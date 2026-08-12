@@ -1,23 +1,40 @@
 # Service Dependency
 
-Servis bağımlılığı + değişiklik onay (gate) ürünü.
+Servis bağımlılığı + değişiklik onay ürünü.
 
-## Ne bu?
+## Mimari
 
-Büyük codebase’de:
+```
+web/      → React (Vite) UI
+server/  → Node (Express) API  ·  mock katalog + talep/flag
+```
 
-- Sol: `project → jar/package → service` modül ağacı
-- Servis seçilince: **bu servisi çağıranlar** (liste / grafik)
-- Değişiklik veya yeni servis: etkilenen owner’lara bildirim + onay flag’leri (🟢🔴🟡⬜)
-- Tüm onaylar olmadan değişiklik yok
+UI `/api/*` çağırır; Vite dev proxy → `http://127.0.0.1:4000`.
 
-Detaylı gereklilikler ve referans UI’lar: [`docs/ServiceDependency.md`](docs/ServiceDependency.md)
+## Çalıştırma
 
-## Durum
+İki terminal:
 
-Taslak / şekillenme aşaması. Dependency DB gelince entegre edilecek; UI mock ile geliştirilebilir.
+```bash
+# API
+cd server
+npm install
+npm run dev
+```
 
-## Katalog lineage ile ilişki
+```bash
+# UI
+cd web
+npm install
+npm run dev
+```
 
-Veri lineage (tablo/ETL) ayrı repo: `katalog pg_v12`.  
-Bu repo **servis / metod / onay** yüzeyi için bağımsız ilerler.
+UI: http://127.0.0.1:5173 · API: http://127.0.0.1:4000/api/health
+
+## Notlar
+
+- **Onay** = yalnız 1. katman (doğrudan etkilenenler).
+- **Harita / etki yolu** = dinamik katman (bütçe yetiyorsa 2–3); dolaylı zincir görünür.
+- Refund örneği: `Refund → SupportDesk → CustomerCare → TicketAnalytics`.
+
+Dokümanlar: `docs/ServiceDependency.md`, `docs/UI_UX_GEREKSINIMLER.md`, `docs/ONAY_ZINCIRI_SENARYOLAR.md`

@@ -3,6 +3,8 @@
 > Amaç: Servis → çağırdığı servisler → içindeki metodlar (call-graph / bağımlılık) arayüzü için **örnek alınacak ürünler** ve buradan türetilecek feature’lar.  
 > Bu doküman yaşayan bir taslak: aşağıdaki **“Nasıl olmalı?”** bölümüne notlar eklendikçe, referans önerilerden alınacak feature’larla arayüz şekillenecek.  
 > İlgili: `URUN_ARASTIRMA_REFERANSLAR.md`, `UI_FIKIRLER_EKRAN_BAZLI.md`, `BUYUK_CODEBASE_URUNLER_NE_KULLANIYOR.md`, `TEKNIK_OZELLIKLER_OLCEKLI_ETKI.md`  
+> UI/UX somutlaştırma (ekran, rol, akış, contract): [`UI_UX_GEREKSINIMLER.md`](./UI_UX_GEREKSINIMLER.md)  
+> Onay zinciri / hop / çift bildirim senaryoları: [`ONAY_ZINCIRI_SENARYOLAR.md`](./ONAY_ZINCIRI_SENARYOLAR.md)  
 > Tarih: 2026-08-12
 
 ---
@@ -100,11 +102,11 @@ Servis → MethodX → MethodY → (opsiyonel) Tablo / API
 
 ## 4) Arayüz iskeleti
 
-> §8 sonrası güncel iskelet §7 altındaki ASCII wireframe’dir. Aşağıdaki eski 3-yüzey taslağı referans olarak durur; ürün omurgası artık **modül ağacı + callers + onay gate**.
+> §8 sonrası güncel iskelet §7 altındaki ASCII wireframe’dir. Aşağıdaki eski 3-yüzey taslağı referans olarak durur; ürün omurgası artık **modül ağacı + etkilenen servisler + onay gate**.
 
 ```
 [1] Sol: project → jar/package → service
-[2] Sağ: callers listesi | grafik (toggle)
+[2] Sağ: etkilenen servisler listesi | grafik (toggle)
 [3] Değişiklik talebi → owner flag’leri → gate
 ```
 
@@ -149,8 +151,8 @@ Servis → MethodX → MethodY → (opsiyonel) Tablo / API
 | # | Feature | Nereden | Yüzey | Öncelik | Bizde nasıl |
 |---|---------|---------|-------|---------|-------------|
 | S.1 | **Modül ağacı:** project → jar/package → service | Backstage catalog tree / IDE Project view | Sol panel | **P0** | `project-jars-packages` tarzı; servis doğru paket altında |
-| S.2 | Servis tıklanınca **çağıranlar (callers)** listesi | Datadog Catalog upstream / Sourcegraph | Sağ panel veya alt | **P0** | “Bu servisi kim çağırıyor?” — ayırt edilebilir, okunaklı liste |
-| S.3 | Aynı callers’ın **grafik** görünümü (toggle) | Datadog Service Map inspect | Diyagram | **P0** | Liste ↔ ego-network; büyük graf değil, seçili servis + komşular |
+| S.2 | Servis tıklanınca **etkilenen servisler** listesi | Datadog Catalog upstream / Sourcegraph | Sağ panel veya alt | **P0** | “Bu değişirse kim etkilenir?” — ayırt edilebilir, okunaklı liste |
+| S.3 | Aynı etkilenenlerin **grafik** görünümü (toggle) | Datadog Service Map inspect | Diyagram | **P0** | Liste ↔ ego-network; büyük graf değil, seçili servis + etkilenen komşular |
 | S.4 | Ownership / sorumlu kişi-ekip rozeti | Backstage / Datadog | Ağaç + kart | **P0** | Her serviste owner; onay akışının kimliği |
 | S.5 | Impact özeti: etkilenen servis + owner listesi | CodeQL path / Manta / Atlan blast | Inspector / talep | **P0** | Değişiklik talebi açılınca otomatik doldurulur |
 | S.6 | **Değişiklik talebi** formu: ne / neden | (ürün — Backstage scaffolder benzeri) | Modal / sayfa | **P0** | Yetkili kişi talep açar; etkilenenlere bildirim |
@@ -168,10 +170,10 @@ Servis → MethodX → MethodY → (opsiyonel) Tablo / API
 ```
 ┌─────────────────────┬──────────────────────────────────────────┐
 │ Modül / paket ağacı │  Seçili servis                           │
-│ project             │  · owner · outbound/inbound N            │
+│ project             │  · owner · etkilenen N                   │
 │  └ jar/package      │                                          │
-│      └ Service ★    │  [Liste] Bu servisi çağıranlar           │
-│          └ …        │    CallerA (owner)  CallerB …            │
+│      └ Service ★    │  [Liste] Etkilenen servisler             │
+│          └ …        │    ServisA (owner)  ServisB …            │
 │                     │  [Grafik] ego-network (opsiyonel)        │
 │ [ara / filtre]      │                                          │
 │                     │  [Değişiklik talebi aç]                   │
@@ -191,14 +193,14 @@ Servis → MethodX → MethodY → (opsiyonel) Tablo / API
 
 ### Ham not (kaynak)
 
-Ekranın bir tarafında project-jars-packages tarzı modüler kısım olacak; servisler onların altında doğru yerlerinde bulunacak. Buradan bir service’e tıklandığında bu servisi **çağıran** diğer servisler ayırt edilebilir, kolay okunabilir biçimde listelenecek veya grafik hale getirilecek. Bağımlılıklar için veritabanı geldiğinde entegre edilecek.
+Ekranın bir tarafında project-jars-packages tarzı modüler kısım olacak; servisler onların altında doğru yerlerinde bulunacak. Buradan bir service’e tıklandığında bu servis değişince **etkilenen** diğer servisler ayırt edilebilir, kolay okunabilir biçimde listelenecek veya grafik hale getirilecek. Bağımlılıklar için veritabanı geldiğinde entegre edilecek.
 
 Ürünün amacı: servisi yetkili kişi değiştirdiğinde / değiştirmek istediğinde, o servisi kullanan diğer servislerin sahiplerinin/sorumlularının bilgilendirme alması. Bilgilendirmede değiştirilecek servisin **neyinin / neden** değiştirildiği yer alacak. Etki gören servisin sorumlusu **kabul / red / bekletip kendi servisini ayarlama** yapacak; talebe flag gönderecek (yeşil / kırmızı / sarı / gri). Değiştiren kişi, etkilenen **tüm** servis sorumlularının onayını almadan değişikliği yapamayacak. Bu kural **yeni servis ekleme** için de geçerli. Büyük codebase (çok servis + metod) UI’ya uygun ölçekte olmalı.
 
 ### Genel
 
 - Sol: modüler navigasyon (project → jar/package → service).
-- Sağ (veya detay): seçili servisi **kullanan / çağıran** servisler — liste veya grafik.
+- Sağ (veya detay): seçili servis değişince **etkilenen** servisler — liste veya grafik.
 - Ürün omurgası = dependency görünümü + **değişiklik onay (CAB-benzeri) gate**.
 - Ölçek: binlerce servis/metod varsayımı; lazy / filtre / ego-network (tüm grafı bir anda değil).
 
@@ -206,11 +208,12 @@ Ekranın bir tarafında project-jars-packages tarzı modüler kısım olacak; se
 
 - `project-jars-packages` benzeri hiyerarşi.
 - Servis, ait olduğu paket/modülün **doğru** altında.
-- Tıklanınca detay + callers yüklenir.
+- Tıklanınca detay + etkilenen servisler yüklenir.
 
-### Çağıranlar (callers) görünümü
+### Etkilenen servisler görünümü
 
-- Birincil soru: **“Bu servisi kim çağırıyor?”** (upstream consumers / inbound).
+- Birincil soru: **“Bu değişirse kim etkilenir?”** (teknik: upstream consumers / bu servisi kullananlar).
+- UI dili: **etkilenen servisler** (caller denmez).
 - Liste: ayırt edilebilir, okunaklı (owner rozeti şart).
 - Alternatif: aynı veri grafik (Datadog inspect / ego-network).
 - Toggle: Liste | Grafik.
@@ -254,10 +257,10 @@ Ekranın bir tarafında project-jars-packages tarzı modüler kısım olacak; se
 | Konu | Karar |
 |------|--------|
 | Runtime APM zorunlu mu? | Hayır (opsiyonel) |
-| Birincil UI omurgası | Sol modül ağacı + seçili servisin **callers** (liste/grafik) |
+| Birincil UI omurgası | Sol modül ağacı + seçili servisin **etkilenenleri** (liste/grafik) |
 | Ürün amacı | Değişiklik / yeni servis → etkilenen owner’lara bildirim + **onay gate** |
 | Onay modeli | Flag: 🟢 kabul · 🔴 red · 🟡 beklet · ⬜ bekliyor; hepsi 🟢 şart |
-| İlk ekran MVP | Modül ağacı + callers listesi (+ basit talep/flag iskeleti) |
+| İlk ekran MVP | Modül ağacı + etkilenenler listesi (+ basit talep/flag iskeleti) |
 | Grafik | İkinci görünüm (inspect / ego-network); full map değil |
 | Veri | DB gelince entegre; UI contract önce |
 | Metod derinliği | P1 — MVP’de servis↔servis yeterli olabilir |

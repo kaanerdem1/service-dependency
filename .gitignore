@@ -1,0 +1,21 @@
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+
+# Dependencies / build
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
