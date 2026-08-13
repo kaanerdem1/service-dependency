@@ -4,6 +4,9 @@ import type {
   FlagStatus,
   ImpactGraph,
   ImpactedFlag,
+  MethodImpact,
+  MethodImpactGraph,
+  MethodRef,
   ModuleNode,
   Owner,
   Service,
@@ -41,6 +44,33 @@ export function getAffected(serviceId: string) {
 
 export function getNeighbors(serviceId: string) {
   return request<ServiceNeighbors>(`/services/${serviceId}/neighbors`)
+}
+
+export function listMethodsForService(serviceId: string) {
+  return request<MethodRef[]>(`/services/${serviceId}/methods`)
+}
+
+export function getMethodCallers(methodId: string) {
+  return request<MethodRef[]>(`/methods/${encodeURIComponent(methodId)}/callers`)
+}
+
+export function getMethodCallees(methodId: string) {
+  return request<MethodRef[]>(`/methods/${encodeURIComponent(methodId)}/callees`)
+}
+
+export function getMethodImpact(methodId: string) {
+  return request<MethodImpact>(`/methods/${encodeURIComponent(methodId)}/impact`)
+}
+
+export function getMethodImpactGraph(methodId: string) {
+  return request<MethodImpactGraph>(
+    `/methods/${encodeURIComponent(methodId)}/impact-graph`,
+  )
+}
+
+export function searchMethods(query: string) {
+  const q = encodeURIComponent(query.trim())
+  return request<MethodRef[]>(`/methods?q=${q}`)
 }
 
 export function getImpactGraph(serviceId: string, mode: 'simple' | 'advanced') {

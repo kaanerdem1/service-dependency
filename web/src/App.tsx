@@ -9,6 +9,7 @@ import { DetailPanel } from './components/DetailPanel'
 import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
+import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
 import { NewServiceRequestModal } from './components/NewServiceRequestModal'
 import { RequestDetailModal } from './components/RequestDetailModal'
@@ -17,12 +18,14 @@ import {
   getChangeRequest,
   getImpactGraph,
   getInbox,
+  getMethodImpactGraph,
   getModuleTree,
   getNeighbors,
   getService,
   getSessionUsers,
   listRequestsForService,
   markInboxRead,
+  searchMethods,
   searchServices,
 } from './api/client'
 import type { SessionUser } from './mock/session'
@@ -33,6 +36,8 @@ import type {
   ImpactGraph,
   ImpactedFlag,
   InboxNotification,
+  MethodImpactGraph,
+  MethodRef,
   ModuleNode,
   Service,
   ViewMode,
@@ -46,7 +51,12 @@ export default function App() {
   const [sessionUsers, setSessionUsers] = useState<SessionUser[]>([])
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
+  const [methodHits, setMethodHits] = useState<MethodRef[]>([])
   const [pivotId, setPivotId] = useState<string | undefined>()
+  const [selectedMethodId, setSelectedMethodId] = useState<string>()
+  const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
+  /** Metod seçilmeden Metodlar sekmesini aç (harita +N) */
+  const [preferMethodsTab, setPreferMethodsTab] = useState(false)
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [service, setService] = useState<Service>()
@@ -97,8 +107,33 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    void searchServices(query).then(setHits).catch(() => setHits([]))
+    const q = query.trim()
+    if (!q) {
+      setHits([])
+      setMethodHits([])
+      return
+    }
+    void searchServices(q).then(setHits).catch(() => setHits([]))
+    void searchMethods(q).then(setMethodHits).catch(() => setMethodHits([]))
   }, [query])
+
+  useEffect(() => {
+    if (!selectedMethodId) {
+      setMethodImpact(undefined)
+      return
+    }
+    let cancelled = false
+    void getMethodImpactGraph(selectedMethodId)
+      .then((g) => {
+        if (!cancelled) setMethodImpact(g)
+      })
+      .catch(() => {
+        if (!cancelled) setMethodImpact(undefined)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedMethodId])
 
   useEffect(() => {
     if (!session) return
@@ -148,6 +183,9 @@ export default function App() {
 
   const clearSelection = useCallback(() => {
     setPivotId(undefined)
+    setSelectedMethodId(undefined)
+    setPreferMethodsTab(false)
+    setMethodImpact(undefined)
     setHistory([])
     setHistoryIndex(-1)
     setService(undefined)
@@ -160,10 +198,13 @@ export default function App() {
 
   const selectPivot = useCallback(
     (id: string, opts?: { resetHistory?: boolean }) => {
-      if (id === pivotId) {
+      if (id === pivotId && !selectedMethodId) {
         clearSelection()
         return
       }
+      setSelectedMethodId(undefined)
+      setPreferMethodsTab(false)
+      setMethodImpact(undefined)
       if (opts?.resetHistory) {
         setHistory([id])
         setHistoryIndex(0)
@@ -176,10 +217,53 @@ export default function App() {
       setHistoryIndex(next.length - 1)
       setPivotId(id)
     },
-    [clearSelection, history, historyIndex, pivotId],
+    [clearSelection, history, historyIndex, pivotId, selectedMethodId],
+  )
+
+  const selectMethod = useCallback(
+    (serviceId: string, methodId: string) => {
+      setSelectedMethodId(methodId)
+      setPreferMethodsTab(true)
+      setViewMode('advanced')
+      setTab('map')
+      if (serviceId !== pivotId) {
+        setHistory([serviceId])
+        setHistoryIndex(0)
+        setPivotId(serviceId)
+      }
+    },
+    [pivotId],
+  )
+
+  const clearMethodKeepService = useCallback(() => {
+    setSelectedMethodId(undefined)
+    setMethodImpact(undefined)
+    setPreferMethodsTab(false)
+    setViewMode('advanced')
+    setTab('map')
+  }, [])
+
+  const browseServiceMethods = useCallback(
+    (serviceId: string) => {
+      setSelectedMethodId(undefined)
+      setMethodImpact(undefined)
+      setPreferMethodsTab(true)
+      setViewMode('advanced')
+      setTab('map')
+      if (serviceId !== pivotId) {
+        setHistory([serviceId])
+        setHistoryIndex(0)
+        setPivotId(serviceId)
+      }
+    },
+    [pivotId],
   )
 
   const goBack = () => {
+    if (selectedMethodId) {
+      clearMethodKeepService()
+      return
+    }
     if (historyIndex <= 0) return
     const i = historyIndex - 1
     setHistoryIndex(i)
@@ -190,6 +274,8 @@ export default function App() {
     if (historyIndex < 0 || historyIndex >= history.length - 1) return
     const i = historyIndex + 1
     setHistoryIndex(i)
+    setSelectedMethodId(undefined)
+    setMethodImpact(undefined)
     setPivotId(history[i])
   }
 
@@ -216,13 +302,13 @@ export default function App() {
           </div>
         </div>
         <label className="search">
-          <span className="sr-only">Servis ara</span>
+          <span className="sr-only">Servis veya metod ara</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Servis, owner, ekip ara…"
+            placeholder="Servis veya metod ara…"
           />
-          {query && hits.length > 0 && (
+          {query && (hits.length > 0 || methodHits.length > 0) && (
             <ul className="search-hits">
               {hits.map((s) => (
                 <li key={s.id}>
@@ -234,7 +320,24 @@ export default function App() {
                     }}
                   >
                     {s.name}
-                    <span className="muted"> · {s.owner?.team}</span>
+                    <span className="muted"> · servis</span>
+                  </button>
+                </li>
+              ))}
+              {methodHits.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    className="method-hit"
+                    onClick={() => {
+                      selectMethod(m.serviceId, m.id)
+                      setQuery('')
+                    }}
+                  >
+                    <span>
+                      {m.className}.{m.name}
+                    </span>
+                    <span className="method-hit-svc">{m.serviceName}</span>
                   </button>
                 </li>
               ))}
@@ -298,7 +401,9 @@ export default function App() {
           <ModuleTree
             nodes={tree}
             selectedServiceId={pivotId}
+            selectedMethodId={selectedMethodId}
             onSelectService={(id) => selectPivot(id, { resetHistory: true })}
+            onSelectMethod={selectMethod}
           />
         </aside>
 
@@ -385,7 +490,32 @@ export default function App() {
                 </>
               )}
 
-              {tab === 'map' && impact && (
+              {tab === 'map' && selectedMethodId && methodImpact && (
+                <MapStage
+                  title="Metod haritası"
+                  expanded={mapExpanded}
+                  onExpandedChange={setMapExpanded}
+                >
+                  <MethodImpactMap
+                    key={`method-${selectedMethodId}-${mapExpanded}`}
+                    graph={methodImpact}
+                    onSelectMethod={selectMethod}
+                    onSelectService={(id) => {
+                      clearMethodKeepService()
+                      if (id !== pivotId) selectPivot(id, { resetHistory: true })
+                    }}
+                    onClearMethod={clearMethodKeepService}
+                    onPivotBack={goBack}
+                    onPivotForward={goForward}
+                    canPivotBack={historyIndex > 0 || Boolean(selectedMethodId)}
+                    canPivotForward={
+                      historyIndex >= 0 && historyIndex < history.length - 1
+                    }
+                  />
+                </MapStage>
+              )}
+
+              {tab === 'map' && !selectedMethodId && impact && (
                 <MapStage
                   title={viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
                   expanded={mapExpanded}
@@ -411,6 +541,8 @@ export default function App() {
                       graph={impact}
                       projectOptions={impactProjectOptions}
                       onPivot={(id) => selectPivot(id)}
+                      onSelectMethod={selectMethod}
+                      onBrowseMethods={browseServiceMethods}
                       onClearCenter={clearSelection}
                       onPivotBack={goBack}
                       onPivotForward={goForward}
@@ -422,6 +554,10 @@ export default function App() {
                   )}
                 </MapStage>
               )}
+
+              {tab === 'map' && selectedMethodId && !methodImpact && (
+                <p className="empty-hint">Metod etki grafı yükleniyor…</p>
+              )}
             </>
           )}
         </main>
@@ -431,6 +567,12 @@ export default function App() {
           loading={loading}
           session={session}
           requests={serviceRequests}
+          downstream={affected}
+          upstream={upstream}
+          projectLabels={projectLabels}
+          focusMethodId={selectedMethodId}
+          preferMethodsTab={preferMethodsTab}
+          onPivot={(id) => selectPivot(id)}
           onOpenRequest={() => setShowCreateCr(true)}
           onOpenNewService={() => setShowNewService(true)}
           onOpenExisting={(id) => void openExisting(id)}

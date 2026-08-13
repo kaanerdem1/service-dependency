@@ -17,6 +17,16 @@ import {
   setFlag,
 } from './changeRequests.js'
 import { IMPACT_VIEW, buildImpactGraph } from './impact.js'
+import {
+  buildMethodImpactGraph,
+  checkCallGraphConsistency,
+  getCalleeRefs,
+  getCallerRefs,
+  getMethod,
+  listMethodRefsForService,
+  methodImpact,
+  searchMethods,
+} from './methods.js'
 import { assertCanCreateRequest } from './permissions.js'
 
 const app = express()
@@ -89,6 +99,51 @@ app.get('/api/services/:id/impact', (req, res) => {
 
 app.get('/api/services/:id/change-requests', (req, res) => {
   res.json(listRequestsForService(req.params.id))
+})
+
+app.get('/api/services/:id/methods', (req, res) => {
+  if (!services[req.params.id]) return res.status(404).json({ error: 'not_found' })
+  res.json(listMethodRefsForService(req.params.id))
+})
+
+app.get('/api/methods', (req, res) => {
+  const q = String(req.query.q ?? '')
+  res.json(searchMethods(q))
+})
+
+app.get('/api/methods/:id', (req, res) => {
+  const method = getMethod(req.params.id)
+  if (!method) return res.status(404).json({ error: 'not_found' })
+  const refs = listMethodRefsForService(method.serviceId)
+  const ref = refs.find((m) => m.id === method.id)
+  res.json(ref ?? method)
+})
+
+app.get('/api/methods/:id/callers', (req, res) => {
+  if (!getMethod(req.params.id)) return res.status(404).json({ error: 'not_found' })
+  res.json(getCallerRefs(req.params.id))
+})
+
+app.get('/api/methods/:id/callees', (req, res) => {
+  if (!getMethod(req.params.id)) return res.status(404).json({ error: 'not_found' })
+  res.json(getCalleeRefs(req.params.id))
+})
+
+app.get('/api/methods/:id/impact', (req, res) => {
+  const impact = methodImpact(req.params.id)
+  if (!impact) return res.status(404).json({ error: 'not_found' })
+  res.json(impact)
+})
+
+app.get('/api/methods/:id/impact-graph', (req, res) => {
+  const graph = buildMethodImpactGraph(req.params.id)
+  if (!graph) return res.status(404).json({ error: 'not_found' })
+  res.json(graph)
+})
+
+app.get('/api/meta/call-graph-consistency', (_req, res) => {
+  const issues = checkCallGraphConsistency()
+  res.json({ ok: issues.length === 0, issueCount: issues.length, issues })
 })
 
 app.post('/api/change-requests', (req, res) => {
@@ -176,5 +231,11 @@ app.patch('/api/change-requests/:id/flags/:serviceId', (req, res) => {
 })
 
 app.listen(PORT, () => {
+  const issues = checkCallGraphConsistency()
+  if (issues.length) {
+    console.warn(`[call-graph] ${issues.length} tutarlılık uyarısı — GET /api/meta/call-graph-consistency`)
+  } else {
+    console.log('[call-graph] metod ↔ affectsEdges tutarlı')
+  }
   console.log(`API http://127.0.0.1:${PORT}`)
 })

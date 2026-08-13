@@ -13,6 +13,29 @@ export function discoveryParents(
   return parent
 }
 
+/**
+ * Merkez → hedef ana etki yolu (via zinciri).
+ * Cascade yan bağları dahil edilmez.
+ */
+export function discoveryPathTo(
+  centerId: string,
+  targetId: string,
+  parents: Map<string, string>,
+): string[] {
+  if (!targetId || targetId === centerId) return [centerId]
+  const chain: string[] = []
+  const seen = new Set<string>()
+  let cur: string | undefined = targetId
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    chain.push(cur)
+    if (cur === centerId) break
+    cur = parents.get(cur)
+  }
+  if (chain[chain.length - 1] !== centerId) chain.push(centerId)
+  return chain.reverse()
+}
+
 export type ProjectOption = { id: string; label: string }
 
 /** Modül ağacından proje etiketleri */
@@ -132,4 +155,65 @@ export function filterEdges(
   keepIds: Set<string>,
 ): ImpactEdge[] {
   return edges.filter((e) => keepIds.has(e.fromId) && keepIds.has(e.toId))
+}
+
+export type BlastRadiusStats = {
+  serviceCount: number
+  hop1Count: number
+  maxHop: number
+  teamCount: number
+  projectCount: number
+  teamNames: string[]
+  projectLabels: string[]
+  /** En uzun via zinciri (hop sayısı = kenar) */
+  longestViaHops: number
+  /** Merkez dahil id zinciri */
+  longestViaPath: string[]
+}
+
+/** Blast radius: etkilenen düğümler üzerinden özet (merkez hariç). */
+export function summarizeBlastRadius(
+  centerId: string,
+  nodes: ImpactNode[],
+  parents: Map<string, string>,
+  projectLabelOf: (projectId: string) => string,
+  /** Verilirse yalnız bu id’ler sayılır (filtre eşleşenleri) */
+  onlyIds?: Set<string> | null,
+): BlastRadiusStats {
+  const scoped = onlyIds
+    ? nodes.filter((n) => onlyIds.has(n.service.id))
+    : nodes
+
+  const teams = new Set<string>()
+  const projects = new Set<string>()
+  let hop1Count = 0
+  let maxHop = 0
+
+  for (const n of scoped) {
+    maxHop = Math.max(maxHop, n.hop)
+    if (n.hop === 1) hop1Count++
+    const team = n.service.owner?.team?.trim()
+    if (team) teams.add(team)
+    if (n.service.projectId) projects.add(n.service.projectId)
+  }
+
+  let longestViaPath: string[] = [centerId]
+  for (const n of scoped) {
+    const path = discoveryPathTo(centerId, n.service.id, parents)
+    if (path.length > longestViaPath.length) longestViaPath = path
+  }
+
+  return {
+    serviceCount: scoped.length,
+    hop1Count,
+    maxHop,
+    teamCount: teams.size,
+    projectCount: projects.size,
+    teamNames: [...teams].sort((a, b) => a.localeCompare(b, 'tr')),
+    projectLabels: [...projects]
+      .map((id) => projectLabelOf(id))
+      .sort((a, b) => a.localeCompare(b, 'tr')),
+    longestViaHops: Math.max(0, longestViaPath.length - 1),
+    longestViaPath,
+  }
 }

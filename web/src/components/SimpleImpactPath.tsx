@@ -14,7 +14,12 @@ import {
   type ProjectOption,
 } from '../impact/projectFilter'
 import type { ImpactGraph, ImpactNode } from '../types'
-import { ImpactLegend, ProjectFilterHint } from './ImpactChrome'
+import {
+  BlastRadiusSummary,
+  ImpactLegend,
+  PathBreadcrumb,
+  ProjectFilterHint,
+} from './ImpactChrome'
 
 type Props = {
   graph: ImpactGraph
@@ -100,6 +105,9 @@ export function SimpleImpactPath({
   const [projectFilter, setProjectFilter] = useState<string>('')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [lines, setLines] = useState<Line[]>([])
+  /** Katman açılınca içeriği viewport’a sığdır (fitView benzeri) */
+  const [fitScale, setFitScale] = useState(1)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const uid = useId().replace(/:/g, '')
   const treeMarker = `path-arrow-tree-${uid}`
@@ -122,10 +130,20 @@ export function SimpleImpactPath({
   const filterLabel =
     projectOptions.find((p) => p.id === projectFilter)?.label ?? ''
 
+  const projectLabels = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of projectOptions) m.set(p.id, p.label)
+    for (const n of graph.nodes) {
+      if (!m.has(n.service.projectId)) m.set(n.service.projectId, n.service.projectId)
+    }
+    return m
+  }, [projectOptions, graph.nodes])
+
   useEffect(() => {
     setVisibleMaxHop(1)
     setFocusId(null)
     setProjectFilter('')
+    setFitScale(1)
   }, [center.id])
 
   /** Filtre uygulanınca eşleşen en derin katmana kadar aç (ara yol görünsün) */
@@ -133,6 +151,43 @@ export function SimpleImpactPath({
     if (!projectFilter || filter.matchCount === 0) return
     setVisibleMaxHop(Math.max(1, filter.deepestHop))
   }, [projectFilter, filter.matchCount, filter.deepestHop])
+
+  /** Katman aç/kapa → içeriği body’ye sığdır (CSS scale ≈ fitView) */
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    const stage = stageRef.current
+    if (!body || !stage) return
+
+    const measure = () => {
+      const pad = 28
+      const availW = Math.max(40, body.clientWidth - pad)
+      const availH = Math.max(40, body.clientHeight - pad)
+      // scrollWidth/Height transform’dan bağımsız doğal boyut
+      const needW = stage.scrollWidth
+      const needH = stage.scrollHeight
+      if (needW < 8 || needH < 8) {
+        setFitScale(1)
+        return
+      }
+      const raw = Math.min(1, availW / needW, availH / needH)
+      const next = raw < 0.99 ? Math.max(0.4, raw) : 1
+      setFitScale((prev) =>
+        Math.abs(prev - next) < 0.01 ? prev : Number(next.toFixed(3)),
+      )
+    }
+
+    const raf = requestAnimationFrame(() => {
+      requestAnimationFrame(measure)
+    })
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(measure)
+    })
+    ro.observe(body)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
+  }, [visibleMaxHop, nodes, projectFilter])
 
   const nameById = useMemo(() => {
     const m = new Map<string, string>([[center.id, center.name]])
@@ -146,9 +201,10 @@ export function SimpleImpactPath({
     return m
   }, [center.id, nodes])
 
+  /** Via / breadcrumb / blast: tam graf (filtre köprüsü bozulmasın) */
   const parents = useMemo(
-    () => discoveryParents(center.id, edges),
-    [center.id, edges],
+    () => discoveryParents(center.id, graph.edges),
+    [center.id, graph.edges],
   )
 
   const byHop = useMemo(() => {
@@ -359,7 +415,7 @@ export function SimpleImpactPath({
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [center.id, visibleMaxHop, nodes, visibleEdges, parents, hopOf])
+  }, [center.id, visibleMaxHop, nodes, visibleEdges, parents, hopOf, fitScale])
 
   const chipClass = (id: string, hop: number) => {
     const on = !pathIds || pathIds.has(id)
@@ -516,11 +572,48 @@ export function SimpleImpactPath({
           hop1EmptyButDeeper={filter.hop1EmptyButDeeper}
         />
       )}
+      <BlastRadiusSummary
+        centerId={center.id}
+        nodes={graph.nodes}
+        parents={parents}
+        projectLabels={projectLabels}
+        matchIds={projectFilter ? filter.matchIds : null}
+        bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
+        filterLabel={filterLabel || undefined}
+        truncated={truncated}
+      />
+      <PathBreadcrumb
+        centerId={center.id}
+        focusId={focusId}
+        parents={parents}
+        nameById={nameById}
+        onSelect={(id) =>
+          id === center.id ? onClearCenter?.() : onPivot(id)
+        }
+      />
       {truncated && reason && <p className="map-budget-hint">{reason}</p>}
-      <div className="simple-path-body multi-hop">
+      <div
+        className={`simple-path-body multi-hop ${fitScale < 1 ? 'is-fitted' : ''}`}
+        ref={bodyRef}
+      >
+        <div
+          className="path-fit-frame"
+          style={
+            fitScale < 1
+              ? {
+                  width: `calc(100% / ${fitScale})`,
+                  height: `calc(100% / ${fitScale})`,
+                }
+              : undefined
+          }
+        >
         <div
           className={`path-stage ${cascadeCount > 0 ? 'has-cascade' : ''}`}
           ref={stageRef}
+          style={{
+            transform: fitScale < 1 ? `scale(${fitScale})` : undefined,
+            transformOrigin: 'top left',
+          }}
         >
           <svg className="path-edges" aria-hidden>
             <defs>
@@ -671,6 +764,7 @@ export function SimpleImpactPath({
               </div>
             )}
           </div>
+        </div>
         </div>
       </div>
     </div>

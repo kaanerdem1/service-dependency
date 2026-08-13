@@ -7,6 +7,14 @@ import type {
   Service,
 } from '../types'
 import { affectsEdges, moduleTree, services } from './data'
+import {
+  buildMethodImpactGraph,
+  getCalleeRefs,
+  getCallerRefs,
+  listMethodRefsForService,
+  methodImpact,
+  searchMethods as searchMethodsLocal,
+} from './methods'
 
 const delay = (ms = 180) => new Promise((r) => setTimeout(r, ms))
 
@@ -126,4 +134,34 @@ export async function searchServices(query: string): Promise<Service[]> {
       s.owner?.name.toLowerCase().includes(q) ||
       s.owner?.team?.toLowerCase().includes(q),
   )
+}
+
+export async function listMethodsForService(serviceId: string) {
+  await delay(80)
+  return listMethodRefsForService(serviceId)
+}
+
+export async function getMethodCallers(methodId: string) {
+  await delay(80)
+  return getCallerRefs(methodId)
+}
+
+export async function getMethodCallees(methodId: string) {
+  await delay(80)
+  return getCalleeRefs(methodId)
+}
+
+export async function getMethodImpact(methodId: string) {
+  await delay(80)
+  return methodImpact(methodId)
+}
+
+export async function getMethodImpactGraph(methodId: string) {
+  await delay(100)
+  return buildMethodImpactGraph(methodId)
+}
+
+export async function searchMethods(query: string) {
+  await delay(80)
+  return searchMethodsLocal(query)
 }

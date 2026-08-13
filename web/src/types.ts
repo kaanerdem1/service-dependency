@@ -29,6 +29,47 @@ export type ServiceNeighbors = {
   downstream: AffectedService[]
 }
 
+/** Katalog metodu (call-graph düğümü) */
+export type MethodRef = {
+  id: string
+  serviceId: string
+  serviceName: string
+  className: string
+  name: string
+  signature: string
+  callerCount: number
+  calleeCount: number
+}
+
+export type MethodImpact = {
+  methodId: string
+  methodCount: number
+  serviceCount: number
+  serviceIds: string[]
+  methodIds: string[]
+}
+
+export type MethodImpactNode = {
+  method: MethodRef
+  hop: number
+}
+
+export type MethodImpactEdge = {
+  fromId: string
+  toId: string
+  hop: number
+}
+
+/** Merkez metod → çağıranlar (blast), katmanlı */
+export type MethodImpactGraph = {
+  center: MethodRef
+  nodes: MethodImpactNode[]
+  edges: MethodImpactEdge[]
+  hopsDrawn: number
+  truncated: boolean
+  reason?: string
+}
+
 export type ImpactNode = {
   service: Service
   hop: number
@@ -192,9 +233,11 @@ export type InboxNotification = {
 
 export type ModuleNode = {
   id: string
-  kind: 'project' | 'package' | 'service'
+  kind: 'project' | 'package' | 'service' | 'method'
   name: string
   serviceId?: string
+  /** kind === 'method' */
+  methodId?: string
   children?: ModuleNode[]
 }
 

@@ -9,9 +9,10 @@ export type Service = {
 }
 export type ModuleNode = {
   id: string
-  kind: 'project' | 'package' | 'service'
+  kind: 'project' | 'package' | 'service' | 'method'
   name: string
   serviceId?: string
+  methodId?: string
   children?: ModuleNode[]
 }
 export type FlagStatus = 'accepted' | 'rejected' | 'hold_editing' | 'unseen'

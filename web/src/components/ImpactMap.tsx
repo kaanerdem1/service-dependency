@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type RefObject,
+} from 'react'
 import ReactFlow, {
   Background,
   BaseEdge,
@@ -18,17 +27,28 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import {
   applyProjectFilter,
+  discoveryParents,
   filterEdges,
   filterNodes,
   type ProjectOption,
 } from '../impact/projectFilter'
-import type { ImpactGraph, ImpactNode } from '../types'
-import { ImpactLegend, ProjectFilterHint } from './ImpactChrome'
+import { listMethodsForService } from '../api/client'
+import type { ImpactGraph, ImpactNode, MethodRef } from '../types'
+import {
+  BlastRadiusSummary,
+  ImpactLegend,
+  PathBreadcrumb,
+  ProjectFilterHint,
+} from './ImpactChrome'
 
 type Props = {
   graph: ImpactGraph
   projectOptions: ProjectOption[]
   onPivot: (serviceId: string) => void
+  /** Metod chip → detay */
+  onSelectMethod?: (serviceId: string, methodId: string) => void
+  /** +N → servisin Metodlar sekmesi */
+  onBrowseMethods?: (serviceId: string) => void
   onClearCenter?: () => void
   onPivotBack?: () => void
   onPivotForward?: () => void
@@ -43,7 +63,6 @@ const LEFT_X = 48
 /** İlk N görünür; kalan 1–2 ise hepsini göster, kalan ≥3 ise +N collapsed */
 const MAX_VISIBLE_PER_LAYER = 4
 const MIN_COLLAPSE_COUNT = 3
-
 type ServiceNodeData = {
   label: string
   kind: 'center' | 'service' | 'collapsed'
@@ -54,6 +73,12 @@ type ServiceNodeData = {
   bridge?: boolean
   /** Proje filtresine uyan etkilenen servis */
   match?: boolean
+}
+
+type MethodBadgeData = {
+  serviceId: string
+  count: number
+  expanded: boolean
 }
 
 function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
@@ -100,7 +125,6 @@ function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
         id="out"
         className="dd-handle"
       />
-      {/* Aynı kolon cascade: sağ boşluğa yumuşak U */}
       <Handle
         type="source"
         position={Position.Right}
@@ -117,7 +141,184 @@ function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
   )
 }
 
-const nodeTypes = { serviceNode: memo(ServiceNodeView) }
+function MethodBadgeView({ data }: NodeProps<MethodBadgeData>) {
+  return (
+    <div
+      className={`dd-method-badge ${data.expanded ? 'expanded' : ''}`}
+      title="Metod listesini aç / kapa"
+    >
+      {data.count} metod
+    </div>
+  )
+}
+
+const nodeTypes = {
+  serviceNode: memo(ServiceNodeView),
+  methodBadge: memo(MethodBadgeView),
+}
+
+const BADGE_GAP = 14
+
+/** Harita zoom’unu bozmayan taşınabilir metod penceresi (varsayılan yukarı) */
+function MethodPopover({
+  serviceId,
+  serviceName,
+  methods,
+  mapRef,
+  onSelectMethod,
+  onClose,
+}: {
+  serviceId: string
+  serviceName: string
+  methods: MethodRef[]
+  mapRef: RefObject<HTMLDivElement | null>
+  onSelectMethod: (serviceId: string, methodId: string) => void
+  onClose: () => void
+}) {
+  const [filter, setFilter] = useState('')
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const dragRef = useRef<{
+    startX: number
+    startY: number
+    origTop: number
+    origLeft: number
+  } | null>(null)
+  const placedOnce = useRef(false)
+
+  useEffect(() => {
+    placedOnce.current = false
+    setPos(null)
+  }, [serviceId])
+
+  useEffect(() => {
+    if (placedOnce.current || !mapRef.current) return
+    const root = mapRef.current
+    const anchor =
+      root.querySelector<HTMLElement>(`[data-id="mbadge-${serviceId}"]`) ??
+      root.querySelector<HTMLElement>(`[data-id="${serviceId}"]`)
+    if (!anchor) return
+    const rootBox = root.getBoundingClientRect()
+    const box = anchor.getBoundingClientRect()
+    const popH = 280
+    const popW = 240
+    // Varsayılan: rozetin üstüne aç
+    let top = box.top - rootBox.top - popH - 8
+    if (top < 8) top = box.bottom - rootBox.top + 8
+    let left = box.left - rootBox.left
+    left = Math.max(8, Math.min(left, rootBox.width - popW - 8))
+    setPos({ top, left })
+    placedOnce.current = true
+  }, [mapRef, serviceId, methods.length])
+
+  const onDragStart = (e: ReactMouseEvent) => {
+    if (!pos || (e.target as HTMLElement).closest('button, input')) return
+    e.preventDefault()
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origTop: pos.top,
+      origLeft: pos.left,
+    }
+    const onMove = (ev: MouseEvent) => {
+      const d = dragRef.current
+      const root = mapRef.current
+      if (!d || !root) return
+      const rootBox = root.getBoundingClientRect()
+      const nextTop = d.origTop + (ev.clientY - d.startY)
+      const nextLeft = d.origLeft + (ev.clientX - d.startX)
+      setPos({
+        top: Math.max(4, Math.min(nextTop, rootBox.height - 80)),
+        left: Math.max(4, Math.min(nextLeft, rootBox.width - 120)),
+      })
+    }
+    const onUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const ranked = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    return [...methods]
+      .filter(
+        (m) =>
+          !q ||
+          m.name.toLowerCase().includes(q) ||
+          m.className.toLowerCase().includes(q),
+      )
+      .sort(
+        (a, b) =>
+          b.callerCount + b.calleeCount - (a.callerCount + a.calleeCount),
+      )
+  }, [methods, filter])
+
+  if (!pos) return null
+
+  return (
+    <div
+      className="method-popover"
+      style={{ top: pos.top, left: pos.left }}
+      role="dialog"
+      aria-label={`${serviceName} metodları`}
+    >
+      <header
+        className="method-popover-head method-popover-drag"
+        onMouseDown={onDragStart}
+        title="Sürükleyerek taşı"
+      >
+        <div>
+          <strong>{methods.length} metod</strong>
+          <span className="muted"> · {serviceName}</span>
+          <span className="method-popover-drag-hint">⠿</span>
+        </div>
+        <button type="button" className="btn ghost path-layer-btn" onClick={onClose}>
+          Kapat
+        </button>
+      </header>
+      <p className="method-popover-legend">
+        <span title="Bu metodu çağıranlar">çağıran ←</span>
+        <span aria-hidden>·</span>
+        <span title="Bu metodun çağırdıkları">çağırılan →</span>
+      </p>
+      <input
+        type="search"
+        className="method-popover-filter"
+        placeholder="Filtre…"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
+      <ul className="method-popover-list">
+        {ranked.length === 0 ? (
+          <li className="method-popover-empty">Eşleşme yok</li>
+        ) : (
+          ranked.map((m) => (
+            <li key={m.id}>
+              <button
+                type="button"
+                onClick={() => onSelectMethod(serviceId, m.id)}
+              >
+                <span className="fly-class">{m.className}</span>
+                <span className="fly-name">{m.name}</span>
+                <span className="fly-meta">
+                  <span title="Çağıran (kim çağırıyor)">
+                    çağıran {m.callerCount}
+                  </span>
+                  <span aria-hidden> · </span>
+                  <span title="Çağırılan (kimi çağırıyor)">
+                    çağırılan {m.calleeCount}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+    </div>
+  )
+}
 
 type FanEdgeData = {
   fromId?: string
@@ -185,13 +386,15 @@ function FanEdge({
   )
 }
 
-/** Katman aç/kapa sonrası görünümü ekrana sığdır */
+/** Katman aç/kapa / metod overlay sonrası görünümü ekrana sığdır */
 function FitViewOnLayers({
   visibleMaxHop,
   nodeCount,
+  layoutKey,
 }: {
   visibleMaxHop: number
   nodeCount: number
+  layoutKey: string | number | boolean
 }) {
   const { fitView } = useReactFlow()
   useEffect(() => {
@@ -199,7 +402,7 @@ function FitViewOnLayers({
       fitView({ padding: 0.22, duration: 320 })
     }, 40)
     return () => window.clearTimeout(id)
-  }, [visibleMaxHop, nodeCount, fitView])
+  }, [visibleMaxHop, nodeCount, layoutKey, fitView])
   return null
 }
 
@@ -268,6 +471,7 @@ function buildGraph(
   visibleMaxHop = 1,
   forceExpandCollapsed = false,
   filterActive = false,
+  rowGap = ROW_GAP,
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
   const hopOf = new Map<string, number>([[center.id, 0]])
@@ -300,7 +504,7 @@ function buildGraph(
     const extra = collapsedMeta.has(hop) ? 1 : 0
     rowCount = Math.max(rowCount, vis + extra)
   }
-  const centerY = 40 + ((rowCount - 1) * ROW_GAP) / 2
+  const centerY = 40 + ((rowCount - 1) * rowGap) / 2
 
   const nodes: Node<ServiceNodeData>[] = [
     {
@@ -333,7 +537,7 @@ function buildGraph(
         },
         position: {
           x: LEFT_X + hop * (NODE_W + COL_GAP),
-          y: 40 + i * ROW_GAP,
+          y: 40 + i * rowGap,
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
@@ -356,7 +560,7 @@ function buildGraph(
         },
         position: {
           x: LEFT_X + hop * (NODE_W + COL_GAP),
-          y: 40 + col.length * ROW_GAP,
+          y: 40 + col.length * rowGap,
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
@@ -483,6 +687,8 @@ export function ImpactMap({
   graph,
   projectOptions,
   onPivot,
+  onSelectMethod,
+  onBrowseMethods: _onBrowseMethods,
   onClearCenter,
   onPivotBack,
   onPivotForward,
@@ -494,6 +700,14 @@ export function ImpactMap({
   const [projectFilter, setProjectFilter] = useState('')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [focusEdgeId, setFocusEdgeId] = useState<string | null>(null)
+  const [showLinkedMethods, setShowLinkedMethods] = useState(false)
+  const [expandedMethodServiceId, setExpandedMethodServiceId] = useState<
+    string | null
+  >(null)
+  const [methodsByService, setMethodsByService] = useState<
+    Record<string, MethodRef[]>
+  >({})
+  const [methodsLoading, setMethodsLoading] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
 
   const filter = useMemo(
@@ -502,6 +716,17 @@ export function ImpactMap({
   )
   const filterLabel =
     projectOptions.find((p) => p.id === projectFilter)?.label ?? ''
+
+  const projectLabels = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of projectOptions) m.set(p.id, p.label)
+    for (const n of graph.nodes) {
+      if (!m.has(n.service.projectId)) {
+        m.set(n.service.projectId, n.service.projectId)
+      }
+    }
+    return m
+  }, [projectOptions, graph.nodes])
 
   const filteredGraph = useMemo((): ImpactGraph => {
     if (!projectFilter) return graph
@@ -535,6 +760,7 @@ export function ImpactMap({
         visibleMaxHop,
         Boolean(projectFilter),
         Boolean(projectFilter),
+        ROW_GAP,
       ),
     [
       filteredGraph,
@@ -548,6 +774,27 @@ export function ImpactMap({
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
 
+  /** Via zinciri: tam graf ebeveynleri (filtre köprüsü dahil) */
+  const parents = useMemo(
+    () => discoveryParents(graph.center.id, graph.edges),
+    [graph.center.id, graph.edges],
+  )
+
+  const nameById = useMemo(() => {
+    const m = new Map<string, string>([[graph.center.id, graph.center.name]])
+    for (const n of graph.nodes) m.set(n.service.id, n.service.name)
+    return m
+  }, [graph])
+
+  /** Kenar hover’da hedef ucun via yolu */
+  const breadcrumbFocus = useMemo(() => {
+    if (focusId && !focusId.startsWith('collapsed-')) return focusId
+    if (!focusEdgeId) return null
+    const edge = built.edges.find((e) => e.id === focusEdgeId)
+    const d = edge?.data as { toId?: string; fromId?: string } | undefined
+    return d?.toId ?? edge?.target ?? null
+  }, [focusId, focusEdgeId, built.edges])
+
   const egoIds = useMemo(() => {
     if (!focusId || focusId.startsWith('collapsed-')) return null
     return neighborIds(focusId, built.edges)
@@ -559,6 +806,9 @@ export function ImpactMap({
     setFocusId(null)
     setFocusEdgeId(null)
     setProjectFilter('')
+    setShowLinkedMethods(false)
+    setExpandedMethodServiceId(null)
+    setMethodsByService({})
   }, [graph.center.id])
 
   useEffect(() => {
@@ -567,22 +817,93 @@ export function ImpactMap({
     setExpandedLayers(new Set(filteredGraph.nodes.map((n) => n.hop)))
   }, [projectFilter, filter.matchCount, filter.deepestHop, filteredGraph.nodes])
 
-  // Node listesini yalnız graf değişince yaz — hover’da setNodes = titreme
-  useEffect(() => {
-    setNodes(built.nodes)
-  }, [built, setNodes])
+  const visibleServiceIds = useMemo(() => {
+    return built.nodes
+      .filter((n) => n.data.kind === 'center' || n.data.kind === 'service')
+      .map((n) => n.id)
+  }, [built.nodes])
 
-  // Hover parlaması: yalnız ego (odak + doğrudan komşular)
+  useEffect(() => {
+    if (!showLinkedMethods) {
+      setMethodsByService({})
+      setMethodsLoading(false)
+      setExpandedMethodServiceId(null)
+      return
+    }
+    let cancelled = false
+    setMethodsLoading(true)
+    void Promise.all(
+      visibleServiceIds.map(async (id) => {
+        const list = await listMethodsForService(id)
+        return [id, list] as const
+      }),
+    )
+      .then((entries) => {
+        if (cancelled) return
+        setMethodsByService(Object.fromEntries(entries))
+      })
+      .catch(() => {
+        if (!cancelled) setMethodsByService({})
+      })
+      .finally(() => {
+        if (!cancelled) setMethodsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [showLinkedMethods, visibleServiceIds])
+
+  // Yalnız “N metod” rozeti — liste HTML popover (zoom bozulmasın)
+  useEffect(() => {
+    type AnyNode = Node<ServiceNodeData | MethodBadgeData>
+    const out: AnyNode[] = built.nodes.map((n) => ({ ...n }))
+
+    if (showLinkedMethods) {
+      for (const n of built.nodes) {
+        if (n.data.kind !== 'center' && n.data.kind !== 'service') continue
+        const count = (methodsByService[n.id] ?? []).length
+        if (!count) continue
+        out.push({
+          id: `mbadge-${n.id}`,
+          type: 'methodBadge',
+          data: {
+            serviceId: n.id,
+            count,
+            expanded: expandedMethodServiceId === n.id,
+          },
+          position: {
+            x: n.position.x + NODE_W + BADGE_GAP,
+            y: n.position.y + 18,
+          },
+          draggable: false,
+          selectable: true,
+        })
+      }
+    }
+
+    setNodes(out as Node<ServiceNodeData>[])
+  }, [
+    built,
+    showLinkedMethods,
+    methodsByService,
+    expandedMethodServiceId,
+    setNodes,
+  ])
+
+  // Hover / metod flyout: ego dışını soluklaştır
   useEffect(() => {
     const root = mapRef.current
     if (!root) return
-    const active = Boolean(focusId || focusEdgeId)
+    const methodFocus = expandedMethodServiceId
+    const active = Boolean(methodFocus || focusId || focusEdgeId)
     root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
       if (!active) return
       let on = false
-      if (focusEdgeId) {
+      if (methodFocus) {
+        on = id === methodFocus || id === `mbadge-${methodFocus}`
+      } else if (focusEdgeId) {
         const edge = built.edges.find((x) => x.id === focusEdgeId)
         const d = edge?.data as { fromId?: string; toId?: string } | undefined
         on =
@@ -600,9 +921,16 @@ export function ImpactMap({
             Boolean(data.hiddenIds?.some((hid) => egoIds.has(hid))))
       }
       el.classList.add(on ? 'rf-path-on' : 'rf-path-off')
-      if (id === focusId) el.classList.add('rf-path-focus')
+      if (id === focusId || id === methodFocus) el.classList.add('rf-path-focus')
     })
-  }, [egoIds, focusId, focusEdgeId, nodes, built.edges])
+  }, [
+    egoIds,
+    focusId,
+    focusEdgeId,
+    nodes,
+    built.edges,
+    expandedMethodServiceId,
+  ])
 
   // Hover: yalnız oğuna değen kenarlar · tree yeşil / cascade turuncu
   useEffect(() => {
@@ -665,15 +993,24 @@ export function ImpactMap({
   }, [built.edges, focusId, focusEdgeId, setEdges])
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node<ServiceNodeData>) => {
-      if (node.data.kind === 'collapsed') {
-        setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type === 'methodBadge') {
+        const d = node.data as MethodBadgeData
+        setExpandedMethodServiceId((cur) =>
+          cur === d.serviceId ? null : d.serviceId,
+        )
+        return
+      }
+      const data = node.data as ServiceNodeData
+      if (data.kind === 'collapsed') {
+        setExpandedLayers((prev) => new Set(prev).add(data.hop))
         return
       }
       if (node.id === graph.center.id) {
         onClearCenter?.()
         return
       }
+      setExpandedMethodServiceId(null)
       onPivot(node.id)
     },
     [graph.center.id, onClearCenter, onPivot],
@@ -697,13 +1034,17 @@ export function ImpactMap({
     setFocusEdgeId(null)
   }, [])
 
-  const focusing = Boolean(focusId || focusEdgeId)
+  const focusing = Boolean(
+    focusId || focusEdgeId || expandedMethodServiceId,
+  )
 
   return (
     <div
       ref={mapRef}
       className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}`}
-      data-focus={focusId ?? focusEdgeId ?? undefined}
+      data-focus={
+        expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
+      }
     >
       <div className="path-layer-bar">
         <div className="path-layer-left">
@@ -727,6 +1068,20 @@ export function ImpactMap({
           </button>
           <span className="path-bar-sep" aria-hidden />
           <ImpactLegend truncated={graph.truncated} />
+          <span className="path-bar-sep" aria-hidden />
+          <button
+            type="button"
+            className={`btn ghost path-layer-btn ${showLinkedMethods ? 'on' : ''}`}
+            aria-pressed={showLinkedMethods}
+            onClick={() => setShowLinkedMethods((v) => !v)}
+            title="Servis düğümlerinde bağlı metod özeti (2–3 veya +N)"
+          >
+            {methodsLoading
+              ? 'Metodlar…'
+              : showLinkedMethods
+                ? 'Bağlı metodlar: açık'
+                : 'Bağlı metodları göster'}
+          </button>
         </div>
         <div className="path-layer-actions">
           <label className="path-filter">
@@ -805,6 +1160,25 @@ export function ImpactMap({
           hop1EmptyButDeeper={filter.hop1EmptyButDeeper}
         />
       )}
+      <BlastRadiusSummary
+        centerId={graph.center.id}
+        nodes={graph.nodes}
+        parents={parents}
+        projectLabels={projectLabels}
+        matchIds={projectFilter ? filter.matchIds : null}
+        bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
+        filterLabel={filterLabel || undefined}
+        truncated={graph.truncated}
+      />
+      <PathBreadcrumb
+        centerId={graph.center.id}
+        focusId={breadcrumbFocus}
+        parents={parents}
+        nameById={nameById}
+        onSelect={(id) =>
+          id === graph.center.id ? onClearCenter?.() : onPivot(id)
+        }
+      />
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
@@ -832,10 +1206,25 @@ export function ImpactMap({
         <FitViewOnLayers
           visibleMaxHop={visibleMaxHop}
           nodeCount={nodes.length}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}`}
         />
         <Background gap={22} color="#e4e0d6" />
         <Controls showInteractive={false} />
       </ReactFlow>
+      {expandedMethodServiceId &&
+        onSelectMethod &&
+        (methodsByService[expandedMethodServiceId]?.length ?? 0) > 0 && (
+          <MethodPopover
+            serviceId={expandedMethodServiceId}
+            serviceName={
+              nameById.get(expandedMethodServiceId) ?? expandedMethodServiceId
+            }
+            methods={methodsByService[expandedMethodServiceId]!}
+            mapRef={mapRef}
+            onSelectMethod={onSelectMethod}
+            onClose={() => setExpandedMethodServiceId(null)}
+          />
+        )}
     </div>
   )
 }
