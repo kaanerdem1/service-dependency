@@ -4,22 +4,14 @@ type Props = {
   title: string
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
-  onPivotBack?: () => void
-  onPivotForward?: () => void
-  canPivotBack?: boolean
-  canPivotForward?: boolean
   children: ReactNode
 }
 
-/** Tek yeşil macOS tarzı büyüt/küçült (içinde ok ikonu). */
+/** Tek yeşil macOS tarzı büyüt/küçült. Pivot / katman kontrolleri alt satırda (children). */
 export function MapStage({
   title,
   expanded,
   onExpandedChange,
-  onPivotBack,
-  onPivotForward,
-  canPivotBack = false,
-  canPivotForward = false,
   children,
 }: Props) {
   const titleId = useId()
@@ -105,28 +97,6 @@ export function MapStage({
           <span id={titleId} className="map-stage-title">
             {title}
           </span>
-          {expanded && (
-            <div className="map-stage-nav">
-              <button
-                type="button"
-                className="map-nav-btn"
-                disabled={!canPivotBack}
-                onClick={onPivotBack}
-                title="Önceki pivot"
-              >
-                ← Geri
-              </button>
-              <button
-                type="button"
-                className="map-nav-btn"
-                disabled={!canPivotForward}
-                onClick={onPivotForward}
-                title="Sonraki pivot"
-              >
-                İleri →
-              </button>
-            </div>
-          )}
         </div>
         <div className="map-stage-body">{children}</div>
       </div>

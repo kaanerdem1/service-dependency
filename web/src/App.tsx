@@ -1,4 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  projectLabelsFromTree,
+  projectsInImpact,
+} from './impact/projectFilter'
 import { AffectedList } from './components/AffectedList'
 import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { DetailPanel } from './components/DetailPanel'
@@ -10,11 +14,11 @@ import { NewServiceRequestModal } from './components/NewServiceRequestModal'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import { SimpleImpactPath } from './components/SimpleImpactPath'
 import {
-  getAffected,
   getChangeRequest,
   getImpactGraph,
   getInbox,
   getModuleTree,
+  getNeighbors,
   getService,
   getSessionUsers,
   listRequestsForService,
@@ -47,6 +51,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
+  const [upstream, setUpstream] = useState<AffectedService[]>([])
   const [impact, setImpact] = useState<ImpactGraph>()
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<Tab>('affected')
@@ -104,6 +109,7 @@ export default function App() {
     if (!pivotId) {
       setService(undefined)
       setAffected([])
+      setUpstream([])
       setImpact(undefined)
       setServiceRequests([])
       setLoading(false)
@@ -113,14 +119,15 @@ export default function App() {
     setLoading(true)
     void Promise.all([
       getService(pivotId),
-      getAffected(pivotId),
+      getNeighbors(pivotId),
       getImpactGraph(pivotId, viewMode),
       listRequestsForService(pivotId),
     ])
-      .then(([svc, aff, graph, reqs]) => {
+      .then(([svc, neighbors, graph, reqs]) => {
         if (cancelled) return
         setService(svc)
-        setAffected(aff)
+        setAffected(neighbors.downstream)
+        setUpstream(neighbors.upstream)
         setImpact(graph)
         setServiceRequests(reqs)
         setLoading(false)
@@ -133,12 +140,19 @@ export default function App() {
     }
   }, [pivotId, viewMode])
 
+  const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
+  const impactProjectOptions = useMemo(
+    () => (impact ? projectsInImpact(impact, projectLabels) : []),
+    [impact, projectLabels],
+  )
+
   const clearSelection = useCallback(() => {
     setPivotId(undefined)
     setHistory([])
     setHistoryIndex(-1)
     setService(undefined)
     setAffected([])
+    setUpstream([])
     setImpact(undefined)
     setServiceRequests([])
     setMapExpanded(false)
@@ -346,7 +360,7 @@ export default function App() {
                     setTab('affected')
                   }}
                 >
-                  Etkilenenler
+                  Bağımlılıklar
                 </button>
                 <button
                   type="button"
@@ -360,10 +374,11 @@ export default function App() {
               {tab === 'affected' && (
                 <>
                   <p className="list-scope-hint">
-                    Onay kapsamı: yalnız <strong>1. katman (doğrudan)</strong>.
+                    Downstream = beni çağıranlar · Upstream = çağırdıklarım
                   </p>
                   <AffectedList
-                    items={affected}
+                    downstream={affected}
+                    upstream={upstream}
                     loading={loading}
                     onPivot={(id) => selectPivot(id)}
                   />
@@ -375,24 +390,34 @@ export default function App() {
                   title={viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
                   expanded={mapExpanded}
                   onExpandedChange={setMapExpanded}
-                  onPivotBack={goBack}
-                  onPivotForward={goForward}
-                  canPivotBack={historyIndex > 0}
-                  canPivotForward={historyIndex >= 0 && historyIndex < history.length - 1}
                 >
                   {viewMode === 'simple' ? (
                     <SimpleImpactPath
                       key={`simple-${mapExpanded}`}
                       graph={impact}
+                      projectOptions={impactProjectOptions}
                       onPivot={(id) => selectPivot(id)}
                       onClearCenter={clearSelection}
+                      onPivotBack={goBack}
+                      onPivotForward={goForward}
+                      canPivotBack={historyIndex > 0}
+                      canPivotForward={
+                        historyIndex >= 0 && historyIndex < history.length - 1
+                      }
                     />
                   ) : (
                     <ImpactMap
                       key={`adv-${mapExpanded}`}
                       graph={impact}
+                      projectOptions={impactProjectOptions}
                       onPivot={(id) => selectPivot(id)}
                       onClearCenter={clearSelection}
+                      onPivotBack={goBack}
+                      onPivotForward={goForward}
+                      canPivotBack={historyIndex > 0}
+                      canPivotForward={
+                        historyIndex >= 0 && historyIndex < history.length - 1
+                      }
                     />
                   )}
                 </MapStage>

@@ -105,7 +105,7 @@ export function DetailPanel({
         <h2>{service.name}</h2>
         <p className="svc-meta">
           {service.owner?.team ?? '—'} · {service.owner?.name ?? 'Owner atanmamış'} ·{' '}
-          etkilenen {service.affectedCount}
+          downstream {service.affectedCount}
         </p>
       </header>
       <div className="detail-actions">

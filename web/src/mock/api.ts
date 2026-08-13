@@ -27,7 +27,7 @@ export async function getService(id: string): Promise<Service | undefined> {
   return services[id]
 }
 
-/** Onay listesi — yalnız 1 hop (doğrudan etkilenenler) */
+/** Onay listesi — yalnız 1 hop (doğrudan etkilenenler / downstream) */
 export async function getAffected(serviceId: string): Promise<AffectedService[]> {
   await delay()
   const ids = affectsEdges[serviceId] ?? []
@@ -35,6 +35,19 @@ export async function getAffected(serviceId: string): Promise<AffectedService[]>
     .map((id) => services[id])
     .filter(Boolean)
     .map((service) => ({ service, hop: 1 }))
+}
+
+export async function getNeighbors(serviceId: string) {
+  await delay()
+  const downstream = await getAffected(serviceId)
+  const upstreamIds = Object.entries(affectsEdges)
+    .filter(([, tos]) => tos.includes(serviceId))
+    .map(([fromId]) => fromId)
+  const upstream = upstreamIds
+    .map((id) => services[id])
+    .filter(Boolean)
+    .map((service) => ({ service, hop: 1 as const }))
+  return { upstream, downstream }
 }
 
 /**

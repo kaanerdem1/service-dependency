@@ -2,6 +2,8 @@ import cors from 'cors'
 import express from 'express'
 import {
   affectsEdges,
+  getDownstreamIds,
+  getUpstreamIds,
   moduleTree,
   services,
   SESSION_USERS,
@@ -55,14 +57,25 @@ app.get('/api/services/:id', (req, res) => {
   res.json(svc)
 })
 
+function toAffected(ids: string[]) {
+  return ids
+    .map((id) => services[id])
+    .filter(Boolean)
+    .map((service) => ({ service, hop: 1 as const }))
+}
+
 app.get('/api/services/:id/affected', (req, res) => {
-  const ids = affectsEdges[req.params.id] ?? []
-  res.json(
-    ids
-      .map((id) => services[id])
-      .filter(Boolean)
-      .map((service) => ({ service, hop: 1 })),
-  )
+  res.json(toAffected(getDownstreamIds(req.params.id)))
+})
+
+/** Datadog Catalog tarzı: upstream = çağırdıklarım, downstream = beni çağıranlar */
+app.get('/api/services/:id/neighbors', (req, res) => {
+  const id = req.params.id
+  if (!services[id]) return res.status(404).json({ error: 'not_found' })
+  res.json({
+    upstream: toAffected(getUpstreamIds(id)),
+    downstream: toAffected(getDownstreamIds(id)),
+  })
 })
 
 app.get('/api/services/:id/impact', (req, res) => {

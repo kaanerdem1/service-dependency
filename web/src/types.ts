@@ -23,6 +23,12 @@ export type AffectedService = {
   hop?: number
 }
 
+/** Upstream = çağırdıklarım · Downstream = beni çağıranlar (etkilenen / onay) */
+export type ServiceNeighbors = {
+  upstream: AffectedService[]
+  downstream: AffectedService[]
+}
+
 export type ImpactNode = {
   service: Service
   hop: number

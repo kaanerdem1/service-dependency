@@ -7,6 +7,7 @@ import type {
   ModuleNode,
   Owner,
   Service,
+  ServiceNeighbors,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -36,6 +37,10 @@ export function searchServices(query: string) {
 
 export function getAffected(serviceId: string) {
   return request<AffectedService[]>(`/services/${serviceId}/affected`)
+}
+
+export function getNeighbors(serviceId: string) {
+  return request<ServiceNeighbors>(`/services/${serviceId}/neighbors`)
 }
 
 export function getImpactGraph(serviceId: string, mode: 'simple' | 'advanced') {

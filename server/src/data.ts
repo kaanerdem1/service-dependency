@@ -111,6 +111,21 @@ export const services: Record<string, Service> = Object.fromEntries(
   serviceDefs.map((s) => [s.id, { ...s, affectedCount: affectsEdges[s.id]?.length ?? 0 }]),
 )
 
+/** Değişince etkilenenler = bu servisi çağıranlar (downstream / tüketiciler) */
+export function getDownstreamIds(serviceId: string): string[] {
+  return affectsEdges[serviceId] ?? []
+}
+
+/**
+ * Bu servisin çağırdıkları (upstream / bağımlılıklar).
+ * affectsEdges[X] ⊇ serviceId ⇒ service, X’i çağırır.
+ */
+export function getUpstreamIds(serviceId: string): string[] {
+  return Object.entries(affectsEdges)
+    .filter(([, tos]) => tos.includes(serviceId))
+    .map(([fromId]) => fromId)
+}
+
 export const moduleTree: ModuleNode[] = [
   {
     id: 'proj-commerce',
