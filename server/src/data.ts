@@ -1,3 +1,14 @@
+/**
+ * Mock servis kataloğu (statik).
+ *
+ * affectsEdges[callee] = [caller1, caller2, ...]
+ *   → “callee değişince etkilenenler” = onu çağıran servisler (downstream).
+ *   Onay listesi yalnız bu 1. katmanı kullanır.
+ *
+ * Yön özeti:
+ * - Downstream (affected) = beni çağıranlar
+ * - Upstream              = benim çağırdıklarım
+ */
 export type Owner = { id: string; name: string; team?: string; role?: 'lead' | 'member' }
 export type Service = {
   id: string
@@ -75,37 +86,35 @@ export const owners: Record<string, Owner> = {
 
 /** serviceId → etkilenen servisler (değişince) */
 export const affectsEdges: Record<string, string[]> = {
-  'svc-payment': ['svc-checkout', 'svc-billing', 'svc-refund', 'svc-report'],
-  'svc-checkout': ['svc-storefront', 'svc-mobile-bff'],
-  'svc-billing': ['svc-finance-batch', 'svc-report'],
-  // Refund zinciri: 3 katmana kadar demo
-  'svc-refund': ['svc-support-desk', 'svc-notify'],
-  'svc-support-desk': ['svc-customer-care'],
-  'svc-customer-care': ['svc-ticket-analytics'],
-  'svc-ticket-analytics': [],
-  'svc-identity': ['svc-payment', 'svc-checkout', 'svc-storefront', 'svc-mobile-bff'],
-  'svc-notify': ['svc-checkout', 'svc-refund', 'svc-support-desk'],
+  'svc-payment': ['svc-checkout', 'svc-billing', 'svc-refund', 'svc-report', 'svc-finance-batch'],
+  'svc-checkout': ['svc-billing', 'svc-storefront', 'svc-mobile-bff'],
+  'svc-billing': ['svc-checkout', 'svc-refund', 'svc-report', 'svc-finance-batch'],
+  'svc-refund': ['svc-billing', 'svc-notify', 'svc-support-desk'],
   'svc-storefront': [],
   'svc-mobile-bff': [],
-  // Billing→Report→FinanceBatch: haritada FinanceBatch 2. katman (en uzun yol)
-  'svc-report': ['svc-finance-batch'],
+  'svc-identity': ['svc-payment', 'svc-checkout', 'svc-billing', 'svc-storefront', 'svc-mobile-bff', 'svc-support-desk', 'svc-report'],
+  'svc-notify': ['svc-payment', 'svc-checkout', 'svc-billing', 'svc-refund', 'svc-storefront', 'svc-mobile-bff', 'svc-support-desk', 'svc-customer-care'],
+  'svc-support-desk': ['svc-refund', 'svc-customer-care'],
+  'svc-customer-care': ['svc-ticket-analytics'],
+  'svc-report': ['svc-refund', 'svc-storefront', 'svc-finance-batch', 'svc-ticket-analytics'],
   'svc-finance-batch': [],
+  'svc-ticket-analytics': ['svc-report'],
 }
 
 const serviceDefs: Omit<Service, 'affectedCount'>[] = [
-  { id: 'svc-payment', name: 'PaymentService', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
-  { id: 'svc-checkout', name: 'CheckoutService', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
-  { id: 'svc-billing', name: 'BillingService', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
-  { id: 'svc-refund', name: 'RefundService', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
-  { id: 'svc-identity', name: 'IdentityService', projectId: 'proj-platform', packageId: 'pkg-identity', owner: owners.o3 },
-  { id: 'svc-notify', name: 'NotificationService', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
-  { id: 'svc-storefront', name: 'StorefrontApi', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
-  { id: 'svc-mobile-bff', name: 'MobileBff', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
-  { id: 'svc-report', name: 'ReportingService', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
-  { id: 'svc-finance-batch', name: 'FinanceBatchJob', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
-  { id: 'svc-support-desk', name: 'SupportDeskService', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
-  { id: 'svc-customer-care', name: 'CustomerCareService', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
-  { id: 'svc-ticket-analytics', name: 'TicketAnalyticsService', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
+  { id: 'svc-payment', name: 'core_realtime_card_payment_authorization_settlement_gateway', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
+  { id: 'svc-checkout', name: 'retail_checkout_order_cart_orchestration_workflow_engine', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
+  { id: 'svc-billing', name: 'customer_billing_invoice_tax_reconciliation_engine', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
+  { id: 'svc-refund', name: 'customer_refund_chargeback_reversal_settlement_processor', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
+  { id: 'svc-identity', name: 'enterprise_identity_session_directory_access_control', projectId: 'proj-platform', packageId: 'pkg-identity', owner: owners.o3 },
+  { id: 'svc-notify', name: 'outbound_multichannel_notification_delivery_router', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
+  { id: 'svc-storefront', name: 'digital_storefront_catalog_checkout_experience_api', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
+  { id: 'svc-mobile-bff', name: 'mobile_channel_backend_for_frontend_gateway_adapter', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
+  { id: 'svc-report', name: 'enterprise_operational_reporting_analytics_pipeline', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
+  { id: 'svc-finance-batch', name: 'overnight_general_ledger_finance_batch_import_job_runner', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
+  { id: 'svc-support-desk', name: 'customer_support_desk_case_routing_orchestrator', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
+  { id: 'svc-customer-care', name: 'customer_care_interaction_history_assistance_portal', projectId: 'proj-platform', packageId: 'pkg-notify', owner: owners.o4 },
+  { id: 'svc-ticket-analytics', name: 'support_ticket_analytics_insight_warehouse_service', projectId: 'proj-data', packageId: 'pkg-reporting', owner: owners.o5 },
 ]
 
 export const services: Record<string, Service> = Object.fromEntries(
@@ -131,26 +140,26 @@ export const moduleTree: ModuleNode[] = [
   {
     id: 'proj-commerce',
     kind: 'project',
-    name: 'commerce',
+    name: 'HAZINE',
     children: [
       {
         id: 'pkg-payments',
         kind: 'package',
-        name: 'com.example.payments',
+        name: 'com.hazine.payments',
         children: [
-          { id: 'node-payment', kind: 'service', name: 'PaymentService', serviceId: 'svc-payment' },
-          { id: 'node-billing', kind: 'service', name: 'BillingService', serviceId: 'svc-billing' },
-          { id: 'node-refund', kind: 'service', name: 'RefundService', serviceId: 'svc-refund' },
+          { id: 'node-payment', kind: 'service', name: 'core_realtime_card_payment_authorization_settlement_gateway', serviceId: 'svc-payment' },
+          { id: 'node-billing', kind: 'service', name: 'customer_billing_invoice_tax_reconciliation_engine', serviceId: 'svc-billing' },
+          { id: 'node-refund', kind: 'service', name: 'customer_refund_chargeback_reversal_settlement_processor', serviceId: 'svc-refund' },
         ],
       },
       {
         id: 'pkg-orders',
         kind: 'package',
-        name: 'com.example.orders',
+        name: 'com.hazine.orders',
         children: [
-          { id: 'node-checkout', kind: 'service', name: 'CheckoutService', serviceId: 'svc-checkout' },
-          { id: 'node-storefront', kind: 'service', name: 'StorefrontApi', serviceId: 'svc-storefront' },
-          { id: 'node-mobile', kind: 'service', name: 'MobileBff', serviceId: 'svc-mobile-bff' },
+          { id: 'node-checkout', kind: 'service', name: 'retail_checkout_order_cart_orchestration_workflow_engine', serviceId: 'svc-checkout' },
+          { id: 'node-storefront', kind: 'service', name: 'digital_storefront_catalog_checkout_experience_api', serviceId: 'svc-storefront' },
+          { id: 'node-mobile', kind: 'service', name: 'mobile_channel_backend_for_frontend_gateway_adapter', serviceId: 'svc-mobile-bff' },
         ],
       },
     ],
@@ -158,24 +167,24 @@ export const moduleTree: ModuleNode[] = [
   {
     id: 'proj-platform',
     kind: 'project',
-    name: 'platform',
+    name: 'MEVDUAT',
     children: [
       {
         id: 'pkg-identity',
         kind: 'package',
-        name: 'com.example.identity',
+        name: 'com.mevduat.identity',
         children: [
-          { id: 'node-identity', kind: 'service', name: 'IdentityService', serviceId: 'svc-identity' },
+          { id: 'node-identity', kind: 'service', name: 'enterprise_identity_session_directory_access_control', serviceId: 'svc-identity' },
         ],
       },
       {
         id: 'pkg-notify',
         kind: 'package',
-        name: 'com.example.notify',
+        name: 'com.mevduat.notify',
         children: [
-          { id: 'node-notify', kind: 'service', name: 'NotificationService', serviceId: 'svc-notify' },
-          { id: 'node-support', kind: 'service', name: 'SupportDeskService', serviceId: 'svc-support-desk' },
-          { id: 'node-care', kind: 'service', name: 'CustomerCareService', serviceId: 'svc-customer-care' },
+          { id: 'node-notify', kind: 'service', name: 'outbound_multichannel_notification_delivery_router', serviceId: 'svc-notify' },
+          { id: 'node-support', kind: 'service', name: 'customer_support_desk_case_routing_orchestrator', serviceId: 'svc-support-desk' },
+          { id: 'node-care', kind: 'service', name: 'customer_care_interaction_history_assistance_portal', serviceId: 'svc-customer-care' },
         ],
       },
     ],
@@ -183,16 +192,16 @@ export const moduleTree: ModuleNode[] = [
   {
     id: 'proj-data',
     kind: 'project',
-    name: 'data',
+    name: 'KREDI',
     children: [
       {
         id: 'pkg-reporting',
         kind: 'package',
-        name: 'com.example.reporting',
+        name: 'com.kredi.reporting',
         children: [
-          { id: 'node-report', kind: 'service', name: 'ReportingService', serviceId: 'svc-report' },
-          { id: 'node-finance', kind: 'service', name: 'FinanceBatchJob', serviceId: 'svc-finance-batch' },
-          { id: 'node-ticket', kind: 'service', name: 'TicketAnalyticsService', serviceId: 'svc-ticket-analytics' },
+          { id: 'node-report', kind: 'service', name: 'enterprise_operational_reporting_analytics_pipeline', serviceId: 'svc-report' },
+          { id: 'node-finance', kind: 'service', name: 'overnight_general_ledger_finance_batch_import_job_runner', serviceId: 'svc-finance-batch' },
+          { id: 'node-ticket', kind: 'service', name: 'support_ticket_analytics_insight_warehouse_service', serviceId: 'svc-ticket-analytics' },
         ],
       },
     ],

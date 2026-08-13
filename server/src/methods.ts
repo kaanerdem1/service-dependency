@@ -1,6 +1,17 @@
 /**
- * Mock metod kataloğu + call-graph (Java/framework hissi).
- * Tutarlılık: çapraz servis çağrı ⇒ callee değişince caller affectsEdges’te olmalı.
+ * Mock method kataloğu + call-graph.
+ *
+ * Üretici: scripts/gen_mock_catalog.py (server + web mock’u birlikte yamar).
+ *
+ * İki veri kümesi:
+ * - methods[]   → ClassName.methodName tanımları (servise bağlı)
+ * - callEdges[] → callerId → calleeId (statik çağrı kenarı)
+ *
+ * Tutarlılık kuralı (checkCallGraphConsistency):
+ * Çapraz servis çağrı varsa affectsEdges[calleeSvc] içinde callerSvc olmalı
+ * (callee değişince caller etkilenir).
+ *
+ * UI tarafı: callers/callees lazy; impact-graph BFS ile “blast radius”.
  */
 import { affectsEdges, services } from './data.js'
 
@@ -9,13 +20,13 @@ export type MethodDef = {
   serviceId: string
   className: string
   name: string
-  /** örn. (PaymentRequest): PaymentResult */
   signature: string
 }
 
-/** callerMethodId çağırır → calleeMethodId */
+/** caller metodu, callee metodunu çağırır. */
 export type CallEdge = { callerId: string; calleeId: string }
 
+/** Stabil id: m-{svcKısa}-{ClassName}-{methodName} */
 function m(
   serviceId: string,
   className: string,
@@ -26,6 +37,7 @@ function m(
   return { id, serviceId, className, name, signature }
 }
 
+// Servis id kısaltmaları (aşağıdaki uzun listelerde okunabilirlik için)
 const pay = 'svc-payment'
 const chk = 'svc-checkout'
 const bil = 'svc-billing'
@@ -40,328 +52,376 @@ const sup = 'svc-support-desk'
 const care = 'svc-customer-care'
 const tix = 'svc-ticket-analytics'
 
+/** Tüm mock metodlar (servis bazında gruplanmış uzun liste). */
 export const methods: MethodDef[] = [
-  // —— PaymentService ——
-  m(pay, 'PaymentFacade', 'charge', '(ChargeCmd): ChargeResult'),
-  m(pay, 'PaymentFacade', 'authorize', '(AuthCmd): AuthResult'),
-  m(pay, 'PaymentFacade', 'capture', '(CaptureCmd): CaptureResult'),
-  m(pay, 'PaymentFacade', 'voidAuth', '(VoidCmd): void'),
-  m(pay, 'CardProcessor', 'tokenize', '(CardDto): Token'),
-  m(pay, 'CardProcessor', 'chargeCard', '(Token, Money): ChargeResult'),
-  m(pay, 'CardProcessor', 'validateBin', '(String): boolean'),
-  m(pay, 'WalletProcessor', 'chargeWallet', '(WalletId, Money): ChargeResult'),
-  m(pay, 'WalletProcessor', 'reserve', '(WalletId, Money): Reservation'),
-  m(pay, 'FraudGate', 'score', '(ChargeCmd): FraudScore'),
-  m(pay, 'FraudGate', 'blockIfNeeded', '(FraudScore): void'),
-  m(pay, 'LedgerWriter', 'postEntry', '(LedgerEntry): void'),
-  m(pay, 'LedgerWriter', 'reverseEntry', '(EntryId): void'),
-  m(pay, 'PaymentQuery', 'findById', '(PaymentId): Payment'),
-  m(pay, 'PaymentQuery', 'listByOrder', '(OrderId): List<Payment>'),
-  m(pay, 'IdempotencyStore', 'begin', '(Key): boolean'),
-  m(pay, 'IdempotencyStore', 'complete', '(Key, Result): void'),
-
-  // —— CheckoutService ——
-  m(chk, 'CheckoutOrchestrator', 'placeOrder', '(CheckoutCmd): Order'),
-  m(chk, 'CheckoutOrchestrator', 'preview', '(CheckoutCmd): Preview'),
-  m(chk, 'CheckoutOrchestrator', 'cancelDraft', '(DraftId): void'),
-  m(chk, 'CartService', 'addItem', '(CartId, Sku): Cart'),
-  m(chk, 'CartService', 'removeItem', '(CartId, Sku): Cart'),
-  m(chk, 'CartService', 'reprice', '(CartId): Cart'),
-  m(chk, 'PaymentClient', 'chargeOrder', '(Order): ChargeResult'),
-  m(chk, 'PaymentClient', 'authorizeOrder', '(Order): AuthResult'),
-  m(chk, 'InventoryClient', 'reserveStock', '(Order): Reservation'),
-  m(chk, 'InventoryClient', 'releaseStock', '(Reservation): void'),
-  m(chk, 'IdentityClient', 'resolveUser', '(Session): User'),
-  m(chk, 'NotifyClient', 'orderPlaced', '(Order): void'),
-  m(chk, 'CheckoutQuery', 'getOrder', '(OrderId): Order'),
-  m(chk, 'CheckoutQuery', 'listOpen', '(UserId): List<Order>'),
-
-  // —— BillingService ——
-  m(bil, 'InvoiceService', 'createInvoice', '(Order): Invoice'),
-  m(bil, 'InvoiceService', 'voidInvoice', '(InvoiceId): void'),
-  m(bil, 'InvoiceService', 'reissue', '(InvoiceId): Invoice'),
-  m(bil, 'BillingScheduler', 'runDaily', '(): BatchResult'),
-  m(bil, 'BillingScheduler', 'retryFailed', '(): BatchResult'),
-  m(bil, 'PaymentReconciler', 'reconcileCharge', '(ChargeId): void'),
-  m(bil, 'PaymentReconciler', 'markPaid', '(InvoiceId): void'),
-  m(bil, 'TaxCalculator', 'compute', '(InvoiceDraft): TaxLines'),
-  m(bil, 'TaxCalculator', 'validateVat', '(VatId): boolean'),
-  m(bil, 'BillingQuery', 'getInvoice', '(InvoiceId): Invoice'),
-  m(bil, 'BillingQuery', 'listUnpaid', '(AccountId): List<Invoice>'),
-
-  // —— RefundService ——
-  m(ref, 'RefundFacade', 'requestRefund', '(RefundCmd): Refund'),
-  m(ref, 'RefundFacade', 'approveRefund', '(RefundId): Refund'),
-  m(ref, 'RefundFacade', 'rejectRefund', '(RefundId, Reason): void'),
-  m(ref, 'RefundExecutor', 'execute', '(Refund): RefundResult'),
-  m(ref, 'RefundExecutor', 'partialRefund', '(Refund, Money): RefundResult'),
-  m(ref, 'PaymentClient', 'reverseCharge', '(ChargeId): void'),
-  m(ref, 'PaymentClient', 'creditWallet', '(WalletId, Money): void'),
-  m(ref, 'NotifyClient', 'refundStatus', '(Refund): void'),
-  m(ref, 'RefundQuery', 'findById', '(RefundId): Refund'),
-  m(ref, 'RefundQuery', 'listByOrder', '(OrderId): List<Refund>'),
-  m(ref, 'PolicyEngine', 'canRefund', '(Order, Money): boolean'),
-  m(ref, 'PolicyEngine', 'windowOpen', '(Order): boolean'),
-
-  // —— IdentityService ——
-  m(idn, 'AuthService', 'login', '(Creds): Session'),
-  m(idn, 'AuthService', 'logout', '(Session): void'),
-  m(idn, 'AuthService', 'refresh', '(RefreshToken): Session'),
-  m(idn, 'TokenIssuer', 'issue', '(User): Tokens'),
-  m(idn, 'TokenIssuer', 'revoke', '(TokenId): void'),
-  m(idn, 'UserDirectory', 'findById', '(UserId): User'),
-  m(idn, 'UserDirectory', 'findByEmail', '(Email): User'),
-  m(idn, 'UserDirectory', 'updateProfile', '(UserId, Patch): User'),
-  m(idn, 'SessionStore', 'put', '(Session): void'),
-  m(idn, 'SessionStore', 'get', '(SessionId): Session'),
-  m(idn, 'MfaService', 'challenge', '(User): Challenge'),
-  m(idn, 'MfaService', 'verify', '(Challenge, Code): boolean'),
-
-  // —— NotificationService ——
-  m(ntf, 'NotifyFacade', 'send', '(NotifyCmd): void'),
-  m(ntf, 'NotifyFacade', 'sendBulk', '(List<NotifyCmd>): BulkResult'),
-  m(ntf, 'EmailChannel', 'deliver', '(EmailMsg): void'),
-  m(ntf, 'EmailChannel', 'renderTemplate', '(TemplateId, Map): String'),
-  m(ntf, 'SmsChannel', 'deliver', '(SmsMsg): void'),
-  m(ntf, 'PushChannel', 'deliver', '(PushMsg): void'),
-  m(ntf, 'PreferenceStore', 'allows', '(UserId, Channel): boolean'),
-  m(ntf, 'PreferenceStore', 'update', '(UserId, Prefs): void'),
-  m(ntf, 'NotifyQuery', 'status', '(NotifyId): Status'),
-  m(ntf, 'DeadLetter', 'enqueue', '(FailedMsg): void'),
-  m(ntf, 'DeadLetter', 'replay', '(DlqId): void'),
-  m(ntf, 'RefundHook', 'onRefundEvent', '(RefundEvent): void'),
-  m(ntf, 'RefundHook', 'fetchRefund', '(RefundId): Refund'),
-
-  // —— StorefrontApi ——
-  m(sf, 'StorefrontController', 'checkout', '(HttpReq): HttpRes'),
-  m(sf, 'StorefrontController', 'cart', '(HttpReq): HttpRes'),
-  m(sf, 'StorefrontController', 'loginPage', '(HttpReq): HttpRes'),
-  m(sf, 'CheckoutGateway', 'place', '(CheckoutCmd): Order'),
-  m(sf, 'CheckoutGateway', 'preview', '(CheckoutCmd): Preview'),
-  m(sf, 'IdentityGateway', 'currentUser', '(Cookie): User'),
-  m(sf, 'CatalogView', 'productPage', '(Sku): ProductVm'),
-  m(sf, 'CatalogView', 'search', '(Query): List<ProductVm>'),
-
-  // —— MobileBff ——
-  m(bff, 'MobileCheckoutApi', 'placeOrder', '(MobileCheckout): Order'),
-  m(bff, 'MobileCheckoutApi', 'preview', '(MobileCheckout): Preview'),
-  m(bff, 'MobileAuthApi', 'login', '(MobileCreds): Session'),
-  m(bff, 'MobileAuthApi', 'refresh', '(RefreshToken): Session'),
-  m(bff, 'CheckoutGateway', 'place', '(CheckoutCmd): Order'),
-  m(bff, 'IdentityGateway', 'resolve', '(DeviceSession): User'),
-  m(bff, 'MobileCartApi', 'sync', '(DeviceCart): Cart'),
-  m(bff, 'MobileCartApi', 'add', '(Sku): Cart'),
-
-  // —— ReportingService ——
-  m(rpt, 'ReportFacade', 'paymentSummary', '(Range): Report'),
-  m(rpt, 'ReportFacade', 'invoiceAging', '(Range): Report'),
-  m(rpt, 'ReportFacade', 'refundVolume', '(Range): Report'),
-  m(rpt, 'PaymentIngest', 'pullCharges', '(Range): List<ChargeRow>'),
-  m(rpt, 'PaymentIngest', 'normalize', '(ChargeRow): Fact'),
-  m(rpt, 'BillingIngest', 'pullInvoices', '(Range): List<InvoiceRow>'),
-  m(rpt, 'BillingIngest', 'normalize', '(InvoiceRow): Fact'),
-  m(rpt, 'CubeBuilder', 'buildDaily', '(Date): Cube'),
-  m(rpt, 'CubeBuilder', 'publish', '(Cube): void'),
-  m(rpt, 'ReportQuery', 'get', '(ReportId): Report'),
-  m(rpt, 'ReportQuery', 'exportCsv', '(ReportId): Stream'),
-
-  // —— FinanceBatchJob ——
-  m(fin, 'FinanceBatch', 'runNightly', '(): BatchResult'),
-  m(fin, 'FinanceBatch', 'runCatchup', '(Date): BatchResult'),
-  m(fin, 'LedgerImport', 'fromBilling', '(Date): void'),
-  m(fin, 'LedgerImport', 'fromReports', '(Date): void'),
-  m(fin, 'GlPoster', 'post', '(GlEntry): void'),
-  m(fin, 'GlPoster', 'reverse', '(GlEntryId): void'),
-  m(fin, 'FinanceQuery', 'trialBalance', '(Date): Balance'),
-  m(fin, 'FinanceQuery', 'exceptions', '(): List<Exception>'),
-
-  // —— SupportDeskService ——
-  m(sup, 'TicketService', 'openTicket', '(TicketCmd): Ticket'),
-  m(sup, 'TicketService', 'closeTicket', '(TicketId): void'),
-  m(sup, 'TicketService', 'escalate', '(TicketId): void'),
-  m(sup, 'RefundBridge', 'startRefund', '(Ticket): Refund'),
-  m(sup, 'RefundBridge', 'status', '(RefundId): Status'),
-  m(sup, 'NotifyBridge', 'agentUpdate', '(Ticket): void'),
-  m(sup, 'TicketQuery', 'get', '(TicketId): Ticket'),
-  m(sup, 'TicketQuery', 'listOpen', '(AgentId): List<Ticket>'),
-
-  // —— CustomerCareService ——
-  m(care, 'CareFacade', 'handleCall', '(CallCtx): CareResult'),
-  m(care, 'CareFacade', 'handleChat', '(ChatCtx): CareResult'),
-  m(care, 'DeskClient', 'openFromCare', '(CareCase): Ticket'),
-  m(care, 'DeskClient', 'linkTicket', '(CareCase, TicketId): void'),
-  m(care, 'CareQuery', 'history', '(CustomerId): List<CareCase>'),
-  m(care, 'CareQuery', 'active', '(AgentId): List<CareCase>'),
-
-  // —— TicketAnalyticsService ——
-  m(tix, 'AnalyticsFacade', 'dailyStats', '(Date): Stats'),
-  m(tix, 'AnalyticsFacade', 'agentScore', '(AgentId, Range): Score'),
-  m(tix, 'CareIngest', 'pullCases', '(Range): List<CaseRow>'),
-  m(tix, 'CareIngest', 'normalize', '(CaseRow): Fact'),
-  m(tix, 'AggBuilder', 'build', '(Date): Agg'),
-  m(tix, 'AggBuilder', 'publish', '(Agg): void'),
-  m(tix, 'AnalyticsQuery', 'get', '(StatsId): Stats'),
+  m(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement', '(ChargeCmd): ChargeResult'),
+  m(pay, 'RealtimePaymentAuthorizationFacade', 'authorizePendingCardHold', '(AuthCmd): AuthResult'),
+  m(pay, 'RealtimePaymentAuthorizationFacade', 'captureAuthorizedCardHold', '(CaptureCmd): CaptureResult'),
+  m(pay, 'RealtimePaymentAuthorizationFacade', 'voidAuthorizedCardHold', '(VoidCmd): void'),
+  m(pay, 'RealtimePaymentAuthorizationFacade', 'retryFailedSettlementBatch', '(BatchId): BatchResult'),
+  m(pay, 'CardNetworkTokenizationProcessor', 'tokenizeSensitiveCardMaterial', '(CardDto): Token'),
+  m(pay, 'CardNetworkTokenizationProcessor', 'chargeTokenizedCardInstrument', '(Token, Money): ChargeResult'),
+  m(pay, 'CardNetworkTokenizationProcessor', 'validateIssuerBinRangeRules', '(String): boolean'),
+  m(pay, 'CardNetworkTokenizationProcessor', 'refreshNetworkTokenLifecycle', '(Token): Token'),
+  m(pay, 'DigitalWalletSettlementProcessor', 'chargeLinkedWalletBalance', '(WalletId, Money): ChargeResult'),
+  m(pay, 'DigitalWalletSettlementProcessor', 'reserveWalletSpendingLimit', '(WalletId, Money): Reservation'),
+  m(pay, 'DigitalWalletSettlementProcessor', 'releaseReservedWalletFunds', '(Reservation): void'),
+  m(pay, 'RealtimeFraudScoringGate', 'scoreIncomingPaymentRisk', '(ChargeCmd): FraudScore'),
+  m(pay, 'RealtimeFraudScoringGate', 'blockHighRiskPaymentAttempt', '(FraudScore): void'),
+  m(pay, 'RealtimeFraudScoringGate', 'enrichRiskWithDeviceSignals', '(ChargeCmd): FraudScore'),
+  m(pay, 'PaymentLedgerEntryWriter', 'postSuccessfulSettlementEntry', '(LedgerEntry): void'),
+  m(pay, 'PaymentLedgerEntryWriter', 'reversePostedSettlementEntry', '(EntryId): void'),
+  m(pay, 'PaymentLedgerEntryWriter', 'appendCompensatingLedgerNote', '(EntryId, Note): void'),
+  m(pay, 'PaymentSettlementQueryService', 'findSettlementByPaymentId', '(PaymentId): Payment'),
+  m(pay, 'PaymentSettlementQueryService', 'listSettlementsByOrderReference', '(OrderId): List<Payment>'),
+  m(pay, 'PaymentSettlementQueryService', 'listFailedSettlementsForRetry', '(Range): List<Payment>'),
+  m(pay, 'PaymentIdempotencyGuardStore', 'beginIdempotentPaymentOperation', '(Key): boolean'),
+  m(pay, 'PaymentIdempotencyGuardStore', 'completeIdempotentPaymentOperation', '(Key, Result): void'),
+  m(pay, 'PaymentNotifyBridgeClient', 'emitPaymentLifecycleNotification', '(PaymentEvent): void'),
+  m(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder', '(CheckoutCmd): Order'),
+  m(chk, 'RetailCheckoutOrchestrationFacade', 'previewCheckoutPricingQuote', '(CheckoutCmd): Preview'),
+  m(chk, 'RetailCheckoutOrchestrationFacade', 'cancelUncommittedCheckoutDraft', '(DraftId): void'),
+  m(chk, 'RetailCheckoutOrchestrationFacade', 'resumeAbandonedCheckoutSession', '(DraftId): Draft'),
+  m(chk, 'ShoppingCartPricingService', 'addCatalogItemToCart', '(CartId, Sku): Cart'),
+  m(chk, 'ShoppingCartPricingService', 'removeCatalogItemFromCart', '(CartId, Sku): Cart'),
+  m(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions', '(CartId): Cart'),
+  m(chk, 'ShoppingCartPricingService', 'mergeGuestAndUserCarts', '(CartId, CartId): Cart'),
+  m(chk, 'DownstreamPaymentGatewayClient', 'chargeOrderThroughPaymentGateway', '(Order): ChargeResult'),
+  m(chk, 'DownstreamPaymentGatewayClient', 'authorizeOrderThroughPaymentGateway', '(Order): AuthResult'),
+  m(chk, 'DownstreamPaymentGatewayClient', 'queryOrderPaymentSettlementStatus', '(OrderId): Status'),
+  m(chk, 'InventoryReservationClient', 'reserveStockForCheckoutOrder', '(Order): Reservation'),
+  m(chk, 'InventoryReservationClient', 'releaseReservedCheckoutStock', '(Reservation): void'),
+  m(chk, 'IdentitySessionResolutionClient', 'resolveUserFromActiveSession', '(Session): User'),
+  m(chk, 'OutboundNotificationClient', 'notifyCustomerOrderPlaced', '(Order): void'),
+  m(chk, 'OutboundNotificationClient', 'notifyCustomerCheckoutAbandoned', '(Draft): void'),
+  m(chk, 'BillingInvoiceHandoffClient', 'openInvoiceForCompletedOrder', '(Order): Invoice'),
+  m(chk, 'CheckoutOrderQueryService', 'getOrderByReference', '(OrderId): Order'),
+  m(chk, 'CheckoutOrderQueryService', 'listOpenOrdersForUser', '(UserId): List<Order>'),
+  m(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder', '(Order): Invoice'),
+  m(bil, 'CustomerInvoiceLifecycleService', 'voidIssuedCustomerInvoice', '(InvoiceId): void'),
+  m(bil, 'CustomerInvoiceLifecycleService', 'reissueCorrectedCustomerInvoice', '(InvoiceId): Invoice'),
+  m(bil, 'CustomerInvoiceLifecycleService', 'applyCreditMemoToInvoice', '(InvoiceId, Money): Invoice'),
+  m(bil, 'BillingBatchSchedulerService', 'runDailyInvoiceCollectionBatch', '(): BatchResult'),
+  m(bil, 'BillingBatchSchedulerService', 'retryFailedInvoiceCollectionJobs', '(): BatchResult'),
+  m(bil, 'BillingBatchSchedulerService', 'scheduleMidMonthReconciliationSweep', '(): void'),
+  m(bil, 'PaymentSettlementReconciler', 'reconcileChargeAgainstOpenInvoice', '(ChargeId): void'),
+  m(bil, 'PaymentSettlementReconciler', 'markInvoiceFullyPaidFromSettlement', '(InvoiceId): void'),
+  m(bil, 'PaymentSettlementReconciler', 'flagUnmatchedSettlementException', '(ChargeId): Exception'),
+  m(bil, 'InvoiceTaxComputationEngine', 'computeTaxLinesForInvoiceDraft', '(InvoiceDraft): TaxLines'),
+  m(bil, 'InvoiceTaxComputationEngine', 'validateVatRegistrationIdentifier', '(VatId): boolean'),
+  m(bil, 'BillingInvoiceQueryService', 'getInvoiceByIdentifier', '(InvoiceId): Invoice'),
+  m(bil, 'BillingInvoiceQueryService', 'listUnpaidInvoicesForAccount', '(AccountId): List<Invoice>'),
+  m(bil, 'CheckoutOrderLookupClient', 'fetchOrderSnapshotForInvoicing', '(OrderId): Order'),
+  m(bil, 'RefundCreditApplicationClient', 'applyApprovedRefundToInvoice', '(RefundId): void'),
+  m(bil, 'BillingNotifyBridgeClient', 'emitInvoiceLifecycleNotification', '(InvoiceEvent): void'),
+  m(bil, 'IdentityAccountLookupClient', 'resolveBillingAccountOwner', '(AccountId): User'),
+  m(ref, 'CustomerRefundOrchestrationFacade', 'requestCustomerRefundWorkflow', '(RefundCmd): Refund'),
+  m(ref, 'CustomerRefundOrchestrationFacade', 'approvePendingRefundWorkflow', '(RefundId): Refund'),
+  m(ref, 'CustomerRefundOrchestrationFacade', 'rejectPendingRefundWorkflow', '(RefundId, Reason): void'),
+  m(ref, 'CustomerRefundOrchestrationFacade', 'escalateRefundToSupportDesk', '(RefundId): Ticket'),
+  m(ref, 'RefundSettlementExecutor', 'executeFullChargeReversal', '(Refund): RefundResult'),
+  m(ref, 'RefundSettlementExecutor', 'executePartialChargeReversal', '(Refund, Money): RefundResult'),
+  m(ref, 'RefundSettlementExecutor', 'creditWalletAfterChargeReversal', '(Refund): void'),
+  m(ref, 'DownstreamPaymentReversalClient', 'reverseSettledChargeOnGateway', '(ChargeId): void'),
+  m(ref, 'DownstreamPaymentReversalClient', 'creditWalletOnPaymentGateway', '(WalletId, Money): void'),
+  m(ref, 'OutboundRefundNotifyClient', 'publishRefundStatusNotification', '(Refund): void'),
+  m(ref, 'BillingCreditMemoClient', 'requestInvoiceCreditForRefund', '(Refund): void'),
+  m(ref, 'ReportingRefundFactClient', 'publishRefundVolumeFact', '(Refund): void'),
+  m(ref, 'RefundPolicyDecisionEngine', 'evaluateRefundEligibilityRules', '(Order, Money): boolean'),
+  m(ref, 'RefundPolicyDecisionEngine', 'evaluateRefundTimeWindowOpen', '(Order): boolean'),
+  m(ref, 'RefundCaseQueryService', 'findRefundCaseById', '(RefundId): Refund'),
+  m(ref, 'RefundCaseQueryService', 'listRefundsByOrderReference', '(OrderId): List<Refund>'),
+  m(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials', '(Creds): Session'),
+  m(idn, 'EnterpriseAuthenticationFacade', 'logoutActiveUserSession', '(Session): void'),
+  m(idn, 'EnterpriseAuthenticationFacade', 'refreshExpiringAccessSession', '(RefreshToken): Session'),
+  m(idn, 'EnterpriseAuthenticationFacade', 'challengeStepUpAuthentication', '(User): Challenge'),
+  m(idn, 'AccessTokenIssuanceService', 'issueSignedAccessRefreshTokens', '(User): Tokens'),
+  m(idn, 'AccessTokenIssuanceService', 'revokeIssuedAccessToken', '(TokenId): void'),
+  m(idn, 'AccessTokenIssuanceService', 'introspectPresentedAccessToken', '(Token): Claims'),
+  m(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById', '(UserId): User'),
+  m(idn, 'EnterpriseUserDirectoryService', 'findUserProfileByEmail', '(Email): User'),
+  m(idn, 'EnterpriseUserDirectoryService', 'updateUserProfilePatch', '(UserId, Patch): User'),
+  m(idn, 'EnterpriseUserDirectoryService', 'listUsersInSecurityGroup', '(GroupId): List<User>'),
+  m(idn, 'DistributedSessionStore', 'putActiveSessionRecord', '(Session): void'),
+  m(idn, 'DistributedSessionStore', 'getActiveSessionRecord', '(SessionId): Session'),
+  m(idn, 'DistributedSessionStore', 'evictExpiredSessionRecord', '(SessionId): void'),
+  m(idn, 'MultiFactorChallengeService', 'issueMultiFactorChallenge', '(User): Challenge'),
+  m(idn, 'MultiFactorChallengeService', 'verifyMultiFactorChallengeCode', '(Challenge, Code): boolean'),
+  m(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification', '(NotifyCmd): void'),
+  m(ntf, 'OutboundNotificationDispatchFacade', 'sendBulkChannelNotifications', '(List<NotifyCmd>): BulkResult'),
+  m(ntf, 'OutboundNotificationDispatchFacade', 'retryFailedNotificationDelivery', '(NotifyId): void'),
+  m(ntf, 'EmailDeliveryChannelAdapter', 'deliverRenderedEmailMessage', '(EmailMsg): void'),
+  m(ntf, 'EmailDeliveryChannelAdapter', 'renderNotificationEmailTemplate', '(TemplateId, Map): String'),
+  m(ntf, 'SmsDeliveryChannelAdapter', 'deliverSmsNotificationMessage', '(SmsMsg): void'),
+  m(ntf, 'PushDeliveryChannelAdapter', 'deliverMobilePushNotification', '(PushMsg): void'),
+  m(ntf, 'UserNotificationPreferenceStore', 'allowsNotificationOnChannel', '(UserId, Channel): boolean'),
+  m(ntf, 'UserNotificationPreferenceStore', 'updateUserNotificationPreferences', '(UserId, Prefs): void'),
+  m(ntf, 'NotificationDeliveryQueryService', 'getNotificationDeliveryStatus', '(NotifyId): Status'),
+  m(ntf, 'NotificationDeadLetterQueue', 'enqueueFailedNotificationMessage', '(FailedMsg): void'),
+  m(ntf, 'NotificationDeadLetterQueue', 'replayDeadLetterNotification', '(DlqId): void'),
+  m(ntf, 'RefundEventNotificationHook', 'onRefundLifecycleDomainEvent', '(RefundEvent): void'),
+  m(ntf, 'RefundEventNotificationHook', 'fetchRefundSnapshotForNotify', '(RefundId): Refund'),
+  m(ntf, 'PaymentEventNotificationHook', 'onPaymentLifecycleDomainEvent', '(PaymentEvent): void'),
+  m(ntf, 'BillingEventNotificationHook', 'onInvoiceLifecycleDomainEvent', '(InvoiceEvent): void'),
+  m(ntf, 'SupportDeskNotifyBridge', 'onSupportTicketAgentUpdate', '(Ticket): void'),
+  m(sf, 'DigitalStorefrontHttpController', 'submitCheckoutFromStorefront', '(HttpReq): HttpRes'),
+  m(sf, 'DigitalStorefrontHttpController', 'renderActiveShoppingCart', '(HttpReq): HttpRes'),
+  m(sf, 'DigitalStorefrontHttpController', 'renderCustomerLoginExperience', '(HttpReq): HttpRes'),
+  m(sf, 'DigitalStorefrontHttpController', 'searchCatalogProductListing', '(HttpReq): HttpRes'),
+  m(sf, 'CheckoutOrchestrationGateway', 'placeOrderViaCheckoutEngine', '(CheckoutCmd): Order'),
+  m(sf, 'CheckoutOrchestrationGateway', 'previewOrderViaCheckoutEngine', '(CheckoutCmd): Preview'),
+  m(sf, 'IdentitySessionGateway', 'resolveCurrentStorefrontUser', '(Cookie): User'),
+  m(sf, 'CatalogProductViewAssembler', 'assembleProductDetailPageModel', '(Sku): ProductVm'),
+  m(sf, 'CatalogProductViewAssembler', 'searchCatalogProductViewModels', '(Query): List<ProductVm>'),
+  m(sf, 'ReportingBrowseAnalyticsClient', 'publishStorefrontBrowseFact', '(BrowseEvent): void'),
+  m(sf, 'StorefrontNotifyBridgeClient', 'emitStorefrontLifecycleNotification', '(StorefrontEvent): void'),
+  m(bff, 'MobileCheckoutExperienceApi', 'placeOrderFromMobileClient', '(MobileCheckout): Order'),
+  m(bff, 'MobileCheckoutExperienceApi', 'previewOrderFromMobileClient', '(MobileCheckout): Preview'),
+  m(bff, 'MobileAuthenticationExperienceApi', 'loginMobileDeviceSession', '(MobileCreds): Session'),
+  m(bff, 'MobileAuthenticationExperienceApi', 'refreshMobileDeviceSession', '(RefreshToken): Session'),
+  m(bff, 'MobileCheckoutOrchestrationGateway', 'placeOrderThroughCheckoutEngine', '(CheckoutCmd): Order'),
+  m(bff, 'MobileIdentityResolutionGateway', 'resolveUserFromDeviceSession', '(DeviceSession): User'),
+  m(bff, 'MobileShoppingCartSyncApi', 'synchronizeDeviceCartState', '(DeviceCart): Cart'),
+  m(bff, 'MobileShoppingCartSyncApi', 'addSkuToDeviceCart', '(Sku): Cart'),
+  m(bff, 'MobileNotifyPreferenceBridge', 'registerDevicePushEndpoint', '(DeviceToken): void'),
+  m(bff, 'MobileNotifyPreferenceBridge', 'emitMobileLifecycleNotification', '(MobileEvent): void'),
+  m(rpt, 'OperationalReportingFacade', 'buildPaymentSettlementSummaryReport', '(Range): Report'),
+  m(rpt, 'OperationalReportingFacade', 'buildInvoiceAgingSummaryReport', '(Range): Report'),
+  m(rpt, 'OperationalReportingFacade', 'buildRefundVolumeSummaryReport', '(Range): Report'),
+  m(rpt, 'OperationalReportingFacade', 'buildSupportTicketVolumeReport', '(Range): Report'),
+  m(rpt, 'PaymentSettlementIngestWorker', 'pullChargesFromPaymentGateway', '(Range): List<ChargeRow>'),
+  m(rpt, 'PaymentSettlementIngestWorker', 'normalizePaymentChargeFactRow', '(ChargeRow): Fact'),
+  m(rpt, 'BillingInvoiceIngestWorker', 'pullInvoicesFromBillingEngine', '(Range): List<InvoiceRow>'),
+  m(rpt, 'BillingInvoiceIngestWorker', 'normalizeBillingInvoiceFactRow', '(InvoiceRow): Fact'),
+  m(rpt, 'TicketAnalyticsIngestBridge', 'pullTicketFactsFromAnalytics', '(Range): List<TicketFact>'),
+  m(rpt, 'AnalyticsCubeBuilderService', 'buildDailyOperationalAnalyticsCube', '(Date): Cube'),
+  m(rpt, 'AnalyticsCubeBuilderService', 'publishOperationalAnalyticsCube', '(Cube): void'),
+  m(rpt, 'ReportCatalogQueryService', 'getPublishedReportById', '(ReportId): Report'),
+  m(rpt, 'ReportCatalogQueryService', 'exportPublishedReportAsCsv', '(ReportId): Stream'),
+  m(rpt, 'IdentityAudienceLookupClient', 'resolveReportAudienceUser', '(UserId): User'),
+  m(fin, 'OvernightFinanceBatchOrchestrator', 'runNightlyGeneralLedgerImport', '(): BatchResult'),
+  m(fin, 'OvernightFinanceBatchOrchestrator', 'runCatchupGeneralLedgerImport', '(Date): BatchResult'),
+  m(fin, 'OvernightFinanceBatchOrchestrator', 'runPaymentSettlementCatchupImport', '(Date): BatchResult'),
+  m(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromBilling', '(Date): void'),
+  m(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromReports', '(Date): void'),
+  m(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromPayments', '(Date): void'),
+  m(fin, 'GeneralLedgerPostingService', 'postValidatedGeneralLedgerEntry', '(GlEntry): void'),
+  m(fin, 'GeneralLedgerPostingService', 'reversePostedGeneralLedgerEntry', '(GlEntryId): void'),
+  m(fin, 'FinanceExceptionQueryService', 'computeTrialBalanceSnapshot', '(Date): Balance'),
+  m(fin, 'FinanceExceptionQueryService', 'listOpenFinanceExceptions', '(): List<Exception>'),
+  m(sup, 'SupportTicketLifecycleService', 'openCustomerSupportTicket', '(TicketCmd): Ticket'),
+  m(sup, 'SupportTicketLifecycleService', 'closeCustomerSupportTicket', '(TicketId): void'),
+  m(sup, 'SupportTicketLifecycleService', 'escalateCustomerSupportTicket', '(TicketId): void'),
+  m(sup, 'SupportTicketLifecycleService', 'reassignTicketToCareQueue', '(TicketId): void'),
+  m(sup, 'RefundWorkflowBridgeClient', 'startRefundFromSupportTicket', '(Ticket): Refund'),
+  m(sup, 'RefundWorkflowBridgeClient', 'getRefundStatusForSupportTicket', '(RefundId): Status'),
+  m(sup, 'SupportNotifyBridgeClient', 'notifyAgentOfTicketUpdate', '(Ticket): void'),
+  m(sup, 'IdentityAgentLookupClient', 'resolveAgentUserProfile', '(AgentId): User'),
+  m(sup, 'SupportTicketQueryService', 'getSupportTicketById', '(TicketId): Ticket'),
+  m(sup, 'SupportTicketQueryService', 'listOpenTicketsForAgent', '(AgentId): List<Ticket>'),
+  m(care, 'CustomerCareInteractionFacade', 'handleInboundCustomerCall', '(CallCtx): CareResult'),
+  m(care, 'CustomerCareInteractionFacade', 'handleInboundCustomerChat', '(ChatCtx): CareResult'),
+  m(care, 'CustomerCareInteractionFacade', 'summarizeCustomerCareHistory', '(CustomerId): Summary'),
+  m(care, 'SupportDeskCaseClient', 'openSupportTicketFromCareCase', '(CareCase): Ticket'),
+  m(care, 'SupportDeskCaseClient', 'linkCareCaseToSupportTicket', '(CareCase, TicketId): void'),
+  m(care, 'CareNotifyBridgeClient', 'emitCareInteractionNotification', '(CareCase): void'),
+  m(care, 'CareCaseQueryService', 'listCareHistoryForCustomer', '(CustomerId): List<CareCase>'),
+  m(care, 'CareCaseQueryService', 'listActiveCareCasesForAgent', '(AgentId): List<CareCase>'),
+  m(tix, 'SupportTicketAnalyticsFacade', 'computeDailyTicketVolumeStats', '(Date): Stats'),
+  m(tix, 'SupportTicketAnalyticsFacade', 'computeAgentPerformanceScore', '(AgentId, Range): Score'),
+  m(tix, 'SupportTicketAnalyticsFacade', 'publishTicketFactsToReporting', '(Date): void'),
+  m(tix, 'CareCaseIngestWorker', 'pullCareCasesForAnalytics', '(Range): List<CaseRow>'),
+  m(tix, 'CareCaseIngestWorker', 'normalizeCareCaseFactRow', '(CaseRow): Fact'),
+  m(tix, 'TicketAggregationBuilder', 'buildDailyTicketAggregation', '(Date): Agg'),
+  m(tix, 'TicketAggregationBuilder', 'publishTicketAggregationCube', '(Agg): void'),
+  m(tix, 'TicketAnalyticsQueryService', 'getPublishedTicketStats', '(StatsId): Stats'),
+  m(tix, 'ReportingTicketFactPublisher', 'pushTicketFactsIntoReporting', '(Agg): void'),
 ]
 
 const byId = Object.fromEntries(methods.map((x) => [x.id, x]))
 
+/** callEdges yazarken id üretmek için (signature gerekmez). */
 function idOf(serviceId: string, className: string, name: string) {
   return m(serviceId, className, name, '').id
 }
 
-/** Call edges: bol iç + çapraz (affectsEdges ile hizalı) */
+/**
+ * Call-graph kenarları: A.method → B.method.
+ * Hem servis-içi (aynı svc) hem çapraz servis kenarları vardır.
+ */
 export const callEdges: CallEdge[] = [
-  // Payment iç
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'IdempotencyStore', 'begin') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'FraudGate', 'score') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'FraudGate', 'blockIfNeeded') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'CardProcessor', 'chargeCard') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'WalletProcessor', 'chargeWallet') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'LedgerWriter', 'postEntry') },
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(pay, 'IdempotencyStore', 'complete') },
-  { callerId: idOf(pay, 'PaymentFacade', 'authorize'), calleeId: idOf(pay, 'FraudGate', 'score') },
-  { callerId: idOf(pay, 'PaymentFacade', 'authorize'), calleeId: idOf(pay, 'CardProcessor', 'tokenize') },
-  { callerId: idOf(pay, 'PaymentFacade', 'capture'), calleeId: idOf(pay, 'LedgerWriter', 'postEntry') },
-  { callerId: idOf(pay, 'PaymentFacade', 'voidAuth'), calleeId: idOf(pay, 'LedgerWriter', 'reverseEntry') },
-  { callerId: idOf(pay, 'CardProcessor', 'chargeCard'), calleeId: idOf(pay, 'CardProcessor', 'validateBin') },
-  { callerId: idOf(pay, 'WalletProcessor', 'chargeWallet'), calleeId: idOf(pay, 'WalletProcessor', 'reserve') },
-  { callerId: idOf(pay, 'FraudGate', 'blockIfNeeded'), calleeId: idOf(pay, 'FraudGate', 'score') },
-  // Payment → Identity (affectsEdges: identity → payment)
-  { callerId: idOf(pay, 'PaymentFacade', 'charge'), calleeId: idOf(idn, 'SessionStore', 'get') },
-  { callerId: idOf(pay, 'PaymentFacade', 'authorize'), calleeId: idOf(idn, 'UserDirectory', 'findById') },
-
-  // Checkout → Payment / Identity / Notify + iç
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder'), calleeId: idOf(chk, 'CartService', 'reprice') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder'), calleeId: idOf(chk, 'IdentityClient', 'resolveUser') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder'), calleeId: idOf(chk, 'InventoryClient', 'reserveStock') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder'), calleeId: idOf(chk, 'PaymentClient', 'chargeOrder') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder'), calleeId: idOf(chk, 'NotifyClient', 'orderPlaced') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'preview'), calleeId: idOf(chk, 'CartService', 'reprice') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'preview'), calleeId: idOf(chk, 'PaymentClient', 'authorizeOrder') },
-  { callerId: idOf(chk, 'CheckoutOrchestrator', 'cancelDraft'), calleeId: idOf(chk, 'InventoryClient', 'releaseStock') },
-  { callerId: idOf(chk, 'CartService', 'addItem'), calleeId: idOf(chk, 'CartService', 'reprice') },
-  { callerId: idOf(chk, 'CartService', 'removeItem'), calleeId: idOf(chk, 'CartService', 'reprice') },
-  { callerId: idOf(chk, 'PaymentClient', 'chargeOrder'), calleeId: idOf(pay, 'PaymentFacade', 'charge') },
-  { callerId: idOf(chk, 'PaymentClient', 'authorizeOrder'), calleeId: idOf(pay, 'PaymentFacade', 'authorize') },
-  { callerId: idOf(chk, 'IdentityClient', 'resolveUser'), calleeId: idOf(idn, 'SessionStore', 'get') },
-  { callerId: idOf(chk, 'IdentityClient', 'resolveUser'), calleeId: idOf(idn, 'UserDirectory', 'findById') },
-  { callerId: idOf(chk, 'NotifyClient', 'orderPlaced'), calleeId: idOf(ntf, 'NotifyFacade', 'send') },
-
-  // Billing → Payment + iç
-  { callerId: idOf(bil, 'InvoiceService', 'createInvoice'), calleeId: idOf(bil, 'TaxCalculator', 'compute') },
-  { callerId: idOf(bil, 'InvoiceService', 'createInvoice'), calleeId: idOf(bil, 'TaxCalculator', 'validateVat') },
-  { callerId: idOf(bil, 'InvoiceService', 'reissue'), calleeId: idOf(bil, 'InvoiceService', 'voidInvoice') },
-  { callerId: idOf(bil, 'InvoiceService', 'reissue'), calleeId: idOf(bil, 'InvoiceService', 'createInvoice') },
-  { callerId: idOf(bil, 'BillingScheduler', 'runDaily'), calleeId: idOf(bil, 'BillingQuery', 'listUnpaid') },
-  { callerId: idOf(bil, 'BillingScheduler', 'runDaily'), calleeId: idOf(bil, 'PaymentReconciler', 'reconcileCharge') },
-  { callerId: idOf(bil, 'BillingScheduler', 'retryFailed'), calleeId: idOf(bil, 'PaymentReconciler', 'markPaid') },
-  { callerId: idOf(bil, 'PaymentReconciler', 'reconcileCharge'), calleeId: idOf(pay, 'PaymentQuery', 'findById') },
-  { callerId: idOf(bil, 'PaymentReconciler', 'markPaid'), calleeId: idOf(pay, 'PaymentQuery', 'listByOrder') },
-  { callerId: idOf(bil, 'PaymentReconciler', 'reconcileCharge'), calleeId: idOf(pay, 'LedgerWriter', 'postEntry') },
-
-  // Refund → Payment / Notify + iç
-  { callerId: idOf(ref, 'RefundFacade', 'requestRefund'), calleeId: idOf(ref, 'PolicyEngine', 'canRefund') },
-  { callerId: idOf(ref, 'RefundFacade', 'requestRefund'), calleeId: idOf(ref, 'PolicyEngine', 'windowOpen') },
-  { callerId: idOf(ref, 'RefundFacade', 'approveRefund'), calleeId: idOf(ref, 'RefundExecutor', 'execute') },
-  { callerId: idOf(ref, 'RefundFacade', 'approveRefund'), calleeId: idOf(ref, 'NotifyClient', 'refundStatus') },
-  { callerId: idOf(ref, 'RefundExecutor', 'execute'), calleeId: idOf(ref, 'PaymentClient', 'reverseCharge') },
-  { callerId: idOf(ref, 'RefundExecutor', 'partialRefund'), calleeId: idOf(ref, 'PaymentClient', 'creditWallet') },
-  { callerId: idOf(ref, 'PaymentClient', 'reverseCharge'), calleeId: idOf(pay, 'PaymentFacade', 'voidAuth') },
-  { callerId: idOf(ref, 'PaymentClient', 'reverseCharge'), calleeId: idOf(pay, 'LedgerWriter', 'reverseEntry') },
-  { callerId: idOf(ref, 'PaymentClient', 'creditWallet'), calleeId: idOf(pay, 'WalletProcessor', 'chargeWallet') },
-  { callerId: idOf(ref, 'NotifyClient', 'refundStatus'), calleeId: idOf(ntf, 'NotifyFacade', 'send') },
-
-  // Identity iç
-  { callerId: idOf(idn, 'AuthService', 'login'), calleeId: idOf(idn, 'UserDirectory', 'findByEmail') },
-  { callerId: idOf(idn, 'AuthService', 'login'), calleeId: idOf(idn, 'MfaService', 'challenge') },
-  { callerId: idOf(idn, 'AuthService', 'login'), calleeId: idOf(idn, 'TokenIssuer', 'issue') },
-  { callerId: idOf(idn, 'AuthService', 'login'), calleeId: idOf(idn, 'SessionStore', 'put') },
-  { callerId: idOf(idn, 'AuthService', 'refresh'), calleeId: idOf(idn, 'TokenIssuer', 'issue') },
-  { callerId: idOf(idn, 'AuthService', 'logout'), calleeId: idOf(idn, 'TokenIssuer', 'revoke') },
-  { callerId: idOf(idn, 'MfaService', 'challenge'), calleeId: idOf(idn, 'MfaService', 'verify') },
-
-  // Notify iç
-  { callerId: idOf(ntf, 'NotifyFacade', 'send'), calleeId: idOf(ntf, 'PreferenceStore', 'allows') },
-  { callerId: idOf(ntf, 'NotifyFacade', 'send'), calleeId: idOf(ntf, 'EmailChannel', 'renderTemplate') },
-  { callerId: idOf(ntf, 'NotifyFacade', 'send'), calleeId: idOf(ntf, 'EmailChannel', 'deliver') },
-  { callerId: idOf(ntf, 'NotifyFacade', 'send'), calleeId: idOf(ntf, 'SmsChannel', 'deliver') },
-  { callerId: idOf(ntf, 'NotifyFacade', 'send'), calleeId: idOf(ntf, 'PushChannel', 'deliver') },
-  { callerId: idOf(ntf, 'NotifyFacade', 'sendBulk'), calleeId: idOf(ntf, 'NotifyFacade', 'send') },
-  { callerId: idOf(ntf, 'EmailChannel', 'deliver'), calleeId: idOf(ntf, 'DeadLetter', 'enqueue') },
-  // Notify → Refund (affectsEdges: refund → notify)
-  { callerId: idOf(ntf, 'RefundHook', 'onRefundEvent'), calleeId: idOf(ntf, 'RefundHook', 'fetchRefund') },
-  { callerId: idOf(ntf, 'RefundHook', 'fetchRefund'), calleeId: idOf(ref, 'RefundQuery', 'findById') },
-  { callerId: idOf(ntf, 'RefundHook', 'onRefundEvent'), calleeId: idOf(ntf, 'NotifyFacade', 'send') },
-
-  // Storefront → Checkout / Identity
-  { callerId: idOf(sf, 'StorefrontController', 'checkout'), calleeId: idOf(sf, 'CheckoutGateway', 'place') },
-  { callerId: idOf(sf, 'StorefrontController', 'cart'), calleeId: idOf(sf, 'CatalogView', 'productPage') },
-  { callerId: idOf(sf, 'StorefrontController', 'loginPage'), calleeId: idOf(sf, 'IdentityGateway', 'currentUser') },
-  { callerId: idOf(sf, 'CheckoutGateway', 'place'), calleeId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder') },
-  { callerId: idOf(sf, 'CheckoutGateway', 'preview'), calleeId: idOf(chk, 'CheckoutOrchestrator', 'preview') },
-  { callerId: idOf(sf, 'IdentityGateway', 'currentUser'), calleeId: idOf(idn, 'SessionStore', 'get') },
-  { callerId: idOf(sf, 'IdentityGateway', 'currentUser'), calleeId: idOf(idn, 'AuthService', 'refresh') },
-  { callerId: idOf(sf, 'CatalogView', 'search'), calleeId: idOf(sf, 'CatalogView', 'productPage') },
-
-  // MobileBff → Checkout / Identity
-  { callerId: idOf(bff, 'MobileCheckoutApi', 'placeOrder'), calleeId: idOf(bff, 'CheckoutGateway', 'place') },
-  { callerId: idOf(bff, 'MobileCheckoutApi', 'preview'), calleeId: idOf(chk, 'CheckoutOrchestrator', 'preview') },
-  { callerId: idOf(bff, 'MobileAuthApi', 'login'), calleeId: idOf(idn, 'AuthService', 'login') },
-  { callerId: idOf(bff, 'MobileAuthApi', 'refresh'), calleeId: idOf(idn, 'AuthService', 'refresh') },
-  { callerId: idOf(bff, 'CheckoutGateway', 'place'), calleeId: idOf(chk, 'CheckoutOrchestrator', 'placeOrder') },
-  { callerId: idOf(bff, 'IdentityGateway', 'resolve'), calleeId: idOf(idn, 'SessionStore', 'get') },
-  { callerId: idOf(bff, 'MobileCartApi', 'add'), calleeId: idOf(bff, 'MobileCartApi', 'sync') },
-  { callerId: idOf(bff, 'MobileCartApi', 'sync'), calleeId: idOf(chk, 'CartService', 'addItem') },
-
-  // Report → Payment / Billing + iç
-  { callerId: idOf(rpt, 'ReportFacade', 'paymentSummary'), calleeId: idOf(rpt, 'PaymentIngest', 'pullCharges') },
-  { callerId: idOf(rpt, 'ReportFacade', 'paymentSummary'), calleeId: idOf(rpt, 'CubeBuilder', 'buildDaily') },
-  { callerId: idOf(rpt, 'ReportFacade', 'invoiceAging'), calleeId: idOf(rpt, 'BillingIngest', 'pullInvoices') },
-  { callerId: idOf(rpt, 'ReportFacade', 'refundVolume'), calleeId: idOf(rpt, 'PaymentIngest', 'normalize') },
-  { callerId: idOf(rpt, 'PaymentIngest', 'pullCharges'), calleeId: idOf(pay, 'PaymentQuery', 'listByOrder') },
-  { callerId: idOf(rpt, 'PaymentIngest', 'normalize'), calleeId: idOf(pay, 'PaymentQuery', 'findById') },
-  { callerId: idOf(rpt, 'BillingIngest', 'pullInvoices'), calleeId: idOf(bil, 'BillingQuery', 'getInvoice') },
-  { callerId: idOf(rpt, 'BillingIngest', 'normalize'), calleeId: idOf(bil, 'BillingQuery', 'listUnpaid') },
-  { callerId: idOf(rpt, 'CubeBuilder', 'buildDaily'), calleeId: idOf(rpt, 'CubeBuilder', 'publish') },
-  { callerId: idOf(rpt, 'ReportQuery', 'exportCsv'), calleeId: idOf(rpt, 'ReportQuery', 'get') },
-
-  // Finance → Billing / Report
-  { callerId: idOf(fin, 'FinanceBatch', 'runNightly'), calleeId: idOf(fin, 'LedgerImport', 'fromBilling') },
-  { callerId: idOf(fin, 'FinanceBatch', 'runNightly'), calleeId: idOf(fin, 'LedgerImport', 'fromReports') },
-  { callerId: idOf(fin, 'FinanceBatch', 'runNightly'), calleeId: idOf(fin, 'GlPoster', 'post') },
-  { callerId: idOf(fin, 'FinanceBatch', 'runCatchup'), calleeId: idOf(fin, 'FinanceQuery', 'exceptions') },
-  { callerId: idOf(fin, 'LedgerImport', 'fromBilling'), calleeId: idOf(bil, 'BillingQuery', 'listUnpaid') },
-  { callerId: idOf(fin, 'LedgerImport', 'fromBilling'), calleeId: idOf(bil, 'InvoiceService', 'createInvoice') },
-  { callerId: idOf(fin, 'LedgerImport', 'fromReports'), calleeId: idOf(rpt, 'ReportFacade', 'paymentSummary') },
-  { callerId: idOf(fin, 'LedgerImport', 'fromReports'), calleeId: idOf(rpt, 'CubeBuilder', 'publish') },
-  { callerId: idOf(fin, 'GlPoster', 'reverse'), calleeId: idOf(fin, 'FinanceQuery', 'trialBalance') },
-
-  // Support → Refund / Notify
-  { callerId: idOf(sup, 'TicketService', 'openTicket'), calleeId: idOf(sup, 'TicketQuery', 'get') },
-  { callerId: idOf(sup, 'TicketService', 'escalate'), calleeId: idOf(sup, 'NotifyBridge', 'agentUpdate') },
-  { callerId: idOf(sup, 'RefundBridge', 'startRefund'), calleeId: idOf(ref, 'RefundFacade', 'requestRefund') },
-  { callerId: idOf(sup, 'RefundBridge', 'status'), calleeId: idOf(ref, 'RefundQuery', 'findById') },
-  { callerId: idOf(sup, 'NotifyBridge', 'agentUpdate'), calleeId: idOf(ntf, 'NotifyFacade', 'send') },
-  { callerId: idOf(sup, 'TicketService', 'closeTicket'), calleeId: idOf(sup, 'NotifyBridge', 'agentUpdate') },
-
-  // Care → Support
-  { callerId: idOf(care, 'CareFacade', 'handleCall'), calleeId: idOf(care, 'DeskClient', 'openFromCare') },
-  { callerId: idOf(care, 'CareFacade', 'handleChat'), calleeId: idOf(care, 'DeskClient', 'linkTicket') },
-  { callerId: idOf(care, 'DeskClient', 'openFromCare'), calleeId: idOf(sup, 'TicketService', 'openTicket') },
-  { callerId: idOf(care, 'DeskClient', 'linkTicket'), calleeId: idOf(sup, 'TicketQuery', 'get') },
-  { callerId: idOf(care, 'CareFacade', 'handleCall'), calleeId: idOf(care, 'CareQuery', 'history') },
-
-  // Ticket analytics → Care
-  { callerId: idOf(tix, 'AnalyticsFacade', 'dailyStats'), calleeId: idOf(tix, 'CareIngest', 'pullCases') },
-  { callerId: idOf(tix, 'AnalyticsFacade', 'dailyStats'), calleeId: idOf(tix, 'AggBuilder', 'build') },
-  { callerId: idOf(tix, 'AnalyticsFacade', 'agentScore'), calleeId: idOf(tix, 'CareIngest', 'normalize') },
-  { callerId: idOf(tix, 'CareIngest', 'pullCases'), calleeId: idOf(care, 'CareQuery', 'history') },
-  { callerId: idOf(tix, 'CareIngest', 'normalize'), calleeId: idOf(care, 'CareQuery', 'active') },
-  { callerId: idOf(tix, 'AggBuilder', 'build'), calleeId: idOf(tix, 'AggBuilder', 'publish') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'PaymentIdempotencyGuardStore', 'beginIdempotentPaymentOperation') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'RealtimeFraudScoringGate', 'scoreIncomingPaymentRisk') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'RealtimeFraudScoringGate', 'blockHighRiskPaymentAttempt') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'CardNetworkTokenizationProcessor', 'chargeTokenizedCardInstrument') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'DigitalWalletSettlementProcessor', 'chargeLinkedWalletBalance') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'postSuccessfulSettlementEntry') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'PaymentIdempotencyGuardStore', 'completeIdempotentPaymentOperation') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(pay, 'PaymentNotifyBridgeClient', 'emitPaymentLifecycleNotification') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'authorizePendingCardHold'), calleeId: idOf(pay, 'RealtimeFraudScoringGate', 'scoreIncomingPaymentRisk') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'authorizePendingCardHold'), calleeId: idOf(pay, 'CardNetworkTokenizationProcessor', 'tokenizeSensitiveCardMaterial') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'captureAuthorizedCardHold'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'postSuccessfulSettlementEntry') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'voidAuthorizedCardHold'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'reversePostedSettlementEntry') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'retryFailedSettlementBatch'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'listFailedSettlementsForRetry') },
+  { callerId: idOf(pay, 'CardNetworkTokenizationProcessor', 'chargeTokenizedCardInstrument'), calleeId: idOf(pay, 'CardNetworkTokenizationProcessor', 'validateIssuerBinRangeRules') },
+  { callerId: idOf(pay, 'CardNetworkTokenizationProcessor', 'tokenizeSensitiveCardMaterial'), calleeId: idOf(pay, 'CardNetworkTokenizationProcessor', 'refreshNetworkTokenLifecycle') },
+  { callerId: idOf(pay, 'DigitalWalletSettlementProcessor', 'chargeLinkedWalletBalance'), calleeId: idOf(pay, 'DigitalWalletSettlementProcessor', 'reserveWalletSpendingLimit') },
+  { callerId: idOf(pay, 'RealtimeFraudScoringGate', 'blockHighRiskPaymentAttempt'), calleeId: idOf(pay, 'RealtimeFraudScoringGate', 'enrichRiskWithDeviceSignals') },
+  { callerId: idOf(pay, 'RealtimeFraudScoringGate', 'enrichRiskWithDeviceSignals'), calleeId: idOf(pay, 'RealtimeFraudScoringGate', 'scoreIncomingPaymentRisk') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOf(idn, 'DistributedSessionStore', 'getActiveSessionRecord') },
+  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'authorizePendingCardHold'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById') },
+  { callerId: idOf(pay, 'PaymentNotifyBridgeClient', 'emitPaymentLifecycleNotification'), calleeId: idOf(ntf, 'PaymentEventNotificationHook', 'onPaymentLifecycleDomainEvent') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'IdentitySessionResolutionClient', 'resolveUserFromActiveSession') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'InventoryReservationClient', 'reserveStockForCheckoutOrder') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'DownstreamPaymentGatewayClient', 'chargeOrderThroughPaymentGateway') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'OutboundNotificationClient', 'notifyCustomerOrderPlaced') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOf(chk, 'BillingInvoiceHandoffClient', 'openInvoiceForCompletedOrder') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'previewCheckoutPricingQuote'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'previewCheckoutPricingQuote'), calleeId: idOf(chk, 'DownstreamPaymentGatewayClient', 'authorizeOrderThroughPaymentGateway') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'cancelUncommittedCheckoutDraft'), calleeId: idOf(chk, 'InventoryReservationClient', 'releaseReservedCheckoutStock') },
+  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'resumeAbandonedCheckoutSession'), calleeId: idOf(chk, 'OutboundNotificationClient', 'notifyCustomerCheckoutAbandoned') },
+  { callerId: idOf(chk, 'ShoppingCartPricingService', 'addCatalogItemToCart'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions') },
+  { callerId: idOf(chk, 'ShoppingCartPricingService', 'removeCatalogItemFromCart'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions') },
+  { callerId: idOf(chk, 'ShoppingCartPricingService', 'mergeGuestAndUserCarts'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'repriceCartWithPromotions') },
+  { callerId: idOf(chk, 'DownstreamPaymentGatewayClient', 'chargeOrderThroughPaymentGateway'), calleeId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement') },
+  { callerId: idOf(chk, 'DownstreamPaymentGatewayClient', 'authorizeOrderThroughPaymentGateway'), calleeId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'authorizePendingCardHold') },
+  { callerId: idOf(chk, 'DownstreamPaymentGatewayClient', 'queryOrderPaymentSettlementStatus'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'findSettlementByPaymentId') },
+  { callerId: idOf(chk, 'IdentitySessionResolutionClient', 'resolveUserFromActiveSession'), calleeId: idOf(idn, 'DistributedSessionStore', 'getActiveSessionRecord') },
+  { callerId: idOf(chk, 'IdentitySessionResolutionClient', 'resolveUserFromActiveSession'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById') },
+  { callerId: idOf(chk, 'OutboundNotificationClient', 'notifyCustomerOrderPlaced'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(chk, 'OutboundNotificationClient', 'notifyCustomerCheckoutAbandoned'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(chk, 'BillingInvoiceHandoffClient', 'openInvoiceForCompletedOrder'), calleeId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder'), calleeId: idOf(bil, 'InvoiceTaxComputationEngine', 'computeTaxLinesForInvoiceDraft') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder'), calleeId: idOf(bil, 'InvoiceTaxComputationEngine', 'validateVatRegistrationIdentifier') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder'), calleeId: idOf(bil, 'CheckoutOrderLookupClient', 'fetchOrderSnapshotForInvoicing') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'reissueCorrectedCustomerInvoice'), calleeId: idOf(bil, 'CustomerInvoiceLifecycleService', 'voidIssuedCustomerInvoice') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'reissueCorrectedCustomerInvoice'), calleeId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder') },
+  { callerId: idOf(bil, 'CustomerInvoiceLifecycleService', 'applyCreditMemoToInvoice'), calleeId: idOf(bil, 'RefundCreditApplicationClient', 'applyApprovedRefundToInvoice') },
+  { callerId: idOf(bil, 'BillingBatchSchedulerService', 'runDailyInvoiceCollectionBatch'), calleeId: idOf(bil, 'BillingInvoiceQueryService', 'listUnpaidInvoicesForAccount') },
+  { callerId: idOf(bil, 'BillingBatchSchedulerService', 'runDailyInvoiceCollectionBatch'), calleeId: idOf(bil, 'PaymentSettlementReconciler', 'reconcileChargeAgainstOpenInvoice') },
+  { callerId: idOf(bil, 'BillingBatchSchedulerService', 'retryFailedInvoiceCollectionJobs'), calleeId: idOf(bil, 'PaymentSettlementReconciler', 'markInvoiceFullyPaidFromSettlement') },
+  { callerId: idOf(bil, 'BillingBatchSchedulerService', 'scheduleMidMonthReconciliationSweep'), calleeId: idOf(bil, 'PaymentSettlementReconciler', 'flagUnmatchedSettlementException') },
+  { callerId: idOf(bil, 'PaymentSettlementReconciler', 'reconcileChargeAgainstOpenInvoice'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'findSettlementByPaymentId') },
+  { callerId: idOf(bil, 'PaymentSettlementReconciler', 'markInvoiceFullyPaidFromSettlement'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'listSettlementsByOrderReference') },
+  { callerId: idOf(bil, 'PaymentSettlementReconciler', 'reconcileChargeAgainstOpenInvoice'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'postSuccessfulSettlementEntry') },
+  { callerId: idOf(bil, 'CheckoutOrderLookupClient', 'fetchOrderSnapshotForInvoicing'), calleeId: idOf(chk, 'CheckoutOrderQueryService', 'getOrderByReference') },
+  { callerId: idOf(bil, 'RefundCreditApplicationClient', 'applyApprovedRefundToInvoice'), calleeId: idOf(ref, 'RefundCaseQueryService', 'findRefundCaseById') },
+  { callerId: idOf(bil, 'BillingNotifyBridgeClient', 'emitInvoiceLifecycleNotification'), calleeId: idOf(ntf, 'BillingEventNotificationHook', 'onInvoiceLifecycleDomainEvent') },
+  { callerId: idOf(bil, 'IdentityAccountLookupClient', 'resolveBillingAccountOwner'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'requestCustomerRefundWorkflow'), calleeId: idOf(ref, 'RefundPolicyDecisionEngine', 'evaluateRefundEligibilityRules') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'requestCustomerRefundWorkflow'), calleeId: idOf(ref, 'RefundPolicyDecisionEngine', 'evaluateRefundTimeWindowOpen') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'approvePendingRefundWorkflow'), calleeId: idOf(ref, 'RefundSettlementExecutor', 'executeFullChargeReversal') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'approvePendingRefundWorkflow'), calleeId: idOf(ref, 'OutboundRefundNotifyClient', 'publishRefundStatusNotification') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'approvePendingRefundWorkflow'), calleeId: idOf(ref, 'BillingCreditMemoClient', 'requestInvoiceCreditForRefund') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'approvePendingRefundWorkflow'), calleeId: idOf(ref, 'ReportingRefundFactClient', 'publishRefundVolumeFact') },
+  { callerId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'escalateRefundToSupportDesk'), calleeId: idOf(sup, 'SupportTicketLifecycleService', 'openCustomerSupportTicket') },
+  { callerId: idOf(ref, 'RefundSettlementExecutor', 'executeFullChargeReversal'), calleeId: idOf(ref, 'DownstreamPaymentReversalClient', 'reverseSettledChargeOnGateway') },
+  { callerId: idOf(ref, 'RefundSettlementExecutor', 'executePartialChargeReversal'), calleeId: idOf(ref, 'DownstreamPaymentReversalClient', 'creditWalletOnPaymentGateway') },
+  { callerId: idOf(ref, 'RefundSettlementExecutor', 'creditWalletAfterChargeReversal'), calleeId: idOf(ref, 'DownstreamPaymentReversalClient', 'creditWalletOnPaymentGateway') },
+  { callerId: idOf(ref, 'DownstreamPaymentReversalClient', 'reverseSettledChargeOnGateway'), calleeId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'voidAuthorizedCardHold') },
+  { callerId: idOf(ref, 'DownstreamPaymentReversalClient', 'reverseSettledChargeOnGateway'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'reversePostedSettlementEntry') },
+  { callerId: idOf(ref, 'DownstreamPaymentReversalClient', 'creditWalletOnPaymentGateway'), calleeId: idOf(pay, 'DigitalWalletSettlementProcessor', 'chargeLinkedWalletBalance') },
+  { callerId: idOf(ref, 'OutboundRefundNotifyClient', 'publishRefundStatusNotification'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(ref, 'BillingCreditMemoClient', 'requestInvoiceCreditForRefund'), calleeId: idOf(bil, 'CustomerInvoiceLifecycleService', 'applyCreditMemoToInvoice') },
+  { callerId: idOf(ref, 'ReportingRefundFactClient', 'publishRefundVolumeFact'), calleeId: idOf(rpt, 'OperationalReportingFacade', 'buildRefundVolumeSummaryReport') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileByEmail') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials'), calleeId: idOf(idn, 'MultiFactorChallengeService', 'issueMultiFactorChallenge') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials'), calleeId: idOf(idn, 'AccessTokenIssuanceService', 'issueSignedAccessRefreshTokens') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials'), calleeId: idOf(idn, 'DistributedSessionStore', 'putActiveSessionRecord') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'refreshExpiringAccessSession'), calleeId: idOf(idn, 'AccessTokenIssuanceService', 'issueSignedAccessRefreshTokens') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'logoutActiveUserSession'), calleeId: idOf(idn, 'AccessTokenIssuanceService', 'revokeIssuedAccessToken') },
+  { callerId: idOf(idn, 'EnterpriseAuthenticationFacade', 'challengeStepUpAuthentication'), calleeId: idOf(idn, 'MultiFactorChallengeService', 'issueMultiFactorChallenge') },
+  { callerId: idOf(idn, 'MultiFactorChallengeService', 'issueMultiFactorChallenge'), calleeId: idOf(idn, 'MultiFactorChallengeService', 'verifyMultiFactorChallengeCode') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification'), calleeId: idOf(ntf, 'UserNotificationPreferenceStore', 'allowsNotificationOnChannel') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification'), calleeId: idOf(ntf, 'EmailDeliveryChannelAdapter', 'renderNotificationEmailTemplate') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification'), calleeId: idOf(ntf, 'EmailDeliveryChannelAdapter', 'deliverRenderedEmailMessage') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification'), calleeId: idOf(ntf, 'SmsDeliveryChannelAdapter', 'deliverSmsNotificationMessage') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification'), calleeId: idOf(ntf, 'PushDeliveryChannelAdapter', 'deliverMobilePushNotification') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendBulkChannelNotifications'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'retryFailedNotificationDelivery'), calleeId: idOf(ntf, 'NotificationDeadLetterQueue', 'replayDeadLetterNotification') },
+  { callerId: idOf(ntf, 'EmailDeliveryChannelAdapter', 'deliverRenderedEmailMessage'), calleeId: idOf(ntf, 'NotificationDeadLetterQueue', 'enqueueFailedNotificationMessage') },
+  { callerId: idOf(ntf, 'RefundEventNotificationHook', 'onRefundLifecycleDomainEvent'), calleeId: idOf(ntf, 'RefundEventNotificationHook', 'fetchRefundSnapshotForNotify') },
+  { callerId: idOf(ntf, 'RefundEventNotificationHook', 'fetchRefundSnapshotForNotify'), calleeId: idOf(ref, 'RefundCaseQueryService', 'findRefundCaseById') },
+  { callerId: idOf(ntf, 'RefundEventNotificationHook', 'onRefundLifecycleDomainEvent'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(ntf, 'PaymentEventNotificationHook', 'onPaymentLifecycleDomainEvent'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(ntf, 'BillingEventNotificationHook', 'onInvoiceLifecycleDomainEvent'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(ntf, 'SupportDeskNotifyBridge', 'onSupportTicketAgentUpdate'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(sf, 'DigitalStorefrontHttpController', 'submitCheckoutFromStorefront'), calleeId: idOf(sf, 'CheckoutOrchestrationGateway', 'placeOrderViaCheckoutEngine') },
+  { callerId: idOf(sf, 'DigitalStorefrontHttpController', 'renderActiveShoppingCart'), calleeId: idOf(sf, 'CatalogProductViewAssembler', 'assembleProductDetailPageModel') },
+  { callerId: idOf(sf, 'DigitalStorefrontHttpController', 'renderCustomerLoginExperience'), calleeId: idOf(sf, 'IdentitySessionGateway', 'resolveCurrentStorefrontUser') },
+  { callerId: idOf(sf, 'DigitalStorefrontHttpController', 'searchCatalogProductListing'), calleeId: idOf(sf, 'CatalogProductViewAssembler', 'searchCatalogProductViewModels') },
+  { callerId: idOf(sf, 'CheckoutOrchestrationGateway', 'placeOrderViaCheckoutEngine'), calleeId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder') },
+  { callerId: idOf(sf, 'CheckoutOrchestrationGateway', 'previewOrderViaCheckoutEngine'), calleeId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'previewCheckoutPricingQuote') },
+  { callerId: idOf(sf, 'IdentitySessionGateway', 'resolveCurrentStorefrontUser'), calleeId: idOf(idn, 'DistributedSessionStore', 'getActiveSessionRecord') },
+  { callerId: idOf(sf, 'IdentitySessionGateway', 'resolveCurrentStorefrontUser'), calleeId: idOf(idn, 'EnterpriseAuthenticationFacade', 'refreshExpiringAccessSession') },
+  { callerId: idOf(sf, 'CatalogProductViewAssembler', 'searchCatalogProductViewModels'), calleeId: idOf(sf, 'CatalogProductViewAssembler', 'assembleProductDetailPageModel') },
+  { callerId: idOf(sf, 'ReportingBrowseAnalyticsClient', 'publishStorefrontBrowseFact'), calleeId: idOf(rpt, 'OperationalReportingFacade', 'buildPaymentSettlementSummaryReport') },
+  { callerId: idOf(sf, 'StorefrontNotifyBridgeClient', 'emitStorefrontLifecycleNotification'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(bff, 'MobileCheckoutExperienceApi', 'placeOrderFromMobileClient'), calleeId: idOf(bff, 'MobileCheckoutOrchestrationGateway', 'placeOrderThroughCheckoutEngine') },
+  { callerId: idOf(bff, 'MobileCheckoutExperienceApi', 'previewOrderFromMobileClient'), calleeId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'previewCheckoutPricingQuote') },
+  { callerId: idOf(bff, 'MobileAuthenticationExperienceApi', 'loginMobileDeviceSession'), calleeId: idOf(idn, 'EnterpriseAuthenticationFacade', 'loginWithPasswordCredentials') },
+  { callerId: idOf(bff, 'MobileAuthenticationExperienceApi', 'refreshMobileDeviceSession'), calleeId: idOf(idn, 'EnterpriseAuthenticationFacade', 'refreshExpiringAccessSession') },
+  { callerId: idOf(bff, 'MobileCheckoutOrchestrationGateway', 'placeOrderThroughCheckoutEngine'), calleeId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder') },
+  { callerId: idOf(bff, 'MobileIdentityResolutionGateway', 'resolveUserFromDeviceSession'), calleeId: idOf(idn, 'DistributedSessionStore', 'getActiveSessionRecord') },
+  { callerId: idOf(bff, 'MobileShoppingCartSyncApi', 'addSkuToDeviceCart'), calleeId: idOf(bff, 'MobileShoppingCartSyncApi', 'synchronizeDeviceCartState') },
+  { callerId: idOf(bff, 'MobileShoppingCartSyncApi', 'synchronizeDeviceCartState'), calleeId: idOf(chk, 'ShoppingCartPricingService', 'addCatalogItemToCart') },
+  { callerId: idOf(bff, 'MobileNotifyPreferenceBridge', 'registerDevicePushEndpoint'), calleeId: idOf(ntf, 'UserNotificationPreferenceStore', 'updateUserNotificationPreferences') },
+  { callerId: idOf(bff, 'MobileNotifyPreferenceBridge', 'emitMobileLifecycleNotification'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(rpt, 'OperationalReportingFacade', 'buildPaymentSettlementSummaryReport'), calleeId: idOf(rpt, 'PaymentSettlementIngestWorker', 'pullChargesFromPaymentGateway') },
+  { callerId: idOf(rpt, 'OperationalReportingFacade', 'buildPaymentSettlementSummaryReport'), calleeId: idOf(rpt, 'AnalyticsCubeBuilderService', 'buildDailyOperationalAnalyticsCube') },
+  { callerId: idOf(rpt, 'OperationalReportingFacade', 'buildInvoiceAgingSummaryReport'), calleeId: idOf(rpt, 'BillingInvoiceIngestWorker', 'pullInvoicesFromBillingEngine') },
+  { callerId: idOf(rpt, 'OperationalReportingFacade', 'buildRefundVolumeSummaryReport'), calleeId: idOf(rpt, 'PaymentSettlementIngestWorker', 'normalizePaymentChargeFactRow') },
+  { callerId: idOf(rpt, 'OperationalReportingFacade', 'buildSupportTicketVolumeReport'), calleeId: idOf(rpt, 'TicketAnalyticsIngestBridge', 'pullTicketFactsFromAnalytics') },
+  { callerId: idOf(rpt, 'PaymentSettlementIngestWorker', 'pullChargesFromPaymentGateway'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'listSettlementsByOrderReference') },
+  { callerId: idOf(rpt, 'PaymentSettlementIngestWorker', 'normalizePaymentChargeFactRow'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'findSettlementByPaymentId') },
+  { callerId: idOf(rpt, 'BillingInvoiceIngestWorker', 'pullInvoicesFromBillingEngine'), calleeId: idOf(bil, 'BillingInvoiceQueryService', 'getInvoiceByIdentifier') },
+  { callerId: idOf(rpt, 'BillingInvoiceIngestWorker', 'normalizeBillingInvoiceFactRow'), calleeId: idOf(bil, 'BillingInvoiceQueryService', 'listUnpaidInvoicesForAccount') },
+  { callerId: idOf(rpt, 'TicketAnalyticsIngestBridge', 'pullTicketFactsFromAnalytics'), calleeId: idOf(tix, 'TicketAnalyticsQueryService', 'getPublishedTicketStats') },
+  { callerId: idOf(rpt, 'AnalyticsCubeBuilderService', 'buildDailyOperationalAnalyticsCube'), calleeId: idOf(rpt, 'AnalyticsCubeBuilderService', 'publishOperationalAnalyticsCube') },
+  { callerId: idOf(rpt, 'ReportCatalogQueryService', 'exportPublishedReportAsCsv'), calleeId: idOf(rpt, 'ReportCatalogQueryService', 'getPublishedReportById') },
+  { callerId: idOf(rpt, 'IdentityAudienceLookupClient', 'resolveReportAudienceUser'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runNightlyGeneralLedgerImport'), calleeId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromBilling') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runNightlyGeneralLedgerImport'), calleeId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromReports') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runNightlyGeneralLedgerImport'), calleeId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromPayments') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runNightlyGeneralLedgerImport'), calleeId: idOf(fin, 'GeneralLedgerPostingService', 'postValidatedGeneralLedgerEntry') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runCatchupGeneralLedgerImport'), calleeId: idOf(fin, 'FinanceExceptionQueryService', 'listOpenFinanceExceptions') },
+  { callerId: idOf(fin, 'OvernightFinanceBatchOrchestrator', 'runPaymentSettlementCatchupImport'), calleeId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromPayments') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromBilling'), calleeId: idOf(bil, 'BillingInvoiceQueryService', 'listUnpaidInvoicesForAccount') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromBilling'), calleeId: idOf(bil, 'CustomerInvoiceLifecycleService', 'createInvoiceFromFulfilledOrder') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromReports'), calleeId: idOf(rpt, 'OperationalReportingFacade', 'buildPaymentSettlementSummaryReport') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromReports'), calleeId: idOf(rpt, 'AnalyticsCubeBuilderService', 'publishOperationalAnalyticsCube') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromPayments'), calleeId: idOf(pay, 'PaymentSettlementQueryService', 'listFailedSettlementsForRetry') },
+  { callerId: idOf(fin, 'GeneralLedgerImportWorker', 'importLedgerEntriesFromPayments'), calleeId: idOf(pay, 'PaymentLedgerEntryWriter', 'postSuccessfulSettlementEntry') },
+  { callerId: idOf(fin, 'GeneralLedgerPostingService', 'reversePostedGeneralLedgerEntry'), calleeId: idOf(fin, 'FinanceExceptionQueryService', 'computeTrialBalanceSnapshot') },
+  { callerId: idOf(sup, 'SupportTicketLifecycleService', 'openCustomerSupportTicket'), calleeId: idOf(sup, 'SupportTicketQueryService', 'getSupportTicketById') },
+  { callerId: idOf(sup, 'SupportTicketLifecycleService', 'escalateCustomerSupportTicket'), calleeId: idOf(sup, 'SupportNotifyBridgeClient', 'notifyAgentOfTicketUpdate') },
+  { callerId: idOf(sup, 'SupportTicketLifecycleService', 'closeCustomerSupportTicket'), calleeId: idOf(sup, 'SupportNotifyBridgeClient', 'notifyAgentOfTicketUpdate') },
+  { callerId: idOf(sup, 'SupportTicketLifecycleService', 'reassignTicketToCareQueue'), calleeId: idOf(sup, 'SupportNotifyBridgeClient', 'notifyAgentOfTicketUpdate') },
+  { callerId: idOf(sup, 'RefundWorkflowBridgeClient', 'startRefundFromSupportTicket'), calleeId: idOf(ref, 'CustomerRefundOrchestrationFacade', 'requestCustomerRefundWorkflow') },
+  { callerId: idOf(sup, 'RefundWorkflowBridgeClient', 'getRefundStatusForSupportTicket'), calleeId: idOf(ref, 'RefundCaseQueryService', 'findRefundCaseById') },
+  { callerId: idOf(sup, 'SupportNotifyBridgeClient', 'notifyAgentOfTicketUpdate'), calleeId: idOf(ntf, 'SupportDeskNotifyBridge', 'onSupportTicketAgentUpdate') },
+  { callerId: idOf(sup, 'IdentityAgentLookupClient', 'resolveAgentUserProfile'), calleeId: idOf(idn, 'EnterpriseUserDirectoryService', 'findUserProfileById') },
+  { callerId: idOf(care, 'CustomerCareInteractionFacade', 'handleInboundCustomerCall'), calleeId: idOf(care, 'SupportDeskCaseClient', 'openSupportTicketFromCareCase') },
+  { callerId: idOf(care, 'CustomerCareInteractionFacade', 'handleInboundCustomerChat'), calleeId: idOf(care, 'SupportDeskCaseClient', 'linkCareCaseToSupportTicket') },
+  { callerId: idOf(care, 'CustomerCareInteractionFacade', 'handleInboundCustomerCall'), calleeId: idOf(care, 'CareCaseQueryService', 'listCareHistoryForCustomer') },
+  { callerId: idOf(care, 'CustomerCareInteractionFacade', 'summarizeCustomerCareHistory'), calleeId: idOf(care, 'CareCaseQueryService', 'listCareHistoryForCustomer') },
+  { callerId: idOf(care, 'SupportDeskCaseClient', 'openSupportTicketFromCareCase'), calleeId: idOf(sup, 'SupportTicketLifecycleService', 'openCustomerSupportTicket') },
+  { callerId: idOf(care, 'SupportDeskCaseClient', 'linkCareCaseToSupportTicket'), calleeId: idOf(sup, 'SupportTicketQueryService', 'getSupportTicketById') },
+  { callerId: idOf(care, 'CareNotifyBridgeClient', 'emitCareInteractionNotification'), calleeId: idOf(ntf, 'OutboundNotificationDispatchFacade', 'sendSingleChannelNotification') },
+  { callerId: idOf(tix, 'SupportTicketAnalyticsFacade', 'computeDailyTicketVolumeStats'), calleeId: idOf(tix, 'CareCaseIngestWorker', 'pullCareCasesForAnalytics') },
+  { callerId: idOf(tix, 'SupportTicketAnalyticsFacade', 'computeDailyTicketVolumeStats'), calleeId: idOf(tix, 'TicketAggregationBuilder', 'buildDailyTicketAggregation') },
+  { callerId: idOf(tix, 'SupportTicketAnalyticsFacade', 'computeAgentPerformanceScore'), calleeId: idOf(tix, 'CareCaseIngestWorker', 'normalizeCareCaseFactRow') },
+  { callerId: idOf(tix, 'SupportTicketAnalyticsFacade', 'publishTicketFactsToReporting'), calleeId: idOf(tix, 'ReportingTicketFactPublisher', 'pushTicketFactsIntoReporting') },
+  { callerId: idOf(tix, 'CareCaseIngestWorker', 'pullCareCasesForAnalytics'), calleeId: idOf(care, 'CareCaseQueryService', 'listCareHistoryForCustomer') },
+  { callerId: idOf(tix, 'CareCaseIngestWorker', 'normalizeCareCaseFactRow'), calleeId: idOf(care, 'CareCaseQueryService', 'listActiveCareCasesForAgent') },
+  { callerId: idOf(tix, 'TicketAggregationBuilder', 'buildDailyTicketAggregation'), calleeId: idOf(tix, 'TicketAggregationBuilder', 'publishTicketAggregationCube') },
+  { callerId: idOf(tix, 'ReportingTicketFactPublisher', 'pushTicketFactsIntoReporting'), calleeId: idOf(rpt, 'OperationalReportingFacade', 'buildSupportTicketVolumeReport') },
 ]
 
-const callersIndex = new Map<string, string[]>()
-const calleesIndex = new Map<string, string[]>()
+// Ters indeksler: O(1) callers / callees sorgusu
+const callersIndex = new Map<string, string[]>() // calleeId → [callerId, ...]
+const calleesIndex = new Map<string, string[]>() // callerId → [calleeId, ...]
 for (const e of callEdges) {
   const callers = callersIndex.get(e.calleeId) ?? []
   callers.push(e.callerId)
@@ -371,6 +431,8 @@ for (const e of callEdges) {
   calleesIndex.set(e.callerId, callees)
 }
 
+// —— Sorgu / API yardımcıları ——
+
 export function getMethod(id: string): MethodDef | undefined {
   return byId[id]
 }
@@ -379,6 +441,7 @@ export function listMethodsForService(serviceId: string): MethodDef[] {
   return methods.filter((x) => x.serviceId === serviceId)
 }
 
+/** UI’ya giden zenginleştirilmiş metod (servis adı + derece sayıları). */
 export type MethodRef = MethodDef & {
   serviceName: string
   callerCount: number
@@ -445,7 +508,10 @@ export function getCalleeRefs(methodId: string): MethodRef[] {
     .map((m) => toRef(m!))
 }
 
-/** Metod blast: çağıranlar BFS (maxDepth) */
+/**
+ * Metod blast özeti (sayılar): bu metod değişince onu dolaylı/doğrudan
+ * çağıran kaç method ve kaç servis etkilenir? (BFS, maxDepth)
+ */
 export function methodImpact(methodId: string, maxDepth = 6) {
   const root = byId[methodId]
   if (!root) return undefined
@@ -496,6 +562,10 @@ export type MethodImpactGraph = {
   reason?: string
 }
 
+/**
+ * Method haritası grafı: merkez → çağıranlar (oksu etki yönü).
+ * Servis impact’ine benzer; kaynak callEdges / callersIndex.
+ */
 export function buildMethodImpactGraph(
   methodId: string,
   maxNodes = 48,
@@ -547,6 +617,10 @@ export function buildMethodImpactGraph(
   return { center, nodes, edges, hopsDrawn, truncated, reason }
 }
 
+/**
+ * Üst arama: Class.method, class adı, method adı veya servis adı.
+ * "Foo.bar" yazınca nokta öncesi/sonrası ayrı eşleşir.
+ */
 export function searchMethods(query: string): MethodRef[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
@@ -580,7 +654,12 @@ export type ConsistencyIssue = {
   message: string
 }
 
-/** Call-graph ↔ affectsEdges tutarlılık kontrolü */
+/**
+ * Call-graph ↔ affectsEdges tutarlılık kontrolü.
+ * - unknown_caller / unknown_callee
+ * - cross_call_missing_affects: metod çapraz çağrı var, servis kenarı yok
+ * - affects_without_method_call: servis kenarı var, metod çağrısı yok
+ */
 export function checkCallGraphConsistency(): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = []
   const known = new Set(methods.map((x) => x.id))

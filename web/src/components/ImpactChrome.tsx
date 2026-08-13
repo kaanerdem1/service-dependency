@@ -65,16 +65,14 @@ export function PathBreadcrumb({
                 type="button"
                 className={[
                   'path-bc-crumb',
+                  'name-tip',
+                  'is-short',
                   isCenter && 'center',
                   isEnd && 'end',
                 ]
                   .filter(Boolean)
                   .join(' ')}
-                title={
-                  isCenter
-                    ? 'Merkez'
-                    : `${centerName} → … → ${name} (via zinciri)`
-                }
+                data-tip={name}
                 onClick={() => onSelect(id)}
               >
                 {name}

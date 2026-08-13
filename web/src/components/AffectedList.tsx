@@ -1,3 +1,7 @@
+/**
+ * “Bağımlılıklar” sekmesi: Downstream (onay) + Upstream (çağırdıklarım).
+ * Satıra tıklayınca pivot değişir.
+ */
 import type { AffectedService } from '../types'
 
 type Props = {

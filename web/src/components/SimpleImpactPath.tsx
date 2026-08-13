@@ -1,3 +1,8 @@
+/**
+ * Basit “etki yolu”: React Flow yerine CSS/SVG şerit.
+ * Aynı ImpactGraph verisini kullanır; oklar chip’ler arasında çizilir.
+ * tree = ana keşif yolu · cascade = yan bağ.
+ */
 import {
   useEffect,
   useId,
@@ -32,6 +37,7 @@ type Props = {
   canPivotForward?: boolean
 }
 
+/** tree = BFS ana yol · cascade = aynı katmandaki yan kenar */
 type EdgeKind = 'tree' | 'cascade'
 
 type Line = {
@@ -289,7 +295,10 @@ export function SimpleImpactPath({
     if (!root) return
 
     const measure = () => {
+      // CSS scale altında getBoundingClientRect görsel px verir; SVG layout px ister
       const rootBox = root.getBoundingClientRect()
+      const scaleX = rootBox.width > 0 ? root.offsetWidth / rootBox.width : 1
+      const scaleY = rootBox.height > 0 ? root.offsetHeight / rootBox.height : 1
       type Anchor = {
         left: number
         right: number
@@ -301,9 +310,9 @@ export function SimpleImpactPath({
         if (!id) return
         const r = el.getBoundingClientRect()
         anchors.set(id, {
-          right: r.right - rootBox.left,
-          left: r.left - rootBox.left,
-          cy: r.top + r.height / 2 - rootBox.top,
+          right: (r.right - rootBox.left) * scaleX,
+          left: (r.left - rootBox.left) * scaleX,
+          cy: (r.top + r.height / 2 - rootBox.top) * scaleY,
         })
       })
       const draft: Omit<Line, 'fanIndex' | 'fanCount' | 'lx' | 'ly'>[] = []
@@ -442,28 +451,24 @@ export function SimpleImpactPath({
       .filter(Boolean) as string[]
     const bridge = projectFilter && filter.bridgeIds.has(id)
     const match = projectFilter && filter.matchIds.has(id)
+    const tipChars = hop === 0 ? 48 : 40
+    const needsTip = label.length > tipChars
+
     return (
       <button
         type="button"
         data-node-id={id}
         className={chipClass(id, hop)}
-        title={
-          hop === 0
-            ? 'Seçimi bırak'
-            : [
-                bridge ? `Ara yol · ${filterLabel} için köprü` : '',
-                match ? `${filterLabel} · eşleşen` : '',
-                viaName ? `via ${viaName}` : '',
-                cascades.length ? `cascade ← ${cascades.join(', ')}` : '',
-              ]
-                .filter(Boolean)
-                .join(' · ') || undefined
-        }
         onClick={() => (hop === 0 ? onClearCenter?.() : onPivot(id))}
         onMouseEnter={() => setFocusId(id)}
         onMouseLeave={() => setFocusId(null)}
       >
-        <span className="path-chip-name">{label}</span>
+        <span
+          className={`path-chip-name${needsTip ? ' name-tip is-short' : ''}`}
+          data-tip={needsTip ? label : undefined}
+        >
+          {label}
+        </span>
         <span className="path-chip-meta">
           {bridge
             ? 'ara yol · filtre dışı'
@@ -479,7 +484,10 @@ export function SimpleImpactPath({
   }
 
   return (
-    <div className={`simple-path ${dimmed ? 'is-focusing' : ''}`}>
+    <div
+      className={`simple-path ${dimmed ? 'is-focusing' : ''}`}
+      onMouseLeave={() => setFocusId(null)}
+    >
       <div className="path-layer-bar">
         <div className="path-layer-left">
           <button

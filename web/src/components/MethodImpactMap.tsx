@@ -1,3 +1,12 @@
+/**
+ * Method etki haritası — seçili metodun çağıran blast’ı.
+ *
+ * viewMode:
+ * - services → servis düğümleri (çağıran servisler)
+ * - methods  → method düğümleri (daha ince call-graph)
+ *
+ * Kaynak: GET /api/methods/:id/impact-graph
+ */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
@@ -13,6 +22,12 @@ import ReactFlow, {
   type NodeProps,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import {
+  compactMapLabel,
+  mapLabelNeedsTip,
+  mapLayoutForDepth,
+  type MapLayout,
+} from '../impact/mapLayout'
 import type { MethodImpactGraph, MethodRef } from '../types'
 
 type Props = {
@@ -26,11 +41,9 @@ type Props = {
   canPivotForward?: boolean
 }
 
+/** Servis özeti ↔ method detayı geçişi (üst toolbar). */
 type ViewMode = 'services' | 'methods'
 
-const NODE_W = 176
-const COL_GAP = 280
-const ROW_GAP = 96
 const LEFT_X = 40
 const MAX_VISIBLE_PER_LAYER = 4
 const MIN_COLLAPSE_COUNT = 3
@@ -45,6 +58,9 @@ const EDGE_MARKER = {
 
 type MapNodeData = {
   label: string
+  fullLabel: string
+  showTip: boolean
+  size: MapLayout['size']
   sub: string
   kind: 'center' | 'service' | 'method' | 'collapsed'
   hop: number
@@ -61,6 +77,7 @@ function MapNodeView({ data }: NodeProps<MapNodeData>) {
     <div
       className={[
         'dd-node method-map-node',
+        `size-${data.size}`,
         isCenter && 'center',
         isCollapsed && 'collapsed',
         data.kind === 'service' && 'svc-agg',
@@ -71,7 +88,12 @@ function MapNodeView({ data }: NodeProps<MapNodeData>) {
       <Handle type="target" position={Position.Left} id="in" className="dd-handle" />
       <div className="dd-node-ring" />
       <div className="dd-node-body">
-        <span className="dd-node-label">{data.label}</span>
+        <span
+          className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
+          data-tip={data.showTip ? data.fullLabel : undefined}
+        >
+          {data.label}
+        </span>
         <span className="dd-node-hop">{data.sub}</span>
         {!isCenter && !isCollapsed && (
           <span className="dd-node-hop">{data.hop}. katman</span>
@@ -94,18 +116,25 @@ function FitViewOnLayers({
   visibleMaxHop,
   nodeCount,
   layoutKey,
+  layout,
 }: {
   visibleMaxHop: number
   nodeCount: number
   layoutKey: string | number
+  layout: MapLayout
 }) {
   const { fitView } = useReactFlow()
   useEffect(() => {
     const id = window.setTimeout(() => {
-      fitView({ padding: 0.24, duration: 320 })
+      fitView({
+        padding: layout.fitPadding,
+        duration: 320,
+        minZoom: layout.minZoom,
+        maxZoom: layout.maxZoom,
+      })
     }, 40)
     return () => window.clearTimeout(id)
-  }, [visibleMaxHop, nodeCount, layoutKey, fitView])
+  }, [visibleMaxHop, nodeCount, layoutKey, layout, fitView])
   return null
 }
 
@@ -200,7 +229,10 @@ function buildLayeredMap(
   rawEdges: { fromId: string; toId: string; hop: number }[],
   expandedLayers: Set<number>,
   visibleMaxHop: number,
+  layout: MapLayout,
 ): { nodes: Node<MapNodeData>[]; edges: Edge[] } {
+  const { nodeW, colGap, rowGap, size, tipChars } = layout
+  const colPitch = nodeW + colGap
   const byHop = new Map<number, LayerItem[]>()
   for (const it of items) {
     const list = byHop.get(it.hop) ?? []
@@ -209,7 +241,7 @@ function buildLayeredMap(
   }
   const hops = [...byHop.keys()].sort((a, b) => a - b)
 
-  const centerLabel =
+  const centerFull =
     mode === 'services'
       ? center.serviceName
       : `${center.className}.${center.name}`
@@ -223,8 +255,11 @@ function buildLayeredMap(
       id: mode === 'services' ? center.serviceId : center.id,
       type: 'methodNode',
       data: {
-        label: centerLabel,
-        sub: centerSub,
+        label: centerFull,
+        fullLabel: centerFull,
+        showTip: mapLabelNeedsTip(centerFull, tipChars),
+        size,
+        sub: compactMapLabel(centerSub, Math.min(36, tipChars)),
         kind: 'center',
         hop: 0,
         serviceId: center.serviceId,
@@ -261,7 +296,10 @@ function buildLayeredMap(
         type: 'methodNode',
         data: {
           label: it.label,
-          sub: it.sub,
+          fullLabel: it.label,
+          showTip: mapLabelNeedsTip(it.label, tipChars),
+          size,
+          sub: compactMapLabel(it.sub, Math.min(32, tipChars - 4)),
           kind: it.kind,
           hop,
           serviceId: it.serviceId,
@@ -269,8 +307,8 @@ function buildLayeredMap(
           count: it.methodCount,
         },
         position: {
-          x: LEFT_X + hop * (NODE_W + COL_GAP),
-          y: 40 + i * ROW_GAP,
+          x: LEFT_X + hop * colPitch,
+          y: 40 + i * rowGap,
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
@@ -285,6 +323,9 @@ function buildLayeredMap(
         type: 'methodNode',
         data: {
           label: `+${hidden.length} daha`,
+          fullLabel: `+${hidden.length} daha`,
+          showTip: false,
+          size,
           sub: `${hop}. katman`,
           kind: 'collapsed',
           hop,
@@ -292,8 +333,8 @@ function buildLayeredMap(
           hiddenIds: hidden.map((h) => h.id),
         },
         position: {
-          x: LEFT_X + hop * (NODE_W + COL_GAP),
-          y: 40 + visible.length * ROW_GAP,
+          x: LEFT_X + hop * colPitch,
+          y: 40 + visible.length * rowGap,
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
@@ -307,7 +348,7 @@ function buildLayeredMap(
       .length || 1
   const centerNode = nodes.find((n) => n.id === centerId)
   if (centerNode) {
-    centerNode.position.y = 40 + ((hop1Count - 1) * ROW_GAP) / 2
+    centerNode.position.y = 40 + ((hop1Count - 1) * rowGap) / 2
   }
 
   const edges: Edge[] = []
@@ -373,6 +414,11 @@ export function MethodImpactMap({
     return Math.max(1, m)
   }, [layered.items])
 
+  const layout = useMemo(
+    () => mapLayoutForDepth(visibleMaxHop),
+    [visibleMaxHop],
+  )
+
   const built = useMemo(
     () =>
       buildLayeredMap(
@@ -382,8 +428,9 @@ export function MethodImpactMap({
         layered.edges,
         expandedLayers,
         visibleMaxHop,
+        layout,
       ),
-    [graph.center, viewMode, layered, expandedLayers, visibleMaxHop],
+    [graph.center, viewMode, layered, expandedLayers, visibleMaxHop, layout],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
@@ -474,6 +521,7 @@ export function MethodImpactMap({
     <div
       ref={mapRef}
       className={`impact-map dd-map method-impact-map ${focusId ? 'is-focusing' : ''}`}
+      onMouseLeave={() => setFocusId(null)}
     >
       <div className="path-layer-bar">
         <div className="path-layer-left">
@@ -583,12 +631,16 @@ export function MethodImpactMap({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         fitView
-        fitViewOptions={{ padding: 0.24 }}
+        fitViewOptions={{
+          padding: layout.fitPadding,
+          minZoom: layout.minZoom,
+          maxZoom: layout.maxZoom,
+        }}
         nodesDraggable={false}
         nodesConnectable={false}
         panOnDrag
-        minZoom={0.2}
-        maxZoom={1.6}
+        minZoom={layout.minZoom}
+        maxZoom={layout.maxZoom}
         onNodeClick={onNodeClick}
         onNodeMouseEnter={(_, n) => setFocusId(n.id)}
         onNodeMouseLeave={() => setFocusId(null)}
@@ -601,10 +653,11 @@ export function MethodImpactMap({
         <FitViewOnLayers
           visibleMaxHop={visibleMaxHop}
           nodeCount={nodes.length}
-          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}`}
+          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}`}
+          layout={layout}
         />
         <Background gap={22} color="#e4e0d6" />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} position="bottom-left" />
       </ReactFlow>
     </div>
   )

@@ -1,3 +1,15 @@
+/**
+ * Express API girişi (varsayılan :4000).
+ *
+ * Katmanlar:
+ * - data.ts          → servis kataloğu + affectsEdges (servis bağımlılığı)
+ * - methods.ts       → method kataloğu + callEdges (call-graph)
+ * - impact.ts        → servis etki grafı (BFS hop)
+ * - changeRequests.ts → talep / flag / inbox
+ * - permissions.ts   → kim talep açabilir
+ *
+ * Vite UI `/api/*` isteklerini buraya proxy eder.
+ */
 import cors from 'cors'
 import express from 'express'
 import {
@@ -36,6 +48,7 @@ const PORT = Number(process.env.PORT ?? 4000)
 app.use(cors())
 app.use(express.json())
 
+// —— Sağlık / oturum / ağaç ——
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
 })
@@ -48,6 +61,7 @@ app.get('/api/modules', (_req, res) => {
   res.json(moduleTree)
 })
 
+// —— Servis kataloğu + komşular / etki ——
 app.get('/api/services', (req, res) => {
   const q = String(req.query.q ?? '').trim().toLowerCase()
   let list = Object.values(services)
@@ -68,6 +82,7 @@ app.get('/api/services/:id', (req, res) => {
   res.json(svc)
 })
 
+/** Onay listesi ve bağımlılık paneli: yalnız hop=1 (doğrudan komşu). */
 function toAffected(ids: string[]) {
   return ids
     .map((id) => services[id])
@@ -75,11 +90,12 @@ function toAffected(ids: string[]) {
     .map((service) => ({ service, hop: 1 as const }))
 }
 
+/** Downstream = beni çağıranlar (etkilenenler / onay kümesi). */
 app.get('/api/services/:id/affected', (req, res) => {
   res.json(toAffected(getDownstreamIds(req.params.id)))
 })
 
-/** Datadog Catalog tarzı: upstream = çağırdıklarım, downstream = beni çağıranlar */
+/** Upstream + downstream tek cevapta. */
 app.get('/api/services/:id/neighbors', (req, res) => {
   const id = req.params.id
   if (!services[id]) return res.status(404).json({ error: 'not_found' })
@@ -89,6 +105,7 @@ app.get('/api/services/:id/neighbors', (req, res) => {
   })
 })
 
+/** Harita / etki yolu: BFS ile 2–3 hop (mode=simple|advanced düğüm bütçesi). */
 app.get('/api/services/:id/impact', (req, res) => {
   const mode = req.query.mode === 'advanced' ? 'advanced' : 'simple'
   const maxNodes =
@@ -102,8 +119,10 @@ app.get('/api/services/:id/change-requests', (req, res) => {
   res.json(listRequestsForService(req.params.id))
 })
 
+// —— Method kataloğu + call-graph ——
 app.get('/api/services/:id/methods', (req, res) => {
   if (!services[req.params.id]) return res.status(404).json({ error: 'not_found' })
+  // ?linkedTo=pivotId → haritada “bağlı metodlar” filtresi
   const linkedTo = String(req.query.linkedTo ?? '').trim()
   if (linkedTo) {
     if (!services[linkedTo]) return res.status(404).json({ error: 'pivot_not_found' })
@@ -125,33 +144,39 @@ app.get('/api/methods/:id', (req, res) => {
   res.json(ref ?? method)
 })
 
+/** Lazy: bu metodu çağıranlar (1 hop). */
 app.get('/api/methods/:id/callers', (req, res) => {
   if (!getMethod(req.params.id)) return res.status(404).json({ error: 'not_found' })
   res.json(getCallerRefs(req.params.id))
 })
 
+/** Lazy: bu metodun çağırdıkları (1 hop). */
 app.get('/api/methods/:id/callees', (req, res) => {
   if (!getMethod(req.params.id)) return res.status(404).json({ error: 'not_found' })
   res.json(getCalleeRefs(req.params.id))
 })
 
+/** Özet blast: kaç method / kaç servis etkilenir. */
 app.get('/api/methods/:id/impact', (req, res) => {
   const impact = methodImpact(req.params.id)
   if (!impact) return res.status(404).json({ error: 'not_found' })
   res.json(impact)
 })
 
+/** Method haritası için katmanlı çağıran grafı. */
 app.get('/api/methods/:id/impact-graph', (req, res) => {
   const graph = buildMethodImpactGraph(req.params.id)
   if (!graph) return res.status(404).json({ error: 'not_found' })
   res.json(graph)
 })
 
+/** Geliştirici aracı: callEdges ↔ affectsEdges tutarlı mı? */
 app.get('/api/meta/call-graph-consistency', (_req, res) => {
   const issues = checkCallGraphConsistency()
   res.json({ ok: issues.length === 0, issueCount: issues.length, issues })
 })
 
+// —— Değişiklik talebi / inbox / flag ——
 app.post('/api/change-requests', (req, res) => {
   const body = req.body ?? {}
   if (!body.summary || !body.rationale || !body.personId) {
@@ -237,6 +262,7 @@ app.patch('/api/change-requests/:id/flags/:serviceId', (req, res) => {
 })
 
 app.listen(PORT, () => {
+  // Boot’ta tutarlılık uyarısı (zorunlu değil; mock bozulursa console’da görünür)
   const issues = checkCallGraphConsistency()
   if (issues.length) {
     console.warn(`[call-graph] ${issues.length} tutarlılık uyarısı — GET /api/meta/call-graph-consistency`)

@@ -1,3 +1,11 @@
+/**
+ * Sol modül ağacı: proje → paket → servis → (chevron ile) metodlar.
+ *
+ * Etkileşim:
+ * - Chevron → sadece metod listesini aç/kapa (seçim yok)
+ * - Servis adı → pivot seçer
+ * - Metod satırı → method odak + method haritası
+ */
 import { useEffect, useState } from 'react'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
@@ -74,11 +82,10 @@ function MethodLeaves({
               type="button"
               className={`tree-row ${selected ? 'selected' : ''} kind-method`}
               style={{ paddingLeft: 8 + depth * 12 }}
-              title={`${m.className}.${m.name}${m.signature}`}
               onClick={() => onSelectMethod(serviceId, m.id)}
             >
               <span className="chev spacer" />
-              <span className="tree-label">
+              <span className="tree-label" title={`${m.className}.${m.name}`}>
                 <span className="tree-method-class">{m.className}.</span>
                 {m.name}
               </span>
@@ -109,7 +116,7 @@ function TreeItem({
   const isService = node.kind === 'service'
   const hasStaticChildren = !!node.children?.length
   const canExpand = hasStaticChildren || isService
-  const [open, setOpen] = useState(depth < 2)
+  const [open, setOpen] = useState(depth < 2 && !isService)
   const selected =
     isService &&
     node.serviceId === selectedServiceId &&
@@ -117,24 +124,38 @@ function TreeItem({
 
   return (
     <div className="tree-item">
-      <button
-        type="button"
+      <div
         className={`tree-row ${selected ? 'selected' : ''} kind-${node.kind}`}
         style={{ paddingLeft: 8 + depth * 12 }}
-        onClick={() => {
-          if (isService && node.serviceId) {
-            onSelectService(node.serviceId)
-            if (!open) setOpen(true)
-            return
-          }
-          if (canExpand) setOpen((v) => !v)
-        }}
       >
-        {canExpand && <span className="chev">{open ? '▾' : '▸'}</span>}
-        {!canExpand && <span className="chev spacer" />}
-        <span className="tree-label">{node.name}</span>
+        {canExpand ? (
+          <button
+            type="button"
+            className="chev-btn"
+            aria-expanded={open}
+            aria-label={open ? 'Kapat' : 'Aç'}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="chev spacer" />
+        )}
+        <button
+          type="button"
+          className="tree-label-btn"
+          onClick={() => {
+            if (isService && node.serviceId) {
+              onSelectService(node.serviceId)
+              return
+            }
+            if (canExpand) setOpen((v) => !v)
+          }}
+        >
+          <span className="tree-label">{node.name}</span>
+        </button>
         <span className="tree-kind">{node.kind}</span>
-      </button>
+      </div>
       {open &&
         hasStaticChildren &&
         node.children!.map((child) => (

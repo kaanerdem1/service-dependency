@@ -1,3 +1,7 @@
+/**
+ * UI → Express API istemcisi.
+ * Vite proxy: `/api/*` → `http://127.0.0.1:4000/api/*`
+ */
 import type {
   AffectedService,
   ChangeRequest,

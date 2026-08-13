@@ -1,3 +1,8 @@
+/**
+ * Talep açma yetkileri (mock oturum kullanıcıları üzerinden).
+ * - change: aynı ekip domain’inde lead veya member
+ * - new_service: yalnız ekip lideri (+ önerilen paket kendi domain’inde olmalı)
+ */
 import type { Owner, Service } from './data.js'
 import { SESSION_USERS, services } from './data.js'
 
@@ -5,17 +10,19 @@ export function findUser(personId: string): Owner | undefined {
   return SESSION_USERS.find((u) => u.id === personId)
 }
 
+/** Mevcut servis için değişiklik talebi. */
 export function canOpenChangeRequest(user: Owner, service: Service): boolean {
   const domain = service.owner?.team
   if (!user.team || !domain || user.team !== domain) return false
   return user.role === 'lead' || user.role === 'member'
 }
 
+/** Katalogda olmayan yeni servis talebi — yalnız lider. */
 export function canOpenNewServiceRequest(user: Owner): boolean {
   return Boolean(user.team && user.role === 'lead')
 }
 
-/** API create öncesi yetki */
+/** API create öncesi; hata fırlatır → index.ts 403/400’e çevirir. */
 export function assertCanCreateRequest(input: {
   kind: 'change' | 'new_service'
   personId: string

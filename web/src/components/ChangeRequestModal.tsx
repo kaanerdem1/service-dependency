@@ -1,3 +1,7 @@
+/**
+ * Mevcut servis için değişiklik talebi formu.
+ * Onay listesi = hop-1 downstream (affected); her etkilenen için ayrı task açılır.
+ */
 import { useMemo, useState } from 'react'
 import type { AffectedService, Service } from '../types'
 import type { SessionUser } from '../mock/session'

@@ -1,3 +1,12 @@
+/**
+ * UI domain tipleri (API cevaplarıyla hizalı).
+ *
+ * Kavramlar:
+ * - Service / AffectedService → servis bağımlılığı (affectsEdges)
+ * - MethodRef / MethodImpact* → call-graph (callEdges)
+ * - ImpactGraph → harita BFS (hop 1 = onay kümesi)
+ * - ChangeRequest / FlagStatus → onay akışı
+ */
 export type TeamRole = 'lead' | 'member'
 
 export type Owner = {

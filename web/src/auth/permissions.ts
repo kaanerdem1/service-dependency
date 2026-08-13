@@ -1,3 +1,7 @@
+/**
+ * UI yetki yardımcıları (server/permissions ile aynı kurallar).
+ * Oturum seçicideki kullanıcıya göre “talep aç” butonları.
+ */
 import type { Owner, Service, TeamRole } from '../types'
 
 export type SessionActor = Pick<Owner, 'id' | 'name' | 'team' | 'role'>

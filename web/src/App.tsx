@@ -1,3 +1,14 @@
+/**
+ * Ana uygulama kabuğu.
+ *
+ * Sol: modül ağacı · Orta: bağımlılıklar / harita · Sağ: detay paneli
+ *
+ * Seçim modeli:
+ * - pivotId          → odak servis (geri/ileri geçmişi ile)
+ * - selectedMethodId → odak metod (method haritası + Methods sekmesi)
+ * - tab              → 'affected' | 'map'
+ * - viewMode         → 'simple' (etki yolu) | 'advanced' (React Flow harita)
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   projectLabelsFromTree,
@@ -422,7 +433,7 @@ export default function App() {
       {apiError && <div className="api-banner">{apiError}</div>}
 
       <div className="shell">
-        <aside className="left">
+        <aside className="module-sidebar">
           <h3>Modüller</h3>
           <ModuleTree
             nodes={tree}

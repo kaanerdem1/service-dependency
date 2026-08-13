@@ -1,3 +1,7 @@
+/**
+ * Harita proje filtresi yardımcıları.
+ * Bir proje seçilince yalnız o projedeki düğümler + merkeze giden köprü yolu kalır.
+ */
 import type { ImpactEdge, ImpactGraph, ImpactNode, ModuleNode } from '../types'
 
 /** BFS keşif ebeveyni — filtrede ara yol (bridge) için */
@@ -43,6 +47,11 @@ export function projectLabelsFromTree(tree: ModuleNode[]): Map<string, string> {
   const m = new Map<string, string>()
   for (const n of tree) {
     if (n.kind === 'project') {
+      // HAZINE / MEVDUAT / KREDI gibi uppercase adlar olduğu gibi
+      if (n.name && n.name === n.name.toUpperCase()) {
+        m.set(n.id, n.name)
+        continue
+      }
       const nice =
         n.name.length > 0
           ? n.name.charAt(0).toUpperCase() + n.name.slice(1)

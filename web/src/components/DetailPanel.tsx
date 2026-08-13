@@ -1,3 +1,7 @@
+/**
+ * Sağ detay paneli: İlişkiler · Methods · Owner · Talepler.
+ * Methods sekmesi → MethodCallTree (lazy call-graph).
+ */
 import { useEffect, useMemo, useState } from 'react'
 import type { AffectedService, ChangeRequest, Service } from '../types'
 import type { SessionUser } from '../mock/session'

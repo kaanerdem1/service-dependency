@@ -1,3 +1,8 @@
+/**
+ * Detay paneli “Methods” sekmesi:
+ * servisin metod listesi + seçili metodun lazy callers/callees ağacı
+ * + kısa blast özeti (kaç method / servis).
+ */
 import { useEffect, useState } from 'react'
 import {
   getMethodCallees,
@@ -14,6 +19,7 @@ type Props = {
   onPivotService?: (serviceId: string) => void
 }
 
+/** callers = beni kim çağırıyor · callees = ben kimi çağırıyorum */
 type Mode = 'callers' | 'callees'
 
 type NodeState = {

@@ -1,3 +1,14 @@
+/**
+ * Servis etki haritası (React Flow, gelişmiş görünüm).
+ *
+ * - Merkez solda; hop sütunları sağa doğru
+ * - Yeşil ok = ana etki yolu; turuncu kesikli = yan (cascade) bağ
+ * - Katman aç/kapa, proje filtresi, “bağlı methodları göster”
+ * - Düğüm etiketi 2 satır; uzunsa hover’da tam ad
+ *
+ * Zoom paneli: Controls (bottom-left). Sidebar class adı `.left` olmamalı
+ * (React Flow panel class’ı `left` ile çakışır).
+ */
 import {
   memo,
   useCallback,
@@ -33,6 +44,11 @@ import {
   type ProjectOption,
 } from '../impact/projectFilter'
 import { listMethodsForService } from '../api/client'
+import {
+  mapLabelNeedsTip,
+  mapLayoutForDepth,
+  type MapLayout,
+} from '../impact/mapLayout'
 import type { ImpactGraph, ImpactNode, MethodRef } from '../types'
 import {
   BlastRadiusSummary,
@@ -56,15 +72,15 @@ type Props = {
   canPivotForward?: boolean
 }
 
-const NODE_W = 168
-const COL_GAP = 300
-const ROW_GAP = 96
 const LEFT_X = 48
 /** İlk N görünür; kalan 1–2 ise hepsini göster, kalan ≥3 ise +N collapsed */
 const MAX_VISIBLE_PER_LAYER = 4
 const MIN_COLLAPSE_COUNT = 3
 type ServiceNodeData = {
   label: string
+  fullLabel: string
+  showTip: boolean
+  size: MapLayout['size']
   kind: 'center' | 'service' | 'collapsed'
   hop: number
   hiddenIds?: string[]
@@ -88,6 +104,7 @@ function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
     <div
       className={[
         'dd-node',
+        `size-${data.size}`,
         isCenter && 'center',
         isCollapsed && 'collapsed',
         data.bridge && 'bridge',
@@ -105,7 +122,12 @@ function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
       />
       <div className="dd-node-ring" />
       <div className="dd-node-body">
-        <span className="dd-node-label">{data.label}</span>
+        <span
+          className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
+          data-tip={data.showTip ? data.fullLabel : undefined}
+        >
+          {data.label}
+        </span>
         {!isCenter && !isCollapsed && (
           <span className="dd-node-hop">
             {data.bridge
@@ -391,18 +413,25 @@ function FitViewOnLayers({
   visibleMaxHop,
   nodeCount,
   layoutKey,
+  layout,
 }: {
   visibleMaxHop: number
   nodeCount: number
   layoutKey: string | number | boolean
+  layout: MapLayout
 }) {
   const { fitView } = useReactFlow()
   useEffect(() => {
     const id = window.setTimeout(() => {
-      fitView({ padding: 0.22, duration: 320 })
+      fitView({
+        padding: layout.fitPadding,
+        duration: 320,
+        minZoom: layout.minZoom,
+        maxZoom: layout.maxZoom,
+      })
     }, 40)
     return () => window.clearTimeout(id)
-  }, [visibleMaxHop, nodeCount, layoutKey, fitView])
+  }, [visibleMaxHop, nodeCount, layoutKey, layout, fitView])
   return null
 }
 
@@ -471,9 +500,10 @@ function buildGraph(
   visibleMaxHop = 1,
   forceExpandCollapsed = false,
   filterActive = false,
-  rowGap = ROW_GAP,
+  layout: MapLayout = mapLayoutForDepth(1),
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
+  const { nodeW, colGap, rowGap, size, tipChars } = layout
   const hopOf = new Map<string, number>([[center.id, 0]])
   const byHop = new Map<number, ImpactNode[]>()
 
@@ -505,12 +535,20 @@ function buildGraph(
     rowCount = Math.max(rowCount, vis + extra)
   }
   const centerY = 40 + ((rowCount - 1) * rowGap) / 2
+  const colPitch = nodeW + colGap
 
   const nodes: Node<ServiceNodeData>[] = [
     {
       id: center.id,
       type: 'serviceNode',
-      data: { label: center.name, kind: 'center', hop: 0 },
+      data: {
+        label: center.name,
+        fullLabel: center.name,
+        showTip: mapLabelNeedsTip(center.name, tipChars),
+        size,
+        kind: 'center',
+        hop: 0,
+      },
       position: { x: LEFT_X, y: centerY },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
@@ -530,13 +568,16 @@ function buildGraph(
         type: 'serviceNode',
         data: {
           label: n.service.name,
+          fullLabel: n.service.name,
+          showTip: mapLabelNeedsTip(n.service.name, tipChars),
+          size,
           kind: 'service',
           hop,
           bridge: filterActive && bridgeIds.has(n.service.id),
           match: filterActive && matchIds.has(n.service.id),
         },
         position: {
-          x: LEFT_X + hop * (NODE_W + COL_GAP),
+          x: LEFT_X + hop * colPitch,
           y: 40 + i * rowGap,
         },
         sourcePosition: Position.Right,
@@ -548,18 +589,22 @@ function buildGraph(
     const hidden = collapsedMeta.get(hop)
     if (hidden?.length) {
       const collapseId = `collapsed-hop-${hop}`
+      const collapseLabel = `+${hidden.length} daha`
       nodes.push({
         id: collapseId,
         type: 'serviceNode',
         data: {
-          label: `+${hidden.length} daha`,
+          label: collapseLabel,
+          fullLabel: collapseLabel,
+          showTip: false,
+          size,
           kind: 'collapsed',
           hop,
           count: hidden.length,
           hiddenIds: hidden.map((h) => h.service.id),
         },
         position: {
-          x: LEFT_X + hop * (NODE_W + COL_GAP),
+          x: LEFT_X + hop * colPitch,
           y: 40 + col.length * rowGap,
         },
         sourcePosition: Position.Right,
@@ -750,6 +795,11 @@ export function ImpactMap({
   const canExpandAll = visibleMaxHop < maxHopAvailable
   const canCollapseAll = visibleMaxHop > 1
 
+  const layout = useMemo(
+    () => mapLayoutForDepth(visibleMaxHop),
+    [visibleMaxHop],
+  )
+
   const built = useMemo(
     () =>
       buildGraph(
@@ -760,7 +810,7 @@ export function ImpactMap({
         visibleMaxHop,
         Boolean(projectFilter),
         Boolean(projectFilter),
-        ROW_GAP,
+        layout,
       ),
     [
       filteredGraph,
@@ -769,6 +819,7 @@ export function ImpactMap({
       filter.bridgeIds,
       filter.matchIds,
       visibleMaxHop,
+      layout,
     ],
   )
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
@@ -873,7 +924,7 @@ export function ImpactMap({
             expanded: expandedMethodServiceId === n.id,
           },
           position: {
-            x: n.position.x + NODE_W + BADGE_GAP,
+            x: n.position.x + layout.nodeW + BADGE_GAP,
             y: n.position.y + 18,
           },
           draggable: false,
@@ -885,6 +936,7 @@ export function ImpactMap({
     setNodes(out as Node<ServiceNodeData>[])
   }, [
     built,
+    layout.nodeW,
     showLinkedMethods,
     methodsByService,
     expandedMethodServiceId,
@@ -1017,6 +1069,11 @@ export function ImpactMap({
     [graph.center.id, onClearCenter, onPivot],
   )
 
+  const clearHoverFocus = useCallback(() => {
+    setFocusId(null)
+    setFocusEdgeId(null)
+  }, [])
+
   const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
     setFocusEdgeId(null)
     setFocusId((prev) => (prev === node.id ? prev : node.id))
@@ -1046,6 +1103,7 @@ export function ImpactMap({
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
+      onMouseLeave={clearHoverFocus}
     >
       <div className="path-layer-bar">
         <div className="path-layer-left">
@@ -1191,26 +1249,32 @@ export function ImpactMap({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         fitView
-        fitViewOptions={{ padding: 0.22 }}
+        fitViewOptions={{
+          padding: layout.fitPadding,
+          minZoom: layout.minZoom,
+          maxZoom: layout.maxZoom,
+        }}
         nodesDraggable={false}
         nodesConnectable={false}
         panOnDrag
-        minZoom={0.25}
-        maxZoom={1.5}
+        minZoom={layout.minZoom}
+        maxZoom={layout.maxZoom}
         onNodeClick={onNodeClick}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
+        onPaneClick={clearHoverFocus}
         proOptions={{ hideAttribution: true }}
       >
         <FitViewOnLayers
           visibleMaxHop={visibleMaxHop}
           nodeCount={nodes.length}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}`}
+          layout={layout}
         />
         <Background gap={22} color="#e4e0d6" />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} position="bottom-left" />
       </ReactFlow>
       {expandedMethodServiceId &&
         onSelectMethod &&

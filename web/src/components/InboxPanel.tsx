@@ -1,3 +1,7 @@
+/**
+ * Inbox: onay bekleyen aksiyonlar + okunmamış bildirimler.
+ * actions = bu kullanıcının owner olduğu unseen/yanıt bekleyen satırlar.
+ */
 import {
   FLAG_LABEL,
   isApprovalOpen,

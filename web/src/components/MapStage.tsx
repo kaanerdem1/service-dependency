@@ -1,3 +1,8 @@
+/**
+ * Harita / etki yolu çerçevesi.
+ * Yeşil macOS tarzı büyüt-küçült; genişleyince scrim + Escape ile kapanır.
+ * Pivot / katman butonları children içinde (chrome altında).
+ */
 import { useEffect, useId, type ReactNode } from 'react'
 
 type Props = {
@@ -7,7 +12,6 @@ type Props = {
   children: ReactNode
 }
 
-/** Tek yeşil macOS tarzı büyüt/küçült. Pivot / katman kontrolleri alt satırda (children). */
 export function MapStage({
   title,
   expanded,

@@ -1,5 +1,10 @@
+/**
+ * Servis etki grafı — harita / “etki yolu” için.
+ * Kaynak: affectsEdges. Onay kapısı buradan değil; yalnız hop===1 listesinden.
+ */
 import { affectsEdges, services } from './data.js'
 
+/** UI düğüm bütçesi: basit görünüm daha az, gelişmiş biraz daha fazla. */
 export const IMPACT_VIEW = {
   maxHops: 3,
   maxNodesSimple: 28,
@@ -8,9 +13,10 @@ export const IMPACT_VIEW = {
 
 /**
  * Katman = en kısa yol (BFS).
- * 1 = doğrudan (onay listesi ile aynı küme),
- * 2+ = yalnızca dolaylı (doğrudan kenarı olmayanlar).
- * Aynı servise hem doğrudan hem uzun yol varsa 1. katman kazanır.
+ * - hop 1 = doğrudan (onay listesi ile aynı küme)
+ * - hop 2+ = dolaylı zincir (sadece görsel keşif)
+ * Aynı servise hem kısa hem uzun yol varsa kısa hop kazanır.
+ * Bütçe aşılırsa truncated=true; kullanıcı pivot ile devam eder.
  */
 export function buildImpactGraph(
   centerId: string,

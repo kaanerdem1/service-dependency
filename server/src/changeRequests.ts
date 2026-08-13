@@ -1,3 +1,13 @@
+/**
+ * Değişiklik talebi + onay bayrakları + inbox (bellekte mock store).
+ *
+ * Akış özeti:
+ * 1) Requester talep açar → her etkilenen servis için ayrı task (batchId ile gruplanabilir)
+ * 2) Etkilenen owner flag atar: unseen → accepted | rejected | hold_editing
+ * 3) Hepsi accepted → onay açık (isApprovalOpen)
+ *
+ * new_service: bağımlılık beyanı onaycı listesi değildir; paket ekip lideri onaylar.
+ */
 import type { ChangeRequest, FlagStatus, ImpactedFlag } from './data.js'
 import { SESSION_USERS, services } from './data.js'
 
