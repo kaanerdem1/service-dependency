@@ -51,7 +51,7 @@ Otomatik kontrol: `GET /api/meta/call-graph-consistency` → `{ ok: true }`.
 | # | Senaryo | Adımlar | Beklenen |
 |---|---------|---------|----------|
 | F1 | Kapalı varsayılan | Gelişmiş → Harita | Metod rozeti yok |
-| F2 | Overlay aç | “Bağlı metodları göster” | Her servisin **yanında** `N metod` rozeti (harita zoom’u değişmez) |
+| F2 | Overlay aç | “Bağlı methodları göster” | Yanında `N method`; N = o servisin **tüm** katalog method sayısı; kapatınca yazı “Bağlı methodları kapat” |
 | F3 | Rozet aç | Rozete tık | Kaydırılabilir popover (RF node değil); diğer düğümler soluk; FitView tetiklenmez |
 | F4 | Popover metod | Listedeki metoda tık | Metod pivot haritası (gelişmiş) açılır |
 | F5 | Sol ağaç metod | Ağaçtan metod seç | Varsayılan: **çağıran servisler** haritası |

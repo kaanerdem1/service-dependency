@@ -99,9 +99,14 @@ export function DetailPanel({
   const [tab, setTab] = useState<DetailTab>('relations')
 
   useEffect(() => {
-    setTab(focusMethodId || preferMethodsTab ? 'methods' : 'relations')
+    setTab('relations')
     setCollapsed({})
-  }, [service?.id, focusMethodId, preferMethodsTab])
+  }, [service?.id])
+
+  /** Yalnız bilinçli “metodlara git” (ör. +N panel); ağaçtan metod → harita kaydırmaz */
+  useEffect(() => {
+    if (preferMethodsTab) setTab('methods')
+  }, [preferMethodsTab])
 
   if (loading) {
     return (
@@ -168,7 +173,7 @@ export function DetailPanel({
 
   const tabs: { id: DetailTab; label: string }[] = [
     { id: 'relations', label: 'İlişkiler' },
-    { id: 'methods', label: 'Metodlar' },
+    { id: 'methods', label: 'Methods' },
     { id: 'owner', label: 'Owner' },
     { id: 'requests', label: `Talepler${groups.length ? ` (${groups.length})` : ''}` },
   ]

@@ -50,7 +50,7 @@ export function MethodCallTree({
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Metodlar yüklenemedi')
+          setError(e instanceof Error ? e.message : 'Methods yüklenemedi')
         }
       })
       .finally(() => {
@@ -64,8 +64,7 @@ export function MethodCallTree({
   useEffect(() => {
     if (!focusMethodId || loading) return
     setSelectedId(focusMethodId)
-    const el = document.getElementById(`method-row-${focusMethodId}`)
-    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    // Harita odaklı seçimde scroll yapma — sağ panel kaydırmaz
   }, [focusMethodId, loading, methods])
 
   useEffect(() => {
@@ -122,7 +121,7 @@ export function MethodCallTree({
   }
 
   if (loading) {
-    return <p className="empty-hint">Metodlar yükleniyor…</p>
+    return <p className="empty-hint">Methods yükleniyor…</p>
   }
   if (error) {
     return <p className="empty-hint">{error}</p>
@@ -131,19 +130,21 @@ export function MethodCallTree({
   return (
     <div className="method-panel">
       <p className="hint-sm entity-tab-hint">
-        Metod → {mode === 'callers' ? 'çağıranlar' : 'çağırılanlar'} (lazy).
-        Çapraz servis satırına tıklayınca pivot.
+        Bu servisin katalogdaki tüm method’ları (harita rozetiyle aynı liste).
+        {mode === 'callers'
+          ? ' ▸ = kim çağırıyor; başka servis satırı → o servise geç.'
+          : ' ▸ = kimi çağırıyor; başka servis satırı → o servise geç.'}
       </p>
 
       <div className="method-toolbar">
         <input
           type="search"
           className="method-filter"
-          placeholder="Filtre: sınıf / metod…"
+          placeholder="Filtre: sınıf / method…"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
-        <div className="method-mode" role="group" aria-label="Ağaç yönü">
+        <div className="method-mode" role="group" aria-label="▸ açılınca yön">
           <button
             type="button"
             className={mode === 'callers' ? 'on' : ''}
@@ -168,7 +169,8 @@ export function MethodCallTree({
       </div>
 
       <p className="method-count">
-        {visible.length}/{methods.length} metod
+        Bu serviste {visible.length}/{methods.length} method
+        <span className="muted"> · yön yalnızca ▸ için</span>
       </p>
 
       <ul className="method-list">
@@ -251,12 +253,12 @@ export function MethodCallTree({
 
       {selected && impact && (
         <div className="method-impact">
-          <h3 className="section-title">Seçili metod etkisi</h3>
+          <h3 className="section-title">Seçili method etkisi</h3>
           <p className="mono">
             {selected.className}.{selected.name}
           </p>
           <p>
-            Blast (çağıran BFS): <strong>{impact.methodCount}</strong> metod ·{' '}
+            Blast (çağıran BFS): <strong>{impact.methodCount}</strong> method ·{' '}
             <strong>{impact.serviceCount}</strong> servis
           </p>
           {impact.serviceIds.length > 0 && (

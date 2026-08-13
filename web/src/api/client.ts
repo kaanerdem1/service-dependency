@@ -46,8 +46,11 @@ export function getNeighbors(serviceId: string) {
   return request<ServiceNeighbors>(`/services/${serviceId}/neighbors`)
 }
 
-export function listMethodsForService(serviceId: string) {
-  return request<MethodRef[]>(`/services/${serviceId}/methods`)
+export function listMethodsForService(serviceId: string, linkedTo?: string) {
+  const q = linkedTo
+    ? `?linkedTo=${encodeURIComponent(linkedTo)}`
+    : ''
+  return request<MethodRef[]>(`/services/${serviceId}/methods${q}`)
 }
 
 export function getMethodCallers(methodId: string) {

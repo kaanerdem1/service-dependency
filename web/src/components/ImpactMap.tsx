@@ -145,9 +145,9 @@ function MethodBadgeView({ data }: NodeProps<MethodBadgeData>) {
   return (
     <div
       className={`dd-method-badge ${data.expanded ? 'expanded' : ''}`}
-      title="Metod listesini aç / kapa"
+      title="Bu servisin method’ları"
     >
-      {data.count} metod
+      {data.count} method
     </div>
   )
 }
@@ -262,7 +262,7 @@ function MethodPopover({
       className="method-popover"
       style={{ top: pos.top, left: pos.left }}
       role="dialog"
-      aria-label={`${serviceName} metodları`}
+      aria-label={`${serviceName} method’ları`}
     >
       <header
         className="method-popover-head method-popover-drag"
@@ -270,7 +270,7 @@ function MethodPopover({
         title="Sürükleyerek taşı"
       >
         <div>
-          <strong>{methods.length} metod</strong>
+          <strong>{methods.length} method</strong>
           <span className="muted"> · {serviceName}</span>
           <span className="method-popover-drag-hint">⠿</span>
         </div>
@@ -279,9 +279,9 @@ function MethodPopover({
         </button>
       </header>
       <p className="method-popover-legend">
-        <span title="Bu metodu çağıranlar">çağıran ←</span>
+        <span title="Bu method’u çağıranlar">çağıran ←</span>
         <span aria-hidden>·</span>
-        <span title="Bu metodun çağırdıkları">çağırılan →</span>
+        <span title="Bu method’un çağırdıkları">çağırılan →</span>
       </p>
       <input
         type="search"
@@ -834,6 +834,7 @@ export function ImpactMap({
     setMethodsLoading(true)
     void Promise.all(
       visibleServiceIds.map(async (id) => {
+        // Servisin kendi method kataloğu (tümü)
         const list = await listMethodsForService(id)
         return [id, list] as const
       }),
@@ -1071,16 +1072,16 @@ export function ImpactMap({
           <span className="path-bar-sep" aria-hidden />
           <button
             type="button"
-            className={`btn ghost path-layer-btn ${showLinkedMethods ? 'on' : ''}`}
+            className="btn ghost path-layer-btn"
             aria-pressed={showLinkedMethods}
             onClick={() => setShowLinkedMethods((v) => !v)}
-            title="Servis düğümlerinde bağlı metod özeti (2–3 veya +N)"
+            title="Servis düğümlerinde method listesini aç / kapat"
           >
             {methodsLoading
-              ? 'Metodlar…'
+              ? 'Methods…'
               : showLinkedMethods
-                ? 'Bağlı metodlar: açık'
-                : 'Bağlı metodları göster'}
+                ? 'Bağlı methodları kapat'
+                : 'Bağlı methodları göster'}
           </button>
         </div>
         <div className="path-layer-actions">

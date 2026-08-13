@@ -398,6 +398,37 @@ export function listMethodRefsForService(serviceId: string): MethodRef[] {
   return listMethodsForService(serviceId).map(toRef)
 }
 
+/**
+ * Etki haritası “bağlı metodlar”: pivot servisle çapraz çağrısı olan metodlar.
+ * - Aynı servis: dışarı çağıran / dışarı çağırılan
+ * - Diğer servis: pivot’u çağıran veya pivot tarafından çağrılan
+ */
+export function listMethodsLinkedToPivot(
+  serviceId: string,
+  pivotServiceId: string,
+): MethodRef[] {
+  return listMethodRefsForService(serviceId).filter((m) => {
+    const callers = callersIndex.get(m.id) ?? []
+    const callees = calleesIndex.get(m.id) ?? []
+    if (serviceId === pivotServiceId) {
+      const extCaller = callers.some(
+        (id) => byId[id]?.serviceId !== pivotServiceId,
+      )
+      const extCallee = callees.some(
+        (id) => byId[id]?.serviceId !== pivotServiceId,
+      )
+      return extCaller || extCallee
+    }
+    const callsPivot = callees.some(
+      (id) => byId[id]?.serviceId === pivotServiceId,
+    )
+    const calledByPivot = callers.some(
+      (id) => byId[id]?.serviceId === pivotServiceId,
+    )
+    return callsPivot || calledByPivot
+  })
+}
+
 /** Lazy: bir hop çağıranlar */
 export function getCallerRefs(methodId: string): MethodRef[] {
   return (callersIndex.get(methodId) ?? [])
@@ -519,14 +550,27 @@ export function buildMethodImpactGraph(
 export function searchMethods(query: string): MethodRef[] {
   const q = query.trim().toLowerCase()
   if (!q) return []
+  const dot = q.indexOf('.')
+  const classPart = dot >= 0 ? q.slice(0, dot) : ''
+  const namePart = dot >= 0 ? q.slice(dot + 1) : ''
   return methods
-    .filter(
-      (m) =>
-        m.name.toLowerCase().includes(q) ||
-        m.className.toLowerCase().includes(q) ||
-        m.id.toLowerCase().includes(q) ||
-        (services[m.serviceId]?.name ?? '').toLowerCase().includes(q),
-    )
+    .filter((m) => {
+      const cn = m.className.toLowerCase()
+      const mn = m.name.toLowerCase()
+      const full = `${cn}.${mn}`
+      const svc = (services[m.serviceId]?.name ?? '').toLowerCase()
+      if (full.includes(q) || m.id.toLowerCase().includes(q) || svc.includes(q)) {
+        return true
+      }
+      // CardProcessor.charge → nokta sonrası da öneri kalsın
+      if (dot >= 0) {
+        return (
+          (!classPart || cn.includes(classPart)) &&
+          (!namePart || mn.includes(namePart) || mn.startsWith(namePart))
+        )
+      }
+      return mn.includes(q) || cn.includes(q)
+    })
     .slice(0, 40)
     .map(toRef)
 }

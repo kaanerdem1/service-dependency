@@ -12,6 +12,7 @@ import {
   getCalleeRefs,
   getCallerRefs,
   listMethodRefsForService,
+  listMethodsLinkedToPivot,
   methodImpact,
   searchMethods as searchMethodsLocal,
 } from './methods'
@@ -136,8 +137,12 @@ export async function searchServices(query: string): Promise<Service[]> {
   )
 }
 
-export async function listMethodsForService(serviceId: string) {
+export async function listMethodsForService(
+  serviceId: string,
+  linkedTo?: string,
+) {
   await delay(80)
+  if (linkedTo) return listMethodsLinkedToPivot(serviceId, linkedTo)
   return listMethodRefsForService(serviceId)
 }
 

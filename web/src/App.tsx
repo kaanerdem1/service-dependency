@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   projectLabelsFromTree,
   projectsInImpact,
@@ -59,6 +59,9 @@ export default function App() {
   const [preferMethodsTab, setPreferMethodsTab] = useState(false)
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  /** Geri / Harita / Bağımlılıklar tavanı — seçimde buraya kaydır */
+  const stageTopRef = useRef<HTMLDivElement>(null)
+  const mainRef = useRef<HTMLElement>(null)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
   const [upstream, setUpstream] = useState<AffectedService[]>([])
@@ -181,6 +184,20 @@ export default function App() {
     [impact, projectLabels],
   )
 
+  const scrollToStageTop = useCallback(() => {
+    const run = () => {
+      if (mainRef.current) mainRef.current.scrollTop = 0
+      const el = stageTopRef.current
+      if (el) {
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        return
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    // Seçim sonrası stage-top mount olsun diye çift frame
+    requestAnimationFrame(() => requestAnimationFrame(run))
+  }, [])
+
   const clearSelection = useCallback(() => {
     setPivotId(undefined)
     setSelectedMethodId(undefined)
@@ -223,7 +240,7 @@ export default function App() {
   const selectMethod = useCallback(
     (serviceId: string, methodId: string) => {
       setSelectedMethodId(methodId)
-      setPreferMethodsTab(true)
+      setPreferMethodsTab(false)
       setViewMode('advanced')
       setTab('map')
       if (serviceId !== pivotId) {
@@ -234,6 +251,11 @@ export default function App() {
     },
     [pivotId],
   )
+
+  useEffect(() => {
+    if (!pivotId) return
+    scrollToStageTop()
+  }, [pivotId, selectedMethodId, scrollToStageTop])
 
   const clearMethodKeepService = useCallback(() => {
     setSelectedMethodId(undefined)
@@ -302,11 +324,11 @@ export default function App() {
           </div>
         </div>
         <label className="search">
-          <span className="sr-only">Servis veya metod ara</span>
+          <span className="sr-only">Servis veya method ara</span>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Servis veya metod ara…"
+            placeholder="Servis veya method ara…"
           />
           {query && (hits.length > 0 || methodHits.length > 0) && (
             <ul className="search-hits">
@@ -319,8 +341,10 @@ export default function App() {
                       setQuery('')
                     }}
                   >
-                    {s.name}
-                    <span className="muted"> · servis</span>
+                    <span className="search-hit-text">
+                      <strong>{s.name}</strong>
+                    </span>
+                    <span className="hit-tag hit-tag-service">Servis</span>
                   </button>
                 </li>
               ))}
@@ -328,16 +352,18 @@ export default function App() {
                 <li key={m.id}>
                   <button
                     type="button"
-                    className="method-hit"
                     onClick={() => {
                       selectMethod(m.serviceId, m.id)
                       setQuery('')
                     }}
                   >
-                    <span>
-                      {m.className}.{m.name}
+                    <span className="search-hit-text">
+                      <strong>
+                        {m.className}.{m.name}
+                      </strong>
+                      <span className="method-hit-svc">{m.serviceName}</span>
                     </span>
-                    <span className="method-hit-svc">{m.serviceName}</span>
+                    <span className="hit-tag hit-tag-method">Method</span>
                   </button>
                 </li>
               ))}
@@ -407,55 +433,42 @@ export default function App() {
           />
         </aside>
 
-        <main className="main">
+        <main className="main" ref={mainRef}>
           {hasSelection && (
-            <div className="pivot-bar">
-              <button type="button" className="btn ghost" onClick={goBack} disabled={historyIndex <= 0}>
-                ← Geri
-              </button>
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={goForward}
-                disabled={historyIndex < 0 || historyIndex >= history.length - 1}
-              >
-                İleri →
-              </button>
-              <nav className="breadcrumb" aria-label="Pivot geçmişi">
-                {breadcrumb.map((id, i) => (
-                  <span key={`${id}-${i}`}>
-                    {i > 0 && <span className="sep">→</span>}
-                    <button
-                      type="button"
-                      className={i === breadcrumb.length - 1 ? 'current' : ''}
-                      onClick={() => {
-                        setHistoryIndex(i)
-                        setPivotId(history[i])
-                      }}
-                    >
-                      {serviceNameById.get(id) ?? id}
-                    </button>
-                  </span>
-                ))}
-              </nav>
-              <button type="button" className="btn ghost clear-sel" onClick={clearSelection}>
-                Seçimi bırak
-              </button>
-            </div>
-          )}
-
-          {!hasSelection && (
-            <div className="welcome">
-              <h2>Servis seçin</h2>
-              <p>
-                Soldaki ağaçtan veya üst aramadan bir servis seçerek etkilenenleri ve
-                etki yolunu görün. Seçili servise tekrar tıklayınca seçim kalkar.
-              </p>
-            </div>
-          )}
-
-          {hasSelection && (
-            <>
+            <div ref={stageTopRef} className="stage-top">
+              <div className="pivot-bar">
+                <button type="button" className="btn ghost" onClick={goBack} disabled={historyIndex <= 0}>
+                  ← Geri
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={goForward}
+                  disabled={historyIndex < 0 || historyIndex >= history.length - 1}
+                >
+                  İleri →
+                </button>
+                <nav className="breadcrumb" aria-label="Pivot geçmişi">
+                  {breadcrumb.map((id, i) => (
+                    <span key={`${id}-${i}`}>
+                      {i > 0 && <span className="sep">→</span>}
+                      <button
+                        type="button"
+                        className={i === breadcrumb.length - 1 ? 'current' : ''}
+                        onClick={() => {
+                          setHistoryIndex(i)
+                          setPivotId(history[i])
+                        }}
+                      >
+                        {serviceNameById.get(id) ?? id}
+                      </button>
+                    </span>
+                  ))}
+                </nav>
+                <button type="button" className="btn ghost clear-sel" onClick={clearSelection}>
+                  Seçimi bırak
+                </button>
+              </div>
               <div className="tabs">
                 <button
                   type="button"
@@ -475,6 +488,21 @@ export default function App() {
                   {viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
                 </button>
               </div>
+            </div>
+          )}
+
+          {!hasSelection && (
+            <div className="welcome">
+              <h2>Servis seçin</h2>
+              <p>
+                Soldaki ağaçtan veya üst aramadan bir servis seçerek etkilenenleri ve
+                etki yolunu görün. Seçili servise tekrar tıklayınca seçim kalkar.
+              </p>
+            </div>
+          )}
+
+          {hasSelection && (
+            <>
 
               {tab === 'affected' && (
                 <>
@@ -492,7 +520,7 @@ export default function App() {
 
               {tab === 'map' && selectedMethodId && methodImpact && (
                 <MapStage
-                  title="Metod haritası"
+                  title="Method haritası"
                   expanded={mapExpanded}
                   onExpandedChange={setMapExpanded}
                 >
@@ -556,7 +584,7 @@ export default function App() {
               )}
 
               {tab === 'map' && selectedMethodId && !methodImpact && (
-                <p className="empty-hint">Metod etki grafı yükleniyor…</p>
+                <p className="empty-hint">Method etki grafı yükleniyor…</p>
               )}
             </>
           )}

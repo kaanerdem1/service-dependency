@@ -34,7 +34,7 @@ function MethodLeaves({
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Metodlar yüklenemedi')
+          setError(e instanceof Error ? e.message : 'Methods yüklenemedi')
         }
       })
     return () => {
@@ -52,14 +52,14 @@ function MethodLeaves({
   if (!methods) {
     return (
       <p className="tree-method-status" style={{ paddingLeft: 8 + depth * 12 }}>
-        Metodlar…
+        Methods…
       </p>
     )
   }
   if (methods.length === 0) {
     return (
       <p className="tree-method-status" style={{ paddingLeft: 8 + depth * 12 }}>
-        Metod yok
+        Method yok
       </p>
     )
   }

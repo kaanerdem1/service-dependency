@@ -78,6 +78,10 @@
 
 .search-hits button {
   width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   text-align: left;
   border: 0;
   background: transparent;
@@ -88,6 +92,41 @@
 
 .search-hits button:hover {
   background: var(--accent-soft);
+}
+
+.search-hit-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.search-hit-text strong {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.hit-tag {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  line-height: 1.3;
+}
+
+.hit-tag-service {
+  background: #e4eef8;
+  color: #2a4f73;
+  border: 1px solid #b7cfe6;
+}
+
+.hit-tag-method {
+  background: #e8f3ec;
+  color: #24543a;
+  border: 1px solid #a9cbb6;
 }
 
 .top-actions {
@@ -122,7 +161,8 @@
   flex: 1;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 280px;
-  min-height: 0;
+  align-items: start;
+  min-height: calc(100vh - 64px);
 }
 
 .left,
@@ -130,7 +170,7 @@
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border-right: 1px solid var(--line);
   padding: 16px 12px;
-  overflow: auto;
+  min-height: calc(100vh - 64px);
 }
 
 .detail-panel {
@@ -153,6 +193,13 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.stage-top {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scroll-margin-top: 8px;
 }
 
 .tree-row {
@@ -223,8 +270,40 @@
 .pivot-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+}
+
+.pivot-bar .btn.ghost {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 7px;
+  border-color: #9bb5a6;
+  background: #e7f1eb;
+  color: #243d32;
+}
+
+.pivot-bar .btn.ghost:hover:not(:disabled) {
+  background: #d5e8dc;
+}
+
+.pivot-bar .btn.ghost:disabled {
+  opacity: 0.4;
+  background: #f0eeea;
+  border-color: #d5cfc4;
+  color: #8a847a;
+}
+
+.pivot-bar .btn.ghost.clear-sel {
+  margin-left: auto;
+  border-color: #c4a48a;
+  background: #f6eee6;
+  color: #6a4530;
+}
+
+.pivot-bar .btn.ghost.clear-sel:hover:not(:disabled) {
+  background: #efe0d2;
 }
 
 .breadcrumb {
@@ -610,8 +689,9 @@
 }
 
 .path-layer-btn.on {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: #2f6f55;
+  border-color: #2f6f55;
+  color: #f4f7f5;
 }
 
 .dd-method-badge {
@@ -776,15 +856,8 @@
   stroke-width: 3 !important;
 }
 
-.method-hit {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-}
-
 .method-hit-svc {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
 
@@ -943,17 +1016,22 @@
 }
 
 .path-layer-bar .map-nav-btn {
-  border: 1px solid #cfc8bc;
-  background: #fffcf7;
-  color: var(--ink);
+  border: 1px solid #9bb5a6;
+  background: #e7f1eb;
+  color: #243d32;
+  padding: 4px 9px;
+  font-size: 11px;
+  border-radius: 6px;
 }
 
 .path-layer-bar .map-nav-btn:hover:not(:disabled) {
-  background: #efebe4;
+  background: #d5e8dc;
 }
 
 .path-layer-bar .map-nav-btn:disabled {
   opacity: 0.35;
+  background: #f0eeea;
+  border-color: #d5cfc4;
 }
 
 .path-legend-inline {
@@ -1028,14 +1106,25 @@
 }
 
 .path-layer-btn {
-  font-size: 12px;
-  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 9px;
   white-space: nowrap;
+  border-radius: 6px;
+  border: 1px solid #9bb5a6;
+  background: #e7f1eb;
+  color: #243d32;
+}
+
+.path-layer-btn:hover:not(:disabled) {
+  background: #d5e8dc;
 }
 
 .path-layer-btn:disabled {
   opacity: 0.4;
   cursor: default;
+  background: #f0eeea;
+  border-color: #d5cfc4;
 }
 
 .map-filter-hint {
@@ -1967,9 +2056,10 @@ button.linkish {
 }
 
 .btn {
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid var(--line);
-  padding: 10px 14px;
+  padding: 6px 12px;
+  font-size: 13px;
   cursor: pointer;
   background: var(--surface);
 }
@@ -2450,6 +2540,8 @@ button.linkish {
     border: 0;
     border-bottom: 1px solid var(--line);
     max-height: 240px;
+    min-height: 0;
+    overflow: auto;
   }
 }
 

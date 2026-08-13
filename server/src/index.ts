@@ -24,6 +24,7 @@ import {
   getCallerRefs,
   getMethod,
   listMethodRefsForService,
+  listMethodsLinkedToPivot,
   methodImpact,
   searchMethods,
 } from './methods.js'
@@ -103,6 +104,11 @@ app.get('/api/services/:id/change-requests', (req, res) => {
 
 app.get('/api/services/:id/methods', (req, res) => {
   if (!services[req.params.id]) return res.status(404).json({ error: 'not_found' })
+  const linkedTo = String(req.query.linkedTo ?? '').trim()
+  if (linkedTo) {
+    if (!services[linkedTo]) return res.status(404).json({ error: 'pivot_not_found' })
+    return res.json(listMethodsLinkedToPivot(req.params.id, linkedTo))
+  }
   res.json(listMethodRefsForService(req.params.id))
 })
 

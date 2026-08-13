@@ -144,7 +144,7 @@ function layersAsServices(graph: MethodImpactGraph): {
     id: sid,
     hop,
     label: nameBySvc.get(sid) ?? sid,
-    sub: `${countBySvc.get(sid) ?? 1} çağıran metod`,
+    sub: `${countBySvc.get(sid) ?? 1} çağıran method`,
     kind: 'service' as const,
     serviceId: sid,
     methodCount: countBySvc.get(sid) ?? 1,
@@ -497,7 +497,7 @@ export function MethodImpactMap({
           <span className="method-map-kicker">
             {viewMode === 'services'
               ? 'Çağıran servisler'
-              : 'Çağıran metodlar'}
+              : 'Çağıran method’lar'}
           </span>
           <button
             type="button"
@@ -510,16 +510,16 @@ export function MethodImpactMap({
           <span className="path-bar-sep" aria-hidden />
           <button
             type="button"
-            className={`btn ghost path-layer-btn ${viewMode === 'methods' ? 'on' : ''}`}
+            className="btn ghost path-layer-btn"
             aria-pressed={viewMode === 'methods'}
             onClick={() =>
               setViewMode((m) => (m === 'methods' ? 'services' : 'methods'))
             }
-            title="Metod seviyesinde çağıran zinciri"
+            title="Method seviyesinde çağıran zinciri"
           >
             {viewMode === 'methods'
               ? 'Sadece bağlı olduğu servisleri göster'
-              : 'Sadece bağlı olduğu metodları göster'}
+              : 'Sadece bağlı olduğu method’ları göster'}
           </button>
         </div>
         <div className="path-layer-actions">
@@ -572,8 +572,8 @@ export function MethodImpactMap({
         </strong>{' '}
         ·{' '}
         {viewMode === 'services'
-          ? `çağıran ${serviceCount} servis · ${graph.nodes.length} metod`
-          : `çağıran blast · ${graph.nodes.length} metod`}
+          ? `çağıran ${serviceCount} servis · ${graph.nodes.length} method`
+          : `çağıran blast · ${graph.nodes.length} method`}
         {graph.truncated ? ` · ${graph.reason ?? 'kesildi'}` : ''}
       </p>
       <ReactFlow

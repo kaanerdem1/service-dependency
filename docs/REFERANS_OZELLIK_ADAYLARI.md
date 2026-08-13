@@ -29,7 +29,7 @@ Numara = eski referans kimliği (kaynak eşlemesi için). **Sprint sırası = a�
 6. [x] **Metod → çağıranlar ağacı** (+ lazy callers/callees)
 7. [~] **Lazy drill-down** — bir hop
 6b. [x] **Sol ağaç** Project→Package→Service→Method (lazy)
-6c. [x] **Gelişmiş harita** “Bağlı metodları göster” (2–3 / +N)
+6c. [x] **Gelişmiş harita** “Bağlı methodları göster” (rozet + taşınabilir popover; servisin tüm method’ları)
 
 ---
 
@@ -67,13 +67,13 @@ Numara = eski referans kimliği (kaynak eşlemesi için). **Sprint sırası = a�
 3. [-] **Ego-network’te sol/sağ yön** (New Relic)  
 16. [-] **Çift yön görünüm** (haritada)
 
-### F — Metod / call-graph ← **şimdi: 17 entegrasyon**
+### F — Metod / call-graph ← **şimdi: 17**
 
 6. [x] **Metod → çağıranlar ağacı** — DetailPanel **Metodlar**; bol mock  
 7. [~] **Lazy drill-down call hierarchy** — bir hop callers/callees lazy  
-17. [~] **Metod seviyesi etki analizi** — blast özeti var; onay listesine bağlı değil  
+17. [ ] **Metod seviyesi etki → onay listesi** — harita/blast var; değişiklik talebi / gate henüz metod blast’ına bağlı değil  
 
-*Ölçek UX:* sol ağaç / arama → metod seçince **gelişmiş metod etki haritası** (katmanlı çağıran blast). Servis haritasında “Bağlı metodları göster” → yanında `N metod` rozeti, açılınca liste + dim. Basit etki yolu servis seviyesinde kaldı.
+*Ölçek UX (bitti):* ağaç/arama → method pivot; varsayılan çağıran **servis** haritası; toggle ile çağıran **method** zinciri. Servis haritasında method rozeti (servisin tüm katalog method’ları).
 
 *Test:* `docs/METOD_TEST_SENARYOLARI.md` (§E/F) + `GET /api/meta/call-graph-consistency`
 
@@ -94,7 +94,7 @@ Numara = eski referans kimliği (kaynak eşlemesi için). **Sprint sırası = a�
 | Sprint 2 | **4** (bitti); **10 / 14 / 15** sonraya | Detay paneli |
 | Sprint 3 | **5 + 19 → 20** hepsi sonraya | Scorecard / uyum PR |
 | Sprint 4 | **8 → 18** sonraya | APM kenar tipi |
-| Sprint 5 | **6 + 7** (bitti/~) → **17** onay bağlama | Metod kataloğu; `METOD_TEST_SENARYOLARI.md` |
+| Sprint 5 | **6 + 7 + harita** (bitti) → **17** açık | Metod UX bitti; onay’a metod blast bağlama kaldı |
 | Yapma (şimdi) | **3, 16, 21, 22** | Harita dilini / ölçeği bozar |
 
 ---
