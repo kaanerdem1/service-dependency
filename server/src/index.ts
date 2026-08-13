@@ -15,6 +15,7 @@ import {
   setFlag,
 } from './changeRequests.js'
 import { IMPACT_VIEW, buildImpactGraph } from './impact.js'
+import { assertCanCreateRequest } from './permissions.js'
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 4000)
@@ -79,23 +80,55 @@ app.get('/api/services/:id/change-requests', (req, res) => {
 
 app.post('/api/change-requests', (req, res) => {
   const body = req.body ?? {}
-  if (!body.targetServiceId || !body.summary || !body.rationale || !body.personId) {
+  if (!body.summary || !body.rationale || !body.personId) {
     return res.status(400).json({ error: 'missing_fields' })
   }
-  const affectedServiceIds =
-    body.affectedServiceIds ??
-    (affectsEdges[body.targetServiceId] ?? [])
-  const cr = createChangeRequest({
-    targetServiceId: body.targetServiceId,
-    summary: body.summary,
-    rationale: body.rationale,
-    personId: body.personId,
-    personName: body.personName ?? body.personId,
-    team: body.team,
-    department: body.department,
-    affectedServiceIds,
-  })
-  res.status(201).json(cr)
+  const kind = body.kind === 'new_service' ? 'new_service' : 'change'
+  const affectedServiceIds = Array.isArray(body.affectedServiceIds)
+    ? body.affectedServiceIds
+    : kind === 'change' && body.targetServiceId
+      ? (affectsEdges[body.targetServiceId] ?? [])
+      : []
+  if (kind === 'change' && affectedServiceIds.length === 0) {
+    return res.status(400).json({ error: 'no_affected' })
+  }
+  if (kind === 'change' && !body.targetServiceId) {
+    return res.status(400).json({ error: 'target_required' })
+  }
+  if (kind === 'new_service' && !String(body.proposedServiceName ?? '').trim()) {
+    return res.status(400).json({ error: 'proposed_name_required' })
+  }
+  try {
+    assertCanCreateRequest({
+      kind,
+      personId: body.personId,
+      targetServiceId: body.targetServiceId,
+      proposedPackageId: body.proposedPackageId,
+    })
+    const created = createChangeRequest({
+      kind,
+      targetServiceId: body.targetServiceId,
+      proposedServiceName: body.proposedServiceName,
+      proposedProjectId: body.proposedProjectId,
+      proposedPackageId: body.proposedPackageId,
+      summary: body.summary,
+      rationale: body.rationale,
+      description: body.description,
+      serviceImpact: body.serviceImpact,
+      dataImpact: body.dataImpact,
+      personId: body.personId,
+      personName: body.personName ?? body.personId,
+      team: body.team,
+      department: body.department,
+      affectedServiceIds,
+    })
+    res.status(201).json(created)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'bad_request'
+    const status =
+      msg.startsWith('forbidden') || msg === 'unknown_user' ? 403 : 400
+    res.status(status).json({ error: msg })
+  }
 })
 
 app.get('/api/change-requests/:id', (req, res) => {

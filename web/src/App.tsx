@@ -4,7 +4,9 @@ import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { DetailPanel } from './components/DetailPanel'
 import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
+import { MapStage } from './components/MapStage'
 import { ModuleTree } from './components/ModuleTree'
+import { NewServiceRequestModal } from './components/NewServiceRequestModal'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import { SimpleImpactPath } from './components/SimpleImpactPath'
 import {
@@ -20,6 +22,7 @@ import {
   searchServices,
 } from './api/client'
 import type { SessionUser } from './mock/session'
+import { roleLabel } from './auth/permissions'
 import type {
   AffectedService,
   ChangeRequest,
@@ -49,6 +52,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('affected')
   const [viewMode, setViewMode] = useState<ViewMode>('simple')
   const [apiError, setApiError] = useState<string>()
+  const [mapExpanded, setMapExpanded] = useState(false)
 
   const [session, setSession] = useState<SessionUser>()
   const [serviceRequests, setServiceRequests] = useState<ChangeRequest[]>([])
@@ -56,8 +60,10 @@ export default function App() {
   const [inboxUpdates, setInboxUpdates] = useState<InboxNotification[]>([])
   const [inboxPending, setInboxPending] = useState(0)
   const [showCreateCr, setShowCreateCr] = useState(false)
+  const [showNewService, setShowNewService] = useState(false)
   const [showInbox, setShowInbox] = useState(false)
   const [openRequest, setOpenRequest] = useState<ChangeRequest>()
+  const [catalogServices, setCatalogServices] = useState<Service[]>([])
 
   const refreshInbox = useCallback(async (ownerId: string) => {
     const data = await getInbox(ownerId)
@@ -69,10 +75,15 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const [modules, users] = await Promise.all([getModuleTree(), getSessionUsers()])
+        const [modules, users, catalog] = await Promise.all([
+          getModuleTree(),
+          getSessionUsers(),
+          searchServices(''),
+        ])
         setTree(modules)
         setSessionUsers(users)
         setSession(users[0])
+        setCatalogServices(catalog)
         setApiError(undefined)
       } catch {
         setApiError('API’ye bağlanılamadı. `cd server && npm run dev` ile backend’i başlatın.')
@@ -130,12 +141,20 @@ export default function App() {
     setAffected([])
     setImpact(undefined)
     setServiceRequests([])
+    setMapExpanded(false)
   }, [])
 
   const selectPivot = useCallback(
-    (id: string) => {
+    (id: string, opts?: { resetHistory?: boolean }) => {
       if (id === pivotId) {
         clearSelection()
+        return
+      }
+      if (opts?.resetHistory) {
+        setHistory([id])
+        setHistoryIndex(0)
+        setPivotId(id)
+        setMapExpanded(false)
         return
       }
       const next = [...history.slice(0, historyIndex + 1), id]
@@ -167,6 +186,11 @@ export default function App() {
 
   const breadcrumb = historyIndex >= 0 ? history.slice(0, historyIndex + 1) : []
   const hasSelection = !!pivotId
+  const serviceNameById = (() => {
+    const m = new Map(catalogServices.map((s) => [s.id, s.name]))
+    if (service) m.set(service.id, service.name)
+    return m
+  })()
 
   return (
     <div className={`app mode-${viewMode}`}>
@@ -191,7 +215,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      selectPivot(s.id)
+                      selectPivot(s.id, { resetHistory: true })
                       setQuery('')
                     }}
                   >
@@ -217,6 +241,8 @@ export default function App() {
               {sessionUsers.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
+                  {u.team ? ` · ${u.team}` : ''}
+                  {u.role ? ` · ${roleLabel(u.role)}` : ''}
                 </option>
               ))}
             </select>
@@ -258,7 +284,7 @@ export default function App() {
           <ModuleTree
             nodes={tree}
             selectedServiceId={pivotId}
-            onSelectService={(id) => selectPivot(id)}
+            onSelectService={(id) => selectPivot(id, { resetHistory: true })}
           />
         </aside>
 
@@ -288,7 +314,7 @@ export default function App() {
                         setPivotId(history[i])
                       }}
                     >
-                      {id.replace('svc-', '')}
+                      {serviceNameById.get(id) ?? id}
                     </button>
                   </span>
                 ))}
@@ -315,7 +341,10 @@ export default function App() {
                 <button
                   type="button"
                   className={tab === 'affected' ? 'on' : ''}
-                  onClick={() => setTab('affected')}
+                  onClick={() => {
+                    setMapExpanded(false)
+                    setTab('affected')
+                  }}
                 >
                   Etkilenenler
                 </button>
@@ -341,20 +370,32 @@ export default function App() {
                 </>
               )}
 
-              {tab === 'map' && impact && viewMode === 'simple' && (
-                <SimpleImpactPath
-                  graph={impact}
-                  onPivot={(id) => selectPivot(id)}
-                  onClearCenter={clearSelection}
-                />
-              )}
-
-              {tab === 'map' && impact && viewMode === 'advanced' && (
-                <ImpactMap
-                  graph={impact}
-                  onPivot={(id) => selectPivot(id)}
-                  onClearCenter={clearSelection}
-                />
+              {tab === 'map' && impact && (
+                <MapStage
+                  title={viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
+                  expanded={mapExpanded}
+                  onExpandedChange={setMapExpanded}
+                  onPivotBack={goBack}
+                  onPivotForward={goForward}
+                  canPivotBack={historyIndex > 0}
+                  canPivotForward={historyIndex >= 0 && historyIndex < history.length - 1}
+                >
+                  {viewMode === 'simple' ? (
+                    <SimpleImpactPath
+                      key={`simple-${mapExpanded}`}
+                      graph={impact}
+                      onPivot={(id) => selectPivot(id)}
+                      onClearCenter={clearSelection}
+                    />
+                  ) : (
+                    <ImpactMap
+                      key={`adv-${mapExpanded}`}
+                      graph={impact}
+                      onPivot={(id) => selectPivot(id)}
+                      onClearCenter={clearSelection}
+                    />
+                  )}
+                </MapStage>
               )}
             </>
           )}
@@ -363,8 +404,10 @@ export default function App() {
         <DetailPanel
           service={service}
           loading={loading}
+          session={session}
           requests={serviceRequests}
           onOpenRequest={() => setShowCreateCr(true)}
+          onOpenNewService={() => setShowNewService(true)}
           onOpenExisting={(id) => void openExisting(id)}
         />
       </div>
@@ -375,10 +418,24 @@ export default function App() {
           affected={affected}
           session={session}
           onClose={() => setShowCreateCr(false)}
-          onCreated={(id) => {
+          onCreated={(ids) => {
             setShowCreateCr(false)
-            void openExisting(id)
+            if (ids[0]) void openExisting(ids[0])
             void listRequestsForService(service.id).then(setServiceRequests)
+            void refreshInbox(session.id)
+          }}
+        />
+      )}
+
+      {showNewService && session && (
+        <NewServiceRequestModal
+          session={session}
+          domainServices={catalogServices.filter((s) => s.owner?.team === session.team)}
+          onClose={() => setShowNewService(false)}
+          onCreated={(ids) => {
+            setShowNewService(false)
+            if (ids[0]) void openExisting(ids[0])
+            if (pivotId) void listRequestsForService(pivotId).then(setServiceRequests)
             void refreshInbox(session.id)
           }}
         />

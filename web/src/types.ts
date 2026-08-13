@@ -1,7 +1,11 @@
+export type TeamRole = 'lead' | 'member'
+
 export type Owner = {
   id: string
   name: string
   team?: string
+  /** lead = ekip lideri, member = ekip çalışanı */
+  role?: TeamRole
 }
 
 export type Service = {
@@ -58,11 +62,24 @@ export type ImpactedFlag = {
 
 export type ChangeRequest = {
   id: string
+  batchId?: string
   targetServiceId: string
   targetServiceName: string
+  assigneeServiceId: string
+  assigneeServiceName: string
+  assigneeTeam?: string
   kind: 'change' | 'new_service'
+  proposedServiceName?: string
+  proposedProjectId?: string
+  proposedPackageId?: string
   summary: string
   rationale: string
+  description?: string
+  serviceImpact?: string
+  dataImpact?: string
+  /** new_service: çağıracağı servisler (onaycı değil) */
+  dependsOnServiceIds?: string[]
+  dependsOnServiceNames?: string[]
   requestedBy: {
     personId: string
     personName: string
@@ -72,6 +89,68 @@ export type ChangeRequest = {
   impacted: ImpactedFlag[]
   createdAt: string
   updatedAt: string
+}
+
+export type RequestBatchGroup = {
+  key: string
+  batchId?: string
+  kind: 'change' | 'new_service'
+  title: string
+  summary: string
+  updatedAt: string
+  items: ChangeRequest[]
+}
+
+/** Aynı formdan açılan task’ları batchId ile grupla */
+export function groupRequestsByBatch(requests: ChangeRequest[]): RequestBatchGroup[] {
+  const map = new Map<string, ChangeRequest[]>()
+  for (const r of requests) {
+    const key = r.batchId ?? `single:${r.id}`
+    const list = map.get(key) ?? []
+    list.push(r)
+    map.set(key, list)
+  }
+  const groups: RequestBatchGroup[] = []
+  for (const [key, items] of map) {
+    const sorted = [...items].sort((a, b) => a.id.localeCompare(b.id))
+    const head = sorted[0]!
+    const batchId = head.batchId
+    const title = batchId
+      ? `Grup ${batchId} · ${sorted.length} task`
+      : taskHeadline(head)
+    groups.push({
+      key,
+      batchId,
+      kind: head.kind,
+      title,
+      summary: head.summary,
+      updatedAt: sorted.reduce((m, x) => (x.updatedAt > m ? x.updatedAt : m), head.updatedAt),
+      items: sorted,
+    })
+  }
+  return groups.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+}
+
+/** Örn. T-546 — PLATFORM — ReportingService */
+export function taskHeadline(cr: ChangeRequest): string {
+  const team = (cr.assigneeTeam ?? cr.impacted[0]?.team ?? 'EKİP').toLocaleUpperCase('tr-TR')
+  if (cr.kind === 'new_service') {
+    const neu = cr.proposedServiceName ?? cr.targetServiceName
+    return `${cr.id} — ${team} — Yeni: ${neu}`
+  }
+  return `${cr.id} — ${team} — ${cr.assigneeServiceName}`
+}
+
+/** Onayı verecek kişi (etkilenen servis owner’ı) */
+export function taskApprover(cr: ChangeRequest): { name: string; team?: string; label: string } {
+  const row = cr.impacted[0]
+  const name = row?.ownerName ?? 'Owner atanmamış'
+  const team = row?.team ?? cr.assigneeTeam
+  return {
+    name,
+    team,
+    label: team ? `${name} · ${team}` : name,
+  }
 }
 
 export function isApprovalOpen(cr: ChangeRequest): boolean {

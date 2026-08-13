@@ -1,26 +1,31 @@
 import type { ModuleNode, Owner, Service } from '../types'
 
 export const owners: Record<string, Owner> = {
-  o1: { id: 'o1', name: 'Ayşe Yılmaz', team: 'Payments' },
-  o2: { id: 'o2', name: 'Can Demir', team: 'Orders' },
-  o3: { id: 'o3', name: 'Elif Kara', team: 'Identity' },
-  o4: { id: 'o4', name: 'Mert Şahin', team: 'Notifications' },
-  o5: { id: 'o5', name: 'Zeynep Ak', team: 'Platform' },
+  o1: { id: 'o1', name: 'Ayşe Yılmaz', team: 'Payments', role: 'lead' },
+  o1m: { id: 'o1m', name: 'Burak Çelik', team: 'Payments', role: 'member' },
+  o2: { id: 'o2', name: 'Can Demir', team: 'Orders', role: 'lead' },
+  o2m: { id: 'o2m', name: 'Deniz Kaya', team: 'Orders', role: 'member' },
+  o3: { id: 'o3', name: 'Elif Kara', team: 'Identity', role: 'lead' },
+  o4: { id: 'o4', name: 'Mert Şahin', team: 'Notifications', role: 'lead' },
+  o5: { id: 'o5', name: 'Zeynep Ak', team: 'Platform', role: 'lead' },
 }
 
 /** serviceId → list of serviceIds affected if it changes (inbound consumers) */
 export const affectsEdges: Record<string, string[]> = {
   'svc-payment': ['svc-checkout', 'svc-billing', 'svc-refund', 'svc-report'],
   'svc-checkout': ['svc-storefront', 'svc-mobile-bff'],
+  // Doğrudan: Report + FinanceBatch. Report→FinanceBatch = haritada 2. katman cascade.
   'svc-billing': ['svc-finance-batch', 'svc-report'],
-  'svc-refund': ['svc-support-desk'],
+  'svc-refund': ['svc-support-desk', 'svc-notify'],
+  'svc-support-desk': ['svc-customer-care'],
+  'svc-customer-care': ['svc-ticket-analytics'],
+  'svc-ticket-analytics': [],
   'svc-identity': ['svc-payment', 'svc-checkout', 'svc-storefront', 'svc-mobile-bff'],
   'svc-notify': ['svc-checkout', 'svc-refund', 'svc-support-desk'],
   'svc-storefront': [],
   'svc-mobile-bff': [],
   'svc-report': ['svc-finance-batch'],
   'svc-finance-batch': [],
-  'svc-support-desk': [],
 }
 
 const serviceDefs: Omit<Service, 'affectedCount'>[] = [
@@ -101,6 +106,20 @@ const serviceDefs: Omit<Service, 'affectedCount'>[] = [
     packageId: 'pkg-notify',
     owner: owners.o4,
   },
+  {
+    id: 'svc-customer-care',
+    name: 'CustomerCareService',
+    projectId: 'proj-platform',
+    packageId: 'pkg-notify',
+    owner: owners.o4,
+  },
+  {
+    id: 'svc-ticket-analytics',
+    name: 'TicketAnalyticsService',
+    projectId: 'proj-data',
+    packageId: 'pkg-reporting',
+    owner: owners.o5,
+  },
 ]
 
 export const services: Record<string, Service> = Object.fromEntries(
@@ -158,6 +177,7 @@ export const moduleTree: ModuleNode[] = [
         children: [
           { id: 'node-notify', kind: 'service', name: 'NotificationService', serviceId: 'svc-notify' },
           { id: 'node-support', kind: 'service', name: 'SupportDeskService', serviceId: 'svc-support-desk' },
+          { id: 'node-care', kind: 'service', name: 'CustomerCareService', serviceId: 'svc-customer-care' },
         ],
       },
     ],
@@ -174,6 +194,7 @@ export const moduleTree: ModuleNode[] = [
         children: [
           { id: 'node-report', kind: 'service', name: 'ReportingService', serviceId: 'svc-report' },
           { id: 'node-finance', kind: 'service', name: 'FinanceBatchJob', serviceId: 'svc-finance-batch' },
+          { id: 'node-ticket', kind: 'service', name: 'TicketAnalyticsService', serviceId: 'svc-ticket-analytics' },
         ],
       },
     ],

@@ -20,7 +20,7 @@ export function SimpleImpactPath({ graph, onPivot, onClearCenter }: Props) {
   return (
     <div className="simple-path">
       <p className="map-legend">
-        Seçili servis → etkilenenler
+        Seçili servis → etkilenenler · katman = en kısa yol (1 = doğrudan / onay)
         {truncated ? ' · görünüm kısaltıldı' : ''}
       </p>
       {truncated && reason && <p className="map-budget-hint">{reason}</p>}

@@ -6,6 +6,12 @@ export const IMPACT_VIEW = {
   maxNodesAdvanced: 48,
 } as const
 
+/**
+ * Katman = en kısa yol (BFS).
+ * 1 = doğrudan (onay listesi ile aynı küme),
+ * 2+ = yalnızca dolaylı (doğrudan kenarı olmayanlar).
+ * Aynı servise hem doğrudan hem uzun yol varsa 1. katman kazanır.
+ */
 export function buildImpactGraph(
   centerId: string,
   maxNodes: number,

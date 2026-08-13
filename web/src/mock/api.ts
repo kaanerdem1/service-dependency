@@ -38,8 +38,8 @@ export async function getAffected(serviceId: string): Promise<AffectedService[]>
 }
 
 /**
- * Dinamik hiyerarşi: düğüm sayısı bütçeyi aşmayana kadar hop artır (≤ maxHops).
- * Aynı servis birden fazla yoldan gelirse ilk (en sığ) hop kazanır.
+ * Harita katmanı = en kısa yol (BFS) — Etkilenenler / onay ile uyumlu.
+ * 1 = doğrudan, 2+ = dolaylı.
  */
 export function buildImpactGraph(
   centerId: string,

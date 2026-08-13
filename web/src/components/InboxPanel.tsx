@@ -65,9 +65,17 @@ export function InboxPanel({
                   >
                     <span className="inbox-kind">ONAY GEREKİYOR</span>
                     <span className="inbox-id">{request.id}</span>
+                    <span className="approver-line">
+                      Onayı verecek: <strong>{row.ownerName ?? 'Owner atanmamış'}</strong>
+                      {row.team ? ` · ${row.team}` : ''}
+                    </span>
                     <span className="inbox-title">
-                      {request.targetServiceName} değişikliği →{' '}
-                      <strong>{row.serviceName}</strong> adına yanıtla
+                      {(row.team ?? 'Ekip').toLocaleUpperCase('tr-TR')} —{' '}
+                      <strong>{row.serviceName}</strong>
+                      <span className="svc-meta">
+                        {' '}
+                        · {request.targetServiceName} değişikliği
+                      </span>
                     </span>
                     <span className={`flag-pill ${row.flag}`}>{FLAG_LABEL[row.flag]}</span>
                   </button>

@@ -51,16 +51,25 @@ export function getChangeRequest(id: string) {
 }
 
 export function createChangeRequest(input: {
-  targetServiceId: string
+  kind?: 'change' | 'new_service'
+  targetServiceId?: string
+  proposedServiceName?: string
+  proposedProjectId?: string
+  proposedPackageId?: string
   summary: string
   rationale: string
+  description?: string
+  /** change: opsiyonel; task “Servis etkisi” sekmesine yazılır */
+  serviceImpact?: string
+  /** change: opsiyonel; task “Veri etkisi” sekmesine yazılır */
+  dataImpact?: string
   personId: string
   personName: string
   team?: string
   department?: string
   affectedServiceIds: string[]
 }) {
-  return request<ChangeRequest>('/change-requests', {
+  return request<ChangeRequest[]>('/change-requests', {
     method: 'POST',
     body: JSON.stringify(input),
   })

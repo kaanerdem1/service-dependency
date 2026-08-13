@@ -2,7 +2,8 @@ import type { AffectedService, ChangeRequest, FlagStatus, ImpactedFlag } from '.
 import { isApprovalOpen } from '../types'
 import { services } from './data'
 
-let seq = 1
+let seq = 546
+let batchSeq = 1
 const store: ChangeRequest[] = []
 const listeners = new Set<() => void>()
 
@@ -26,10 +27,11 @@ export function getChangeRequest(id: string): ChangeRequest | undefined {
 }
 
 export function listRequestsForService(serviceId: string): ChangeRequest[] {
-  return listChangeRequests().filter((c) => c.targetServiceId === serviceId)
+  return listChangeRequests().filter(
+    (c) => c.targetServiceId === serviceId || c.assigneeServiceId === serviceId,
+  )
 }
 
-/** Inbox: bu owner’ın yanıtlaması gereken (veya tüm) satırlar */
 export function listInboxForOwner(ownerId: string): {
   request: ChangeRequest
   row: ImpactedFlag
@@ -47,47 +49,64 @@ export function pendingInboxCount(ownerId: string): number {
   return listInboxForOwner(ownerId).filter((x) => x.row.flag === 'unseen').length
 }
 
+/** Her etkilenen servis için ayrı T-xxx task */
 export function createChangeRequest(input: {
   targetServiceId: string
   summary: string
   rationale: string
+  description?: string
   personId: string
   personName: string
   team?: string
   department?: string
   affected: AffectedService[]
-}): ChangeRequest {
+}): ChangeRequest[] {
   const target = services[input.targetServiceId]
   const now = new Date().toISOString()
-  const impacted: ImpactedFlag[] = input.affected.map(({ service }) => ({
-    serviceId: service.id,
-    serviceName: service.name,
-    ownerId: service.owner?.id,
-    ownerName: service.owner?.name,
-    team: service.owner?.team,
-    flag: 'unseen' as const,
-  }))
+  const batchId =
+    input.affected.length > 1 ? `B-${String(batchSeq++).padStart(3, '0')}` : undefined
+  const created: ChangeRequest[] = []
 
-  const cr: ChangeRequest = {
-    id: `CR-${String(seq++).padStart(3, '0')}`,
-    targetServiceId: input.targetServiceId,
-    targetServiceName: target?.name ?? input.targetServiceId,
-    kind: 'change',
-    summary: input.summary.trim(),
-    rationale: input.rationale.trim(),
-    requestedBy: {
-      personId: input.personId,
-      personName: input.personName,
-      team: input.team?.trim() || undefined,
-      department: input.department?.trim() || undefined,
-    },
-    impacted,
-    createdAt: now,
-    updatedAt: now,
+  for (const { service: assignee } of input.affected) {
+    const row: ImpactedFlag = {
+      serviceId: assignee.id,
+      serviceName: assignee.name,
+      ownerId: assignee.owner?.id,
+      ownerName: assignee.owner?.name,
+      team: assignee.owner?.team,
+      flag: 'unseen',
+    }
+    const cr: ChangeRequest = {
+      id: `T-${seq++}`,
+      batchId,
+      targetServiceId: input.targetServiceId,
+      targetServiceName: target?.name ?? input.targetServiceId,
+      assigneeServiceId: assignee.id,
+      assigneeServiceName: assignee.name,
+      assigneeTeam: assignee.owner?.team,
+      kind: 'change',
+      summary: input.summary.trim(),
+      rationale: input.rationale.trim(),
+      description:
+        input.description?.trim() ||
+        `${input.summary.trim()}\n\n${input.rationale.trim()}`,
+      serviceImpact: `${target?.name} → ${assignee.name} servis etkisi (mock).`,
+      dataImpact: `${assignee.name} veri etkisi (mock).`,
+      requestedBy: {
+        personId: input.personId,
+        personName: input.personName,
+        team: input.team?.trim() || undefined,
+        department: input.department?.trim() || undefined,
+      },
+      impacted: [row],
+      createdAt: now,
+      updatedAt: now,
+    }
+    store.unshift(cr)
+    created.push(cr)
   }
-  store.unshift(cr)
   emit()
-  return cr
+  return created
 }
 
 export function setFlag(input: {

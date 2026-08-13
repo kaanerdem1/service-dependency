@@ -1,5 +1,5 @@
 import type { ChangeRequest, FlagStatus, ImpactedFlag } from './data.js'
-import { services } from './data.js'
+import { SESSION_USERS, services } from './data.js'
 
 export type InboxNotification = {
   id: string
@@ -21,7 +21,8 @@ const FLAG_MSG: Record<FlagStatus, string> = {
   unseen: 'yanıt bekliyor',
 }
 
-let seq = 1
+let seq = 546
+let batchSeq = 1
 let notifSeq = 1
 const store: ChangeRequest[] = []
 const notifications: InboxNotification[] = []
@@ -51,7 +52,20 @@ export function getChangeRequest(id: string) {
 }
 
 export function listRequestsForService(serviceId: string) {
-  return listChangeRequests().filter((c) => c.targetServiceId === serviceId)
+  const svc = services[serviceId]
+  return listChangeRequests().filter((c) => {
+    if (c.targetServiceId === serviceId || c.assigneeServiceId === serviceId) return true
+    // Yeni servis talebi: aynı paket bağlamında görünsün
+    if (
+      c.kind === 'new_service' &&
+      svc &&
+      c.proposedPackageId &&
+      c.proposedPackageId === svc.packageId
+    ) {
+      return true
+    }
+    return false
+  })
 }
 
 export function listInboxForOwner(ownerId: string) {
@@ -92,75 +106,222 @@ export function markNotificationsRead(userId: string, ids?: string[]) {
   return listNotificationsForUser(userId)
 }
 
+/**
+ * change: her etkilenen servis için ayrı task (onay = o servisin owner’ı).
+ * new_service: bağımlılık beyanı ayrı; onay = ekip lideri (çağrılan servis owner’ı değil).
+ */
 export function createChangeRequest(input: {
-  targetServiceId: string
+  kind?: 'change' | 'new_service'
+  targetServiceId?: string
+  proposedServiceName?: string
+  proposedProjectId?: string
+  proposedPackageId?: string
   summary: string
   rationale: string
+  description?: string
+  /** change: kullanıcı notu; yoksa otomatik metin */
+  serviceImpact?: string
+  dataImpact?: string
   personId: string
   personName: string
   team?: string
   department?: string
+  /** change: etkilenenler · new_service: çağıracağı servisler (depends-on) */
   affectedServiceIds: string[]
-}) {
-  const target = services[input.targetServiceId]
+}): ChangeRequest[] {
+  const kind = input.kind ?? 'change'
   const now = new Date().toISOString()
-  const impacted: ImpactedFlag[] = input.affectedServiceIds
-    .map((id) => services[id])
-    .filter(Boolean)
-    .map((service) => ({
-      serviceId: service.id,
-      serviceName: service.name,
-      ownerId: service.owner?.id,
-      ownerName: service.owner?.name,
-      team: service.owner?.team,
-      flag: 'unseen' as const,
-    }))
+
+  if (kind === 'new_service') {
+    return createNewServiceRequest(input, now)
+  }
+
+  const batchId =
+    input.affectedServiceIds.length > 1
+      ? `B-${String(batchSeq++).padStart(3, '0')}`
+      : undefined
+
+  if (!input.targetServiceId) throw new Error('target_required')
+  const target = services[input.targetServiceId]
+  const targetServiceId = input.targetServiceId
+  const targetServiceName = target?.name ?? input.targetServiceId
+
+  const created: ChangeRequest[] = []
+
+  for (const affectedId of input.affectedServiceIds) {
+    const assignee = services[affectedId]
+    if (!assignee) continue
+
+    const row: ImpactedFlag = {
+      serviceId: assignee.id,
+      serviceName: assignee.name,
+      ownerId: assignee.owner?.id,
+      ownerName: assignee.owner?.name,
+      team: assignee.owner?.team,
+      flag: 'unseen',
+    }
+
+    const teamLabel = (assignee.owner?.team ?? 'Ekip').toLocaleUpperCase('tr-TR')
+    const cr: ChangeRequest = {
+      id: `T-${seq++}`,
+      batchId,
+      targetServiceId,
+      targetServiceName,
+      assigneeServiceId: assignee.id,
+      assigneeServiceName: assignee.name,
+      assigneeTeam: assignee.owner?.team,
+      kind: 'change',
+      summary: input.summary.trim(),
+      rationale: input.rationale.trim(),
+      description:
+        input.description?.trim() ||
+        `${input.summary.trim()}\n\n${input.rationale.trim()}`,
+      serviceImpact:
+        input.serviceImpact?.trim() ||
+        `${targetServiceName} değişikliği, ${assignee.name} servisinin runtime / API sözleşmesini etkileyebilir. Owner: ${assignee.owner?.name ?? 'atanmamış'} (${teamLabel}).`,
+      dataImpact:
+        input.dataImpact?.trim() ||
+        `${assignee.name} üzerinden okunan/yazılan veri sözleşmeleri gözden geçirilmeli. (Mock veri etkisi.)`,
+      requestedBy: {
+        personId: input.personId,
+        personName: input.personName,
+        team: input.team?.trim() || undefined,
+        department: input.department?.trim() || undefined,
+      },
+      impacted: [row],
+      createdAt: now,
+      updatedAt: now,
+    }
+    store.unshift(cr)
+    created.push(cr)
+
+    if (row.ownerId) {
+      pushNotif({
+        userId: row.ownerId,
+        kind: 'approval_needed',
+        requestId: cr.id,
+        title: `${cr.id} — ${teamLabel} — onay bekleniyor`,
+        body: `${targetServiceName} → ${assignee.name} için yanıtın gerekiyor.`,
+        serviceName: assignee.name,
+        flag: 'unseen',
+      })
+    }
+  }
+
+  if (created.length > 0) {
+    pushNotif({
+      userId: input.personId,
+      kind: 'flag_update',
+      requestId: created[0].id,
+      title: `${created.length} Task açıldı`,
+      body: created.map((c) => c.id).join(', ') + (batchId ? ` · grup ${batchId}` : ''),
+    })
+  }
+
+  return created
+}
+
+function createNewServiceRequest(
+  input: {
+    proposedServiceName?: string
+    proposedProjectId?: string
+    proposedPackageId?: string
+    summary: string
+    rationale: string
+    description?: string
+    personId: string
+    personName: string
+    team?: string
+    department?: string
+    affectedServiceIds: string[]
+  },
+  now: string,
+): ChangeRequest[] {
+  const name = input.proposedServiceName?.trim()
+  if (!name) throw new Error('proposed_name_required')
+
+  const requesterTeam =
+    input.team?.trim() ||
+    SESSION_USERS.find((u) => u.id === input.personId)?.team
+  const lead =
+    SESSION_USERS.find((u) => u.team === requesterTeam && u.role === 'lead') ??
+    SESSION_USERS.find((u) => u.id === input.personId)
+
+  if (!lead) throw new Error('no_team_lead')
+
+  const dependsOnServiceIds = input.affectedServiceIds.filter((id) => services[id])
+  const dependsOnServiceNames = dependsOnServiceIds.map((id) => services[id]!.name)
+  const dependsLabel =
+    dependsOnServiceNames.length > 0
+      ? dependsOnServiceNames.join(', ')
+      : 'henüz seçilmedi'
+
+  const targetServiceId = `proposed:${name.toLowerCase().replace(/\s+/g, '-')}`
+  const teamLabel = (lead.team ?? 'Ekip').toLocaleUpperCase('tr-TR')
+
+  const row: ImpactedFlag = {
+    serviceId: targetServiceId,
+    serviceName: name,
+    ownerId: lead.id,
+    ownerName: lead.name,
+    team: lead.team,
+    flag: 'unseen',
+  }
 
   const cr: ChangeRequest = {
-    id: `CR-${String(seq++).padStart(3, '0')}`,
-    targetServiceId: input.targetServiceId,
-    targetServiceName: target?.name ?? input.targetServiceId,
-    kind: 'change',
+    id: `T-${seq++}`,
+    targetServiceId,
+    targetServiceName: name,
+    assigneeServiceId: targetServiceId,
+    assigneeServiceName: name,
+    assigneeTeam: lead.team,
+    kind: 'new_service',
+    proposedServiceName: name,
+    proposedProjectId: input.proposedProjectId,
+    proposedPackageId: input.proposedPackageId,
+    dependsOnServiceIds,
+    dependsOnServiceNames,
     summary: input.summary.trim(),
     rationale: input.rationale.trim(),
+    description:
+      input.description?.trim() ||
+      `${input.summary.trim()}\n\n${input.rationale.trim()}`,
+    serviceImpact: `Yeni servis “${name}” ekip lideri onayı bekliyor (${lead.name}). Çağıracağı servisler (bilgi): ${dependsLabel}. Çağrılan servis owner’ından onay istenmez.`,
+    dataImpact: `Yeni servis veri sözleşmeleri gözden geçirilmeli. Bağımlı servisler: ${dependsLabel}. (Mock)`,
     requestedBy: {
       personId: input.personId,
       personName: input.personName,
       team: input.team?.trim() || undefined,
       department: input.department?.trim() || undefined,
     },
-    impacted,
+    impacted: [row],
     createdAt: now,
     updatedAt: now,
   }
+
   store.unshift(cr)
 
-  // Owner’lara: onay gerekli
-  const notifiedOwners = new Set<string>()
-  for (const row of impacted) {
-    if (!row.ownerId || notifiedOwners.has(row.ownerId)) continue
-    notifiedOwners.add(row.ownerId)
+  pushNotif({
+    userId: lead.id,
+    kind: 'approval_needed',
+    requestId: cr.id,
+    title: `${cr.id} — ${teamLabel} — Yeni Servis onayı`,
+    body: `“${name}” için ekip lideri onayı gerekiyor. Çağıracakları: ${dependsLabel}.`,
+    serviceName: name,
+    flag: 'unseen',
+  })
+
+  if (lead.id !== input.personId) {
     pushNotif({
-      userId: row.ownerId,
-      kind: 'approval_needed',
+      userId: input.personId,
+      kind: 'flag_update',
       requestId: cr.id,
-      title: `${cr.id} · onay bekleniyor`,
-      body: `${cr.targetServiceName} değişikliği için ${row.serviceName} adına yanıtın gerekiyor.`,
-      serviceName: row.serviceName,
-      flag: 'unseen',
+      title: `Yeni Servis Talebi · ${cr.id}`,
+      body: `Onayı verecek: ${lead.name} (ekip lideri).`,
     })
   }
 
-  // Requester’a: talep oluşturuldu özeti
-  pushNotif({
-    userId: input.personId,
-    kind: 'flag_update',
-    requestId: cr.id,
-    title: `${cr.id} · talep gönderildi`,
-    body: `${impacted.length} etkilenen owner’a onay gitti. Yanıtlar bu inbox’ta görünecek.`,
-  })
-
-  return cr
+  return [cr]
 }
 
 export function setFlag(input: {
@@ -184,13 +345,13 @@ export function setFlag(input: {
 
   const actor = services[input.serviceId]?.owner?.name ?? input.actorOwnerId
   const msg = FLAG_MSG[input.flag]
+  const teamLabel = (cr.assigneeTeam ?? 'EKİP').toLocaleUpperCase('tr-TR')
 
-  // Talep sahibine her flag değişiminde bildirim (kendi satırı olsa bile)
   pushNotif({
     userId: cr.requestedBy.personId,
     kind: input.flag === 'rejected' ? 'approval_blocked' : 'flag_update',
     requestId: cr.id,
-    title: `${cr.id} · ${row.serviceName} ${msg}`,
+    title: `${cr.id} — ${teamLabel} — ${row.serviceName} ${msg}`,
     body:
       input.flag === 'rejected'
         ? `${actor}: reddetti.${row.note ? ` Gerekçe: ${row.note}` : ''}`
@@ -208,8 +369,8 @@ export function setFlag(input: {
       userId: cr.requestedBy.personId,
       kind: 'approval_open',
       requestId: cr.id,
-      title: `${cr.id} · Onay açık`,
-      body: `Tüm etkilenenler kabul etti. ${cr.targetServiceName} değişikliği yapılabilir.`,
+      title: `${cr.id} — Onay açık`,
+      body: `${cr.assigneeServiceName} kabul etti. Bu task için kapı açık.`,
     })
   }
 

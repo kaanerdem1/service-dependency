@@ -182,8 +182,7 @@ function buildGraph(
     const fromHop = hopOf.get(e.fromId)
     const toHop = hopOf.get(e.toId)
     if (fromHop === undefined || toHop === undefined) continue
-    if (toHop !== fromHop + 1) continue
-
+    // En uzun yol katmanında atlamalı kenarlar da çizilsin (örn. Billing→FinanceBatch)
     let source = e.fromId
     let target = e.toId
 
@@ -300,7 +299,7 @@ export function ImpactMap({ graph, onPivot, onClearCenter }: Props) {
       data-focus={focusId ?? undefined}
     >
       <p className="map-legend">
-        Seçili servis → etkilenenler
+        Seçili servis → etkilenenler · katman = en kısa yol (1 = doğrudan / onay)
         {graph.truncated ? ' · görünüm kısaltıldı' : ''}
       </p>
       {graph.truncated && graph.reason && (

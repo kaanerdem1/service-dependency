@@ -1,4 +1,4 @@
-export type Owner = { id: string; name: string; team?: string }
+export type Owner = { id: string; name: string; team?: string; role?: 'lead' | 'member' }
 export type Service = {
   id: string
   name: string
@@ -26,28 +26,50 @@ export type ImpactedFlag = {
 }
 export type ChangeRequest = {
   id: string
+  /** Aynı formdan açılan task grubu */
+  batchId?: string
   targetServiceId: string
   targetServiceName: string
+  /** Bu task’ın muhatabı (tek etkilenen servis) */
+  assigneeServiceId: string
+  assigneeServiceName: string
+  assigneeTeam?: string
   kind: 'change' | 'new_service'
+  /** new_service: henüz katalogda olmayan ad */
+  proposedServiceName?: string
+  proposedProjectId?: string
+  proposedPackageId?: string
   summary: string
   rationale: string
+  /** Genel sekme — serbest açıklama */
+  description?: string
+  /** Servis etkisi sekmesi (mock metin) */
+  serviceImpact?: string
+  /** Veri etkisi sekmesi (mock metin) */
+  dataImpact?: string
+  /** new_service: çağıracağı servisler (bağımlılık beyanı; onaycı değil) */
+  dependsOnServiceIds?: string[]
+  dependsOnServiceNames?: string[]
   requestedBy: {
     personId: string
     personName: string
     team?: string
     department?: string
   }
+  /** Her task’ta tek satır (assignee) */
   impacted: ImpactedFlag[]
   createdAt: string
   updatedAt: string
 }
 
 export const owners: Record<string, Owner> = {
-  o1: { id: 'o1', name: 'Ayşe Yılmaz', team: 'Payments' },
-  o2: { id: 'o2', name: 'Can Demir', team: 'Orders' },
-  o3: { id: 'o3', name: 'Elif Kara', team: 'Identity' },
-  o4: { id: 'o4', name: 'Mert Şahin', team: 'Notifications' },
-  o5: { id: 'o5', name: 'Zeynep Ak', team: 'Platform' },
+  o1: { id: 'o1', name: 'Ayşe Yılmaz', team: 'Payments', role: 'lead' },
+  o1m: { id: 'o1m', name: 'Burak Çelik', team: 'Payments', role: 'member' },
+  o2: { id: 'o2', name: 'Can Demir', team: 'Orders', role: 'lead' },
+  o2m: { id: 'o2m', name: 'Deniz Kaya', team: 'Orders', role: 'member' },
+  o3: { id: 'o3', name: 'Elif Kara', team: 'Identity', role: 'lead' },
+  o4: { id: 'o4', name: 'Mert Şahin', team: 'Notifications', role: 'lead' },
+  o5: { id: 'o5', name: 'Zeynep Ak', team: 'Platform', role: 'lead' },
 }
 
 /** serviceId → etkilenen servisler (değişince) */
@@ -64,6 +86,7 @@ export const affectsEdges: Record<string, string[]> = {
   'svc-notify': ['svc-checkout', 'svc-refund', 'svc-support-desk'],
   'svc-storefront': [],
   'svc-mobile-bff': [],
+  // Billing→Report→FinanceBatch: haritada FinanceBatch 2. katman (en uzun yol)
   'svc-report': ['svc-finance-batch'],
   'svc-finance-batch': [],
 }
@@ -160,4 +183,12 @@ export const moduleTree: ModuleNode[] = [
   },
 ]
 
-export const SESSION_USERS = [owners.o1, owners.o2, owners.o3, owners.o4, owners.o5]
+export const SESSION_USERS = [
+  owners.o1,
+  owners.o1m,
+  owners.o2,
+  owners.o2m,
+  owners.o3,
+  owners.o4,
+  owners.o5,
+]

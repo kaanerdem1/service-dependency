@@ -8,8 +8,16 @@ type Props = {
   affected: AffectedService[]
   session: SessionUser
   onClose: () => void
-  onCreated: (requestId: string) => void
+  onCreated: (requestIds: string[]) => void
 }
+
+type TabId = 'change' | 'impact' | 'approval'
+
+const TABS: { id: TabId; label: string; required?: boolean }[] = [
+  { id: 'change', label: 'Değişiklik', required: true },
+  { id: 'impact', label: 'Etki' },
+  { id: 'approval', label: 'Onay' },
+]
 
 export function ChangeRequestModal({
   service,
@@ -18,52 +26,57 @@ export function ChangeRequestModal({
   onClose,
   onCreated,
 }: Props) {
+  const [tab, setTab] = useState<TabId>('change')
   const [summary, setSummary] = useState('')
   const [rationale, setRationale] = useState('')
+  const [description, setDescription] = useState('')
+  const [serviceImpactNote, setServiceImpactNote] = useState('')
+  const [dataImpactNote, setDataImpactNote] = useState('')
   const [team, setTeam] = useState(session.team ?? '')
   const [department, setDepartment] = useState('')
   const [error, setError] = useState<string>()
   const [saving, setSaving] = useState(false)
 
-  const uniqueOwners = useMemo(() => {
-    const map = new Map<string, { name: string; team?: string; services: string[] }>()
-    for (const { service: s } of affected) {
-      const key = s.owner?.id ?? `none-${s.id}`
-      const cur = map.get(key) ?? {
-        name: s.owner?.name ?? 'Owner atanmamış',
-        team: s.owner?.team,
-        services: [],
-      }
-      cur.services.push(s.name)
-      map.set(key, cur)
-    }
-    return [...map.values()]
-  }, [affected])
+  const tasksPreview = useMemo(
+    () =>
+      affected.map(({ service: s }) => ({
+        serviceName: s.name,
+        owner: s.owner?.name ?? 'Owner atanmamış',
+        team: (s.owner?.team ?? 'Ekip').toLocaleUpperCase('tr-TR'),
+      })),
+    [affected],
+  )
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(undefined)
     if (!summary.trim() || !rationale.trim()) {
-      setError('Ne değişiyor ve neden zorunlu.')
+      setError('Ne değişiyor ve neden zorunlu (Değişiklik sekmesi).')
+      setTab('change')
       return
     }
     if (affected.length === 0) {
       setError('Doğrudan etkilenen servis yok; talep açılamaz.')
+      setTab('approval')
       return
     }
     setSaving(true)
     try {
-      const cr = await createChangeRequest({
+      const created = await createChangeRequest({
+        kind: 'change',
         targetServiceId: service.id,
         summary,
         rationale,
+        description,
+        serviceImpact: serviceImpactNote.trim() || undefined,
+        dataImpact: dataImpactNote.trim() || undefined,
         personId: session.id,
         personName: session.name,
         team,
         department,
         affectedServiceIds: affected.map((a) => a.service.id),
       })
-      onCreated(cr.id)
+      onCreated(created.map((c) => c.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kayıt başarısız')
     } finally {
@@ -71,89 +84,203 @@ export function ChangeRequestModal({
     }
   }
 
+  const tabIndex = TABS.findIndex((t) => t.id === tab)
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="modal"
+        className="modal wide cr-modal"
         role="dialog"
         aria-labelledby="cr-title"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-head">
-          <h2 id="cr-title">Değişiklik talebi</h2>
+          <h2 id="cr-title">Değişiklik Talebi</h2>
           <button type="button" className="btn ghost" onClick={onClose}>
             Kapat
           </button>
         </header>
         <p className="modal-sub">
-          Hedef: <strong>{service.name}</strong> · Onay: 1. katman etkilenenler
+          Hedef: <strong>{service.name}</strong>
+          {' · '}
+          Bu servisi <strong>çağıranlar</strong> etkilenir · her biri için ayrı task (
+          {affected.length})
         </p>
 
-        <form className="cr-form" onSubmit={submit}>
-          <label>
-            Ne değişiyor? <span className="req">*</span>
-            <textarea
-              value={summary}
-              onChange={(e) => setSummary(e.target.value)}
-              rows={2}
-              required
-              placeholder="Kısa özet"
-            />
-          </label>
-          <label>
-            Neden? <span className="req">*</span>
-            <textarea
-              value={rationale}
-              onChange={(e) => setRationale(e.target.value)}
-              rows={3}
-              required
-              placeholder="Gerekçe"
-            />
-          </label>
-          <label>
-            Kişi <span className="req">*</span>
-            <input value={session.name} readOnly />
-          </label>
-          <div className="form-row">
-            <label>
-              Ekip
-              <input value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Opsiyonel" />
-            </label>
-            <label>
-              Departman
-              <input
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="Opsiyonel"
-              />
-            </label>
-          </div>
+        <div className="task-tabs ns-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              className={tab === t.id ? 'on' : ''}
+              aria-selected={tab === t.id}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+              {t.required ? ' *' : ''}
+            </button>
+          ))}
+        </div>
 
-          <div className="impact-preview">
-            <h3>Etkilenenler (onay istenecek)</h3>
-            {affected.length === 0 ? (
-              <p className="empty-hint">Doğrudan etkilenen yok.</p>
-            ) : (
-              <ul>
-                {uniqueOwners.map((o) => (
-                  <li key={o.name + o.services.join()}>
-                    <strong>{o.name}</strong>
-                    {o.team ? ` · ${o.team}` : ''} — {o.services.join(', ')}
-                  </li>
-                ))}
-              </ul>
+        <form className="cr-form ns-form" onSubmit={submit}>
+          <div className="task-tab-body ns-tab-body cr-tab-body">
+            {tab === 'change' && (
+              <div className="ns-pane">
+                <div className="form-row">
+                  <label>
+                    Ne değişiyor? <span className="req">*</span>
+                    <textarea
+                      value={summary}
+                      onChange={(e) => setSummary(e.target.value)}
+                      rows={3}
+                      required
+                      placeholder="Kısa özet"
+                    />
+                  </label>
+                  <label>
+                    Neden? <span className="req">*</span>
+                    <textarea
+                      value={rationale}
+                      onChange={(e) => setRationale(e.target.value)}
+                      rows={3}
+                      required
+                      placeholder="Gerekçe"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Açıklama
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={3}
+                    placeholder="Opsiyonel uzun açıklama"
+                  />
+                </label>
+                <div className="form-row">
+                  <label>
+                    Kişi
+                    <input value={session.name} readOnly />
+                  </label>
+                  <label>
+                    Ekip
+                    <input
+                      value={team}
+                      onChange={(e) => setTeam(e.target.value)}
+                      placeholder="Opsiyonel"
+                    />
+                  </label>
+                </div>
+                <label>
+                  Departman
+                  <input
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="Opsiyonel"
+                  />
+                </label>
+              </div>
+            )}
+
+            {tab === 'impact' && (
+              <div className="ns-pane">
+                <p className="hint-sm">
+                  Opsiyonel. Boş bırakırsan task’ta otomatik servis / veri etkisi metni
+                  üretilir.
+                </p>
+                <div className="form-row">
+                  <div className="ns-field">
+                    <span className="ns-field-label">Servis etkisi</span>
+                    <p className="field-hint">
+                      API / runtime / sözleşme etkisi (çağıran servisler açısından).
+                    </p>
+                    <textarea
+                      value={serviceImpactNote}
+                      onChange={(e) => setServiceImpactNote(e.target.value)}
+                      rows={4}
+                      placeholder="Örn. Checkout ödeme yanıt şeması değişebilir"
+                    />
+                  </div>
+                  <div className="ns-field">
+                    <span className="ns-field-label">Veri etkisi</span>
+                    <p className="field-hint">
+                      Tablo, kolon, ETL veya rapor tarafına dokunan değişiklik.
+                    </p>
+                    <textarea
+                      value={dataImpactNote}
+                      onChange={(e) => setDataImpactNote(e.target.value)}
+                      rows={4}
+                      placeholder="Örn. billing_events şemasına alan ekleniyor"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {tab === 'approval' && (
+              <div className="ns-pane">
+                <h3 className="section-title">Açılacak task’lar</h3>
+                <p className="hint-sm">
+                  {service.name}’i çağıran servisler (tüketiciler). Onay = tüketicinin
+                  owner’ı.
+                </p>
+                {tasksPreview.length === 0 ? (
+                  <p className="empty-hint">Doğrudan etkilenen yok.</p>
+                ) : (
+                  <ul className="task-preview-list">
+                    {tasksPreview.map((t) => (
+                      <li key={t.serviceName}>
+                        <strong>
+                          T-… — {t.team} — {t.serviceName}
+                        </strong>
+                        <span className="approver-line">
+                          Onayı verecek: <strong>{t.owner}</strong>
+                          {t.team ? ` · ${t.team}` : ''}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             )}
           </div>
 
           {error && <p className="form-error">{error}</p>}
 
-          <footer className="modal-foot">
-            <button type="button" className="btn ghost" onClick={onClose}>
-              Vazgeç
-            </button>
-            <button type="submit" className="btn primary compact" disabled={saving}>
-              {saving ? 'Gönderiliyor…' : 'Talebi gönder'}
-            </button>
+          <footer className="modal-foot ns-foot">
+            <div className="ns-foot-nav">
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={tabIndex === 0}
+                onClick={() => {
+                  if (tabIndex > 0) setTab(TABS[tabIndex - 1]!.id)
+                }}
+              >
+                ← Önceki
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                disabled={tabIndex === TABS.length - 1}
+                onClick={() => {
+                  if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1]!.id)
+                }}
+              >
+                Sonraki →
+              </button>
+            </div>
+            <div className="ns-foot-actions">
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Vazgeç
+              </button>
+              <button type="submit" className="btn primary compact" disabled={saving}>
+                {saving
+                  ? 'Gönderiliyor…'
+                  : `${affected.length || ''} Task Aç`.trim()}
+              </button>
+            </div>
           </footer>
         </form>
       </div>
