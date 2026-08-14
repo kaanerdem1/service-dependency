@@ -13,8 +13,10 @@ import type {
   MethodRef,
   ModuleNode,
   Owner,
+  NoteVisibility,
   Service,
   ServiceNeighbors,
+  ServiceNote,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -157,4 +159,42 @@ export function setFlag(input: {
 
 export function getSessionUsers() {
   return request<Owner[]>('/session-users')
+}
+
+export function listServiceNotes(serviceId: string, viewerId: string) {
+  return request<ServiceNote[]>(
+    `/services/${serviceId}/notes?viewerId=${encodeURIComponent(viewerId)}`,
+  )
+}
+
+export function createServiceNote(input: {
+  serviceId: string
+  authorId: string
+  body: string
+  visibility?: NoteVisibility
+}) {
+  return request<ServiceNote>(`/services/${input.serviceId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({
+      authorId: input.authorId,
+      body: input.body,
+      visibility: input.visibility ?? 'team',
+    }),
+  })
+}
+
+export function deleteServiceNote(noteId: string, actorId: string) {
+  return request<{ ok: boolean }>(
+    `/notes/${encodeURIComponent(noteId)}?actorId=${encodeURIComponent(actorId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+/** Görünür düğümler için not sayısı (rozet) */
+export function getNoteCounts(serviceIds: string[], viewerId: string) {
+  if (!serviceIds.length) return Promise.resolve({} as Record<string, number>)
+  const ids = encodeURIComponent(serviceIds.join(','))
+  return request<Record<string, number>>(
+    `/notes/counts?ids=${ids}&viewerId=${encodeURIComponent(viewerId)}`,
+  )
 }

@@ -7,6 +7,7 @@
  * - impact.ts        → servis etki grafı (BFS hop)
  * - changeRequests.ts → talep / flag / inbox
  * - permissions.ts   → kim talep açabilir
+ * - notes.ts         → servis notları (MVP)
  *
  * Vite UI `/api/*` isteklerini buraya proxy eder.
  */
@@ -41,6 +42,12 @@ import {
   searchMethods,
 } from './methods.js'
 import { assertCanCreateRequest } from './permissions.js'
+import {
+  createNote,
+  deleteNote,
+  listNotesForService,
+  noteCountsForServices,
+} from './notes.js'
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 4000)
@@ -117,6 +124,59 @@ app.get('/api/services/:id/impact', (req, res) => {
 
 app.get('/api/services/:id/change-requests', (req, res) => {
   res.json(listRequestsForService(req.params.id))
+})
+
+/** Servis notları — viewerId query ile görünürlük filtresi */
+app.get('/api/services/:id/notes', (req, res) => {
+  const id = req.params.id
+  if (!services[id]) return res.status(404).json({ error: 'not_found' })
+  const viewerId = String(req.query.viewerId ?? '')
+  if (!viewerId) return res.status(400).json({ error: 'viewerId_required' })
+  res.json(listNotesForService(id, viewerId))
+})
+
+app.post('/api/services/:id/notes', (req, res) => {
+  const id = req.params.id
+  if (!services[id]) return res.status(404).json({ error: 'not_found' })
+  const body = req.body ?? {}
+  try {
+    const note = createNote({
+      serviceId: id,
+      authorId: String(body.authorId ?? ''),
+      body: String(body.body ?? ''),
+      visibility: body.visibility === 'all' ? 'all' : 'team',
+    })
+    res.status(201).json(note)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'bad_request'
+    const status =
+      msg === 'unknown_user' || msg === 'forbidden_not_author' ? 403 : 400
+    res.status(status).json({ error: msg })
+  }
+})
+
+app.delete('/api/notes/:noteId', (req, res) => {
+  const actorId = String(req.query.actorId ?? req.body?.actorId ?? '')
+  if (!actorId) return res.status(400).json({ error: 'actorId_required' })
+  try {
+    const ok = deleteNote(req.params.noteId, actorId)
+    if (!ok) return res.status(404).json({ error: 'not_found' })
+    res.json({ ok: true })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'bad_request'
+    res.status(msg.startsWith('forbidden') ? 403 : 400).json({ error: msg })
+  }
+})
+
+/** Harita rozetleri: ?ids=a,b,c&viewerId= */
+app.get('/api/notes/counts', (req, res) => {
+  const viewerId = String(req.query.viewerId ?? '')
+  if (!viewerId) return res.status(400).json({ error: 'viewerId_required' })
+  const ids = String(req.query.ids ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  res.json(noteCountsForServices(ids, viewerId))
 })
 
 // —— Method kataloğu + call-graph ——

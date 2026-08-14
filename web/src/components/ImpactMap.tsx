@@ -42,16 +42,30 @@ import {
   filterNodes,
   type ProjectOption,
 } from '../impact/projectFilter'
-import { easeOutCubic, lerp, waitMs } from '../impact/pivotTransition'
-import { listMethodsForService } from '../api/client'
+import { animateViewport, easeInOutCubic, easeOutCubic, lerp, waitMs } from '../impact/pivotTransition'
+import {
+  createServiceNote,
+  deleteServiceNote,
+  getNoteCounts,
+  listMethodsForService,
+  listServiceNotes,
+} from '../api/client'
 import {
   MAP_INFO_PANEL_RESERVE,
   mapLabelNeedsTip,
   mapLayoutForDepth,
   mapLeftX,
+  mapNodeSizeFor,
+  mapNodeWidth,
   type MapLayout,
 } from '../impact/mapLayout'
-import type { ImpactGraph, ImpactNode, MethodRef } from '../types'
+import type {
+  ImpactGraph,
+  ImpactNode,
+  MethodRef,
+  NoteVisibility,
+  ServiceNote,
+} from '../types'
 import {
   MapCanvasBar,
   MapInfoPanel,
@@ -77,6 +91,16 @@ type Props = {
   visitPathIndex?: number
   onVisitSelect?: (index: number) => void
   mapExpanded?: boolean
+  /** Geri/ileri: bu ziyarette bırakılan katman durumu */
+  restoredView?: { visibleMaxHop: number; expandedLayers: number[] }
+  onViewStateChange?: (view: {
+    visibleMaxHop: number
+    expandedLayers: number[]
+  }) => void
+  navDirection?: 'back' | 'forward' | null
+  onNavDirectionConsumed?: () => void
+  /** Session kullanıcı — notlar için */
+  sessionUserId?: string
 }
 
 const LEFT_X = mapLeftX()
@@ -96,6 +120,8 @@ type ServiceNodeData = {
   bridge?: boolean
   /** Proje filtresine uyan etkilenen servis */
   match?: boolean
+  /** Görünür not sayısı (rozet) */
+  noteCount?: number
 }
 
 type MethodBadgeData = {
@@ -108,9 +134,12 @@ function MapLeftPadView() {
   return <div className="map-left-pad" aria-hidden />
 }
 
-function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
+function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
   const isCenter = data.kind === 'center'
   const isCollapsed = data.kind === 'collapsed'
+  const noteCount = data.noteCount ?? 0
+  const showNoteBadge =
+    !isCollapsed && id !== '__map-left-pad' && (isCenter || data.kind === 'service')
   return (
     <div
       className={[
@@ -132,6 +161,25 @@ function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
         className="dd-handle"
       />
       <div className="dd-node-ring" />
+      {showNoteBadge && (
+        <button
+          type="button"
+          className="dd-note-badge nodrag nopan"
+          title={noteCount > 0 ? `${noteCount} not` : 'Not ekle'}
+          aria-label={noteCount > 0 ? `${noteCount} not` : 'Not ekle'}
+          onClick={(e) => {
+            e.stopPropagation()
+            window.dispatchEvent(
+              new CustomEvent('map-open-notes', {
+                detail: { serviceId: id },
+              }),
+            )
+          }}
+        >
+          <span aria-hidden>📌</span>
+          {noteCount > 0 ? <span>{noteCount}</span> : null}
+        </button>
+      )}
       <div className="dd-node-body">
         <span
           className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
@@ -303,13 +351,21 @@ function MethodPopover({
         onMouseDown={onDragStart}
         title="Sürükleyerek taşı"
       >
-        <div>
+        <div className="method-popover-title">
           <strong>{methods.length} method</strong>
           <span className="muted"> · {serviceName}</span>
-          <span className="method-popover-drag-hint">⠿</span>
+          <span className="method-popover-drag-hint" aria-hidden>
+            ⠿
+          </span>
         </div>
-        <button type="button" className="btn ghost path-layer-btn" onClick={onClose}>
-          Kapat
+        <button
+          type="button"
+          className="method-popover-close"
+          onClick={onClose}
+          aria-label="Method listesini kapat"
+          title="Kapat"
+        >
+          ×
         </button>
       </header>
       <p className="method-popover-legend">
@@ -350,6 +406,258 @@ function MethodPopover({
           ))
         )}
       </ul>
+    </div>
+  )
+}
+
+const NOTE_BODY_MAX = 280
+
+/** Servis notları popup (method popover gibi sürüklenir) */
+function NotesPopover({
+  serviceId,
+  serviceName,
+  sessionUserId,
+  mapRef,
+  onClose,
+  onCountsChanged,
+}: {
+  serviceId: string
+  serviceName: string
+  sessionUserId: string
+  mapRef: RefObject<HTMLDivElement | null>
+  onClose: () => void
+  onCountsChanged: () => void
+}) {
+  const [notes, setNotes] = useState<ServiceNote[]>([])
+  const [loading, setLoading] = useState(true)
+  const [body, setBody] = useState('')
+  const [visibility, setVisibility] = useState<NoteVisibility>('team')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const dragRef = useRef<{
+    startX: number
+    startY: number
+    origTop: number
+    origLeft: number
+  } | null>(null)
+  const placedOnce = useRef(false)
+
+  const reload = useCallback(() => {
+    setLoading(true)
+    void listServiceNotes(serviceId, sessionUserId)
+      .then(setNotes)
+      .catch(() => setNotes([]))
+      .finally(() => setLoading(false))
+  }, [serviceId, sessionUserId])
+
+  useEffect(() => {
+    placedOnce.current = false
+    setPos(null)
+    setBody('')
+    setError(null)
+    reload()
+  }, [serviceId, reload])
+
+  useEffect(() => {
+    if (placedOnce.current || !mapRef.current) return
+    const root = mapRef.current
+    const anchor = root.querySelector<HTMLElement>(`[data-id="${serviceId}"]`)
+    if (!anchor) return
+    const rootBox = root.getBoundingClientRect()
+    const box = anchor.getBoundingClientRect()
+    const popH = 320
+    const popW = 280
+    let top = box.top - rootBox.top - popH - 8
+    if (top < 8) top = box.bottom - rootBox.top + 8
+    let left = box.left - rootBox.left
+    left = Math.max(8, Math.min(left, rootBox.width - popW - 8))
+    setPos({ top, left })
+    placedOnce.current = true
+  }, [mapRef, serviceId, notes.length])
+
+  const onDragStart = (e: ReactMouseEvent) => {
+    if (!pos || (e.target as HTMLElement).closest('button, input, textarea, select'))
+      return
+    e.preventDefault()
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      origTop: pos.top,
+      origLeft: pos.left,
+    }
+    const onMove = (ev: MouseEvent) => {
+      const d = dragRef.current
+      const root = mapRef.current
+      if (!d || !root) return
+      const rootBox = root.getBoundingClientRect()
+      setPos({
+        top: Math.max(4, Math.min(d.origTop + (ev.clientY - d.startY), rootBox.height - 80)),
+        left: Math.max(4, Math.min(d.origLeft + (ev.clientX - d.startX), rootBox.width - 120)),
+      })
+    }
+    const onUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
+  const submit = async () => {
+    const text = body.trim()
+    if (!text || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await createServiceNote({
+        serviceId,
+        authorId: sessionUserId,
+        body: text,
+        visibility,
+      })
+      setBody('')
+      reload()
+      onCountsChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Kayıt başarısız')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (noteId: string) => {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await deleteServiceNote(noteId, sessionUserId)
+      reload()
+      onCountsChanged()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Silinemedi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!pos) return null
+
+  return (
+    <div
+      className="notes-popover"
+      style={{ top: pos.top, left: pos.left }}
+      role="dialog"
+      aria-label={`${serviceName} notları`}
+    >
+      <header
+        className="notes-popover-head notes-popover-drag"
+        onMouseDown={onDragStart}
+        title="Sürükleyerek taşı"
+      >
+        <div className="notes-popover-title">
+          <strong>Notlar</strong>
+          <span className="notes-popover-drag-hint" aria-hidden>
+            ⠿
+          </span>
+        </div>
+        <button
+          type="button"
+          className="method-popover-close"
+          onClick={onClose}
+          aria-label="Notları kapat"
+          title="Kapat"
+        >
+          ×
+        </button>
+      </header>
+      <ul className="notes-popover-list">
+        {loading ? (
+          <li className="notes-popover-empty">Yükleniyor…</li>
+        ) : notes.length === 0 ? (
+          <li className="notes-popover-empty">Henüz not yok</li>
+        ) : (
+          notes.map((n) => (
+            <li
+              key={n.id}
+              className={
+                n.authorRole === 'lead' ? 'notes-item is-lead' : 'notes-item'
+              }
+            >
+              <div className="notes-item-meta">
+                <span className="notes-item-author">
+                  {n.authorName}
+                  {n.authorRole === 'lead' ? (
+                    <span className="notes-lead-tag">Lead</span>
+                  ) : null}
+                </span>
+                <span className="notes-item-when">
+                  {new Date(n.createdAt).toLocaleString('tr-TR', {
+                    day: '2-digit',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                  {n.visibility === 'all' ? ' · herkes' : ' · ekip'}
+                </span>
+              </div>
+              <p className="notes-item-body">{n.body}</p>
+              {n.authorId === sessionUserId && (
+                <button
+                  type="button"
+                  className="notes-item-delete"
+                  disabled={busy}
+                  onClick={() => void remove(n.id)}
+                >
+                  Sil
+                </button>
+              )}
+            </li>
+          ))
+        )}
+      </ul>
+      <div className="notes-popover-composer">
+        <textarea
+          rows={2}
+          maxLength={NOTE_BODY_MAX}
+          placeholder="Kısa not… (Enter gönder)"
+          value={body}
+          disabled={busy}
+          onChange={(e) => setBody(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              void submit()
+            }
+          }}
+        />
+        <div className="notes-composer-row">
+          <select
+            value={visibility}
+            disabled={busy}
+            onChange={(e) =>
+              setVisibility(e.target.value === 'all' ? 'all' : 'team')
+            }
+            aria-label="Görünürlük"
+          >
+            <option value="team">Ekip</option>
+            <option value="all">Herkes</option>
+          </select>
+          <span className="notes-char-count">
+            {body.trim().length}/{NOTE_BODY_MAX}
+          </span>
+          <button
+            type="button"
+            className="notes-submit"
+            disabled={busy || !body.trim()}
+            onClick={() => void submit()}
+          >
+            Ekle
+          </button>
+        </div>
+        {error && <p className="notes-error">{error}</p>}
+      </div>
     </div>
   )
 }
@@ -488,7 +796,7 @@ function buildGraph(
   layout: MapLayout = mapLayoutForDepth(1),
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
-  const { nodeW, colGap, rowGap, size, tipChars } = layout
+  const { nodeW, colGap, rowGap, tipChars } = layout
   const hopOf = new Map<string, number>([[center.id, 0]])
   const byHop = new Map<number, ImpactNode[]>()
 
@@ -521,8 +829,10 @@ function buildGraph(
   }
   const centerY = 40 + ((rowCount - 1) * rowGap) / 2
   const colPitch = nodeW + colGap
+  const centerSize = mapNodeSizeFor('center', 0, visibleMaxHop)
+  const centerW = 348
 
-  /** Sol panel için görünmez pad — fitView bbox’ına girer, kamera kaydırılmaz */
+  /** Sol panel için görünmez pad — fitView bbox’ına dahil */
   const nodes: Node<ServiceNodeData>[] = [
     {
       id: '__map-left-pad',
@@ -531,7 +841,7 @@ function buildGraph(
         label: '',
         fullLabel: '',
         showTip: false,
-        size,
+        size: 'sm',
         kind: 'collapsed',
         hop: 0,
       },
@@ -555,11 +865,12 @@ function buildGraph(
         label: center.name,
         fullLabel: center.name,
         showTip: mapLabelNeedsTip(center.name, tipChars),
-        size,
+        size: centerSize,
         kind: 'center',
         hop: 0,
       },
-      position: { x: LEFT_X, y: centerY },
+      position: { x: LEFT_X, y: centerY - 18 },
+      style: { width: centerW },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       draggable: true,
@@ -573,6 +884,8 @@ function buildGraph(
     const col = visibleByHop.get(hop) ?? []
     col.forEach((n, i) => {
       visibleIds.add(n.service.id)
+      const nodeSize = mapNodeSizeFor('service', hop, visibleMaxHop)
+      const w = mapNodeWidth(nodeSize)
       nodes.push({
         id: n.service.id,
         type: 'serviceNode',
@@ -580,7 +893,7 @@ function buildGraph(
           label: n.service.name,
           fullLabel: n.service.name,
           showTip: mapLabelNeedsTip(n.service.name, tipChars),
-          size,
+          size: nodeSize,
           kind: 'service',
           hop,
           bridge: filterActive && bridgeIds.has(n.service.id),
@@ -590,6 +903,7 @@ function buildGraph(
           x: LEFT_X + hop * colPitch,
           y: 40 + i * rowGap,
         },
+        style: { width: w },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         draggable: true,
@@ -600,6 +914,8 @@ function buildGraph(
     if (hidden?.length) {
       const collapseId = `collapsed-hop-${hop}`
       const collapseLabel = `+${hidden.length} daha`
+      const nodeSize = mapNodeSizeFor('collapsed', hop, visibleMaxHop)
+      const w = mapNodeWidth(nodeSize)
       nodes.push({
         id: collapseId,
         type: 'serviceNode',
@@ -607,7 +923,7 @@ function buildGraph(
           label: collapseLabel,
           fullLabel: collapseLabel,
           showTip: false,
-          size,
+          size: nodeSize,
           kind: 'collapsed',
           hop,
           count: hidden.length,
@@ -617,6 +933,7 @@ function buildGraph(
           x: LEFT_X + hop * colPitch,
           y: 40 + col.length * rowGap,
         },
+        style: { width: w },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         draggable: true,
@@ -753,6 +1070,11 @@ export function ImpactMap({
   visitPathIndex = -1,
   onVisitSelect,
   mapExpanded = false,
+  restoredView,
+  onViewStateChange,
+  navDirection = null,
+  onNavDirectionConsumed,
+  sessionUserId,
 }: Props) {
   const [infoPanelOpen, setInfoPanelOpen] = useState(mapExpanded)
 
@@ -760,8 +1082,18 @@ export function ImpactMap({
     setInfoPanelOpen(mapExpanded)
   }, [mapExpanded])
 
-  const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set())
-  const [visibleMaxHop, setVisibleMaxHop] = useState(1)
+  const restoredViewRef = useRef(restoredView)
+  restoredViewRef.current = restoredView
+  const onViewStateChangeRef = useRef(onViewStateChange)
+  onViewStateChangeRef.current = onViewStateChange
+  const skipViewNotifyRef = useRef(false)
+
+  const [expandedLayers, setExpandedLayers] = useState<Set<number>>(() => {
+    return new Set(restoredView?.expandedLayers ?? [])
+  })
+  const [visibleMaxHop, setVisibleMaxHop] = useState(
+    () => restoredView?.visibleMaxHop ?? 1,
+  )
   const [projectFilter, setProjectFilter] = useState('')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [focusEdgeId, setFocusEdgeId] = useState<string | null>(null)
@@ -769,6 +1101,8 @@ export function ImpactMap({
   const [expandedMethodServiceId, setExpandedMethodServiceId] = useState<
     string | null
   >(null)
+  const [notesServiceId, setNotesServiceId] = useState<string | null>(null)
+  const [noteCounts, setNoteCounts] = useState<Record<string, number>>({})
   const [methodsByService, setMethodsByService] = useState<
     Record<string, MethodRef[]>
   >({})
@@ -875,19 +1209,37 @@ export function ImpactMap({
   }, [focusId, built.edges])
 
   useEffect(() => {
-    setExpandedLayers(new Set())
-    setVisibleMaxHop(1)
+    skipViewNotifyRef.current = true
+    const saved = restoredViewRef.current
+    setExpandedLayers(new Set(saved?.expandedLayers ?? []))
+    setVisibleMaxHop(saved?.visibleMaxHop ?? 1)
     setFocusId(null)
     setFocusEdgeId(null)
     setProjectFilter('')
     setShowLinkedMethods(false)
     setExpandedMethodServiceId(null)
+    setNotesServiceId(null)
     setMethodsByService({})
+    setNoteCounts({})
     layoutDirtyRef.current = false
     setPivotFlash(true)
     const t = window.setTimeout(() => setPivotFlash(false), 560)
-    return () => window.clearTimeout(t)
+    const t2 = window.setTimeout(() => {
+      skipViewNotifyRef.current = false
+    }, 0)
+    return () => {
+      window.clearTimeout(t)
+      window.clearTimeout(t2)
+    }
   }, [graph.center.id])
+
+  useEffect(() => {
+    if (skipViewNotifyRef.current) return
+    onViewStateChangeRef.current?.({
+      visibleMaxHop,
+      expandedLayers: [...expandedLayers].sort((a, b) => a - b),
+    })
+  }, [visibleMaxHop, expandedLayers])
 
   useEffect(() => {
     if (!projectFilter || filter.matchCount === 0) return
@@ -932,6 +1284,31 @@ export function ImpactMap({
     }
   }, [showLinkedMethods, visibleServiceIds])
 
+  const refreshNoteCounts = useCallback(() => {
+    if (!sessionUserId || visibleServiceIds.length === 0) {
+      setNoteCounts({})
+      return
+    }
+    void getNoteCounts(visibleServiceIds, sessionUserId)
+      .then(setNoteCounts)
+      .catch(() => setNoteCounts({}))
+  }, [sessionUserId, visibleServiceIds])
+
+  useEffect(() => {
+    refreshNoteCounts()
+  }, [refreshNoteCounts])
+
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ serviceId: string }>).detail
+      if (!detail?.serviceId || !sessionUserId) return
+      setExpandedMethodServiceId(null)
+      setNotesServiceId(detail.serviceId)
+    }
+    window.addEventListener('map-open-notes', onOpen)
+    return () => window.removeEventListener('map-open-notes', onOpen)
+  }, [sessionUserId])
+
   // Rozetler + sürüklenen konumları koru (Hizala / pivot morph / merkez değişimi hariç)
   useEffect(() => {
     if (pivotMorphingRef.current) return
@@ -946,6 +1323,16 @@ export function ImpactMap({
       const posById = new Map(current.map((n) => [n.id, n.position]))
       const out: AnyNode[] = built.nodes.map((n) => ({
         ...n,
+        data:
+          'kind' in n.data
+            ? {
+                ...n.data,
+                noteCount:
+                  n.data.kind === 'center' || n.data.kind === 'service'
+                    ? (noteCounts[n.id] ?? 0)
+                    : n.data.noteCount,
+              }
+            : n.data,
         position: resetLayout
           ? n.position
           : (posById.get(n.id) ?? n.position),
@@ -985,6 +1372,7 @@ export function ImpactMap({
     showLinkedMethods,
     methodsByService,
     expandedMethodServiceId,
+    noteCounts,
     tidyNonce,
     graph.center.id,
     setNodes,
@@ -1227,6 +1615,7 @@ export function ImpactMap({
       }
       if (node.type === 'methodBadge') {
         const d = node.data as MethodBadgeData
+        setNotesServiceId(null)
         setExpandedMethodServiceId((cur) =>
           cur === d.serviceId ? null : d.serviceId,
         )
@@ -1242,6 +1631,7 @@ export function ImpactMap({
         return
       }
       setExpandedMethodServiceId(null)
+      setNotesServiceId(null)
       pivotToNode(node)
     },
     [graph.center.id, onClearCenter, pivotToNode],
@@ -1274,10 +1664,50 @@ export function ImpactMap({
     focusId || focusEdgeId || expandedMethodServiceId,
   )
 
+  const slideExitThen = useCallback(
+    async (dir: 'back' | 'forward', then: () => void) => {
+      if (pivotMorphingRef.current) return
+      const inst = rfInstance.current
+      const animId = ++pivotAnimRef.current
+      pivotMorphingRef.current = true
+      setPivotMorphing(true)
+
+      if (inst) {
+        const vp = inst.getViewport()
+        const slide = dir === 'back' ? 130 : -130
+        await animateViewport(
+          inst,
+          { x: vp.x + slide, y: vp.y, zoom: vp.zoom },
+          340,
+          easeInOutCubic,
+          vp,
+        )
+        if (pivotAnimRef.current !== animId) return
+      } else {
+        await waitMs(200)
+      }
+
+      pivotMorphingRef.current = false
+      setPivotMorphing(false)
+      then()
+    },
+    [],
+  )
+
+  const handlePivotBack = useCallback(() => {
+    if (!onPivotBack || !canPivotBack) return
+    void slideExitThen('back', onPivotBack)
+  }, [canPivotBack, onPivotBack, slideExitThen])
+
+  const handlePivotForward = useCallback(() => {
+    if (!onPivotForward || !canPivotForward) return
+    void slideExitThen('forward', onPivotForward)
+  }, [canPivotForward, onPivotForward, slideExitThen])
+
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}`}
+      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -1288,8 +1718,8 @@ export function ImpactMap({
           <button
             type="button"
             className="map-nav-btn path-layer-btn"
-            disabled={!canPivotBack}
-            onClick={onPivotBack}
+            disabled={!canPivotBack || pivotMorphing}
+            onClick={handlePivotBack}
             title="Önceki pivot"
           >
             ← Geri
@@ -1297,8 +1727,8 @@ export function ImpactMap({
           <button
             type="button"
             className="map-nav-btn path-layer-btn"
-            disabled={!canPivotForward}
-            onClick={onPivotForward}
+            disabled={!canPivotForward || pivotMorphing}
+            onClick={handlePivotForward}
             title="Sonraki pivot"
           >
             İleri →
@@ -1384,8 +1814,10 @@ export function ImpactMap({
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${tidyNonce}`}
           layout={layout}
+          navDirection={navDirection}
+          onNavDirectionConsumed={onNavDirectionConsumed}
         />
         <MapInfoPanel
           center={graph.center}
@@ -1450,6 +1882,16 @@ export function ImpactMap({
             onClose={() => setExpandedMethodServiceId(null)}
           />
         )}
+      {notesServiceId && sessionUserId && (
+        <NotesPopover
+          serviceId={notesServiceId}
+          serviceName={nameById.get(notesServiceId) ?? notesServiceId}
+          sessionUserId={sessionUserId}
+          mapRef={mapRef}
+          onClose={() => setNotesServiceId(null)}
+          onCountsChanged={refreshNoteCounts}
+        />
+      )}
     </div>
   )
 }

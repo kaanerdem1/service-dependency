@@ -23,7 +23,7 @@ export type MapLayout = {
  * Sol bilgi paneli için fitView bbox’ına dahil edilen görünmez pad genişliği.
  * Kamera kaydırılmaz — pad düğümü boşluğu grafikte tutar.
  */
-export const MAP_INFO_PANEL_RESERVE = 268
+export const MAP_INFO_PANEL_RESERVE = 280
 
 export function mapLeftX(): number {
   return 48 + MAP_INFO_PANEL_RESERVE
@@ -31,44 +31,75 @@ export function mapLeftX(): number {
 
 /** fitView kenar boşluğu */
 export function fitViewPaddingForLayout(layout: MapLayout): number {
-  return layout.fitPadding + 0.06
+  return layout.fitPadding + 0.05
 }
 
-/** Görünen max hop’a göre layout (1 = yalnızca komşular) */
+export function mapNodeWidth(size: MapNodeSize): number {
+  if (size === 'lg') return 320
+  if (size === 'md') return 280
+  return 244
+}
+
+/** Merkez her zaman büyük; diğerleri hop + açık derinlik ile dinamik */
+export function mapNodeSizeFor(
+  kind: 'center' | 'service' | 'collapsed',
+  hop: number,
+  visibleMaxHop: number,
+): MapNodeSize {
+  if (kind === 'center') return 'lg'
+  if (kind === 'collapsed') {
+    return visibleMaxHop <= 1 ? 'md' : 'sm'
+  }
+  // 1. katman: tek katmanda lg, daha derin görünümde md
+  if (hop <= 1) {
+    return visibleMaxHop <= 1 ? 'lg' : 'md'
+  }
+  // 2. katman
+  if (hop === 2) {
+    return visibleMaxHop <= 2 ? 'md' : 'sm'
+  }
+  // 3+ katman
+  return 'sm'
+}
+
+/**
+ * Büyük harita için sütun aralığı / zoom.
+ * Hop kapanınca lg sütun düzenine döner.
+ */
 export function mapLayoutForDepth(visibleMaxHop: number): MapLayout {
   if (visibleMaxHop <= 1) {
     return {
       size: 'lg',
-      nodeW: 288,
-      colGap: 360,
-      rowGap: 118,
-      tipChars: 52,
-      minZoom: 0.55,
-      maxZoom: 1.4,
-      fitPadding: 0.16,
+      nodeW: 320,
+      colGap: 380,
+      rowGap: 132,
+      tipChars: 56,
+      minZoom: 0.62,
+      maxZoom: 1.45,
+      fitPadding: 0.14,
     }
   }
   if (visibleMaxHop === 2) {
     return {
       size: 'md',
-      nodeW: 248,
-      colGap: 300,
-      rowGap: 104,
-      tipChars: 44,
-      minZoom: 0.4,
-      maxZoom: 1.25,
-      fitPadding: 0.2,
+      nodeW: 280,
+      colGap: 330,
+      rowGap: 122,
+      tipChars: 48,
+      minZoom: 0.55,
+      maxZoom: 1.35,
+      fitPadding: 0.16,
     }
   }
   return {
     size: 'sm',
-    nodeW: 200,
-    colGap: 240,
-    rowGap: 90,
-    tipChars: 36,
-    minZoom: 0.28,
-    maxZoom: 1.15,
-    fitPadding: 0.22,
+    nodeW: 244,
+    colGap: 290,
+    rowGap: 112,
+    tipChars: 40,
+    minZoom: 0.5,
+    maxZoom: 1.25,
+    fitPadding: 0.16,
   }
 }
 

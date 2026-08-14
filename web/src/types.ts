@@ -100,6 +100,21 @@ export type ImpactGraph = {
   reason?: string
 }
 
+/** Servis notu (MVP) — team | all görünürlük */
+export type NoteVisibility = 'team' | 'all'
+
+export type ServiceNote = {
+  id: string
+  serviceId: string
+  authorId: string
+  authorName: string
+  authorTeam?: string
+  authorRole?: TeamRole
+  body: string
+  visibility: NoteVisibility
+  createdAt: string
+}
+
 export type FlagStatus =
   | 'accepted'
   | 'rejected'

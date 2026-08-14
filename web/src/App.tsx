@@ -51,6 +51,21 @@ import './App.css'
 
 type Tab = 'affected' | 'map'
 
+/** Pivot geçmişi + o ziyarette açık bırakılan katman görünümü */
+type VisitEntry = {
+  id: string
+  visibleMaxHop: number
+  expandedLayers: number[]
+}
+
+function visitEntry(id: string, view?: Partial<Omit<VisitEntry, 'id'>>): VisitEntry {
+  return {
+    id,
+    visibleMaxHop: view?.visibleMaxHop ?? 1,
+    expandedLayers: view?.expandedLayers ? [...view.expandedLayers] : [],
+  }
+}
+
 export default function App() {
   const [tree, setTree] = useState<ModuleNode[]>([])
   const [sessionUsers, setSessionUsers] = useState<SessionUser[]>([])
@@ -61,7 +76,7 @@ export default function App() {
   const [selectedMethodId, setSelectedMethodId] = useState<string>()
   const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
   /** Metod seçilmeden Metodlar sekmesini aç (harita +N) — saklandı; detay paneli kaldırıldı */
-  const [history, setHistory] = useState<string[]>([])
+  const [history, setHistory] = useState<VisitEntry[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
@@ -71,6 +86,9 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map')
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
+  const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
+    null,
+  )
   const stageTopRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
 
@@ -215,13 +233,15 @@ export default function App() {
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
       if (opts?.resetHistory) {
-        setHistory([id])
+        setNavDirection(null)
+        setHistory([visitEntry(id)])
         setHistoryIndex(0)
         setPivotId(id)
         setMapExpanded(false)
         return
       }
-      const next = [...history.slice(0, historyIndex + 1), id]
+      setNavDirection('forward')
+      const next = [...history.slice(0, historyIndex + 1), visitEntry(id)]
       setHistory(next)
       setHistoryIndex(next.length - 1)
       setPivotId(id)
@@ -234,7 +254,7 @@ export default function App() {
       setSelectedMethodId(methodId)
       setTab('map')
       if (serviceId !== pivotId) {
-        setHistory([serviceId])
+        setHistory([visitEntry(serviceId)])
         setHistoryIndex(0)
         setPivotId(serviceId)
       }
@@ -259,7 +279,7 @@ export default function App() {
       setMethodImpact(undefined)
       setTab('map')
       if (serviceId !== pivotId) {
-        setHistory([serviceId])
+        setHistory([visitEntry(serviceId)])
         setHistoryIndex(0)
         setPivotId(serviceId)
       }
@@ -274,18 +294,41 @@ export default function App() {
     }
     if (historyIndex <= 0) return
     const i = historyIndex - 1
+    setNavDirection('back')
     setHistoryIndex(i)
-    setPivotId(history[i])
+    setPivotId(history[i].id)
   }
 
   const goForward = () => {
     if (historyIndex < 0 || historyIndex >= history.length - 1) return
     const i = historyIndex + 1
+    setNavDirection('forward')
     setHistoryIndex(i)
     setSelectedMethodId(undefined)
     setMethodImpact(undefined)
-    setPivotId(history[i])
+    setPivotId(history[i].id)
   }
+
+  const saveMapViewState = useCallback(
+    (view: { visibleMaxHop: number; expandedLayers: number[] }) => {
+      setHistory((prev) => {
+        if (historyIndex < 0 || historyIndex >= prev.length) return prev
+        const cur = prev[historyIndex]!
+        const sameLayers =
+          cur.expandedLayers.length === view.expandedLayers.length &&
+          cur.expandedLayers.every((h, i) => h === view.expandedLayers[i])
+        if (cur.visibleMaxHop === view.visibleMaxHop && sameLayers) return prev
+        const next = [...prev]
+        next[historyIndex] = {
+          ...cur,
+          visibleMaxHop: view.visibleMaxHop,
+          expandedLayers: [...view.expandedLayers],
+        }
+        return next
+      })
+    },
+    [historyIndex],
+  )
 
   const openExisting = async (id: string) => {
     const cr = await getChangeRequest(id)
@@ -293,6 +336,10 @@ export default function App() {
   }
 
   const breadcrumb = historyIndex >= 0 ? history.slice(0, historyIndex + 1) : []
+  const currentVisit =
+    historyIndex >= 0 && historyIndex < history.length
+      ? history[historyIndex]
+      : undefined
   const hasSelection = !!pivotId
   const serviceNameById = (() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
@@ -499,16 +546,30 @@ export default function App() {
                       historyIndex >= 0 &&
                       historyIndex < history.length - 1
                     }
-                    visitPath={breadcrumb.map((id) => ({
-                      id,
-                      name: serviceNameById.get(id) ?? id,
+                    visitPath={breadcrumb.map((e) => ({
+                      id: e.id,
+                      name: serviceNameById.get(e.id) ?? e.id,
                     }))}
                     visitPathIndex={historyIndex}
+                    restoredView={
+                      currentVisit
+                        ? {
+                            visibleMaxHop: currentVisit.visibleMaxHop,
+                            expandedLayers: currentVisit.expandedLayers,
+                          }
+                        : undefined
+                    }
+                    onViewStateChange={saveMapViewState}
+                    navDirection={navDirection}
+                    onNavDirectionConsumed={() => setNavDirection(null)}
+                    sessionUserId={session?.id}
                     onVisitSelect={(i) => {
+                      if (i === historyIndex) return
+                      setNavDirection(i < historyIndex ? 'back' : 'forward')
                       setHistoryIndex(i)
                       setSelectedMethodId(undefined)
                       setMethodImpact(undefined)
-                      setPivotId(history[i])
+                      setPivotId(history[i].id)
                     }}
                   />
                 </MapStage>
@@ -546,6 +607,44 @@ export default function App() {
                       </button>
                     </div>
                   </div>
+                  {breadcrumb.length > 0 && (
+                    <nav
+                      className="relations-breadcrumb"
+                      aria-label="Ziyaret yolu"
+                    >
+                      {breadcrumb.map((e, i) => {
+                        const name = serviceNameById.get(e.id) ?? e.id
+                        const isCurrent = i === historyIndex
+                        return (
+                          <span key={`${e.id}-${i}`} className="relations-bc-item">
+                            {i > 0 && (
+                              <span className="sep" aria-hidden>
+                                /
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className={isCurrent ? 'current' : undefined}
+                              disabled={isCurrent}
+                              title={name}
+                              onClick={() => {
+                                if (i === historyIndex) return
+                                setNavDirection(
+                                  i < historyIndex ? 'back' : 'forward',
+                                )
+                                setHistoryIndex(i)
+                                setSelectedMethodId(undefined)
+                                setMethodImpact(undefined)
+                                setPivotId(history[i]!.id)
+                              }}
+                            >
+                              {name}
+                            </button>
+                          </span>
+                        )
+                      })}
+                    </nav>
+                  )}
                   <AffectedList
                     downstream={affected}
                     upstream={upstream}

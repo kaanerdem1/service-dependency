@@ -3,6 +3,11 @@ import { Panel, useReactFlow } from 'reactflow'
 import type { MapLayout } from '../impact/mapLayout'
 import { fitViewPaddingForLayout } from '../impact/mapLayout'
 import {
+  animateViewport,
+  easeInOutCubic,
+  waitMs,
+} from '../impact/pivotTransition'
+import {
   discoveryPathTo,
   summarizeBlastRadius,
   type BlastRadiusStats,
@@ -13,36 +18,70 @@ export type VisitStep = { id: string; name: string }
 
 /** Ortak lejant + filtre ipucu + path breadcrumb + blast özeti */
 
-/** Katman değişince fitView; pivot / geri-ileri de fitView — kamera ekstra kaydırılmaz */
+/** Merkez / katman değişince fitView (sol pad → etki özeti ile çakışmaz); geri/ileri kaydırmalı */
 export function MapViewportSync({
   centerId,
   visibleMaxHop,
   layoutKey,
   layout,
+  navDirection = null,
+  onNavDirectionConsumed,
 }: {
   centerId: string
   visibleMaxHop: number
   layoutKey: string | number | boolean
   layout: MapLayout
+  navDirection?: 'back' | 'forward' | null
+  onNavDirectionConsumed?: () => void
 }) {
-  const { fitView } = useReactFlow()
+  const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
+  const prevHop = useRef(visibleMaxHop)
+  const navDirRef = useRef(navDirection)
+  navDirRef.current = navDirection
+  const consumedRef = useRef(onNavDirectionConsumed)
+  consumedRef.current = onNavDirectionConsumed
 
   useEffect(() => {
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
+    const hopChanged = prevHop.current !== visibleMaxHop
     prevCenter.current = centerId
+    prevHop.current = visibleMaxHop
+    const dir = navDirRef.current
 
     const id = window.setTimeout(() => {
-      fitView({
-        padding: fitViewPaddingForLayout(layout),
-        duration: centerChanged ? 280 : 320,
-        minZoom: layout.minZoom,
-        maxZoom: layout.maxZoom,
-      })
-    }, 60)
+      void (async () => {
+        const padding = fitViewPaddingForLayout(layout)
+        const fitOpts = {
+          padding,
+          minZoom: layout.minZoom,
+          maxZoom: layout.maxZoom,
+        }
+
+        if (centerChanged && (dir === 'back' || dir === 'forward')) {
+          await rf.fitView({ ...fitOpts, duration: 0 })
+          const target = rf.getViewport()
+          const slide = dir === 'back' ? -110 : 110
+          rf.setViewport(
+            { x: target.x + slide, y: target.y, zoom: target.zoom },
+            { duration: 0 },
+          )
+          await waitMs(16)
+          await animateViewport(rf, target, 520, easeInOutCubic)
+          consumedRef.current?.()
+          return
+        }
+
+        // Katman aç/kapa ve merkez: fitView — sol pad sayesinde özet kartının altına girmez
+        await rf.fitView({
+          ...fitOpts,
+          duration: centerChanged ? 320 : hopChanged ? 360 : 280,
+        })
+      })()
+    }, 50)
     return () => window.clearTimeout(id)
-  }, [centerId, visibleMaxHop, layoutKey, layout, fitView])
+  }, [centerId, visibleMaxHop, layoutKey, layout, rf])
 
   return null
 }
