@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
 import { Panel, useReactFlow } from 'reactflow'
-import type { MapLayout } from '../impact/mapLayout'
+import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
 import { fitViewPaddingForLayout } from '../impact/mapLayout'
 import {
   animateViewport,
@@ -616,6 +616,8 @@ type LayerControlsProps = {
   onExpandAll: () => void
   onCollapseAll: () => void
   onTidyUp?: () => void
+  onToggleLayoutMode?: () => void
+  layoutMode?: MapLayoutMode
   layout?: MapLayout
   cascadeCount?: number
   truncated?: boolean
@@ -624,22 +626,40 @@ type LayerControlsProps = {
 function DockBtn({
   label,
   disabled,
+  pressed,
   onClick,
   children,
 }: {
   label: string
   disabled?: boolean
+  pressed?: boolean
   onClick?: () => void
   children: ReactNode
 }) {
+  const [flash, setFlash] = useState(false)
+  const flashTimer = useRef(0)
+
+  useEffect(() => {
+    return () => window.clearTimeout(flashTimer.current)
+  }, [])
+
   return (
-    <span className={`map-dock-wrap${disabled ? ' is-off' : ''}`}>
+    <span
+      className={`map-dock-wrap${disabled ? ' is-off' : ''}${flash ? ' is-tip-flash' : ''}`}
+    >
       <button
         type="button"
-        className="map-dock-btn"
+        className={`map-dock-btn${pressed ? ' is-pressed' : ''}`}
         disabled={disabled}
         aria-label={label}
-        onClick={onClick}
+        aria-pressed={pressed}
+        onClick={(e) => {
+          onClick?.()
+          e.currentTarget.blur()
+          setFlash(true)
+          window.clearTimeout(flashTimer.current)
+          flashTimer.current = window.setTimeout(() => setFlash(false), 1000)
+        }}
       >
         {children}
       </button>
@@ -790,8 +810,34 @@ function IconTidy() {
   )
 }
 
+/** Halka / radial görünüm */
+function IconRadial() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <circle cx="8" cy="8" r="1.55" fill="currentColor" />
+      <circle
+        cx="8"
+        cy="8"
+        r="3.6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+      />
+      <circle
+        cx="8"
+        cy="8"
+        r="6.1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        opacity="0.55"
+      />
+    </svg>
+  )
+}
+
 /**
- * Liam tarzı orta-alt şerit: zoom + katman + lejant.
+ * Orta-alt (veya serbest) harita dock’u: sürükle, dikey/kenar.
  * React Flow çocuğu olmalı (useReactFlow).
  */
 export function MapCanvasBar({
@@ -802,6 +848,8 @@ export function MapCanvasBar({
   onExpandAll,
   onCollapseAll,
   onTidyUp,
+  onToggleLayoutMode,
+  layoutMode = 'ltr',
   layout,
   cascadeCount,
   truncated,
@@ -811,118 +859,266 @@ export function MapCanvasBar({
   const canCollapse = visibleMaxHop > 1
   const nextHop = canExpand ? visibleMaxHop + 1 : null
   const fitPadding = layout ? fitViewPaddingForLayout(layout) : 0.22
+  const radialOn = layoutMode === 'radial'
+
+  const rootRef = useRef<HTMLDivElement>(null)
+  const dockRef = useRef<HTMLDivElement>(null)
+  const [placed, setPlaced] = useState<{ x: number; y: number } | null>(null)
+  const [orient, setOrient] = useState<'h' | 'v'>('h')
+  const drag = useRef<{
+    ox: number
+    oy: number
+    sx: number
+    sy: number
+  } | null>(null)
+
+  useEffect(() => {
+    if (!placed || !rootRef.current || !dockRef.current) return
+    const rootBox = rootRef.current.getBoundingClientRect()
+    const dockBox = dockRef.current.getBoundingClientRect()
+    const x = Math.max(8, Math.min(placed.x, rootBox.width - dockBox.width - 8))
+    const y = Math.max(
+      8,
+      Math.min(placed.y, rootBox.height - dockBox.height - 8),
+    )
+    if (x !== placed.x || y !== placed.y) setPlaced({ x, y })
+  }, [orient, placed])
+
+  const onGripPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    const dock = dockRef.current
+    const root = rootRef.current
+    if (!dock || !root) return
+    const dockBox = dock.getBoundingClientRect()
+    const rootBox = root.getBoundingClientRect()
+    const x = placed?.x ?? dockBox.left - rootBox.left
+    const y = placed?.y ?? dockBox.top - rootBox.top
+    if (!placed) setPlaced({ x, y })
+    drag.current = { ox: x, oy: y, sx: e.clientX, sy: e.clientY }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  const onGripPointerMove = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag.current || !rootRef.current || !dockRef.current) return
+    const rootBox = rootRef.current.getBoundingClientRect()
+    const dockBox = dockRef.current.getBoundingClientRect()
+    let nx = drag.current.ox + (e.clientX - drag.current.sx)
+    let ny = drag.current.oy + (e.clientY - drag.current.sy)
+    nx = Math.max(8, Math.min(nx, rootBox.width - dockBox.width - 8))
+    ny = Math.max(8, Math.min(ny, rootBox.height - dockBox.height - 8))
+    setPlaced({ x: nx, y: ny })
+  }
+
+  const onGripPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!drag.current || !rootRef.current || !dockRef.current) {
+      drag.current = null
+      return
+    }
+    drag.current = null
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    } catch {
+      /* ignore */
+    }
+    const rootBox = rootRef.current.getBoundingClientRect()
+    const dockBox = dockRef.current.getBoundingClientRect()
+    const x = dockBox.left - rootBox.left
+    const y = dockBox.top - rootBox.top
+    const snap = 56
+    const nearLeft = x < snap
+    const nearRight = x + dockBox.width > rootBox.width - snap
+    const nearBottom = y + dockBox.height > rootBox.height - snap
+
+    if (nearLeft) {
+      setOrient('v')
+      setPlaced({ x: 12, y: Math.max(8, Math.min(y, rootBox.height - dockBox.height - 8)) })
+      return
+    }
+    if (nearRight) {
+      setOrient('v')
+      setPlaced({
+        x: Math.max(8, rootBox.width - Math.min(dockBox.width, 56) - 12),
+        y: Math.max(8, Math.min(y, rootBox.height - dockBox.height - 8)),
+      })
+      return
+    }
+    if (nearBottom) {
+      setOrient('h')
+      setPlaced({
+        x: Math.max(8, Math.min(x, rootBox.width - dockBox.width - 8)),
+        y: rootBox.height - dockBox.height - 14,
+      })
+    }
+  }
+
+  const floatStyle =
+    placed == null
+      ? undefined
+      : ({ left: placed.x, top: placed.y } as const)
 
   return (
-    <Panel position="bottom-center" className="map-dock-panel">
-      <div className="map-dock" role="toolbar" aria-label="Harita araçları">
-        <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
-          <IconZoomOut />
-        </DockBtn>
-        <DockBtn label="Yakınlaştır" onClick={() => zoomIn({ duration: 180 })}>
-          <IconZoomIn />
-        </DockBtn>
-        <DockBtn
-          label="Ekrana sığdır"
-          onClick={() => fitView({ padding: fitPadding, duration: 220 })}
+    <div className="map-dock-float-root" ref={rootRef} aria-hidden={false}>
+      <div
+        ref={dockRef}
+        className={`map-dock-float${placed ? ' is-placed' : ' is-default'}${orient === 'v' ? ' is-vertical' : ''}`}
+        style={floatStyle}
+      >
+        <div
+          className={`map-dock${orient === 'v' ? ' is-vertical' : ''}`}
+          role="toolbar"
+          aria-label="Harita araçları"
         >
-          <IconFit />
-        </DockBtn>
-        {onTidyUp && (
-          <DockBtn
-            label="Hizala — düğümleri eski düzene al"
-            onClick={() => {
-              onTidyUp()
-              window.setTimeout(() => {
-                fitView({ padding: fitPadding, duration: 280 })
-              }, 40)
-            }}
-          >
-            <IconTidy />
-          </DockBtn>
-        )}
-
-        <span className="map-dock-sep" aria-hidden />
-
-        <DockBtn
-          label="Sadece komşular — 1. katman"
-          disabled={!canCollapse}
-          onClick={onCollapseAll}
-        >
-          <IconNeighbors />
-        </DockBtn>
-        <DockBtn
-          label={canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular'}
-          disabled={!canCollapse}
-          onClick={onCollapseLayer}
-        >
-          <IconLayerBack />
-        </DockBtn>
-        <span className="map-dock-wrap">
-          <span
-            className="map-dock-hop"
-            aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
-          >
-            {visibleMaxHop}/{maxHopAvailable}
-          </span>
-          <span className="map-dock-tip" role="tooltip">
-            Görünen katman {visibleMaxHop} / {maxHopAvailable}
-          </span>
-        </span>
-        <DockBtn
-          label={
-            nextHop ? `Bir katman ileri — ${nextHop}. katman` : 'Tüm katmanlar açık'
-          }
-          disabled={!canExpand}
-          onClick={onExpandLayer}
-        >
-          <IconLayerForward />
-        </DockBtn>
-        <DockBtn
-          label="Tüm katmanları aç"
-          disabled={!canExpand}
-          onClick={onExpandAll}
-        >
-          <IconFullChain />
-        </DockBtn>
-
-        <span className="map-dock-sep" aria-hidden />
-
-        <span className="map-dock-wrap map-dock-legend">
           <button
             type="button"
-            className="map-dock-btn map-dock-info"
-            aria-label="Ok anlamları"
-            aria-describedby="map-legend-pop"
+            className="map-dock-grip"
+            aria-label="Dock’u sürükle — kenara çekince dikey; çift tık yön değiştir"
+            title="Sürükle · çift tık: yatay/dikey"
+            onPointerDown={onGripPointerDown}
+            onPointerMove={onGripPointerMove}
+            onPointerUp={onGripPointerUp}
+            onPointerCancel={onGripPointerUp}
+            onDoubleClick={(e) => {
+              e.preventDefault()
+              setOrient((o) => (o === 'h' ? 'v' : 'h'))
+            }}
           >
-            i
+            <span aria-hidden>⋮⋮</span>
           </button>
-          <div id="map-legend-pop" className="map-legend-pop" role="tooltip">
-            <p className="map-legend-pop-title">Oklar</p>
-            <div className="path-legend-block">
-              <span className="path-legend-item">
-                <span className="legend-swatch tree" aria-hidden />
-                <span>
-                  <strong>Yeşil</strong> — ana etki yolu (değişen → etkilenen)
+
+          <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
+            <IconZoomOut />
+          </DockBtn>
+          <DockBtn label="Yakınlaştır" onClick={() => zoomIn({ duration: 180 })}>
+            <IconZoomIn />
+          </DockBtn>
+          <DockBtn
+            label="Ekrana sığdır"
+            onClick={() => fitView({ padding: fitPadding, duration: 220 })}
+          >
+            <IconFit />
+          </DockBtn>
+          {onTidyUp && (
+            <DockBtn
+              label="Hizala — düğümleri eski düzene al"
+              onClick={() => {
+                onTidyUp()
+                window.setTimeout(() => {
+                  fitView({ padding: fitPadding, duration: 280 })
+                }, 40)
+              }}
+            >
+              <IconTidy />
+            </DockBtn>
+          )}
+          {onToggleLayoutMode && (
+            <DockBtn
+              label={
+                radialOn
+                  ? 'Katmanlı görünüm — sola/sağa düzen'
+                  : 'Halka görünüm — merkez etrafında'
+              }
+              pressed={radialOn}
+              onClick={() => {
+                onToggleLayoutMode()
+                window.setTimeout(() => {
+                  fitView({ padding: fitPadding, duration: 280 })
+                }, 40)
+              }}
+            >
+              <IconRadial />
+            </DockBtn>
+          )}
+
+          <span className="map-dock-sep" aria-hidden />
+
+          <DockBtn
+            label="Sadece komşular — 1. katman"
+            disabled={!canCollapse}
+            onClick={onCollapseAll}
+          >
+            <IconNeighbors />
+          </DockBtn>
+          <DockBtn
+            label={canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular'}
+            disabled={!canCollapse}
+            onClick={onCollapseLayer}
+          >
+            <IconLayerBack />
+          </DockBtn>
+          <span className="map-dock-wrap">
+            <span
+              className="map-dock-hop"
+              aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+            >
+              {visibleMaxHop}/{maxHopAvailable}
+            </span>
+            <span className="map-dock-tip" role="tooltip">
+              Görünen katman {visibleMaxHop} / {maxHopAvailable}
+            </span>
+          </span>
+          <DockBtn
+            label={
+              nextHop
+                ? `Bir katman ileri — ${nextHop}. katman`
+                : 'Tüm katmanlar açık'
+            }
+            disabled={!canExpand}
+            onClick={onExpandLayer}
+          >
+            <IconLayerForward />
+          </DockBtn>
+          <DockBtn
+            label="Tüm katmanları aç"
+            disabled={!canExpand}
+            onClick={onExpandAll}
+          >
+            <IconFullChain />
+          </DockBtn>
+
+          <span className="map-dock-sep" aria-hidden />
+
+          <span className="map-dock-wrap map-dock-legend">
+            <button
+              type="button"
+              className="map-dock-btn map-dock-info"
+              aria-label="Ok anlamları"
+              aria-describedby="map-legend-pop"
+            >
+              i
+            </button>
+            <div id="map-legend-pop" className="map-legend-pop" role="tooltip">
+              <p className="map-legend-pop-title">Oklar</p>
+              <div className="path-legend-block">
+                <span className="path-legend-item">
+                  <span className="legend-swatch tree" aria-hidden />
+                  <span>
+                    <strong>Yeşil</strong> — ana etki yolu (değişen → etkilenen)
+                  </span>
                 </span>
-              </span>
-              <span className="path-legend-item">
-                <span className="legend-swatch cascade" aria-hidden />
-                <span>
-                  <strong>Turuncu</strong> — yan bağ
-                  {typeof cascadeCount === 'number' && cascadeCount > 0
-                    ? ` · ${cascadeCount}`
+                <span className="path-legend-item">
+                  <span className="legend-swatch cascade" aria-hidden />
+                  <span>
+                    <strong>Turuncu</strong> — yan bağ
+                    {typeof cascadeCount === 'number' && cascadeCount > 0
+                      ? ` · ${cascadeCount}`
+                      : ''}
+                  </span>
+                </span>
+                <span className="path-legend-note">
+                  Ok ucu etkilenen servise bakar. Hover’da yalnız o düğümün bağları.
+                  {truncated ? ' Görünüm kısaltıldı.' : ''}
+                  {radialOn
+                    ? ' Halka: yalnız ana etki yolu; mesafe = hop, eşit açı.'
                     : ''}
                 </span>
-              </span>
-              <span className="path-legend-note">
-                Ok ucu etkilenen servise bakar. Hover’da yalnız o düğümün bağları.
-                {truncated ? ' Görünüm kısaltıldı.' : ''}
-              </span>
+              </div>
             </div>
-          </div>
-        </span>
+          </span>
+        </div>
       </div>
-    </Panel>
+    </div>
   )
 }
 

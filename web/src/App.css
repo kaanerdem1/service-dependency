@@ -870,6 +870,38 @@
   width: 348px;
 }
 
+/** Radial: kompakt kartlar — 3 hop sığsın */
+.dd-map.is-radial .dd-node.size-lg,
+.dd-map.is-radial .dd-node.size-md {
+  width: 248px;
+}
+
+.dd-map.is-radial .dd-node.center,
+.dd-map.is-radial .dd-node.center.size-lg,
+.dd-map.is-radial .dd-node.center.size-md {
+  width: 292px;
+}
+
+.dd-map.is-radial .dd-node.size-lg .dd-node-body,
+.dd-map.is-radial .dd-node.size-md .dd-node-body {
+  padding: 12px 14px;
+  min-height: 64px;
+}
+
+.dd-map.is-radial .dd-node.center .dd-node-body {
+  padding: 18px 16px;
+  min-height: 96px;
+}
+
+.dd-map.is-radial .dd-node.center .dd-node-label {
+  font-size: 14px;
+}
+
+.dd-map.is-radial .dd-node.size-lg .dd-node-label,
+.dd-map.is-radial .dd-node.size-md .dd-node-label {
+  font-size: 13px;
+}
+
 .dd-node-ring {
   position: absolute;
   inset: -4px;
@@ -1524,6 +1556,30 @@
   opacity: 0 !important;
 }
 
+/* Radial yön handle’ları — görünmez, spoke bağlantı noktası */
+.dd-handle.dir {
+  opacity: 0 !important;
+}
+
+/* Halka kılavuz çizgisi — referans gibi soluk konsantrik */
+.map-radial-ring {
+  border: 1.5px solid #c5d4e8;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+  opacity: 0.55;
+}
+
+.react-flow__node-radialRing {
+  pointer-events: none !important;
+  z-index: -1 !important;
+}
+
+.dd-map.is-radial .react-flow__edge.dd-edge.direct path,
+.dd-map.is-radial .react-flow__edge.dd-edge.indirect path {
+  stroke-linecap: round;
+}
+
 .dd-map .react-flow__edge.animated path {
   stroke-dasharray: 6;
   animation: dd-flow 0.7s linear infinite;
@@ -1633,6 +1689,93 @@
 .react-flow__panel.map-dock-panel {
   margin: 0 0 14px;
   pointer-events: none;
+}
+
+.map-dock-float-root {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.map-dock-float {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.map-dock-float.is-default {
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+}
+
+.map-dock-float.is-placed {
+  transform: none;
+}
+
+.map-dock-grip {
+  width: 22px;
+  height: 32px;
+  margin-right: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #8a847a;
+  cursor: grab;
+  font-size: 11px;
+  letter-spacing: -2px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.map-dock-grip:hover {
+  background: #efeae2;
+  color: #5c564c;
+}
+
+.map-dock-grip:active {
+  cursor: grabbing;
+}
+
+.map-dock.is-vertical {
+  flex-direction: column;
+  padding: 7px 5px;
+}
+
+.map-dock.is-vertical .map-dock-grip {
+  width: 32px;
+  height: 22px;
+  margin-right: 0;
+  margin-bottom: 2px;
+  letter-spacing: 0;
+}
+
+.map-dock.is-vertical .map-dock-sep {
+  width: 22px;
+  height: 1px;
+  margin: 7px 0;
+}
+
+.map-dock.is-vertical .map-dock-tip {
+  bottom: auto;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.map-dock.is-vertical .map-dock-wrap:hover .map-dock-tip,
+.map-dock.is-vertical .map-dock-wrap.is-tip-flash .map-dock-tip {
+  transform: translateY(-50%) translateX(0);
+}
+
+.map-dock.is-vertical .map-dock-legend .map-legend-pop {
+  left: calc(100% + 8px);
+  right: auto;
+  bottom: 0;
 }
 
 .react-flow__panel.map-info-panel {
@@ -2042,6 +2185,16 @@
   color: #243d32;
 }
 
+.map-dock-btn.is-pressed {
+  background: #d8ebe0;
+  color: #1f3a2c;
+  box-shadow: inset 0 0 0 1px #9bb9a8;
+}
+
+.map-dock-btn.is-pressed:hover:not(:disabled) {
+  background: #cfe4d7;
+}
+
 .map-dock-btn:disabled {
   opacity: 0.32;
   cursor: default;
@@ -2075,14 +2228,21 @@
 }
 
 .map-dock-wrap:hover .map-dock-tip,
-.map-dock-wrap:focus-within .map-dock-tip {
+.map-dock-wrap.is-tip-flash .map-dock-tip {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(0);
 }
 
+/* Tık sonrası focus’ta takılı kalmasın — yalnız hover / kısa flash */
+.map-dock-wrap:focus-within:not(:hover):not(.is-tip-flash) .map-dock-tip {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .map-dock-legend:hover .map-dock-tip,
-.map-dock-legend:focus-within .map-dock-tip {
+.map-dock-legend:focus-within .map-dock-tip,
+.map-dock-legend.is-tip-flash .map-dock-tip {
   opacity: 0;
   visibility: hidden;
 }

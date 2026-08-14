@@ -22,10 +22,13 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import {
+  applyRadialLayout,
   compactMapLabel,
   mapLabelNeedsTip,
   mapLayoutForDepth,
+  mapLayoutForRadial,
   type MapLayout,
+  type MapLayoutMode,
 } from '../impact/mapLayout'
 import type { MethodImpactGraph, MethodRef } from '../types'
 import { MapCanvasBar, MapViewportSync } from './ImpactChrome'
@@ -204,6 +207,7 @@ function buildLayeredMap(
   expandedLayers: Set<number>,
   visibleMaxHop: number,
   layout: MapLayout,
+  layoutMode: MapLayoutMode = 'ltr',
 ): { nodes: Node<MapNodeData>[]; edges: Edge[] } {
   const { nodeW, colGap, rowGap, size, tipChars } = layout
   const colPitch = nodeW + colGap
@@ -356,7 +360,24 @@ function buildLayeredMap(
     }
   }
 
-  return { nodes, edges }
+  return {
+    nodes:
+      layoutMode === 'radial'
+        ? applyRadialLayout(nodes, layout, {
+            centerId,
+            originX: LEFT_X,
+            treeParent: (() => {
+              const m = new Map<string, string>()
+              for (const e of rawEdges) {
+                if (e.toId === centerId) continue
+                if (!m.has(e.toId)) m.set(e.toId, e.fromId)
+              }
+              return m
+            })(),
+          }).nodes
+        : nodes,
+    edges,
+  }
 }
 
 export function MethodImpactMap({
@@ -375,10 +396,12 @@ export function MethodImpactMap({
   const [visibleMaxHop, setVisibleMaxHop] = useState(1)
   const [focusId, setFocusId] = useState<string | null>(null)
   const [tidyNonce, setTidyNonce] = useState(0)
+  const [layoutMode, setLayoutMode] = useState<MapLayoutMode>('ltr')
   const [pivotFlash, setPivotFlash] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const nodeDragged = useRef(false)
   const lastTidyRef = useRef(0)
+  const layoutEpochRef = useRef('')
   const rfInstance = useRef<ReactFlowInstance | null>(null)
   const layoutDirtyRef = useRef(false)
   const prevCenterLayoutRef = useRef(graph.center.id)
@@ -396,8 +419,11 @@ export function MethodImpactMap({
   }, [layered.items])
 
   const layout = useMemo(
-    () => mapLayoutForDepth(visibleMaxHop),
-    [visibleMaxHop],
+    () =>
+      layoutMode === 'radial'
+        ? mapLayoutForRadial()
+        : mapLayoutForDepth(visibleMaxHop),
+    [visibleMaxHop, layoutMode],
   )
 
   const built = useMemo(
@@ -410,8 +436,9 @@ export function MethodImpactMap({
         expandedLayers,
         visibleMaxHop,
         layout,
+        layoutMode,
       ),
-    [graph.center, viewMode, layered, expandedLayers, visibleMaxHop, layout],
+    [graph.center, viewMode, layered, expandedLayers, visibleMaxHop, layout, layoutMode],
   )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
@@ -437,7 +464,11 @@ export function MethodImpactMap({
   useEffect(() => {
     const centerChanged = prevCenterLayoutRef.current !== graph.center.id
     prevCenterLayoutRef.current = graph.center.id
-    const resetLayout = tidyNonce !== lastTidyRef.current || centerChanged
+    const layoutEpoch = `${layoutMode}:${visibleMaxHop}:${layout.size}`
+    const epochChanged = layoutEpochRef.current !== layoutEpoch
+    layoutEpochRef.current = layoutEpoch
+    const resetLayout =
+      tidyNonce !== lastTidyRef.current || centerChanged || epochChanged
     lastTidyRef.current = tidyNonce
     setNodes((current) => {
       const posById = new Map(current.map((n) => [n.id, n.position]))
@@ -449,7 +480,16 @@ export function MethodImpactMap({
       }))
     })
     setEdges(built.edges)
-  }, [built, tidyNonce, graph.center.id, setNodes, setEdges])
+  }, [
+    built,
+    tidyNonce,
+    graph.center.id,
+    layoutMode,
+    visibleMaxHop,
+    layout.size,
+    setNodes,
+    setEdges,
+  ])
 
   useEffect(() => {
     const root = mapRef.current
@@ -646,7 +686,7 @@ export function MethodImpactMap({
         <MapViewportSync
           centerId={centerNodeId}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}`}
+          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}-${layoutMode}-${tidyNonce}`}
           layout={layout}
         />
         <Background gap={22} color="#e4e0d6" />
@@ -654,6 +694,7 @@ export function MethodImpactMap({
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
           layout={layout}
+          layoutMode={layoutMode}
           truncated={graph.truncated}
           onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
           onExpandLayer={() =>
@@ -669,6 +710,11 @@ export function MethodImpactMap({
           }}
           onTidyUp={() => {
             layoutDirtyRef.current = false
+            setTidyNonce((n) => n + 1)
+          }}
+          onToggleLayoutMode={() => {
+            layoutDirtyRef.current = false
+            setLayoutMode((m) => (m === 'ltr' ? 'radial' : 'ltr'))
             setTidyNonce((n) => n + 1)
           }}
         />

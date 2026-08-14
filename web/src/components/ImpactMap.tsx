@@ -26,6 +26,7 @@ import ReactFlow, {
   MarkerType,
   Position,
   getBezierPath,
+  getStraightPath,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -52,12 +53,19 @@ import {
 } from '../api/client'
 import {
   MAP_INFO_PANEL_RESERVE,
+  RADIAL_CENTER_W,
+  applyRadialLayout,
   mapLabelNeedsTip,
   mapLayoutForDepth,
+  mapLayoutForRadial,
   mapLeftX,
   mapNodeSizeFor,
   mapNodeWidth,
+  radialEdgePath,
+  radialHandlePair,
+  radialNodeHeight,
   type MapLayout,
+  type MapLayoutMode,
 } from '../impact/mapLayout'
 import type {
   ImpactGraph,
@@ -130,8 +138,23 @@ type MethodBadgeData = {
   expanded: boolean
 }
 
+type RingGuideData = {
+  radius: number
+  hop: number
+}
+
 function MapLeftPadView() {
   return <div className="map-left-pad" aria-hidden />
+}
+
+function RingGuideView({ data }: NodeProps<RingGuideData>) {
+  return (
+    <div
+      className="map-radial-ring"
+      style={{ width: data.radius * 2, height: data.radius * 2 }}
+      aria-hidden
+    />
+  )
 }
 
 function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
@@ -159,6 +182,24 @@ function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
         position={Position.Left}
         id="in"
         className="dd-handle"
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="in-top"
+        className="dd-handle dir"
+      />
+      <Handle
+        type="target"
+        position={Position.Right}
+        id="in-right"
+        className="dd-handle dir"
+      />
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="in-bottom"
+        className="dd-handle dir"
       />
       <div className="dd-node-ring" />
       {showNoteBadge && (
@@ -208,6 +249,24 @@ function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
       />
       <Handle
         type="source"
+        position={Position.Top}
+        id="out-top"
+        className="dd-handle dir"
+      />
+      <Handle
+        type="source"
+        position={Position.Left}
+        id="out-left"
+        className="dd-handle dir"
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="out-bottom"
+        className="dd-handle dir"
+      />
+      <Handle
+        type="source"
         position={Position.Right}
         id="side-out"
         className="dd-handle side"
@@ -237,6 +296,7 @@ const nodeTypes = {
   serviceNode: memo(ServiceNodeView),
   methodBadge: memo(MethodBadgeView),
   mapLeftPad: memo(MapLeftPadView),
+  radialRing: memo(RingGuideView),
 }
 
 const BADGE_GAP = 14
@@ -670,6 +730,9 @@ type FanEdgeData = {
   fanIndex?: number
   fanCount?: number
   sameColumn?: boolean
+  /** Radial eğri için halka merkezi */
+  cx?: number
+  cy?: number
 }
 
 /**
@@ -728,7 +791,35 @@ function FanEdge({
   )
 }
 
-const edgeTypes = { fan: memo(FanEdge) }
+/** Radial: referans gibi fan eğrisi (yarıçap ↑, açı açılır) */
+function RadialEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  style,
+  markerEnd,
+  data,
+}: EdgeProps<FanEdgeData>) {
+  const cx = data?.cx
+  const cy = data?.cy
+  const path =
+    typeof cx === 'number' && typeof cy === 'number'
+      ? radialEdgePath(sourceX, sourceY, targetX, targetY, cx, cy)
+      : getStraightPath({ sourceX, sourceY, targetX, targetY })[0]
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      style={style}
+      markerEnd={markerEnd}
+      interactionWidth={28}
+    />
+  )
+}
+
+const edgeTypes = { fan: memo(FanEdge), radial: memo(RadialEdge) }
 
 function assignFanIndices(
   edges: Edge[],
@@ -794,6 +885,7 @@ function buildGraph(
   forceExpandCollapsed = false,
   filterActive = false,
   layout: MapLayout = mapLayoutForDepth(1),
+  layoutMode: MapLayoutMode = 'ltr',
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
   const { nodeW, colGap, rowGap, tipChars } = layout
@@ -829,8 +921,9 @@ function buildGraph(
   }
   const centerY = 40 + ((rowCount - 1) * rowGap) / 2
   const colPitch = nodeW + colGap
-  const centerSize = mapNodeSizeFor('center', 0, visibleMaxHop)
-  const centerW = 348
+  const centerSize =
+    layoutMode === 'radial' ? 'md' : mapNodeSizeFor('center', 0, visibleMaxHop)
+  const centerW = layoutMode === 'radial' ? RADIAL_CENTER_W : 348
 
   /** Sol panel için görünmez pad — fitView bbox’ına dahil */
   const nodes: Node<ServiceNodeData>[] = [
@@ -884,8 +977,12 @@ function buildGraph(
     const col = visibleByHop.get(hop) ?? []
     col.forEach((n, i) => {
       visibleIds.add(n.service.id)
-      const nodeSize = mapNodeSizeFor('service', hop, visibleMaxHop)
-      const w = mapNodeWidth(nodeSize)
+      const nodeSize =
+        layoutMode === 'radial'
+          ? 'md'
+          : mapNodeSizeFor('service', hop, visibleMaxHop)
+      const w =
+        layoutMode === 'radial' ? layout.nodeW : mapNodeWidth(nodeSize)
       nodes.push({
         id: n.service.id,
         type: 'serviceNode',
@@ -914,8 +1011,14 @@ function buildGraph(
     if (hidden?.length) {
       const collapseId = `collapsed-hop-${hop}`
       const collapseLabel = `+${hidden.length} daha`
-      const nodeSize = mapNodeSizeFor('collapsed', hop, visibleMaxHop)
-      const w = mapNodeWidth(nodeSize)
+      const nodeSize =
+        layoutMode === 'radial'
+          ? 'md'
+          : mapNodeSizeFor('collapsed', hop, visibleMaxHop)
+      const w =
+        layoutMode === 'radial'
+          ? Math.round(layout.nodeW * 0.88)
+          : mapNodeWidth(nodeSize)
       nodes.push({
         id: collapseId,
         type: 'serviceNode',
@@ -979,6 +1082,9 @@ function buildGraph(
     seen.add(key)
 
     const isCascade = treeParent.get(e.toId) !== e.fromId
+    /** Halka görünümde yalnız ağaç (spoke) — cascade okları karışıklığın ana kaynağı */
+    if (layoutMode === 'radial' && isCascade) continue
+
     const direct = toHop === 1 && !isCascade
     const sameColumn = fromHop === toHop
     /** Geriye cascade: sağ rota + çift ok */
@@ -990,7 +1096,7 @@ function buildGraph(
       target,
       sourceHandle: sideRoute ? 'side-out' : 'out',
       targetHandle: sideRoute ? 'side-in' : 'in',
-      type: 'fan',
+      type: layoutMode === 'radial' ? 'radial' : 'fan',
       animated: false,
       className: isCascade
         ? 'dd-edge cascade'
@@ -1018,7 +1124,88 @@ function buildGraph(
     })
   }
 
-  return { nodes, edges: assignFanIndices(edges, hopOf), hops }
+  let radialCenter: { cx: number; cy: number } | null = null
+  const positioned =
+    layoutMode === 'radial'
+      ? (() => {
+          const { nodes: placed, rings, cx, cy } = applyRadialLayout(
+            nodes,
+            layout,
+            {
+              centerId: center.id,
+              centerWidth: centerW,
+              treeParent,
+            },
+          )
+          radialCenter = { cx, cy }
+          const guides: Node<ServiceNodeData | RingGuideData>[] = rings.map(
+            (ring) => ({
+              id: `__ring-hop-${ring.hop}`,
+              type: 'radialRing',
+              data: { radius: ring.radius, hop: ring.hop },
+              position: {
+                x: cx - ring.radius,
+                y: cy - ring.radius,
+              },
+              style: {
+                width: ring.radius * 2,
+                height: ring.radius * 2,
+                padding: 0,
+                border: 'none',
+                background: 'transparent',
+              },
+              draggable: false,
+              selectable: false,
+              connectable: false,
+              focusable: false,
+              zIndex: -2,
+            }),
+          )
+          return [...guides, ...placed] as Node<ServiceNodeData>[]
+        })()
+      : nodes
+
+  let finalEdges =
+    layoutMode === 'radial' ? edges : assignFanIndices(edges, hopOf)
+
+  if (layoutMode === 'radial' && radialCenter) {
+    const { cx, cy } = radialCenter
+    const posOf = new Map(
+      positioned
+        .filter((n) => n.type === 'serviceNode' || n.id === center.id)
+        .map((n) => [n.id, n]),
+    )
+    finalEdges = finalEdges.map((e) => {
+      const s = posOf.get(e.source)
+      const t = posOf.get(e.target)
+      if (!s || !t) return e
+      const sw =
+        typeof s.style?.width === 'number' ? s.style.width : layout.nodeW
+      const tw =
+        typeof t.style?.width === 'number' ? t.style.width : layout.nodeW
+      const sh = radialNodeHeight(
+        (s.data as ServiceNodeData).kind,
+        (s.data as ServiceNodeData).size,
+      )
+      const th = radialNodeHeight(
+        (t.data as ServiceNodeData).kind,
+        (t.data as ServiceNodeData).size,
+      )
+      const handles = radialHandlePair(
+        { x: s.position.x, y: s.position.y, w: sw, h: sh },
+        { x: t.position.x, y: t.position.y, w: tw, h: th },
+      )
+      const prev = (e.data ?? {}) as FanEdgeData
+      return {
+        ...e,
+        ...handles,
+        type: 'radial' as const,
+        data: { ...prev, cx, cy },
+      }
+    })
+  }
+
+  return { nodes: positioned, edges: finalEdges, hops }
 }
 
 /** Hover ego: yalnız oğuna değen uçlar (path / hop-2 zinciri yok) */
@@ -1108,11 +1295,13 @@ export function ImpactMap({
   >({})
   const [methodsLoading, setMethodsLoading] = useState(false)
   const [tidyNonce, setTidyNonce] = useState(0)
+  const [layoutMode, setLayoutMode] = useState<MapLayoutMode>('ltr')
   const [pivotFlash, setPivotFlash] = useState(false)
   const [pivotMorphing, setPivotMorphing] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
   const nodeDragged = useRef(false)
   const lastTidyRef = useRef(0)
+  const layoutEpochRef = useRef('')
   const rfInstance = useRef<ReactFlowInstance | null>(null)
   const pivotMorphingRef = useRef(false)
   const layoutDirtyRef = useRef(false)
@@ -1153,8 +1342,11 @@ export function ImpactMap({
   }, [filteredGraph.nodes])
 
   const layout = useMemo(
-    () => mapLayoutForDepth(visibleMaxHop),
-    [visibleMaxHop],
+    () =>
+      layoutMode === 'radial'
+        ? mapLayoutForRadial()
+        : mapLayoutForDepth(visibleMaxHop),
+    [visibleMaxHop, layoutMode],
   )
 
   const built = useMemo(
@@ -1168,6 +1360,7 @@ export function ImpactMap({
         Boolean(projectFilter),
         Boolean(projectFilter),
         layout,
+        layoutMode,
       ),
     [
       filteredGraph,
@@ -1177,6 +1370,7 @@ export function ImpactMap({
       filter.matchIds,
       visibleMaxHop,
       layout,
+      layoutMode,
     ],
   )
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
@@ -1315,10 +1509,17 @@ export function ImpactMap({
 
     const centerChanged = prevCenterLayoutRef.current !== graph.center.id
     prevCenterLayoutRef.current = graph.center.id
-    const resetLayout = tidyNonce !== lastTidyRef.current || centerChanged
+    const layoutEpoch = `${layoutMode}:${visibleMaxHop}:${layout.size}`
+    const epochChanged = layoutEpochRef.current !== layoutEpoch
+    layoutEpochRef.current = layoutEpoch
+    const resetLayout =
+      tidyNonce !== lastTidyRef.current ||
+      centerChanged ||
+      epochChanged ||
+      layoutMode === 'radial'
     lastTidyRef.current = tidyNonce
 
-    type AnyNode = Node<ServiceNodeData | MethodBadgeData>
+    type AnyNode = Node<ServiceNodeData | MethodBadgeData | RingGuideData>
     setNodes((current) => {
       const posById = new Map(current.map((n) => [n.id, n.position]))
       const out: AnyNode[] = built.nodes.map((n) => ({
@@ -1333,9 +1534,7 @@ export function ImpactMap({
                     : n.data.noteCount,
               }
             : n.data,
-        position: resetLayout
-          ? n.position
-          : (posById.get(n.id) ?? n.position),
+        position: resetLayout ? n.position : (posById.get(n.id) ?? n.position),
       }))
 
       if (showLinkedMethods) {
@@ -1369,6 +1568,9 @@ export function ImpactMap({
   }, [
     built,
     layout.nodeW,
+    layout.size,
+    layoutMode,
+    visibleMaxHop,
     showLinkedMethods,
     methodsByService,
     expandedMethodServiceId,
@@ -1707,7 +1909,7 @@ export function ImpactMap({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}`}
+      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -1814,7 +2016,7 @@ export function ImpactMap({
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${tidyNonce}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}`}
           layout={layout}
           navDirection={navDirection}
           onNavDirectionConsumed={onNavDirectionConsumed}
@@ -1848,6 +2050,7 @@ export function ImpactMap({
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
           layout={layout}
+          layoutMode={layoutMode}
           truncated={graph.truncated}
           onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
           onExpandLayer={() =>
@@ -1863,6 +2066,11 @@ export function ImpactMap({
           }}
           onTidyUp={() => {
             layoutDirtyRef.current = false
+            setTidyNonce((n) => n + 1)
+          }}
+          onToggleLayoutMode={() => {
+            layoutDirtyRef.current = false
+            setLayoutMode((m) => (m === 'ltr' ? 'radial' : 'ltr'))
             setTidyNonce((n) => n + 1)
           }}
         />
