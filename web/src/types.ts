@@ -249,5 +249,3 @@ export type ModuleNode = {
   methodId?: string
   children?: ModuleNode[]
 }
-
-export type ViewMode = 'simple' | 'advanced'

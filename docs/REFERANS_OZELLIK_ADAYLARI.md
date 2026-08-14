@@ -1,107 +1,53 @@
-# Referans özellik adayları
+# Referans özellik adayları — sonraya bırakılanlar
 
-Deneme listesi: maddeleri ekleyip çıkararak ilerleyeceğiz.  
+Yapılanlar bu listeden çıkarıldı. Aşağıdakiler bilinçli olarak **ertelendi**.
+
 Kaynaklar: Datadog, Backstage, New Relic, Dynatrace, CodeQL, Sourcegraph, JetBrains, Manta/Atlan, OpsLevel/Cortex.
 
-İşaret: `[ ]` yapılmadı · `[~]` denendi · `[x]` kaldı · `[-]` çıktı / bilinçli ertelendi
+---
+
+## Açık (sıradaki — ertelenmedi)
+
+17. [ ] **Metod seviyesi etki → onay listesi**  
+    Harita / blast var; değişiklik talebi ve gate henüz metod blast’ına bağlı değil.
 
 ---
 
-## Sıralama mantığı (neden bu sıra?)
+## Sonraya bırakılanlar
 
-1. **Çakışma riski** — mevcut LTR etki haritası / via-cascade / katman / proje filtresi bozulmasın  
-2. **Bağımlılık** — önce veri/UI iskeleti, sonra ona oturan rozet/uyarı  
-3. **Test kolaylığı** — küçük, tek ekranda doğrulanabilir parçalar önce; model değişimi sonra  
-4. **Ürün değeri** — onay zinciri ve sahiplik, vitrin APM’den önce
-
-Numara = eski referans kimliği (kaynak eşlemesi için). **Sprint sırası = aşağıdaki blok sırası.**
-
----
-
-## Bitti / denendi
-
-1. [~] **Upstream / Downstream iki kolon** (Datadog Catalog)
-2. [~] **Collapsed path + kenar vurgusu** (Datadog Map) — katman aç/kapa, via/cascade, ego hover
-11. [~] **Filtre:** proje — etki yolu / harita; ara yol + eşleşen
-13. [~] **Path breadcrumb** — hover’da via zinciri
-9. [~] **Blast radius özeti** — N servis · M ekip · P proje
-4. [~] **Entity header + İlişkiler / Owner / Talepler sekmeleri** (Backstage)
-6. [x] **Metod → çağıranlar ağacı** (+ lazy callers/callees)
-7. [~] **Lazy drill-down** — bir hop
-6b. [x] **Sol ağaç** Project→Package→Service→Method (lazy)
-6c. [x] **Gelişmiş harita** “Bağlı methodları göster” (rozet + taşınabilir popover; servisin tüm method’ları)
-
----
-
-## Sıradaki paket
-
-### B — Katalog paneli *(14, 15, 10 sonraya)*
+### Katalog paneli
 
 14. [ ] **Gate progress şeridi** — “2/4 onay · 1 beklet”  
-    *Sonraya bırakıldı (geri alındı).*
-
 15. [ ] **Deep link:** inbox → talep (`T-123`)  
-    *Sonraya bırakıldı.*
+10. [ ] **On-call / Slack / repo deep link** (OpsLevel)
 
-10. [ ] **On-call / Slack / repo deep link** (OpsLevel)  
-    *Sonraya bırakıldı.*
-
-### C — Kalite kapısı *(5, 19, 20 sonraya)*
+### Kalite kapısı
 
 5. [ ] **Scorecard** (Backstage / Cortex) — owner var mı, bağımlılık beyanı eksik mi  
-    *Sonraya: sahipsiz servis beklenmiyor; sahiplik kişi veya ekip olabilir (model sonra).*
+    *Sahipsiz servis beklenmiyor; sahiplik modeli gelince yeniden bakılacak.*
 19. [ ] **Scorecard / eksik sahiplik uyarısı** — onay açmadan önce  
-    *Sonraya: aynı gerekçe — “owner yok” kapısı ürün varsayımına uymuyor.*
-20. [ ] **Uyum PR linki** (sarı flag sonrası) — bkz. `ONAY_ZINCIRI_SENARYOLAR.md` K2/K6  
-    *Sonraya bırakıldı.*
+    *5 ile aynı gerekçe.*
+20. [ ] **Uyum PR linki** (sarı flag sonrası) — bkz. `ONAY_ZINCIRI_SENARYOLAR.md` K2/K6
 
-### D — Kenar semantiği *(8 + 18 sonraya — APM tipi; Java/framework call-graph önce)*
+### Kenar semantiği *(APM tipi; framework call-graph önce)*
 
 8. [ ] **Kenar tipi:** `http` / `queue` / `db`  
-    *Sonraya: genel APM kenar tipleri; framework metod graı gelince yeniden değerlendir.*
-18. [ ] **Kenar tipi + veri etkisi** — değişiklik formuyla birleşir  
-    *Sonraya: 8’e bağlı.*
-
-### E — Bilinçli seçim (mevcut harita ile çakışır)
-
-3. [-] **Ego-network’te sol/sağ yön** (New Relic)  
-16. [-] **Çift yön görünüm** (haritada)
-
-### F — Metod / call-graph ← **şimdi: 17**
-
-6. [x] **Metod → çağıranlar ağacı** — DetailPanel **Metodlar**; bol mock  
-7. [~] **Lazy drill-down call hierarchy** — bir hop callers/callees lazy  
-17. [ ] **Metod seviyesi etki → onay listesi** — harita/blast var; değişiklik talebi / gate henüz metod blast’ına bağlı değil  
-
-*Ölçek UX (bitti):* ağaç/arama → method pivot; varsayılan çağıran **servis** haritası; toggle ile çağıran **method** zinciri. Servis haritasında method rozeti (servisin tüm katalog method’ları).
-
-*Test:* `docs/METOD_TEST_SENARYOLARI.md` (§E/F) + `GET /api/meta/call-graph-consistency`
+18. [ ] **Kenar tipi + veri etkisi** — değişiklik formuyla birleşir *(8’e bağlı)*
 
 ---
 
-## Bilerek düşük öncelik
+## Bilerek yapılmayacak (şimdi)
 
+3. [-] Ego-network’te sol/sağ yön (New Relic)  
+16. [-] Çift yön görünüm (haritada)  
 21. [-] Runtime kenar animasyonu / tam APM map  
 22. [-] Tüm org grafını bir anda çizmek
 
 ---
 
-## Önerilen sprint dilimleri
+## Gerçek veri gelince — uyum notu
 
-| Dilim | Maddeler | Test odağı |
-|-------|----------|------------|
-| Sprint 1 (bitti) | **13 → 9** | Path + blast özeti |
-| Sprint 2 | **4** (bitti); **10 / 14 / 15** sonraya | Detay paneli |
-| Sprint 3 | **5 + 19 → 20** hepsi sonraya | Scorecard / uyum PR |
-| Sprint 4 | **8 → 18** sonraya | APM kenar tipi |
-| Sprint 5 | **6 + 7 + harita** (bitti) → **17** açık | Metod UX bitti; onay’a metod blast bağlama kaldı |
-| Yapma (şimdi) | **3, 16, 21, 22** | Harita dilini / ölçeği bozar |
-
----
-
-## Gerçek veri gelince — uyum / test notu
-
-**Not (2026-08-13):** `owner.team` / “ekip” mantığı büyük ihtimalle **kalmayacak**. Asıl codebase’e yakın sahiplik / domain modeli gelince blast özeti, yetki ve filtre buna **yeniden uyarlanacak**. Mock’taki Payments/Orders ekipleri geçici.
+**Not (2026-08-13):** `owner.team` / “ekip” mantığı büyük ihtimalle **kalmayacak**. Blast özeti, yetki ve filtre gerçek sahiplik modeline göre yeniden uyarlanacak.
 
 | Kavram (şimdilik mock) | Alan | Örnek |
 |------------------------|------|--------|
@@ -109,4 +55,34 @@ Numara = eski referans kimliği (kaynak eşlemesi için). **Sprint sırası = a�
 | **Ekip** *(muhtemelen kalkacak)* | `owner.team` | Payments, Orders, … |
 | **Paket** | `packageId` | com.example.payments |
 
-Gerçek model gelince: blast “ekip” sayacı, domain yetkisi ve ilgili UI metinleri yeni şemaya göre düzenlenecek; mock varsayımlarına güvenilmeyecek.
+---
+
+## Yüksek sayılı bağlılığa sahip servisler için
+
+1 merkeze **20–30 hop-1 komşu** (ve üzeri) denk gelince soldan-sağa harita “hepsini kolonda çiz” diye ölçeklenmez; **hepsini göstermemek** üzerine ölçeklenir. Hop-1 onay listesi haritadan ayrı kalır: 30 kişilik onay ≠ 30 kutu.
+
+### Mevcut dili bozmadan
+
+- **Ego + örneklem:** hop 1’de 5–8 “önemli” (owner çeşitliliği, kenar sayısı, aynı proje) + `+22 daha`. Tıkla → liste/panel; haritayı 30 kutuyla doldurma.
+- **Grupla, tek tek değil:** 30 servis → 4–6 küme (proje / paket / ekip). Haritada kutu = küme; açınca üyeler. 30 düğüm → 5 düğüm.
+- **Harita keşif, liste iş:** “kim onaylar?” = kaydırılabilir liste + arama. Harita = yayılma hissi + 2. katman.
+- **Pivot:** 30’u bir anda değil; bir komşuya tıkla, o merkez olsun (zaten var).
+
+20–30 hop-1: küme / `+N` / liste — LTR kalabilir.  
+100+ hop-1 veya 3 hop’ta yüzlerce: harita özet (blast: N servis, M proje); çizim yok. Pivot + filtre zorunlu.  
+Method seviyesi: bir servisin 20–30 metodu ayrı overlay; 30×30 call-graph’ı servis haritasına bindirmeyin.
+
+### Alternatif düzenler (dinamik)
+
+Hepsi BFS yerine başka algoritma değil; **başka layout**. Hop / onay kuralı aynı kalır.
+
+| Yaklaşım | Ne zaman işe yarar | Risk |
+|----------|--------------------|------|
+| **Yelpaze / radial** (merkez ortada, hop 1 halka) | 20–30 hop-1 tek bakışta | LTR + “etki sağa akar” dilini bozar (#3 bilinçli elendi) |
+| **Focus + context** (seçili büyük, diğerleri halkada küçük) | Hover’da netlik | Cascade okları yine kalabalık |
+| **Sadece hop-1 halkası, hop-2 isteğe** | 30 doğrudan + dolaylı ayrı | 2. katmanı gizlerseniz keşif zayıflar |
+| **Mini-map + detay** | Çok hop açıkken | 30 hop-1’de şart değil |
+| **Semantic zoom** | Yakın: isim; uzak: küme | Uygulama maliyeti yüksek |
+| **Force-directed** | Organik görünüm | Katman/onay okunmaz; kaçının |
+
+20–30 için radial güzel vitrin, ürün omurgası için şart değil. Asıl kazanç **küme + collapsed + liste**. Hop-1 sayısı > 12 ise isteğe bağlı radial veya “komşular çekmecesi”; varsayılan LTR kalsın.

@@ -80,8 +80,8 @@ export function searchMethods(query: string) {
   return request<MethodRef[]>(`/methods?q=${q}`)
 }
 
-export function getImpactGraph(serviceId: string, mode: 'simple' | 'advanced') {
-  return request<ImpactGraph>(`/services/${serviceId}/impact?mode=${mode}`)
+export function getImpactGraph(serviceId: string) {
+  return request<ImpactGraph>(`/services/${serviceId}/impact?mode=advanced`)
 }
 
 export function listRequestsForService(serviceId: string) {

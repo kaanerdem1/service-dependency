@@ -10,16 +10,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
-  Controls,
   Handle,
   MarkerType,
   Position,
   useEdgesState,
   useNodesState,
-  useReactFlow,
   type Edge,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import {
@@ -29,6 +28,7 @@ import {
   type MapLayout,
 } from '../impact/mapLayout'
 import type { MethodImpactGraph, MethodRef } from '../types'
+import { MapCanvasBar, MapViewportSync } from './ImpactChrome'
 
 type Props = {
   graph: MethodImpactGraph
@@ -111,32 +111,6 @@ function MapNodeView({ data }: NodeProps<MapNodeData>) {
 }
 
 const nodeTypes = { methodNode: memo(MapNodeView) }
-
-function FitViewOnLayers({
-  visibleMaxHop,
-  nodeCount,
-  layoutKey,
-  layout,
-}: {
-  visibleMaxHop: number
-  nodeCount: number
-  layoutKey: string | number
-  layout: MapLayout
-}) {
-  const { fitView } = useReactFlow()
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      fitView({
-        padding: layout.fitPadding,
-        duration: 320,
-        minZoom: layout.minZoom,
-        maxZoom: layout.maxZoom,
-      })
-    }, 40)
-    return () => window.clearTimeout(id)
-  }, [visibleMaxHop, nodeCount, layoutKey, layout, fitView])
-  return null
-}
 
 type LayerItem = {
   id: string
@@ -268,7 +242,7 @@ function buildLayeredMap(
       position: { x: LEFT_X, y: 80 },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      draggable: false,
+      draggable: true,
     },
   ]
 
@@ -312,7 +286,7 @@ function buildLayeredMap(
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        draggable: false,
+        draggable: true,
       })
     })
 
@@ -338,7 +312,7 @@ function buildLayeredMap(
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        draggable: false,
+        draggable: true,
       })
     }
   }
@@ -400,7 +374,14 @@ export function MethodImpactMap({
   const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set())
   const [visibleMaxHop, setVisibleMaxHop] = useState(1)
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [tidyNonce, setTidyNonce] = useState(0)
+  const [pivotFlash, setPivotFlash] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
+  const nodeDragged = useRef(false)
+  const lastTidyRef = useRef(0)
+  const rfInstance = useRef<ReactFlowInstance | null>(null)
+  const layoutDirtyRef = useRef(false)
+  const prevCenterLayoutRef = useRef(graph.center.id)
 
   const layered = useMemo(() => {
     return viewMode === 'services'
@@ -441,6 +422,10 @@ export function MethodImpactMap({
     setVisibleMaxHop(1)
     setFocusId(null)
     setViewMode('services')
+    layoutDirtyRef.current = false
+    setPivotFlash(true)
+    const t = window.setTimeout(() => setPivotFlash(false), 560)
+    return () => window.clearTimeout(t)
   }, [graph.center.id])
 
   useEffect(() => {
@@ -450,9 +435,21 @@ export function MethodImpactMap({
   }, [viewMode])
 
   useEffect(() => {
-    setNodes(built.nodes)
+    const centerChanged = prevCenterLayoutRef.current !== graph.center.id
+    prevCenterLayoutRef.current = graph.center.id
+    const resetLayout = tidyNonce !== lastTidyRef.current || centerChanged
+    lastTidyRef.current = tidyNonce
+    setNodes((current) => {
+      const posById = new Map(current.map((n) => [n.id, n.position]))
+      return built.nodes.map((n) => ({
+        ...n,
+        position: resetLayout
+          ? n.position
+          : (posById.get(n.id) ?? n.position),
+      }))
+    })
     setEdges(built.edges)
-  }, [built, setNodes, setEdges])
+  }, [built, tidyNonce, graph.center.id, setNodes, setEdges])
 
   useEffect(() => {
     const root = mapRef.current
@@ -487,8 +484,36 @@ export function MethodImpactMap({
     })
   }, [focusId, edges])
 
+  const centerNodeId =
+    viewMode === 'services' ? graph.center.serviceId : graph.center.id
+
+  const pivotToNode = useCallback(
+    (node: Node<MapNodeData>, onDone: () => void) => {
+      if (!layoutDirtyRef.current) {
+        onDone()
+        return
+      }
+      const inst = rfInstance.current
+      if (inst) {
+        inst.setCenter(
+          node.position.x + layout.nodeW / 2,
+          node.position.y + 48,
+          { zoom: inst.getZoom(), duration: 340 },
+        )
+        window.setTimeout(onDone, 320)
+        return
+      }
+      onDone()
+    },
+    [layout.nodeW],
+  )
+
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<MapNodeData>) => {
+      if (nodeDragged.current) {
+        nodeDragged.current = false
+        return
+      }
       if (node.data.kind === 'collapsed') {
         setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
         return
@@ -498,18 +523,15 @@ export function MethodImpactMap({
         return
       }
       if (viewMode === 'services' && node.data.serviceId) {
-        onSelectService(node.data.serviceId)
+        pivotToNode(node, () => onSelectService(node.data.serviceId!))
         return
       }
       if (node.data.methodId && node.data.serviceId) {
         onSelectMethod(node.data.serviceId, node.data.methodId)
       }
     },
-    [onClearMethod, onSelectMethod, onSelectService, viewMode],
+    [onClearMethod, onSelectMethod, onSelectService, pivotToNode, viewMode],
   )
-
-  const nextHop =
-    visibleMaxHop < maxHopAvailable ? visibleMaxHop + 1 : undefined
 
   const serviceCount = useMemo(() => {
     const s = new Set(graph.nodes.map((n) => n.method.serviceId))
@@ -520,7 +542,7 @@ export function MethodImpactMap({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map method-impact-map ${focusId ? 'is-focusing' : ''}`}
+      className={`impact-map dd-map method-impact-map ${focusId ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}`}
       onMouseLeave={() => setFocusId(null)}
     >
       <div className="path-layer-bar">
@@ -570,48 +592,6 @@ export function MethodImpactMap({
               : 'Sadece bağlı olduğu method’ları göster'}
           </button>
         </div>
-        <div className="path-layer-actions">
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={visibleMaxHop <= 1}
-            onClick={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
-          >
-            Katmanı daralt
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={!nextHop}
-            onClick={() =>
-              setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
-            }
-          >
-            {nextHop ? `${nextHop}. katmanı aç` : 'Katmanlar açık'}
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={visibleMaxHop >= maxHopAvailable}
-            onClick={() => {
-              setVisibleMaxHop(maxHopAvailable)
-              setExpandedLayers(new Set(layered.items.map((n) => n.hop)))
-            }}
-          >
-            Bütün katmanları aç
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={visibleMaxHop <= 1}
-            onClick={() => {
-              setVisibleMaxHop(1)
-              setExpandedLayers(new Set())
-            }}
-          >
-            Hepsini daralt
-          </button>
-        </div>
       </div>
       <p className="method-map-banner">
         Merkez:{' '}
@@ -624,10 +604,14 @@ export function MethodImpactMap({
           : `çağıran blast · ${graph.nodes.length} method`}
         {graph.truncated ? ` · ${graph.reason ?? 'kesildi'}` : ''}
       </p>
+      <div className="map-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onInit={(inst) => {
+          rfInstance.current = inst
+        }}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         fitView
@@ -636,29 +620,60 @@ export function MethodImpactMap({
           minZoom: layout.minZoom,
           maxZoom: layout.maxZoom,
         }}
-        nodesDraggable={false}
+        nodesDraggable
+        nodeDragThreshold={4}
+        selectNodesOnDrag={false}
         nodesConnectable={false}
         panOnDrag
         minZoom={layout.minZoom}
         maxZoom={layout.maxZoom}
         onNodeClick={onNodeClick}
+        onNodeDrag={() => {
+          nodeDragged.current = true
+          layoutDirtyRef.current = true
+        }}
         onNodeMouseEnter={(_, n) => setFocusId(n.id)}
         onNodeMouseLeave={() => setFocusId(null)}
+        onPaneClick={() => {
+          nodeDragged.current = false
+        }}
         defaultEdgeOptions={{
           style: { stroke: EDGE_COLOR, strokeWidth: 2.5 },
           markerEnd: EDGE_MARKER,
         }}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayers
+        <MapViewportSync
+          centerId={centerNodeId}
           visibleMaxHop={visibleMaxHop}
-          nodeCount={nodes.length}
           layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}`}
           layout={layout}
         />
         <Background gap={22} color="#e4e0d6" />
-        <Controls showInteractive={false} position="bottom-left" />
+        <MapCanvasBar
+          visibleMaxHop={visibleMaxHop}
+          maxHopAvailable={maxHopAvailable}
+          fitPadding={layout.fitPadding}
+          truncated={graph.truncated}
+          onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
+          onExpandLayer={() =>
+            setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
+          }
+          onExpandAll={() => {
+            setVisibleMaxHop(maxHopAvailable)
+            setExpandedLayers(new Set(layered.items.map((n) => n.hop)))
+          }}
+          onCollapseAll={() => {
+            setVisibleMaxHop(1)
+            setExpandedLayers(new Set())
+          }}
+          onTidyUp={() => {
+            layoutDirtyRef.current = false
+            setTidyNonce((n) => n + 1)
+          }}
+        />
       </ReactFlow>
+      </div>
     </div>
   )
 }

@@ -117,12 +117,9 @@ export function buildImpactGraph(
 
 export async function getImpactGraph(
   serviceId: string,
-  mode: 'simple' | 'advanced',
 ): Promise<ImpactGraph | undefined> {
   await delay()
-  const maxNodes =
-    mode === 'simple' ? IMPACT_VIEW.maxNodesSimple : IMPACT_VIEW.maxNodesAdvanced
-  return buildImpactGraph(serviceId, maxNodes)
+  return buildImpactGraph(serviceId, IMPACT_VIEW.maxNodesAdvanced)
 }
 
 export async function searchServices(query: string): Promise<Service[]> {

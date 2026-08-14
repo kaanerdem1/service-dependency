@@ -10,6 +10,13 @@ import { useEffect, useState } from 'react'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
 
+const KIND_LABEL: Record<ModuleNode['kind'], string> = {
+  project: 'proje',
+  package: 'paket',
+  service: 'servis',
+  method: 'method',
+}
+
 type Props = {
   nodes: ModuleNode[]
   selectedServiceId?: string
@@ -89,7 +96,7 @@ function MethodLeaves({
                 <span className="tree-method-class">{m.className}.</span>
                 {m.name}
               </span>
-              <span className="tree-kind">method</span>
+              <span className="tree-kind">{KIND_LABEL.method}</span>
             </button>
           </div>
         )
@@ -154,7 +161,7 @@ function TreeItem({
         >
           <span className="tree-label">{node.name}</span>
         </button>
-        <span className="tree-kind">{node.kind}</span>
+          <span className="tree-kind">{KIND_LABEL[node.kind]}</span>
       </div>
       {open &&
         hasStaticChildren &&

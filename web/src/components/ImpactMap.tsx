@@ -6,7 +6,7 @@
  * - Katman aç/kapa, proje filtresi, “bağlı methodları göster”
  * - Düğüm etiketi 2 satır; uzunsa hover’da tam ad
  *
- * Zoom paneli: Controls (bottom-left). Sidebar class adı `.left` olmamalı
+ * Zoom / katman / lejant: orta-alt MapCanvasBar. Sidebar class adı `.left` olmamalı
  * (React Flow panel class’ı `left` ile çakışır).
  */
 import {
@@ -22,18 +22,17 @@ import {
 import ReactFlow, {
   Background,
   BaseEdge,
-  Controls,
   Handle,
   MarkerType,
   Position,
   getBezierPath,
   useEdgesState,
   useNodesState,
-  useReactFlow,
   type Edge,
   type EdgeProps,
   type Node,
   type NodeProps,
+  type ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import {
@@ -43,6 +42,7 @@ import {
   filterNodes,
   type ProjectOption,
 } from '../impact/projectFilter'
+import { easeOutCubic, lerp, waitMs } from '../impact/pivotTransition'
 import { listMethodsForService } from '../api/client'
 import {
   mapLabelNeedsTip,
@@ -52,7 +52,8 @@ import {
 import type { ImpactGraph, ImpactNode, MethodRef } from '../types'
 import {
   BlastRadiusSummary,
-  ImpactLegend,
+  MapCanvasBar,
+  MapViewportSync,
   PathBreadcrumb,
   ProjectFilterHint,
 } from './ImpactChrome'
@@ -408,33 +409,6 @@ function FanEdge({
   )
 }
 
-/** Katman aç/kapa / metod overlay sonrası görünümü ekrana sığdır */
-function FitViewOnLayers({
-  visibleMaxHop,
-  nodeCount,
-  layoutKey,
-  layout,
-}: {
-  visibleMaxHop: number
-  nodeCount: number
-  layoutKey: string | number | boolean
-  layout: MapLayout
-}) {
-  const { fitView } = useReactFlow()
-  useEffect(() => {
-    const id = window.setTimeout(() => {
-      fitView({
-        padding: layout.fitPadding,
-        duration: 320,
-        minZoom: layout.minZoom,
-        maxZoom: layout.maxZoom,
-      })
-    }, 40)
-    return () => window.clearTimeout(id)
-  }, [visibleMaxHop, nodeCount, layoutKey, layout, fitView])
-  return null
-}
-
 const edgeTypes = { fan: memo(FanEdge) }
 
 function assignFanIndices(
@@ -552,7 +526,7 @@ function buildGraph(
       position: { x: LEFT_X, y: centerY },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
-      draggable: false,
+      draggable: true,
     },
   ]
 
@@ -582,7 +556,7 @@ function buildGraph(
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        draggable: false,
+        draggable: true,
       })
     })
 
@@ -609,7 +583,7 @@ function buildGraph(
         },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
-        draggable: false,
+        draggable: true,
       })
     }
   }
@@ -753,7 +727,17 @@ export function ImpactMap({
     Record<string, MethodRef[]>
   >({})
   const [methodsLoading, setMethodsLoading] = useState(false)
+  const [tidyNonce, setTidyNonce] = useState(0)
+  const [pivotFlash, setPivotFlash] = useState(false)
+  const [pivotMorphing, setPivotMorphing] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
+  const nodeDragged = useRef(false)
+  const lastTidyRef = useRef(0)
+  const rfInstance = useRef<ReactFlowInstance | null>(null)
+  const pivotMorphingRef = useRef(false)
+  const layoutDirtyRef = useRef(false)
+  const pivotAnimRef = useRef(0)
+  const prevCenterLayoutRef = useRef(graph.center.id)
 
   const filter = useMemo(
     () => applyProjectFilter(graph, projectFilter || null),
@@ -787,13 +771,6 @@ export function ImpactMap({
     for (const n of filteredGraph.nodes) m = Math.max(m, n.hop)
     return m
   }, [filteredGraph.nodes])
-
-  const nextHop =
-    visibleMaxHop < maxHopAvailable ? visibleMaxHop + 1 : undefined
-  const canExpandLayer = Boolean(nextHop)
-  const canCollapseLayer = visibleMaxHop > 1
-  const canExpandAll = visibleMaxHop < maxHopAvailable
-  const canCollapseAll = visibleMaxHop > 1
 
   const layout = useMemo(
     () => mapLayoutForDepth(visibleMaxHop),
@@ -860,6 +837,10 @@ export function ImpactMap({
     setShowLinkedMethods(false)
     setExpandedMethodServiceId(null)
     setMethodsByService({})
+    layoutDirtyRef.current = false
+    setPivotFlash(true)
+    const t = window.setTimeout(() => setPivotFlash(false), 560)
+    return () => window.clearTimeout(t)
   }, [graph.center.id])
 
   useEffect(() => {
@@ -905,41 +886,58 @@ export function ImpactMap({
     }
   }, [showLinkedMethods, visibleServiceIds])
 
-  // Yalnız “N metod” rozeti — liste HTML popover (zoom bozulmasın)
+  // Rozetler + sürüklenen konumları koru (Hizala / pivot morph / merkez değişimi hariç)
   useEffect(() => {
+    if (pivotMorphingRef.current) return
+
+    const centerChanged = prevCenterLayoutRef.current !== graph.center.id
+    prevCenterLayoutRef.current = graph.center.id
+    const resetLayout = tidyNonce !== lastTidyRef.current || centerChanged
+    lastTidyRef.current = tidyNonce
+
     type AnyNode = Node<ServiceNodeData | MethodBadgeData>
-    const out: AnyNode[] = built.nodes.map((n) => ({ ...n }))
+    setNodes((current) => {
+      const posById = new Map(current.map((n) => [n.id, n.position]))
+      const out: AnyNode[] = built.nodes.map((n) => ({
+        ...n,
+        position: resetLayout
+          ? n.position
+          : (posById.get(n.id) ?? n.position),
+      }))
 
-    if (showLinkedMethods) {
-      for (const n of built.nodes) {
-        if (n.data.kind !== 'center' && n.data.kind !== 'service') continue
-        const count = (methodsByService[n.id] ?? []).length
-        if (!count) continue
-        out.push({
-          id: `mbadge-${n.id}`,
-          type: 'methodBadge',
-          data: {
-            serviceId: n.id,
-            count,
-            expanded: expandedMethodServiceId === n.id,
-          },
-          position: {
-            x: n.position.x + layout.nodeW + BADGE_GAP,
-            y: n.position.y + 18,
-          },
-          draggable: false,
-          selectable: true,
-        })
+      if (showLinkedMethods) {
+        for (const n of out) {
+          if (n.data.kind !== 'center' && n.data.kind !== 'service') continue
+          const count = (methodsByService[n.id] ?? []).length
+          if (!count) continue
+          out.push({
+            id: `mbadge-${n.id}`,
+            type: 'methodBadge',
+            data: {
+              serviceId: n.id,
+              count,
+              expanded: expandedMethodServiceId === n.id,
+            },
+            position: {
+              x: n.position.x + layout.nodeW + BADGE_GAP,
+              y: n.position.y + 18,
+            },
+            draggable: false,
+            selectable: true,
+          })
+        }
       }
-    }
 
-    setNodes(out as Node<ServiceNodeData>[])
+      return out as Node<ServiceNodeData>[]
+    })
   }, [
     built,
     layout.nodeW,
     showLinkedMethods,
     methodsByService,
     expandedMethodServiceId,
+    tidyNonce,
+    graph.center.id,
     setNodes,
   ])
 
@@ -1045,8 +1043,144 @@ export function ImpactMap({
     )
   }, [built.edges, focusId, focusEdgeId, setEdges])
 
+  const pivotToNode = useCallback(
+    async (node: Node) => {
+      const targetId = node.id
+      const fromCenterId = graph.center.id
+
+      // Varsayılan düzen: morph yok — Hizala + ekrana sığdır etkisi pivot sonrası gelir
+      if (!layoutDirtyRef.current) {
+        onPivot(targetId)
+        return
+      }
+
+      const inst = rfInstance.current
+      if (!inst) {
+        onPivot(targetId)
+        return
+      }
+
+      const centerNode = inst.getNode(fromCenterId)
+      const targetNode = inst.getNode(targetId)
+      if (!centerNode || !targetNode) {
+        onPivot(targetId)
+        return
+      }
+
+      const animId = ++pivotAnimRef.current
+      pivotMorphingRef.current = true
+      setPivotMorphing(true)
+
+      const nodeFocusX = (n: Node) => n.position.x + layout.nodeW / 2
+      const nodeFocusY = (n: Node) => n.position.y + 48
+
+      inst.setCenter(nodeFocusX(targetNode), nodeFocusY(targetNode), {
+        zoom: inst.getZoom(),
+        duration: 360,
+      })
+      await waitMs(360)
+      if (pivotAnimRef.current !== animId) return
+
+      const centerStart = { ...centerNode.position }
+      const targetStart = { ...targetNode.position }
+      const targetEnd = { ...centerStart }
+      const colPitch = layout.nodeW + layout.colGap
+      const centerEnd = {
+        x: centerStart.x - colPitch * 1.05,
+        y: centerStart.y,
+      }
+      const morphMs = 540
+      const t0 = performance.now()
+
+      await new Promise<void>((resolve) => {
+        const tick = (now: number) => {
+          if (pivotAnimRef.current !== animId) {
+            resolve()
+            return
+          }
+          const t = Math.min(1, (now - t0) / morphMs)
+          const e = easeOutCubic(t)
+          const targetPos = {
+            x: lerp(targetStart.x, targetEnd.x, e),
+            y: lerp(targetStart.y, targetEnd.y, e),
+          }
+          const oldCenterPos = {
+            x: lerp(centerStart.x, centerEnd.x, e),
+            y: lerp(centerStart.y, centerEnd.y, e),
+          }
+
+          setNodes((current) => {
+            const posById = new Map<string, { x: number; y: number }>()
+            for (const n of current) {
+              if (n.id === targetId) posById.set(n.id, targetPos)
+              else if (n.id === fromCenterId) posById.set(n.id, oldCenterPos)
+              else posById.set(n.id, n.position)
+            }
+            return current.map((n) => {
+              if (n.id === targetId) {
+                return {
+                  ...n,
+                  position: targetPos,
+                  className: 'pivot-incoming',
+                }
+              }
+              if (n.id === fromCenterId) {
+                return {
+                  ...n,
+                  position: oldCenterPos,
+                  className: 'pivot-slide-out',
+                  style: {
+                    ...n.style,
+                    opacity: 1 - e * 0.45,
+                  },
+                }
+              }
+              if (n.type === 'methodBadge') {
+                const sid = (n.data as MethodBadgeData).serviceId
+                const parent = posById.get(sid)
+                if (parent) {
+                  return {
+                    ...n,
+                    position: {
+                      x: parent.x + layout.nodeW + BADGE_GAP,
+                      y: parent.y + 18,
+                    },
+                  }
+                }
+              }
+              return n
+            })
+          })
+
+          inst.setCenter(
+            targetPos.x + layout.nodeW / 2,
+            targetPos.y + 48,
+            { zoom: inst.getZoom(), duration: 0 },
+          )
+
+          if (t < 1) requestAnimationFrame(tick)
+          else resolve()
+        }
+        requestAnimationFrame(tick)
+      })
+
+      if (pivotAnimRef.current !== animId) return
+
+      pivotMorphingRef.current = false
+      setPivotMorphing(false)
+      layoutDirtyRef.current = false
+      onPivot(targetId)
+    },
+    [graph.center.id, layout.colGap, layout.nodeW, onPivot, setNodes],
+  )
+
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      if (pivotMorphingRef.current) return
+      if (nodeDragged.current) {
+        nodeDragged.current = false
+        return
+      }
       if (node.type === 'methodBadge') {
         const d = node.data as MethodBadgeData
         setExpandedMethodServiceId((cur) =>
@@ -1064,9 +1198,9 @@ export function ImpactMap({
         return
       }
       setExpandedMethodServiceId(null)
-      onPivot(node.id)
+      pivotToNode(node)
     },
-    [graph.center.id, onClearCenter, onPivot],
+    [graph.center.id, onClearCenter, pivotToNode],
   )
 
   const clearHoverFocus = useCallback(() => {
@@ -1099,7 +1233,7 @@ export function ImpactMap({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}`}
+      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -1125,9 +1259,8 @@ export function ImpactMap({
           >
             İleri →
           </button>
-          <span className="path-bar-sep" aria-hidden />
-          <ImpactLegend truncated={graph.truncated} />
-          <span className="path-bar-sep" aria-hidden />
+        </div>
+        <div className="path-layer-actions">
           <button
             type="button"
             className="btn ghost path-layer-btn"
@@ -1141,8 +1274,6 @@ export function ImpactMap({
                 ? 'Bağlı methodları kapat'
                 : 'Bağlı methodları göster'}
           </button>
-        </div>
-        <div className="path-layer-actions">
           <label className="path-filter">
             <span className="path-filter-label">Proje</span>
             <select
@@ -1159,55 +1290,6 @@ export function ImpactMap({
               ))}
             </select>
           </label>
-          <span className="path-bar-sep" aria-hidden />
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={!canCollapseLayer}
-            onClick={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
-            title="Bir katman daralt"
-          >
-            Katmanı daralt
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={!canExpandLayer}
-            onClick={() =>
-              setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
-            }
-            title={
-              nextHop ? `${nextHop}. katmanı aç` : 'Daha fazla katman yok'
-            }
-          >
-            {canExpandLayer ? `${nextHop}. katmanı aç` : 'Katmanlar açık'}
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={!canExpandAll}
-            onClick={() => {
-              setVisibleMaxHop(maxHopAvailable)
-              setExpandedLayers(
-                new Set(filteredGraph.nodes.map((n) => n.hop)),
-              )
-            }}
-            title="Tüm katmanları aç"
-          >
-            Bütün katmanları aç
-          </button>
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            disabled={!canCollapseAll}
-            onClick={() => {
-              setVisibleMaxHop(1)
-              setExpandedLayers(new Set())
-            }}
-            title="Yalnız 1. katman"
-          >
-            Hepsini daralt
-          </button>
         </div>
       </div>
       {projectFilter && (
@@ -1241,11 +1323,15 @@ export function ImpactMap({
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
+      <div className="map-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+        onInit={(inst) => {
+          rfInstance.current = inst
+        }}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         fitView
@@ -1254,28 +1340,59 @@ export function ImpactMap({
           minZoom: layout.minZoom,
           maxZoom: layout.maxZoom,
         }}
-        nodesDraggable={false}
+        nodesDraggable
+        nodeDragThreshold={4}
+        selectNodesOnDrag={false}
         nodesConnectable={false}
         panOnDrag
         minZoom={layout.minZoom}
         maxZoom={layout.maxZoom}
         onNodeClick={onNodeClick}
+        onNodeDrag={() => {
+          nodeDragged.current = true
+          layoutDirtyRef.current = true
+        }}
         onNodeMouseEnter={onNodeMouseEnter}
         onNodeMouseLeave={onNodeMouseLeave}
         onEdgeMouseEnter={onEdgeMouseEnter}
         onEdgeMouseLeave={onEdgeMouseLeave}
-        onPaneClick={clearHoverFocus}
+        onPaneClick={() => {
+          nodeDragged.current = false
+          clearHoverFocus()
+        }}
         proOptions={{ hideAttribution: true }}
       >
-        <FitViewOnLayers
+        <MapViewportSync
+          centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          nodeCount={nodes.length}
           layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}`}
           layout={layout}
         />
         <Background gap={22} color="#e4e0d6" />
-        <Controls showInteractive={false} position="bottom-left" />
+        <MapCanvasBar
+          visibleMaxHop={visibleMaxHop}
+          maxHopAvailable={maxHopAvailable}
+          fitPadding={layout.fitPadding}
+          truncated={graph.truncated}
+          onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
+          onExpandLayer={() =>
+            setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
+          }
+          onExpandAll={() => {
+            setVisibleMaxHop(maxHopAvailable)
+            setExpandedLayers(new Set(filteredGraph.nodes.map((n) => n.hop)))
+          }}
+          onCollapseAll={() => {
+            setVisibleMaxHop(1)
+            setExpandedLayers(new Set())
+          }}
+          onTidyUp={() => {
+            layoutDirtyRef.current = false
+            setTidyNonce((n) => n + 1)
+          }}
+        />
       </ReactFlow>
+      </div>
       {expandedMethodServiceId &&
         onSelectMethod &&
         (methodsByService[expandedMethodServiceId]?.length ?? 0) > 0 && (

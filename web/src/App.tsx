@@ -7,7 +7,7 @@
  * - pivotId          → odak servis (geri/ileri geçmişi ile)
  * - selectedMethodId → odak metod (method haritası + Methods sekmesi)
  * - tab              → 'affected' | 'map'
- * - viewMode         → 'simple' (etki yolu) | 'advanced' (React Flow harita)
+ * Harita: gelişmiş React Flow (basit etki yolu kaldırıldı).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -24,7 +24,6 @@ import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
 import { NewServiceRequestModal } from './components/NewServiceRequestModal'
 import { RequestDetailModal } from './components/RequestDetailModal'
-import { SimpleImpactPath } from './components/SimpleImpactPath'
 import {
   getChangeRequest,
   getImpactGraph,
@@ -51,7 +50,6 @@ import type {
   MethodRef,
   ModuleNode,
   Service,
-  ViewMode,
 } from './types'
 import './App.css'
 
@@ -79,7 +77,6 @@ export default function App() {
   const [impact, setImpact] = useState<ImpactGraph>()
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<Tab>('affected')
-  const [viewMode, setViewMode] = useState<ViewMode>('simple')
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
 
@@ -169,7 +166,7 @@ export default function App() {
     void Promise.all([
       getService(pivotId),
       getNeighbors(pivotId),
-      getImpactGraph(pivotId, viewMode),
+      getImpactGraph(pivotId),
       listRequestsForService(pivotId),
     ])
       .then(([svc, neighbors, graph, reqs]) => {
@@ -187,7 +184,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [pivotId, viewMode])
+  }, [pivotId])
 
   const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
   const impactProjectOptions = useMemo(
@@ -252,7 +249,6 @@ export default function App() {
     (serviceId: string, methodId: string) => {
       setSelectedMethodId(methodId)
       setPreferMethodsTab(false)
-      setViewMode('advanced')
       setTab('map')
       if (serviceId !== pivotId) {
         setHistory([serviceId])
@@ -272,7 +268,6 @@ export default function App() {
     setSelectedMethodId(undefined)
     setMethodImpact(undefined)
     setPreferMethodsTab(false)
-    setViewMode('advanced')
     setTab('map')
   }, [])
 
@@ -281,7 +276,6 @@ export default function App() {
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
       setPreferMethodsTab(true)
-      setViewMode('advanced')
       setTab('map')
       if (serviceId !== pivotId) {
         setHistory([serviceId])
@@ -326,7 +320,7 @@ export default function App() {
   })()
 
   return (
-    <div className={`app mode-${viewMode}`}>
+    <div className="app">
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark">SD</span>
@@ -401,22 +395,6 @@ export default function App() {
               ))}
             </select>
           </label>
-          <div className="segmented" role="group" aria-label="Görünüm">
-            <button
-              type="button"
-              className={viewMode === 'simple' ? 'on' : ''}
-              onClick={() => setViewMode('simple')}
-            >
-              Basit
-            </button>
-            <button
-              type="button"
-              className={viewMode === 'advanced' ? 'on' : ''}
-              onClick={() => setViewMode('advanced')}
-            >
-              Gelişmiş
-            </button>
-          </div>
           <button
             type="button"
             className="btn ghost"
@@ -496,7 +474,7 @@ export default function App() {
                   className={tab === 'map' ? 'on' : ''}
                   onClick={() => setTab('map')}
                 >
-                  {viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
+                  Harita
                 </button>
               </div>
             </div>
@@ -556,41 +534,25 @@ export default function App() {
 
               {tab === 'map' && !selectedMethodId && impact && (
                 <MapStage
-                  title={viewMode === 'simple' ? 'Etki yolu' : 'Harita'}
+                  title="Harita"
                   expanded={mapExpanded}
                   onExpandedChange={setMapExpanded}
                 >
-                  {viewMode === 'simple' ? (
-                    <SimpleImpactPath
-                      key={`simple-${mapExpanded}`}
-                      graph={impact}
-                      projectOptions={impactProjectOptions}
-                      onPivot={(id) => selectPivot(id)}
-                      onClearCenter={clearSelection}
-                      onPivotBack={goBack}
-                      onPivotForward={goForward}
-                      canPivotBack={historyIndex > 0}
-                      canPivotForward={
-                        historyIndex >= 0 && historyIndex < history.length - 1
-                      }
-                    />
-                  ) : (
-                    <ImpactMap
-                      key={`adv-${mapExpanded}`}
-                      graph={impact}
-                      projectOptions={impactProjectOptions}
-                      onPivot={(id) => selectPivot(id)}
-                      onSelectMethod={selectMethod}
-                      onBrowseMethods={browseServiceMethods}
-                      onClearCenter={clearSelection}
-                      onPivotBack={goBack}
-                      onPivotForward={goForward}
-                      canPivotBack={historyIndex > 0}
-                      canPivotForward={
-                        historyIndex >= 0 && historyIndex < history.length - 1
-                      }
-                    />
-                  )}
+                  <ImpactMap
+                    key={`adv-${mapExpanded}`}
+                    graph={impact}
+                    projectOptions={impactProjectOptions}
+                    onPivot={(id) => selectPivot(id)}
+                    onSelectMethod={selectMethod}
+                    onBrowseMethods={browseServiceMethods}
+                    onClearCenter={clearSelection}
+                    onPivotBack={goBack}
+                    onPivotForward={goForward}
+                    canPivotBack={historyIndex > 0}
+                    canPivotForward={
+                      historyIndex >= 0 && historyIndex < history.length - 1
+                    }
+                  />
                 </MapStage>
               )}
 
