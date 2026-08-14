@@ -258,18 +258,6 @@ export function SimpleImpactPath({
     return edges.filter((e) => ids.has(e.fromId) && ids.has(e.toId))
   }, [center.id, hops, byHop, visibleMaxHop, edges])
 
-  /** Hedefe gelen cascade kaynakları (ağaç ebeveyni değil) */
-  const cascadeInto = useMemo(() => {
-    const map = new Map<string, string[]>()
-    for (const e of visibleEdges) {
-      if (parents.get(e.toId) === e.fromId) continue
-      const list = map.get(e.toId) ?? []
-      list.push(e.fromId)
-      map.set(e.toId, list)
-    }
-    return map
-  }, [visibleEdges, parents])
-
   const cascadeCount = useMemo(
     () => visibleEdges.filter((e) => parents.get(e.toId) !== e.fromId).length,
     [visibleEdges, parents],
@@ -446,9 +434,6 @@ export function SimpleImpactPath({
   const renderChip = (id: string, hop: number, label: string, meta: string) => {
     const viaId = hop > 0 ? parents.get(id) : undefined
     const viaName = viaId ? nameById.get(viaId) : undefined
-    const cascades = (cascadeInto.get(id) ?? [])
-      .map((fid) => nameById.get(fid))
-      .filter(Boolean) as string[]
     const bridge = projectFilter && filter.bridgeIds.has(id)
     const match = projectFilter && filter.matchIds.has(id)
     const tipChars = hop === 0 ? 48 : 40

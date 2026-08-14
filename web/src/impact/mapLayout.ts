@@ -19,6 +19,21 @@ export type MapLayout = {
   fitPadding: number
 }
 
+/**
+ * Sol bilgi paneli için fitView bbox’ına dahil edilen görünmez pad genişliği.
+ * Kamera kaydırılmaz — pad düğümü boşluğu grafikte tutar.
+ */
+export const MAP_INFO_PANEL_RESERVE = 268
+
+export function mapLeftX(): number {
+  return 48 + MAP_INFO_PANEL_RESERVE
+}
+
+/** fitView kenar boşluğu */
+export function fitViewPaddingForLayout(layout: MapLayout): number {
+  return layout.fitPadding + 0.06
+}
+
 /** Görünen max hop’a göre layout (1 = yalnızca komşular) */
 export function mapLayoutForDepth(visibleMaxHop: number): MapLayout {
   if (visibleMaxHop <= 1) {

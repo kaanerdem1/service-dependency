@@ -45,17 +45,19 @@ import {
 import { easeOutCubic, lerp, waitMs } from '../impact/pivotTransition'
 import { listMethodsForService } from '../api/client'
 import {
+  MAP_INFO_PANEL_RESERVE,
   mapLabelNeedsTip,
   mapLayoutForDepth,
+  mapLeftX,
   type MapLayout,
 } from '../impact/mapLayout'
 import type { ImpactGraph, ImpactNode, MethodRef } from '../types'
 import {
-  BlastRadiusSummary,
   MapCanvasBar,
+  MapInfoPanel,
   MapViewportSync,
-  PathBreadcrumb,
   ProjectFilterHint,
+  type VisitStep,
 } from './ImpactChrome'
 
 type Props = {
@@ -71,9 +73,13 @@ type Props = {
   onPivotForward?: () => void
   canPivotBack?: boolean
   canPivotForward?: boolean
+  visitPath?: VisitStep[]
+  visitPathIndex?: number
+  onVisitSelect?: (index: number) => void
+  mapExpanded?: boolean
 }
 
-const LEFT_X = 48
+const LEFT_X = mapLeftX()
 /** İlk N görünür; kalan 1–2 ise hepsini göster, kalan ≥3 ise +N collapsed */
 const MAX_VISIBLE_PER_LAYER = 4
 const MIN_COLLAPSE_COUNT = 3
@@ -96,6 +102,10 @@ type MethodBadgeData = {
   serviceId: string
   count: number
   expanded: boolean
+}
+
+function MapLeftPadView() {
+  return <div className="map-left-pad" aria-hidden />
 }
 
 function ServiceNodeView({ data }: NodeProps<ServiceNodeData>) {
@@ -178,6 +188,7 @@ function MethodBadgeView({ data }: NodeProps<MethodBadgeData>) {
 const nodeTypes = {
   serviceNode: memo(ServiceNodeView),
   methodBadge: memo(MethodBadgeView),
+  mapLeftPad: memo(MapLeftPadView),
 }
 
 const BADGE_GAP = 14
@@ -511,7 +522,32 @@ function buildGraph(
   const centerY = 40 + ((rowCount - 1) * rowGap) / 2
   const colPitch = nodeW + colGap
 
+  /** Sol panel için görünmez pad — fitView bbox’ına girer, kamera kaydırılmaz */
   const nodes: Node<ServiceNodeData>[] = [
+    {
+      id: '__map-left-pad',
+      type: 'mapLeftPad',
+      data: {
+        label: '',
+        fullLabel: '',
+        showTip: false,
+        size,
+        kind: 'collapsed',
+        hop: 0,
+      },
+      position: { x: 0, y: centerY },
+      style: {
+        width: MAP_INFO_PANEL_RESERVE,
+        height: 24,
+        padding: 0,
+        border: 'none',
+        background: 'transparent',
+      },
+      draggable: false,
+      selectable: false,
+      connectable: false,
+      focusable: false,
+    },
     {
       id: center.id,
       type: 'serviceNode',
@@ -713,7 +749,17 @@ export function ImpactMap({
   onPivotForward,
   canPivotBack = false,
   canPivotForward = false,
+  visitPath = [],
+  visitPathIndex = -1,
+  onVisitSelect,
+  mapExpanded = false,
 }: Props) {
+  const [infoPanelOpen, setInfoPanelOpen] = useState(mapExpanded)
+
+  useEffect(() => {
+    setInfoPanelOpen(mapExpanded)
+  }, [mapExpanded])
+
   const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set())
   const [visibleMaxHop, setVisibleMaxHop] = useState(1)
   const [projectFilter, setProjectFilter] = useState('')
@@ -907,7 +953,10 @@ export function ImpactMap({
 
       if (showLinkedMethods) {
         for (const n of out) {
-          if (n.data.kind !== 'center' && n.data.kind !== 'service') continue
+          const d = n.data
+          if (!('kind' in d) || (d.kind !== 'center' && d.kind !== 'service')) {
+            continue
+          }
           const count = (methodsByService[n.id] ?? []).length
           if (!count) continue
           out.push({
@@ -1048,12 +1097,6 @@ export function ImpactMap({
       const targetId = node.id
       const fromCenterId = graph.center.id
 
-      // Varsayılan düzen: morph yok — Hizala + ekrana sığdır etkisi pivot sonrası gelir
-      if (!layoutDirtyRef.current) {
-        onPivot(targetId)
-        return
-      }
-
       const inst = rfInstance.current
       if (!inst) {
         onPivot(targetId)
@@ -1076,9 +1119,9 @@ export function ImpactMap({
 
       inst.setCenter(nodeFocusX(targetNode), nodeFocusY(targetNode), {
         zoom: inst.getZoom(),
-        duration: 360,
+        duration: 320,
       })
-      await waitMs(360)
+      await waitMs(320)
       if (pivotAnimRef.current !== animId) return
 
       const centerStart = { ...centerNode.position }
@@ -1136,7 +1179,7 @@ export function ImpactMap({
                 }
               }
               if (n.type === 'methodBadge') {
-                const sid = (n.data as MethodBadgeData).serviceId
+                const sid = (n.data as unknown as MethodBadgeData).serviceId
                 const parent = posById.get(sid)
                 if (parent) {
                   return {
@@ -1176,6 +1219,7 @@ export function ImpactMap({
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
+      if (node.id === '__map-left-pad') return
       if (pivotMorphingRef.current) return
       if (nodeDragged.current) {
         nodeDragged.current = false
@@ -1301,25 +1345,6 @@ export function ImpactMap({
           hop1EmptyButDeeper={filter.hop1EmptyButDeeper}
         />
       )}
-      <BlastRadiusSummary
-        centerId={graph.center.id}
-        nodes={graph.nodes}
-        parents={parents}
-        projectLabels={projectLabels}
-        matchIds={projectFilter ? filter.matchIds : null}
-        bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
-        filterLabel={filterLabel || undefined}
-        truncated={graph.truncated}
-      />
-      <PathBreadcrumb
-        centerId={graph.center.id}
-        focusId={breadcrumbFocus}
-        parents={parents}
-        nameById={nameById}
-        onSelect={(id) =>
-          id === graph.center.id ? onClearCenter?.() : onPivot(id)
-        }
-      />
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
@@ -1334,12 +1359,6 @@ export function ImpactMap({
         }}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        fitView
-        fitViewOptions={{
-          padding: layout.fitPadding,
-          minZoom: layout.minZoom,
-          maxZoom: layout.maxZoom,
-        }}
         nodesDraggable
         nodeDragThreshold={4}
         selectNodesOnDrag={false}
@@ -1368,11 +1387,35 @@ export function ImpactMap({
           layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}`}
           layout={layout}
         />
+        <MapInfoPanel
+          center={graph.center}
+          projectLabel={
+            projectLabels.get(graph.center.projectId) ?? graph.center.projectId
+          }
+          centerId={graph.center.id}
+          nodes={graph.nodes}
+          parents={parents}
+          projectLabels={projectLabels}
+          matchIds={projectFilter ? filter.matchIds : null}
+          bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
+          filterLabel={filterLabel || undefined}
+          truncated={graph.truncated}
+          visitPath={visitPath}
+          visitPathIndex={visitPathIndex}
+          onVisitSelect={(i) => onVisitSelect?.(i)}
+          focusId={breadcrumbFocus}
+          nameById={nameById}
+          onHoverPathSelect={(id) =>
+            id === graph.center.id ? onClearCenter?.() : onPivot(id)
+          }
+          open={infoPanelOpen}
+          onOpenChange={setInfoPanelOpen}
+        />
         <Background gap={22} color="#e4e0d6" />
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
-          fitPadding={layout.fitPadding}
+          layout={layout}
           truncated={graph.truncated}
           onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
           onExpandLayer={() =>

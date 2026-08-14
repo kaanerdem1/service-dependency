@@ -653,7 +653,7 @@ export function MethodImpactMap({
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
-          fitPadding={layout.fitPadding}
+          layout={layout}
           truncated={graph.truncated}
           onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
           onExpandLayer={() =>

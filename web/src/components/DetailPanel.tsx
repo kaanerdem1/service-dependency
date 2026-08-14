@@ -197,7 +197,7 @@ export function DetailPanel({
             <dd className="mono">{service.packageId}</dd>
           </div>
           <div>
-            <dt>Downstream</dt>
+            <dt>Çağıranlar</dt>
             <dd>{service.affectedCount}</dd>
           </div>
         </dl>
@@ -243,19 +243,19 @@ export function DetailPanel({
         {tab === 'relations' && (
           <>
             <p className="hint-sm entity-tab-hint">
-              Downstream = beni çağıranlar · Upstream = çağırdıklarım. Satıra tıklayınca
+              Bu Servisi Çağıranlar · Bu Servisin Çağırdıkları. Satıra tıklayınca
               pivot.
             </p>
             <NeighborMiniList
-              title="Downstream"
+              title="Bu Servisi Çağıranlar"
               items={downstream}
               empty="Bu servisi çağıran yok."
               onPivot={onPivot}
             />
             <NeighborMiniList
-              title="Upstream"
+              title="Bu Servisin Çağırdıkları"
               items={upstream}
-              empty="Bağımlılık beyanı yok."
+              empty="Çağırdığı servis yok."
               onPivot={onPivot}
             />
           </>

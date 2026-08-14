@@ -1,13 +1,13 @@
 /**
- * “Bağımlılıklar” sekmesi: Downstream (onay) + Upstream (çağırdıklarım).
+ * “İlişkiler” sekmesi: Bu Servisi Çağıranlar + Bu Servisin Çağırdıkları.
  * Satıra tıklayınca pivot değişir.
  */
 import type { AffectedService } from '../types'
 
 type Props = {
-  /** Beni çağıranlar — onay kapsamı */
+  /** Bu servisi çağıranlar — onay kapsamı */
   downstream: AffectedService[]
-  /** Çağırdıklarım — katalog bilgisi */
+  /** Bu servisin çağırdıkları */
   upstream: AffectedService[]
   loading?: boolean
   onPivot: (serviceId: string) => void
@@ -80,19 +80,19 @@ export function AffectedList({ downstream, upstream, loading, onPivot }: Props) 
   return (
     <div className="neighbor-grid">
       <Column
-        title="Downstream"
-        subtitle="Beni çağıranlar (etkilenenler)"
+        title="Bu Servisi Çağıranlar"
+        subtitle="Downstream · etkilenenler / onay"
         badge="down"
         items={downstream}
         empty="Bu servisi çağıran yok."
         onPivot={onPivot}
       />
       <Column
-        title="Upstream"
-        subtitle="Çağırdıklarım (bağımlılıklar)"
+        title="Bu Servisin Çağırdıkları"
+        subtitle="Upstream · bağımlılıklar"
         badge="up"
         items={upstream}
-        empty="Bağımlılık beyanı yok."
+        empty="Çağırdığı servis yok."
         onPivot={onPivot}
       />
     </div>

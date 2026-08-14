@@ -1,6 +1,6 @@
-1- Etki özeti (servis · ekip · proje) — seçili servise göre haritanın solunda bilgi kutusu
+1- [x] Etki özeti (servis · ekip · proje) — seçili servise göre haritanın solunda bilgi kutusu
 
-2- Ziyaret yolu — başlangıç servis/method ve tıklanarak gidilen yol dikey ağaç
+2- [x] Ziyaret yolu — başlangıç servis/method ve tıklanarak gidilen yol dikey ağaç
 
 3- Servislere not ekleme
 
