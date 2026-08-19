@@ -10,6 +10,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   Handle,
   MarkerType,
   Position,
@@ -33,7 +34,7 @@ import {
   type MapLayoutMode,
 } from '../impact/mapLayout'
 import type { MethodImpactGraph, MethodRef } from '../types'
-import { MapCanvasBar, MapViewportSync } from './ImpactChrome'
+import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from './ImpactChrome'
 
 type Props = {
   graph: MethodImpactGraph
@@ -127,8 +128,7 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
             )}
             {isCollapsed && (
               <span className="dd-node-hop">
-                genişlet · {data.count}{' '}
-                {data.kind === 'collapsed' ? 'öğe' : ''}
+                Aç · {data.count} öğe daha
               </span>
             )}
           </>
@@ -339,8 +339,8 @@ function buildLayeredMap(
         id: collapseId,
         type: 'methodNode',
         data: {
-          label: `+${hidden.length} daha`,
-          fullLabel: `+${hidden.length} daha`,
+          label: `+${hidden.length} servis daha`,
+          fullLabel: `+${hidden.length} servis daha`,
           showTip: false,
           size,
           sub: `${hop}. katman`,
@@ -722,13 +722,19 @@ export function MethodImpactMap({
         }}
         proOptions={{ hideAttribution: true }}
       >
+        <RadialLabelZoomSync />
         <MapViewportSync
           centerId={centerNodeId}
           visibleMaxHop={visibleMaxHop}
           layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}-${layoutMode}-${tidyNonce}`}
           layout={layout}
         />
-        <Background gap={22} color="#e4e0d6" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={18}
+          size={1.55}
+          color="#bdb6aa"
+        />
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}

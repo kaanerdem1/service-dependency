@@ -84,10 +84,96 @@ export function mapLayoutForRadial(): MapLayout {
     colGap: 300,
     rowGap: 112,
     tipChars: 28,
-    minZoom: 0.18,
+    minZoom: 0.45,
     maxZoom: 1.4,
     fitPadding: 0.18,
   }
+}
+
+const RADIAL_LABEL_MAX_W = 156
+const RADIAL_LABEL_CHAR_W = 6.9
+const RADIAL_LABEL_LINE_H = 15.4
+const RADIAL_LABEL_GAP = 12
+
+export function radialLabelMetrics(name: string, isCenter: boolean): {
+  w: number
+  h: number
+} {
+  const text = name.trim() || '·'
+  const extra = isCenter ? 12 : 0
+  const maxW = isCenter ? 188 : RADIAL_LABEL_MAX_W
+  const raw = text.length * RADIAL_LABEL_CHAR_W
+  const lines = Math.min(3, Math.max(1, Math.ceil(raw / maxW)))
+  const w = Math.min(maxW, Math.max(28, raw / lines))
+  const h = lines * RADIAL_LABEL_LINE_H + extra
+  return { w, h }
+}
+
+export function radialLabelBox(
+  cx: number,
+  cy: number,
+  side: RadialLabelSide,
+  name: string,
+  isCenter: boolean,
+): { x: number; y: number; w: number; h: number } {
+  const { w, h } = radialLabelMetrics(name, isCenter)
+  const g = RADIAL_LABEL_GAP
+  if (side === 'east') return { x: cx + g, y: cy - h / 2, w, h }
+  if (side === 'west') return { x: cx - g - w, y: cy - h / 2, w, h }
+  if (side === 'above') return { x: cx - w / 2, y: cy - g - h, w, h }
+  return { x: cx - w / 2, y: cy + g, w, h }
+}
+
+function rectsHit(
+  a: { x: number; y: number; w: number; h: number },
+  b: { x: number; y: number; w: number; h: number },
+  pad: number,
+): boolean {
+  return !(
+    a.x + a.w + pad <= b.x ||
+    b.x + b.w + pad <= a.x ||
+    a.y + a.h + pad <= b.y ||
+    b.y + b.h + pad <= a.y
+  )
+}
+
+/** Çakışan halka etiketleri — merkez ve düşük hop öncelikli; gizlenenler hover’da */
+export function occludedRadialLabelIds(
+  items: {
+    id: string
+    hop: number
+    kind: string
+    cx: number
+    cy: number
+    angle: number
+    name: string
+  }[],
+): Set<string> {
+  const hidden = new Set<string>()
+  const kept: { x: number; y: number; w: number; h: number }[] = []
+  for (const it of items) {
+    const d = 10
+    kept.push({ x: it.cx - d / 2, y: it.cy - d / 2, w: d, h: d })
+  }
+  const ranked = [...items].sort((a, b) => {
+    const pa = a.kind === 'center' ? -1 : a.hop
+    const pb = b.kind === 'center' ? -1 : b.hop
+    if (pa !== pb) return pa - pb
+    return a.name.length - b.name.length
+  })
+  for (const it of ranked) {
+    const isCenter = it.kind === 'center'
+    const side = radialLabelSide(it.angle, isCenter)
+    const box = radialLabelBox(it.cx, it.cy, side, it.name, isCenter)
+    if (isCenter) {
+      kept.push(box)
+      continue
+    }
+    const hit = kept.some((k) => rectsHit(box, k, 5))
+    if (hit) hidden.add(it.id)
+    else kept.push(box)
+  }
+  return hidden
 }
 
 /** Hop halkası merkez yarıçapı — daire + ışın etiketi sığsın */
@@ -428,14 +514,8 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   return { nodes: next, rings, cx, cy }
 }
 
-/**
- * Sol bilgi paneli için fitView bbox’ına dahil edilen görünmez pad genişliği.
- * Kamera kaydırılmaz — pad düğümü boşluğu grafikte tutar.
- */
-export const MAP_INFO_PANEL_RESERVE = 280
-
 export function mapLeftX(): number {
-  return 48 + MAP_INFO_PANEL_RESERVE
+  return 48
 }
 
 /** fitView kenar boşluğu */

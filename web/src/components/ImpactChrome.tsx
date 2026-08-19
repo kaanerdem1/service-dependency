@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useCallback, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
-import { Panel, useReactFlow } from 'reactflow'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
-import { fitViewPaddingForLayout } from '../impact/mapLayout'
+import { fitViewPaddingForLayout, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
 import {
   animateViewport,
   easeInOutCubic,
@@ -73,7 +73,7 @@ export function MapViewportSync({
           return
         }
 
-        // Katman aç/kapa ve merkez: fitView — sol pad sayesinde özet kartının altına girmez
+        // Katman / drawer / boyut: fitView
         await rf.fitView({
           ...fitOpts,
           duration: centerChanged ? 320 : hopChanged ? 360 : 280,
@@ -83,7 +83,95 @@ export function MapViewportSync({
     return () => window.clearTimeout(id)
   }, [centerId, visibleMaxHop, layoutKey, layout, rf])
 
+  const paneW = useStore((s) => s.width)
+  const paneH = useStore((s) => s.height)
+  const prevPane = useRef(`${Math.round(paneW)}x${Math.round(paneH)}`)
+
+  useEffect(() => {
+    const next = `${Math.round(paneW)}x${Math.round(paneH)}`
+    const prev = prevPane.current
+    if (prev === next) return
+    const [pw, ph] = prev.split('x').map(Number)
+    prevPane.current = next
+    if (!pw || (Math.abs(pw - paneW) < 20 && Math.abs(ph - paneH) < 20)) return
+    const padding = fitViewPaddingForLayout(layout)
+    const id = window.setTimeout(() => {
+      void rf.fitView({
+        padding,
+        minZoom: layout.minZoom,
+        maxZoom: layout.maxZoom,
+        duration: 240,
+      })
+    }, 100)
+    return () => window.clearTimeout(id)
+  }, [paneW, paneH, layout, rf])
+
   return null
+}
+
+/** Halka: çakışan isimleri gizle; hover / odakta geri getir. */
+export function RadialLabelZoomSync() {
+  const rf = useReactFlow()
+  const probe = useRef<HTMLSpanElement>(null)
+  const sig = useStore((s) => {
+    const internals = (
+      s as unknown as {
+        nodeInternals?: Map<
+          string,
+          { id: string; position: { x: number; y: number }; data?: Record<string, unknown> }
+        >
+      }
+    ).nodeInternals
+    if (!internals) return `z${s.transform[2]}`
+    let out = `${internals.size}:${s.transform[2].toFixed(2)}`
+    internals.forEach((n) => {
+      const d = n.data
+      if (!d || d.radialDot !== true) return
+      out += `|${n.id}:${n.position.x | 0}:${n.position.y | 0}`
+    })
+    return out
+  })
+  useLayoutEffect(() => {
+    const nodes = rf.getNodes()
+    const items = nodes.flatMap((n) => {
+      const d = n.data as {
+        radialDot?: boolean
+        hop?: number
+        kind?: string
+        radialAngle?: number
+        radialCx?: number
+        radialCy?: number
+        fullLabel?: string
+        label?: string
+      }
+      if (!d?.radialDot) return []
+      const mid = RADIAL_HIT / 2
+      const cx = n.position.x + mid
+      const cy = n.position.y + mid
+      const angle =
+        typeof d.radialCx === 'number' && typeof d.radialCy === 'number'
+          ? Math.atan2(cy - d.radialCy, cx - d.radialCx)
+          : (d.radialAngle ?? 0)
+      return [
+        {
+          id: n.id,
+          hop: d.hop ?? 1,
+          kind: d.kind ?? 'service',
+          cx,
+          cy,
+          angle,
+          name: String(d.fullLabel || d.label || ''),
+        },
+      ]
+    })
+    const hidden = occludedRadialLabelIds(items)
+    const root = probe.current?.closest('.dd-map')
+    root?.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
+      const id = el.getAttribute('data-id') ?? ''
+      el.classList.toggle('radial-label-occluded', hidden.has(id))
+    })
+  }, [sig, rf])
+  return <span ref={probe} className="dd-radial-zoom-probe" hidden aria-hidden />
 }
 
 type LegendProps = {
@@ -118,16 +206,34 @@ export function PathBreadcrumb({
   if (!path) {
     if (layout === 'tree') {
       return (
-        <p className="map-info-hint" aria-live="polite">
-          Bir servisin üzerine gel — ana etki yolu (via zinciri) burada
-        </p>
+        <div className="map-info-empty" aria-live="polite">
+          <span className="map-info-empty-icon" aria-hidden>
+            <svg viewBox="0 0 24 24" width="22" height="22">
+              <circle cx="6" cy="12" r="2.2" fill="currentColor" />
+              <circle cx="18" cy="12" r="2.2" fill="currentColor" />
+              <path
+                d="M8.4 12h7.2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <p className="map-info-empty-title">Etki yolunu görün</p>
+          <p className="map-info-empty-cta">
+            Haritada bir servisin üzerine gelin. Merkezden o servise giden yol
+            burada listelenir.
+          </p>
+        </div>
       )
     }
     return (
       <div className="path-breadcrumb is-idle" aria-live="polite">
         <span className="path-bc-label">Yol</span>
         <span className="path-bc-hint">
-          Bir servisin üzerine gel — ana etki yolu (via zinciri) burada
+          Haritada bir servisin üzerine gelin — merkezden o servise giden yol
+          burada görünür.
         </span>
       </div>
     )
@@ -288,7 +394,7 @@ type MapInfoPanelProps = {
   onOpenChange: (open: boolean) => void
 }
 
-/** Harita sol overlay: etki özeti + ziyaret yolu + hover via yolu */
+/** Harita sağ sütun: etki özeti + ziyaret yolu + hover via yolu */
 export function MapInfoPanel({
   center,
   projectLabel,
@@ -324,180 +430,103 @@ export function MapInfoPanel({
   const filtered = Boolean(matchIds && filterLabel)
   const team = center.owner?.team?.trim()
   const ownerName = center.owner?.name?.trim()
-  const [panelOffset, setPanelOffset] = useState({ x: 12, y: 12 })
-  const dragRef = useRef<{
-    startX: number
-    startY: number
-    origX: number
-    origY: number
-  } | null>(null)
-
-  const onDragPointerDown = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      if (e.button !== 0) return
-      e.preventDefault()
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        origX: panelOffset.x,
-        origY: panelOffset.y,
-      }
-      e.currentTarget.setPointerCapture(e.pointerId)
-    },
-    [panelOffset.x, panelOffset.y],
-  )
-
-  const onDragPointerMove = useCallback(
-    (e: ReactPointerEvent<HTMLDivElement>) => {
-      if (!dragRef.current) return
-      const dx = e.clientX - dragRef.current.startX
-      const dy = e.clientY - dragRef.current.startY
-      setPanelOffset({
-        x: Math.max(4, dragRef.current.origX + dx),
-        y: Math.max(4, dragRef.current.origY + dy),
-      })
-    },
-    [],
-  )
-
-  const onDragPointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    dragRef.current = null
-    e.currentTarget.releasePointerCapture(e.pointerId)
-  }, [])
 
   return (
-    <Panel
-      position="top-left"
-      className="map-info-panel"
-      style={{
-        margin: 0,
-        transform: `translate(${panelOffset.x}px, ${panelOffset.y}px)`,
-      }}
+    <aside
+      className={`map-info-drawer${open ? '' : ' is-collapsed'}`}
+      aria-label="Etki özeti"
     >
-      <div className={`map-info-card${open ? '' : ' is-collapsed'}`}>
-        <div
-          className="map-info-drag-bar"
-          role="presentation"
-          aria-label="Paneli taşı"
-          onPointerDown={onDragPointerDown}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={onDragPointerUp}
-          onPointerCancel={onDragPointerUp}
+      <div className="map-info-drawer-head">
+        <h4 className="map-info-drawer-title">Etki özeti</h4>
+        <button
+          type="button"
+          className="nav-toggle"
+          title={open ? 'Özeti gizle' : 'Etki özetini göster'}
+          aria-label={open ? 'Etki özetini gizle' : 'Etki özetini göster'}
+          aria-expanded={open}
+          onClick={() => onOpenChange(!open)}
         >
-          <span className="map-info-drag-grip" aria-hidden />
-        </div>
-
-        <section
-          className={`map-info-section map-info-impact${open ? ' is-open' : ' is-collapsed'}`}
-          aria-label="Etki özeti"
-        >
-          <div className="map-info-section-head">
-            <h4 className="map-info-heading">Etki özeti</h4>
-            {!open && (
-              <span
-                className="map-info-collapsed-name name-tip"
+          {open ? '›' : '‹'}
+        </button>
+      </div>
+      {open && (
+        <div className="map-info-drawer-body">
+          <section className="map-info-section map-info-impact is-open">
+            <div className="map-info-focus">
+              <span className="map-info-focus-label">Seçilen Servis</span>
+              <strong
+                className="map-info-focus-name name-tip"
                 data-tip={center.name}
                 title={center.name}
               >
                 {center.name}
-              </span>
-            )}
-            <button
-              type="button"
-              className="map-info-collapse-btn"
-              aria-expanded={open}
-              aria-label={open ? 'Bilgi panelini daralt' : 'Bilgi panelini genişlet'}
-              onClick={() => onOpenChange(!open)}
-            >
-              <span className="map-info-collapse-icon" aria-hidden>
-                {open ? '−' : '+'}
-              </span>
-            </button>
-          </div>
-          {open && (
-            <div className="map-info-collapse-body">
-              <div className="map-info-collapse-inner">
-                <div className="map-info-focus">
-                  <span className="map-info-focus-label">Seçilen Servis</span>
-                  <strong
-                    className="map-info-focus-name name-tip"
-                    data-tip={center.name}
-                    title={center.name}
-                  >
-                    {center.name}
-                  </strong>
-                  {(team || ownerName) && (
-                    <span className="map-info-focus-meta">
-                      {[team, ownerName].filter(Boolean).join(' · ')}
-                    </span>
-                  )}
-                  <span className="map-info-focus-meta">{projectLabel}</span>
-                </div>
-                <dl className="map-info-stats">
-                  <div className="map-info-stat">
-                    <dt>
-                      {filtered ? 'Eşleşen (1. katman)' : 'Doğrudan bağlı'}
-                    </dt>
-                    <dd>{stats.hop1Count}</dd>
-                  </div>
-                  <div className="map-info-stat">
-                    <dt title="Hop 2 ve sonrası — doğrudan bağlıların dışındaki etkilenenler">
-                      Dolaylı etkilenen
-                    </dt>
-                    <dd>
-                      {Math.max(0, stats.serviceCount - stats.hop1Count)}
-                    </dd>
-                  </div>
-                  {stats.maxHop > 0 && (
-                    <div className="map-info-stat">
-                      <dt>Derinlik</dt>
-                      <dd>{stats.maxHop} katman</dd>
-                    </div>
-                  )}
-                  {filtered && bridgeCount > 0 && (
-                    <div className="map-info-stat">
-                      <dt>Ara yol</dt>
-                      <dd>{bridgeCount}</dd>
-                    </div>
-                  )}
-                  {truncated && (
-                    <div className="map-info-stat map-info-stat-warn">
-                      <dt>Görünüm</dt>
-                      <dd>kısaltıldı</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
+              </strong>
+              {(team || ownerName) && (
+                <span className="map-info-focus-meta">
+                  {[team, ownerName].filter(Boolean).join(' · ')}
+                </span>
+              )}
+              <span className="map-info-focus-meta">{projectLabel}</span>
             </div>
-          )}
-        </section>
+            <dl className="map-info-stats">
+              <div className="map-info-stat">
+                <dt>
+                  {filtered ? 'Eşleşen (1. katman)' : 'Doğrudan bağlı'}
+                </dt>
+                <dd>{stats.hop1Count}</dd>
+              </div>
+              <div className="map-info-stat">
+                <dt title="Hop 2 ve sonrası — doğrudan bağlıların dışındaki etkilenenler">
+                  Dolaylı etkilenen
+                </dt>
+                <dd>
+                  {Math.max(0, stats.serviceCount - stats.hop1Count)}
+                </dd>
+              </div>
+              {stats.maxHop > 0 && (
+                <div className="map-info-stat">
+                  <dt>Derinlik</dt>
+                  <dd>{stats.maxHop} katman</dd>
+                </div>
+              )}
+              {filtered && bridgeCount > 0 && (
+                <div className="map-info-stat">
+                  <dt>Ara yol</dt>
+                  <dd>{bridgeCount}</dd>
+                </div>
+              )}
+              {truncated && (
+                <div className="map-info-stat map-info-stat-warn">
+                  <dt>Görünüm</dt>
+                  <dd>kısaltıldı</dd>
+                </div>
+              )}
+            </dl>
+          </section>
 
-        {open && (
-          <div className="map-info-extra-sections">
-            <section className="map-info-section" aria-label="Ziyaret yolu">
-              <h4 className="map-info-heading">Ziyaret yolu</h4>
-              <VisitPathTree
-                steps={visitPath}
-                currentIndex={visitPathIndex}
-                onSelect={onVisitSelect}
-              />
-            </section>
+          <section className="map-info-section" aria-label="Ziyaret yolu">
+            <h4 className="map-info-heading">Ziyaret yolu</h4>
+            <VisitPathTree
+              steps={visitPath}
+              currentIndex={visitPathIndex}
+              onSelect={onVisitSelect}
+            />
+          </section>
 
-            <section className="map-info-section" aria-label="Ana etki yolu">
-              <h4 className="map-info-heading">Ana etki yolu</h4>
-              <PathBreadcrumb
-                centerId={centerId}
-                focusId={focusId}
-                parents={parents}
-                nameById={nameById}
-                layout="tree"
-                onSelect={onHoverPathSelect}
-              />
-            </section>
-          </div>
-        )}
-      </div>
-    </Panel>
+          <section className="map-info-section" aria-label="Ana etki yolu">
+            <h4 className="map-info-heading">Ana etki yolu</h4>
+            <PathBreadcrumb
+              centerId={centerId}
+              focusId={focusId}
+              parents={parents}
+              nameById={nameById}
+              layout="tree"
+              onSelect={onHoverPathSelect}
+            />
+          </section>
+        </div>
+      )}
+    </aside>
   )
 }
 
@@ -653,6 +682,7 @@ function DockBtn({
         type="button"
         className={`map-dock-btn${pressed ? ' is-pressed' : ''}`}
         disabled={disabled}
+        title={label}
         aria-label={label}
         aria-pressed={pressed}
         onClick={(e) => {
@@ -712,17 +742,26 @@ function IconFit() {
 function IconNeighbors() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-      <circle cx="4.3" cy="8" r="2.05" fill="currentColor" />
-      <circle cx="12.3" cy="3.7" r="1.3" fill="currentColor" />
-      <circle cx="12.3" cy="8" r="1.3" fill="currentColor" />
-      <circle cx="12.3" cy="12.3" r="1.3" fill="currentColor" />
+      <circle cx="4.2" cy="8" r="2.1" fill="currentColor" />
+      <circle cx="12.2" cy="8" r="2.1" fill="currentColor" />
       <path
-        d="M6.3 8h4.4M6.2 7.15L11 4.3M6.2 8.85L11 11.7"
+        d="M6.4 8h3.4"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.15"
+        strokeWidth="1.3"
         strokeLinecap="round"
       />
+      <text
+        x="12.2"
+        y="9.15"
+        textAnchor="middle"
+        fill="#fffcf7"
+        fontSize="6.2"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+      >
+        1
+      </text>
     </svg>
   )
 }
@@ -972,22 +1011,27 @@ export function MapCanvasBar({
           role="toolbar"
           aria-label="Harita araçları"
         >
-          <button
-            type="button"
-            className="map-dock-grip"
-            aria-label="Dock’u sürükle — kenara çekince dikey; çift tık yön değiştir"
-            title="Sürükle · çift tık: yatay/dikey"
-            onPointerDown={onGripPointerDown}
-            onPointerMove={onGripPointerMove}
-            onPointerUp={onGripPointerUp}
-            onPointerCancel={onGripPointerUp}
-            onDoubleClick={(e) => {
-              e.preventDefault()
-              setOrient((o) => (o === 'h' ? 'v' : 'h'))
-            }}
-          >
-            <span aria-hidden>⋮⋮</span>
-          </button>
+          <span className="map-dock-wrap">
+            <button
+              type="button"
+              className="map-dock-grip"
+              aria-label="Araç çubuğunu sürükle. Kenara çekince dikey; çift tık yön değiştir"
+              title="Sürükle · çift tık: yatay / dikey"
+              onPointerDown={onGripPointerDown}
+              onPointerMove={onGripPointerMove}
+              onPointerUp={onGripPointerUp}
+              onPointerCancel={onGripPointerUp}
+              onDoubleClick={(e) => {
+                e.preventDefault()
+                setOrient((o) => (o === 'h' ? 'v' : 'h'))
+              }}
+            >
+              <span aria-hidden>⋮⋮</span>
+            </button>
+            <span className="map-dock-tip" role="tooltip">
+              Sürükle · çift tık yatay/dikey
+            </span>
+          </span>
 
           <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
             <IconZoomOut />
@@ -1036,7 +1080,7 @@ export function MapCanvasBar({
           <span className="map-dock-sep" aria-hidden />
 
           <DockBtn
-            label="Sadece komşular — 1. katman"
+            label="Sadece 1. katman — doğrudan komşular"
             disabled={!canCollapse}
             onClick={onCollapseAll}
           >
@@ -1052,12 +1096,16 @@ export function MapCanvasBar({
           <span className="map-dock-wrap">
             <span
               className="map-dock-hop"
+              title={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable} — 1 doğrudan komşu, sonrası dolaylı`}
               aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
             >
-              {visibleMaxHop}/{maxHopAvailable}
+              <span className="map-dock-hop-kicker">Katman</span>
+              <span className="map-dock-hop-count">
+                {visibleMaxHop}/{maxHopAvailable}
+              </span>
             </span>
             <span className="map-dock-tip" role="tooltip">
-              Görünen katman {visibleMaxHop} / {maxHopAvailable}
+              Katman {visibleMaxHop} / {maxHopAvailable} görünür
             </span>
           </span>
           <DockBtn
@@ -1072,7 +1120,7 @@ export function MapCanvasBar({
             <IconLayerForward />
           </DockBtn>
           <DockBtn
-            label="Tüm katmanları aç"
+            label="Tüm etki zincirini aç"
             disabled={!canExpand}
             onClick={onExpandAll}
           >
@@ -1086,6 +1134,7 @@ export function MapCanvasBar({
               type="button"
               className="map-dock-btn map-dock-info"
               aria-label="Ok anlamları"
+              title="Ok anlamları"
               aria-describedby="map-legend-pop"
             >
               i
@@ -1096,13 +1145,13 @@ export function MapCanvasBar({
                 <span className="path-legend-item">
                   <span className="legend-swatch tree" aria-hidden />
                   <span>
-                    <strong>Yeşil</strong> — ana etki yolu (değişen → etkilenen)
+                    <strong>Yeşil</strong> — odak ve ana etki yolu
                   </span>
                 </span>
                 <span className="path-legend-item">
                   <span className="legend-swatch cascade" aria-hidden />
                   <span>
-                    <strong>Turuncu</strong> — yan bağ
+                    <strong>Kehribar</strong> — yan bağ (asıl yol değil)
                     {typeof cascadeCount === 'number' && cascadeCount > 0
                       ? ` · ${cascadeCount}`
                       : ''}
@@ -1141,13 +1190,13 @@ export function ImpactLegend({ cascadeCount, truncated }: LegendProps) {
           <span className="path-legend-item">
             <span className="legend-swatch tree" aria-hidden />
             <span>
-              <strong>Yeşil</strong> — ana etki yolu (değişen → etkilenen)
+              <strong>Yeşil</strong> — odak ve ana etki yolu
             </span>
           </span>
           <span className="path-legend-item">
             <span className="legend-swatch cascade" aria-hidden />
             <span>
-              <strong>Turuncu</strong> — yan bağ
+              <strong>Kehribar</strong> — yan bağ (asıl yol değil)
               {typeof cascadeCount === 'number' && cascadeCount > 0
                 ? ` · ${cascadeCount}`
                 : ''}

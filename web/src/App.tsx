@@ -15,33 +15,24 @@ import {
   projectsInImpact,
 } from './impact/projectFilter'
 import { AffectedList } from './components/AffectedList'
-import { InboxPanel } from './components/InboxPanel'
 import { ImpactMap } from './components/ImpactMap'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
-import { RequestDetailModal } from './components/RequestDetailModal'
 import {
-  getChangeRequest,
   getImpactGraph,
-  getInbox,
   getMethodImpactGraph,
   getModuleTree,
   getNeighbors,
   getService,
   getSessionUsers,
-  markInboxRead,
   searchMethods,
   searchServices,
 } from './api/client'
 import type { SessionUser } from './mock/session'
-import { roleLabel } from './auth/permissions'
 import type {
   AffectedService,
-  ChangeRequest,
   ImpactGraph,
-  ImpactedFlag,
-  InboxNotification,
   MethodImpactGraph,
   MethodRef,
   ModuleNode,
@@ -68,7 +59,6 @@ function visitEntry(id: string, view?: Partial<Omit<VisitEntry, 'id'>>): VisitEn
 
 export default function App() {
   const [tree, setTree] = useState<ModuleNode[]>([])
-  const [sessionUsers, setSessionUsers] = useState<SessionUser[]>([])
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
   const [methodHits, setMethodHits] = useState<MethodRef[]>([])
@@ -86,6 +76,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map')
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
+  const [navOpen, setNavOpen] = useState(true)
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
     null,
   )
@@ -93,19 +84,7 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null)
 
   const [session, setSession] = useState<SessionUser>()
-  const [inboxActions, setInboxActions] = useState<{ request: ChangeRequest; row: ImpactedFlag }[]>([])
-  const [inboxUpdates, setInboxUpdates] = useState<InboxNotification[]>([])
-  const [inboxPending, setInboxPending] = useState(0)
-  const [showInbox, setShowInbox] = useState(false)
-  const [openRequest, setOpenRequest] = useState<ChangeRequest>()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
-
-  const refreshInbox = useCallback(async (ownerId: string) => {
-    const data = await getInbox(ownerId)
-    setInboxActions(data.actions)
-    setInboxUpdates(data.updates)
-    setInboxPending(data.pending)
-  }, [])
 
   useEffect(() => {
     void (async () => {
@@ -116,7 +95,6 @@ export default function App() {
           searchServices(''),
         ])
         setTree(modules)
-        setSessionUsers(users)
         setSession(users[0])
         setCatalogServices(catalog)
         setApiError(undefined)
@@ -154,11 +132,6 @@ export default function App() {
       cancelled = true
     }
   }, [selectedMethodId])
-
-  useEffect(() => {
-    if (!session) return
-    void refreshInbox(session.id).catch(() => undefined)
-  }, [session, refreshInbox])
 
   useEffect(() => {
     if (!pivotId) {
@@ -330,11 +303,6 @@ export default function App() {
     [historyIndex],
   )
 
-  const openExisting = async (id: string) => {
-    const cr = await getChangeRequest(id)
-    setOpenRequest(cr)
-  }
-
   const breadcrumb = historyIndex >= 0 ? history.slice(0, historyIndex + 1) : []
   const currentVisit =
     historyIndex >= 0 && historyIndex < history.length
@@ -349,108 +317,101 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">SD</span>
-          <div>
-            <strong>Service Dependency</strong>
-          </div>
-        </div>
-        <label className="search">
-          <span className="sr-only">Servis veya method ara</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Servis veya method ara…"
-          />
-          {query && (hits.length > 0 || methodHits.length > 0) && (
-            <ul className="search-hits">
-              {hits.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      selectPivot(s.id, { resetHistory: true })
-                      setQuery('')
-                    }}
-                  >
-                    <span className="search-hit-text">
-                      <strong>{s.name}</strong>
-                    </span>
-                    <span className="hit-tag hit-tag-service">Servis</span>
-                  </button>
-                </li>
-              ))}
-              {methodHits.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      selectMethod(m.serviceId, m.id)
-                      setQuery('')
-                    }}
-                  >
-                    <span className="search-hit-text">
-                      <strong>
-                        {m.className}.{m.name}
-                      </strong>
-                      <span className="method-hit-svc">{m.serviceName}</span>
-                    </span>
-                    <span className="hit-tag hit-tag-method">Method</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </label>
-        <div className="top-actions">
-          <label className="session-select">
-            <span className="sr-only">Oturum</span>
-            <select
-              value={session?.id ?? ''}
-              onChange={(e) => {
-                const u = sessionUsers.find((x) => x.id === e.target.value)
-                if (u) setSession(u)
-              }}
-              title="Oturum"
-            >
-              {sessionUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                  {u.team ? ` · ${u.team}` : ''}
-                  {u.role ? ` · ${roleLabel(u.role)}` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={() => {
-              if (session) void refreshInbox(session.id)
-              setShowInbox(true)
-            }}
-          >
-            Inbox ({inboxPending})
-          </button>
-        </div>
-      </header>
-
       {apiError && <div className="api-banner">{apiError}</div>}
 
-      <div className="shell">
+      <div className={`shell${navOpen ? '' : ' is-nav-collapsed'}`}>
         <aside className="module-sidebar">
-          <h3>Modüller</h3>
-          <ModuleTree
-            nodes={tree}
-            selectedServiceId={pivotId}
-            selectedMethodId={selectedMethodId}
-            onSelectService={(id) => selectPivot(id, { resetHistory: true })}
-            onSelectMethod={selectMethod}
-          />
+          <label className="search">
+            <span className="sr-only">Servis veya method ara</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Servis veya method ara…"
+            />
+            {query && (hits.length > 0 || methodHits.length > 0) && (
+              <ul className="search-hits">
+                {hits.map((s) => (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectPivot(s.id, { resetHistory: true })
+                        setQuery('')
+                      }}
+                    >
+                      <span className="search-hit-main">
+                        <span className="search-hit-text" title={s.name}>
+                          <strong>{s.name}</strong>
+                        </span>
+                        <span className="hit-tag hit-tag-service">Servis</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+                {methodHits.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        selectMethod(m.serviceId, m.id)
+                        setQuery('')
+                      }}
+                    >
+                      <span className="search-hit-main">
+                        <span
+                          className="search-hit-text"
+                          title={`${m.className}.${m.name}`}
+                        >
+                          <strong>
+                            {m.className}.{m.name}
+                          </strong>
+                        </span>
+                        <span className="hit-tag hit-tag-method">Method</span>
+                      </span>
+                      <span className="method-hit-svc" title={m.serviceName}>
+                        {m.serviceName}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </label>
+          <div className="module-sidebar-head">
+            <h3>Modüller</h3>
+            <button
+              type="button"
+              className="nav-toggle"
+              title={navOpen ? 'Paneli gizle' : 'Modülleri göster'}
+              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini göster'}
+              aria-expanded={navOpen}
+              onClick={() => setNavOpen((v) => !v)}
+            >
+              {navOpen ? '‹' : '›'}
+            </button>
+          </div>
+          <div className="module-sidebar-body">
+            <ModuleTree
+              nodes={tree}
+              selectedServiceId={pivotId}
+              selectedMethodId={selectedMethodId}
+              onSelectService={(id) => selectPivot(id, { resetHistory: true })}
+              onSelectMethod={selectMethod}
+            />
+          </div>
         </aside>
 
-        <main
+        <div className="workspace">
+          <header className="topbar">
+            <div className="brand">
+              <span className="brand-mark">SD</span>
+              <div>
+                <strong>Service Dependency</strong>
+              </div>
+            </div>
+          </header>
+
+          <main
           className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}`}
           ref={mainRef}
         >
@@ -458,7 +419,7 @@ export default function App() {
             <div className="welcome">
               <h2>Servis seçin</h2>
               <p>
-                Soldaki ağaçtan veya üst aramadan bir servis seçerek ilişkileri ve
+                Soldaki aramadan veya ağaçtan bir servis seçerek ilişkileri ve
                 etki yolunu görün. Seçili servise tekrar tıklayınca seçim kalkar.
               </p>
             </div>
@@ -656,35 +617,8 @@ export default function App() {
             </>
           )}
         </main>
+        </div>
       </div>
-
-      {showInbox && session && (
-        <InboxPanel
-          actions={inboxActions}
-          updates={inboxUpdates}
-          pending={inboxPending}
-          onClose={() => setShowInbox(false)}
-          onOpen={(id) => {
-            setShowInbox(false)
-            void openExisting(id)
-          }}
-          onMarkRead={() => {
-            void markInboxRead(session.id).then(() => refreshInbox(session.id))
-          }}
-        />
-      )}
-
-      {openRequest && session && (
-        <RequestDetailModal
-          request={openRequest}
-          session={session}
-          onClose={() => setOpenRequest(undefined)}
-          onUpdated={(cr) => {
-            setOpenRequest(cr)
-            void refreshInbox(session.id)
-          }}
-        />
-      )}
     </div>
   )
 }

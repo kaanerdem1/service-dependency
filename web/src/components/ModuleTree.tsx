@@ -5,8 +5,9 @@
  * - Chevron → sadece metod listesini aç/kapa (seçim yok)
  * - Servis adı → pivot seçer
  * - Metod satırı → method odak + method haritası
+ * - Arama / dış seçim → ataların açılması + satırın görünmesi
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
 
@@ -23,6 +24,30 @@ type Props = {
   selectedMethodId?: string
   onSelectService: (serviceId: string) => void
   onSelectMethod: (serviceId: string, methodId: string) => void
+}
+
+/** Seçili servise (ve method varsa servise) giden ataları aç. */
+function revealAncestorIds(
+  nodes: ModuleNode[],
+  serviceId?: string,
+  methodId?: string,
+): Set<string> {
+  const ids = new Set<string>()
+  if (!serviceId) return ids
+  const walk = (node: ModuleNode): boolean => {
+    if (node.kind === 'service' && node.serviceId === serviceId) {
+      if (methodId) ids.add(node.id)
+      return true
+    }
+    let hit = false
+    for (const child of node.children ?? []) {
+      if (walk(child)) hit = true
+    }
+    if (hit) ids.add(node.id)
+    return hit
+  }
+  for (const n of nodes) walk(n)
+  return ids
 }
 
 function MethodLeaves({
@@ -57,6 +82,13 @@ function MethodLeaves({
     }
   }, [serviceId])
 
+  useLayoutEffect(() => {
+    if (!selectedMethodId || !methods?.some((m) => m.id === selectedMethodId)) return
+    document
+      .querySelector(`[data-tree-method="${CSS.escape(selectedMethodId)}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [methods, selectedMethodId])
+
   if (error) {
     return (
       <p className="tree-method-status" style={{ paddingLeft: 8 + depth * 12 }}>
@@ -89,6 +121,7 @@ function MethodLeaves({
               type="button"
               className={`tree-row ${selected ? 'selected' : ''} kind-method`}
               style={{ paddingLeft: 8 + depth * 12 }}
+              data-tree-method={m.id}
               onClick={() => onSelectMethod(serviceId, m.id)}
             >
               <span className="chev spacer" />
@@ -108,6 +141,7 @@ function MethodLeaves({
 function TreeItem({
   node,
   depth,
+  revealIds,
   selectedServiceId,
   selectedMethodId,
   onSelectService,
@@ -115,6 +149,7 @@ function TreeItem({
 }: {
   node: ModuleNode
   depth: number
+  revealIds: Set<string>
   selectedServiceId?: string
   selectedMethodId?: string
   onSelectService: (serviceId: string) => void
@@ -123,17 +158,31 @@ function TreeItem({
   const isService = node.kind === 'service'
   const hasStaticChildren = !!node.children?.length
   const canExpand = hasStaticChildren || isService
-  const [open, setOpen] = useState(depth < 2 && !isService)
+  const [open, setOpen] = useState(
+    () => (depth < 2 && !isService) || revealIds.has(node.id),
+  )
   const selected =
     isService &&
     node.serviceId === selectedServiceId &&
     !selectedMethodId
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (revealIds.has(node.id)) setOpen(true)
+  }, [revealIds, node.id])
+
+  useLayoutEffect(() => {
+    if (!selected) return
+    rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
 
   return (
     <div className="tree-item">
       <div
+        ref={rowRef}
         className={`tree-row ${selected ? 'selected' : ''} kind-${node.kind}`}
         style={{ paddingLeft: 8 + depth * 12 }}
+        data-tree-service={isService ? node.serviceId : undefined}
       >
         {canExpand ? (
           <button
@@ -170,6 +219,7 @@ function TreeItem({
             key={child.id}
             node={child}
             depth={depth + 1}
+            revealIds={revealIds}
             selectedServiceId={selectedServiceId}
             selectedMethodId={selectedMethodId}
             onSelectService={onSelectService}
@@ -197,6 +247,22 @@ export function ModuleTree({
   onSelectService,
   onSelectMethod,
 }: Props) {
+  const revealIds = useMemo(
+    () => revealAncestorIds(nodes, selectedServiceId, selectedMethodId),
+    [nodes, selectedServiceId, selectedMethodId],
+  )
+
+  useEffect(() => {
+    if (!selectedServiceId) return
+    const sel = selectedMethodId
+      ? `[data-tree-method="${CSS.escape(selectedMethodId)}"]`
+      : `[data-tree-service="${CSS.escape(selectedServiceId)}"]`
+    const t = window.setTimeout(() => {
+      document.querySelector(sel)?.scrollIntoView({ block: 'nearest' })
+    }, 80)
+    return () => window.clearTimeout(t)
+  }, [selectedServiceId, selectedMethodId, revealIds])
+
   return (
     <nav className="module-tree" aria-label="Modül ağacı">
       {nodes.map((n) => (
@@ -204,6 +270,7 @@ export function ModuleTree({
           key={n.id}
           node={n}
           depth={0}
+          revealIds={revealIds}
           selectedServiceId={selectedServiceId}
           selectedMethodId={selectedMethodId}
           onSelectService={onSelectService}

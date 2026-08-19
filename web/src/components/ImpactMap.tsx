@@ -21,6 +21,7 @@ import {
 } from 'react'
 import ReactFlow, {
   Background,
+  BackgroundVariant,
   BaseEdge,
   Handle,
   MarkerType,
@@ -54,7 +55,6 @@ import {
   listServiceNotes,
 } from '../api/client'
 import {
-  MAP_INFO_PANEL_RESERVE,
   RADIAL_CENTER_W,
   RADIAL_HIT,
   applyRadialLayout,
@@ -83,6 +83,7 @@ import {
   MapInfoPanel,
   MapViewportSync,
   ProjectFilterHint,
+  RadialLabelZoomSync,
   type VisitStep,
 } from './ImpactChrome'
 
@@ -151,10 +152,6 @@ type RingGuideData = {
   hop: number
 }
 
-function MapLeftPadView() {
-  return <div className="map-left-pad" aria-hidden />
-}
-
 function RingGuideView({ data }: NodeProps<RingGuideData>) {
   return (
     <div
@@ -184,7 +181,6 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
   const showNoteBadge =
     !radial &&
     !isCollapsed &&
-    id !== '__map-left-pad' &&
     (isCenter || data.kind === 'service')
   const label = (
     <span
@@ -237,7 +233,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
       {showNoteBadge && (
         <button
           type="button"
-          className="dd-note-badge nodrag nopan"
+          className={`dd-note-badge nodrag nopan${noteCount > 0 ? ' has-count' : ''}`}
           title={noteCount > 0 ? `${noteCount} not` : 'Not ekle'}
           aria-label={noteCount > 0 ? `${noteCount} not` : 'Not ekle'}
           onClick={(e) => {
@@ -249,8 +245,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
             )
           }}
         >
-          <span aria-hidden>📌</span>
-          {noteCount > 0 ? <span>{noteCount}</span> : null}
+          {noteCount > 0 ? <span>{noteCount}</span> : <span aria-hidden>+</span>}
         </button>
       )}
       <div className="dd-node-body">
@@ -267,7 +262,9 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
               </span>
             )}
             {isCollapsed && (
-              <span className="dd-node-hop">genişlet · {data.count} servis</span>
+              <span className="dd-node-hop">
+                Aç · {data.count} servis daha
+              </span>
             )}
           </>
         )}
@@ -342,7 +339,6 @@ function MethodBadgeView({ data }: NodeProps<MethodBadgeData>) {
 const nodeTypes = {
   serviceNode: memo(ServiceNodeView),
   methodBadge: memo(MethodBadgeView),
-  mapLeftPad: memo(MapLeftPadView),
   radialRing: memo(RingGuideView),
 }
 
@@ -1003,32 +999,8 @@ function buildGraph(
     layoutMode === 'radial' ? 'md' : mapNodeSizeFor('center', 0, visibleMaxHop)
   const centerW = layoutMode === 'radial' ? RADIAL_CENTER_W : 348
 
-  /** Sol panel için görünmez pad — fitView bbox’ına dahil */
+  /** Sol pad yok — harita origin mapLeftX() */
   const nodes: Node<ServiceNodeData>[] = [
-    {
-      id: '__map-left-pad',
-      type: 'mapLeftPad',
-      data: {
-        label: '',
-        fullLabel: '',
-        showTip: false,
-        size: 'sm',
-        kind: 'collapsed',
-        hop: 0,
-      },
-      position: { x: 0, y: centerY },
-      style: {
-        width: MAP_INFO_PANEL_RESERVE,
-        height: 24,
-        padding: 0,
-        border: 'none',
-        background: 'transparent',
-      },
-      draggable: false,
-      selectable: false,
-      connectable: false,
-      focusable: false,
-    },
     {
       id: center.id,
       type: 'serviceNode',
@@ -1091,7 +1063,7 @@ function buildGraph(
     const hidden = collapsedMeta.get(hop)
     if (hidden?.length) {
       const collapseId = `collapsed-hop-${hop}`
-      const collapseLabel = `+${hidden.length} daha`
+      const collapseLabel = `+${hidden.length} servis daha`
       const nodeSize =
         layoutMode === 'radial'
           ? 'md'
@@ -1170,7 +1142,11 @@ function buildGraph(
     const sameColumn = fromHop === toHop
     /** Geriye cascade: sağ rota + çift ok */
     const sideRoute = isCascade && (sameColumn || fromHop > toHop)
-    const stroke = isCascade ? '#c4783a' : direct ? '#3d7a60' : '#a39e94'
+    const stroke = isCascade
+      ? 'var(--map-side)'
+      : direct
+        ? 'var(--map-path-mid)'
+        : 'var(--map-idle)'
     const radialTree = layoutMode === 'radial' && !isCascade
     edges.push({
       id: key,
@@ -1193,7 +1169,7 @@ function buildGraph(
             type: MarkerType.ArrowClosed,
             width: isCascade ? 18 : 16,
             height: isCascade ? 18 : 16,
-            color: isCascade ? '#c4783a' : direct ? '#2f6f55' : '#8a847a',
+            color: isCascade ? '#a56b38' : direct ? '#2f6f55' : '#8a847a',
           },
       style: radialTree
         ? {
@@ -1332,11 +1308,7 @@ export function ImpactMap({
   onNavDirectionConsumed,
   sessionUserId,
 }: Props) {
-  const [infoPanelOpen, setInfoPanelOpen] = useState(mapExpanded)
-
-  useEffect(() => {
-    setInfoPanelOpen(mapExpanded)
-  }, [mapExpanded])
+  const [infoPanelOpen, setInfoPanelOpen] = useState(false)
 
   const restoredViewRef = useRef(restoredView)
   restoredViewRef.current = restoredView
@@ -1536,6 +1508,11 @@ export function ImpactMap({
       window.clearTimeout(t2)
     }
   }, [graph.center.id])
+
+  useEffect(() => {
+    if (mapExpanded) return
+    setInfoPanelOpen(false)
+  }, [graph.center.id, mapExpanded])
 
   useEffect(() => {
     if (skipViewNotifyRef.current) return
@@ -1755,11 +1732,11 @@ export function ImpactMap({
             : '#d4d0c8'
           : !focusing
             ? kind === 'cascade'
-              ? '#c4783a'
+              ? '#a56b38'
               : ((e.style?.stroke as string) ?? '#3d7a60')
             : hot
               ? kind === 'cascade'
-                ? '#a85f24'
+                ? '#8a572c'
                 : '#2f6f55'
               : '#cfc8bc'
         return {
@@ -1929,7 +1906,6 @@ export function ImpactMap({
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
-      if (node.id === '__map-left-pad') return
       if (pivotMorphingRef.current) return
       if (nodeDragged.current) {
         nodeDragged.current = false
@@ -2029,7 +2005,7 @@ export function ImpactMap({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}`}
+      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -2100,6 +2076,7 @@ export function ImpactMap({
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
+      <div className="map-canvas-row">
       <div className="map-canvas">
       <ReactFlow
         nodes={nodes}
@@ -2133,39 +2110,21 @@ export function ImpactMap({
         }}
         proOptions={{ hideAttribution: true }}
       >
+        <RadialLabelZoomSync />
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}-${infoPanelOpen}`}
           layout={layout}
           navDirection={navDirection}
           onNavDirectionConsumed={onNavDirectionConsumed}
         />
-        <MapInfoPanel
-          center={graph.center}
-          projectLabel={
-            projectLabels.get(graph.center.projectId) ?? graph.center.projectId
-          }
-          centerId={graph.center.id}
-          nodes={graph.nodes}
-          parents={parents}
-          projectLabels={projectLabels}
-          matchIds={projectFilter ? filter.matchIds : null}
-          bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
-          filterLabel={filterLabel || undefined}
-          truncated={graph.truncated}
-          visitPath={visitPath}
-          visitPathIndex={visitPathIndex}
-          onVisitSelect={(i) => onVisitSelect?.(i)}
-          focusId={breadcrumbFocus}
-          nameById={nameById}
-          onHoverPathSelect={(id) =>
-            id === graph.center.id ? onClearCenter?.() : onPivot(id)
-          }
-          open={infoPanelOpen}
-          onOpenChange={setInfoPanelOpen}
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={18}
+          size={1.55}
+          color="#bdb6aa"
         />
-        <Background gap={22} color="#e4e0d6" />
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
@@ -2195,6 +2154,31 @@ export function ImpactMap({
           }}
         />
       </ReactFlow>
+      </div>
+      <MapInfoPanel
+        center={graph.center}
+        projectLabel={
+          projectLabels.get(graph.center.projectId) ?? graph.center.projectId
+        }
+        centerId={graph.center.id}
+        nodes={graph.nodes}
+        parents={parents}
+        projectLabels={projectLabels}
+        matchIds={projectFilter ? filter.matchIds : null}
+        bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
+        filterLabel={filterLabel || undefined}
+        truncated={graph.truncated}
+        visitPath={visitPath}
+        visitPathIndex={visitPathIndex}
+        onVisitSelect={(i) => onVisitSelect?.(i)}
+        focusId={breadcrumbFocus}
+        nameById={nameById}
+        onHoverPathSelect={(id) =>
+          id === graph.center.id ? onClearCenter?.() : onPivot(id)
+        }
+        open={infoPanelOpen}
+        onOpenChange={setInfoPanelOpen}
+      />
       </div>
       {expandedMethodServiceId &&
         onSelectMethod &&
