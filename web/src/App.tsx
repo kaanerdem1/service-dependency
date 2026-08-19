@@ -70,7 +70,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(-1)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
-  const [upstream, setUpstream] = useState<AffectedService[]>([])
+  const [callees, setCallees] = useState<AffectedService[]>([])
   const [impact, setImpact] = useState<ImpactGraph>()
   const [loading, setLoading] = useState(false)
   const [tab, setTab] = useState<Tab>('map')
@@ -137,7 +137,7 @@ export default function App() {
     if (!pivotId) {
       setService(undefined)
       setAffected([])
-      setUpstream([])
+      setCallees([])
       setImpact(undefined)
       setLoading(false)
       return
@@ -153,7 +153,7 @@ export default function App() {
         if (cancelled) return
         setService(svc)
         setAffected(neighbors.downstream)
-        setUpstream(neighbors.upstream)
+        setCallees(neighbors.upstream)
         setImpact(graph)
         setLoading(false)
       })
@@ -192,7 +192,7 @@ export default function App() {
     setHistoryIndex(-1)
     setService(undefined)
     setAffected([])
-    setUpstream([])
+    setCallees([])
     setImpact(undefined)
     setMapExpanded(false)
   }, [])
@@ -542,16 +542,56 @@ export default function App() {
 
               {tab === 'affected' && (
                 <>
-                  <div className="list-scope-bar">
-                    <p className="list-scope-hint">
-                      Bu Servisi Çağıranlar · Bu Servisin Çağırdıkları
-                    </p>
-                    <div className="list-scope-nav" role="group" aria-label="Gezinme">
+                  <div className="relations-nav">
+                    {breadcrumb.length > 0 && (
+                      <nav
+                        className="relations-breadcrumb"
+                        aria-label="Ziyaret yolu"
+                      >
+                        {breadcrumb.map((e, i) => {
+                          const name = serviceNameById.get(e.id) ?? e.id
+                          const isCurrent = i === historyIndex
+                          return (
+                            <span key={`${e.id}-${i}`} className="relations-bc-item">
+                              {i > 0 && (
+                                <span className="sep" aria-hidden>
+                                  /
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className={isCurrent ? 'current' : undefined}
+                                disabled={isCurrent}
+                                title={name}
+                                onClick={() => {
+                                  if (i === historyIndex) return
+                                  setNavDirection(
+                                    i < historyIndex ? 'back' : 'forward',
+                                  )
+                                  setHistoryIndex(i)
+                                  setSelectedMethodId(undefined)
+                                  setMethodImpact(undefined)
+                                  setPivotId(history[i]!.id)
+                                }}
+                              >
+                                {name}
+                              </button>
+                            </span>
+                          )
+                        })}
+                      </nav>
+                    )}
+                    <div
+                      className="list-scope-nav"
+                      role="group"
+                      aria-label="Gezinme geçmişi — Harita ile aynı"
+                    >
                       <button
                         type="button"
                         className="btn ghost"
                         onClick={goBack}
                         disabled={historyIndex <= 0}
+                        title="Önceki servis (Harita ile aynı geçmiş)"
                       >
                         ← Geri
                       </button>
@@ -563,52 +603,15 @@ export default function App() {
                           historyIndex < 0 ||
                           historyIndex >= history.length - 1
                         }
+                        title="Sonraki servis (Harita ile aynı geçmiş)"
                       >
                         İleri →
                       </button>
                     </div>
                   </div>
-                  {breadcrumb.length > 0 && (
-                    <nav
-                      className="relations-breadcrumb"
-                      aria-label="Ziyaret yolu"
-                    >
-                      {breadcrumb.map((e, i) => {
-                        const name = serviceNameById.get(e.id) ?? e.id
-                        const isCurrent = i === historyIndex
-                        return (
-                          <span key={`${e.id}-${i}`} className="relations-bc-item">
-                            {i > 0 && (
-                              <span className="sep" aria-hidden>
-                                /
-                              </span>
-                            )}
-                            <button
-                              type="button"
-                              className={isCurrent ? 'current' : undefined}
-                              disabled={isCurrent}
-                              title={name}
-                              onClick={() => {
-                                if (i === historyIndex) return
-                                setNavDirection(
-                                  i < historyIndex ? 'back' : 'forward',
-                                )
-                                setHistoryIndex(i)
-                                setSelectedMethodId(undefined)
-                                setMethodImpact(undefined)
-                                setPivotId(history[i]!.id)
-                              }}
-                            >
-                              {name}
-                            </button>
-                          </span>
-                        )
-                      })}
-                    </nav>
-                  )}
                   <AffectedList
-                    downstream={affected}
-                    upstream={upstream}
+                    callers={affected}
+                    callees={callees}
                     loading={loading}
                     onPivot={(id) => selectPivot(id)}
                   />

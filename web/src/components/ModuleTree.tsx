@@ -208,7 +208,9 @@ function TreeItem({
             if (canExpand) setOpen((v) => !v)
           }}
         >
-          <span className="tree-label">{node.name}</span>
+          <span className="tree-label" title={node.name}>
+            {node.name}
+          </span>
         </button>
           <span className="tree-kind">{KIND_LABEL[node.kind]}</span>
       </div>

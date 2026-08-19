@@ -17,6 +17,7 @@ export type Service = {
   packageId: string
   owner?: Owner
   affectedCount: number
+  dependsOnCount: number
 }
 export type ModuleNode = {
   id: string
@@ -101,7 +102,13 @@ export const affectsEdges: Record<string, string[]> = {
   'svc-ticket-analytics': ['svc-report'],
 }
 
-const serviceDefs: Omit<Service, 'affectedCount'>[] = [
+function dependsOnIds(serviceId: string): string[] {
+  return Object.entries(affectsEdges)
+    .filter(([, callers]) => callers.includes(serviceId))
+    .map(([calleeId]) => calleeId)
+}
+
+const serviceDefs: Omit<Service, 'affectedCount' | 'dependsOnCount'>[] = [
   { id: 'svc-payment', name: 'core_realtime_card_payment_authorization_settlement_gateway', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
   { id: 'svc-checkout', name: 'retail_checkout_order_cart_orchestration_workflow_engine', projectId: 'proj-commerce', packageId: 'pkg-orders', owner: owners.o2 },
   { id: 'svc-billing', name: 'customer_billing_invoice_tax_reconciliation_engine', projectId: 'proj-commerce', packageId: 'pkg-payments', owner: owners.o1 },
@@ -118,7 +125,14 @@ const serviceDefs: Omit<Service, 'affectedCount'>[] = [
 ]
 
 export const services: Record<string, Service> = Object.fromEntries(
-  serviceDefs.map((s) => [s.id, { ...s, affectedCount: affectsEdges[s.id]?.length ?? 0 }]),
+  serviceDefs.map((s) => [
+    s.id,
+    {
+      ...s,
+      affectedCount: affectsEdges[s.id]?.length ?? 0,
+      dependsOnCount: dependsOnIds(s.id).length,
+    },
+  ]),
 )
 
 /** Değişince etkilenenler = bu servisi çağıranlar (downstream / tüketiciler) */
@@ -131,9 +145,7 @@ export function getDownstreamIds(serviceId: string): string[] {
  * affectsEdges[X] ⊇ serviceId ⇒ service, X’i çağırır.
  */
 export function getUpstreamIds(serviceId: string): string[] {
-  return Object.entries(affectsEdges)
-    .filter(([, tos]) => tos.includes(serviceId))
-    .map(([fromId]) => fromId)
+  return dependsOnIds(serviceId)
 }
 
 export const moduleTree: ModuleNode[] = [

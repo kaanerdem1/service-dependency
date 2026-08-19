@@ -244,7 +244,7 @@ export function DetailPanel({
           <>
             <p className="hint-sm entity-tab-hint">
               Bu Servisi Çağıranlar · Bu Servisin Çağırdıkları. Satıra tıklayınca
-              pivot.
+              merkeze alınır.
             </p>
             <NeighborMiniList
               title="Bu Servisi Çağıranlar"

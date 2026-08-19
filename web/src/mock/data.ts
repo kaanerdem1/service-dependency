@@ -31,7 +31,13 @@ export const affectsEdges: Record<string, string[]> = {
   'svc-ticket-analytics': ['svc-report'],
 }
 
-const serviceDefs: Omit<Service, 'affectedCount'>[] = [
+function dependsOnIds(serviceId: string): string[] {
+  return Object.entries(affectsEdges)
+    .filter(([, callers]) => callers.includes(serviceId))
+    .map(([calleeId]) => calleeId)
+}
+
+const serviceDefs: Omit<Service, 'affectedCount' | 'dependsOnCount'>[] = [
   {
     id: 'svc-payment',
     name: 'core_realtime_card_payment_authorization_settlement_gateway',
@@ -128,7 +134,11 @@ const serviceDefs: Omit<Service, 'affectedCount'>[] = [
 export const services: Record<string, Service> = Object.fromEntries(
   serviceDefs.map((s) => [
     s.id,
-    { ...s, affectedCount: affectsEdges[s.id]?.length ?? 0 },
+    {
+      ...s,
+      affectedCount: affectsEdges[s.id]?.length ?? 0,
+      dependsOnCount: dependsOnIds(s.id).length,
+    },
   ]),
 )
 

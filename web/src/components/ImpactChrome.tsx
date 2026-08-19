@@ -428,8 +428,7 @@ export function MapInfoPanel({
   )
 
   const filtered = Boolean(matchIds && filterLabel)
-  const team = center.owner?.team?.trim()
-  const ownerName = center.owner?.name?.trim()
+  const indirect = Math.max(0, stats.serviceCount - stats.hop1Count)
 
   return (
     <aside
@@ -461,47 +460,55 @@ export function MapInfoPanel({
               >
                 {center.name}
               </strong>
-              {(team || ownerName) && (
-                <span className="map-info-focus-meta">
-                  {[team, ownerName].filter(Boolean).join(' · ')}
-                </span>
-              )}
               <span className="map-info-focus-meta">{projectLabel}</span>
             </div>
-            <dl className="map-info-stats">
-              <div className="map-info-stat">
-                <dt>
-                  {filtered ? 'Eşleşen (1. katman)' : 'Doğrudan bağlı'}
-                </dt>
+
+            <div className="map-info-hero">
+              <span className="map-info-hero-num">{stats.serviceCount}</span>
+              <span className="map-info-hero-copy">
+                <strong>
+                  {filtered ? 'eşleşen servis' : 'etkilenen servis'}
+                </strong>
+              </span>
+            </div>
+
+            <dl className="map-info-metrics">
+              <div className="map-info-metric">
+                <dt>{filtered ? '1. katman' : 'Doğrudan'}</dt>
                 <dd>{stats.hop1Count}</dd>
               </div>
-              <div className="map-info-stat">
+              <div className="map-info-metric">
                 <dt title="Hop 2 ve sonrası — doğrudan bağlıların dışındaki etkilenenler">
-                  Dolaylı etkilenen
+                  Dolaylı
                 </dt>
-                <dd>
-                  {Math.max(0, stats.serviceCount - stats.hop1Count)}
-                </dd>
+                <dd>{indirect}</dd>
               </div>
-              {stats.maxHop > 0 && (
-                <div className="map-info-stat">
-                  <dt>Derinlik</dt>
-                  <dd>{stats.maxHop} katman</dd>
-                </div>
-              )}
-              {filtered && bridgeCount > 0 && (
-                <div className="map-info-stat">
-                  <dt>Ara yol</dt>
-                  <dd>{bridgeCount}</dd>
-                </div>
-              )}
-              {truncated && (
-                <div className="map-info-stat map-info-stat-warn">
-                  <dt>Görünüm</dt>
-                  <dd>kısaltıldı</dd>
-                </div>
-              )}
             </dl>
+
+            {(stats.maxHop > 0 ||
+              (filtered && bridgeCount > 0) ||
+              truncated) && (
+              <dl className="map-info-stats">
+                {stats.maxHop > 0 && (
+                  <div className="map-info-stat">
+                    <dt>Derinlik</dt>
+                    <dd>{stats.maxHop} katman</dd>
+                  </div>
+                )}
+                {filtered && bridgeCount > 0 && (
+                  <div className="map-info-stat">
+                    <dt>Ara yol</dt>
+                    <dd>{bridgeCount}</dd>
+                  </div>
+                )}
+                {truncated && (
+                  <div className="map-info-stat map-info-stat-warn">
+                    <dt>Görünüm</dt>
+                    <dd>kısaltıldı</dd>
+                  </div>
+                )}
+              </dl>
+            )}
           </section>
 
           <section className="map-info-section" aria-label="Ziyaret yolu">
@@ -566,16 +573,8 @@ export function BlastRadiusSummary({
   )
 
   const filtered = Boolean(matchIds && filterLabel)
-  const teamHint =
-    stats.teamNames.length > 0 && stats.teamNames.length <= 4
-      ? stats.teamNames.join(', ')
-      : ''
-
   const titleParts = [
     `${stats.serviceCount} servis`,
-    stats.teamNames.length
-      ? `ekipler (owner.team): ${stats.teamNames.join(', ')}`
-      : `${stats.teamCount} ekip`,
     stats.projectLabels.length
       ? `projeler: ${stats.projectLabels.join(', ')}`
       : `${stats.projectCount} proje`,
@@ -591,13 +590,6 @@ export function BlastRadiusSummary({
       <span className="blast-stats">
         <strong>{stats.serviceCount}</strong>
         {filtered ? ' eşleşen' : ' servis'}
-        <span className="blast-dot" aria-hidden>
-          ·
-        </span>
-        <strong>{stats.teamCount}</strong> ekip
-        {teamHint ? (
-          <span className="blast-team-names"> ({teamHint})</span>
-        ) : null}
         <span className="blast-dot" aria-hidden>
           ·
         </span>

@@ -23,7 +23,10 @@ export type Service = {
   projectId: string
   packageId: string
   owner?: Owner
+  /** Bu servisi çağıran sayısı (değişince etkilenenler) */
   affectedCount: number
+  /** Bu servisin çağırdığı servis sayısı */
+  dependsOnCount: number
 }
 
 export type AffectedService = {
@@ -32,7 +35,10 @@ export type AffectedService = {
   hop?: number
 }
 
-/** Upstream = çağırdıklarım · Downstream = beni çağıranlar (etkilenen / onay) */
+/**
+ * Ürün dili (etki): Downstream = beni çağıranlar · Upstream = çağırdıklarım.
+ * APM (istek yönü) bunun tersidir; UI Türkçe etiket kullanır.
+ */
 export type ServiceNeighbors = {
   upstream: AffectedService[]
   downstream: AffectedService[]
