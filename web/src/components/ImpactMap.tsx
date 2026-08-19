@@ -25,6 +25,7 @@ import ReactFlow, {
   Handle,
   MarkerType,
   Position,
+  applyNodeChanges,
   getBezierPath,
   getStraightPath,
   useEdgesState,
@@ -32,6 +33,7 @@ import ReactFlow, {
   type Edge,
   type EdgeProps,
   type Node,
+  type NodeChange,
   type NodeProps,
   type ReactFlowInstance,
 } from 'reactflow'
@@ -54,6 +56,7 @@ import {
 import {
   MAP_INFO_PANEL_RESERVE,
   RADIAL_CENTER_W,
+  RADIAL_HIT,
   applyRadialLayout,
   mapLabelNeedsTip,
   mapLayoutForDepth,
@@ -61,9 +64,10 @@ import {
   mapLeftX,
   mapNodeSizeFor,
   mapNodeWidth,
-  radialEdgePath,
+  radialEdgeGeometry,
   radialHandlePair,
-  radialNodeHeight,
+  radialLabelSide,
+  radialSpokeEnds,
   type MapLayout,
   type MapLayoutMode,
 } from '../impact/mapLayout'
@@ -130,6 +134,10 @@ type ServiceNodeData = {
   match?: boolean
   /** Görünür not sayısı (rozet) */
   noteCount?: number
+  radialDot?: boolean
+  radialAngle?: number
+  radialCx?: number
+  radialCy?: number
 }
 
 type MethodBadgeData = {
@@ -157,12 +165,35 @@ function RingGuideView({ data }: NodeProps<RingGuideData>) {
   )
 }
 
-function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
+function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
   const isCenter = data.kind === 'center'
   const isCollapsed = data.kind === 'collapsed'
+  const radial = Boolean(data.radialDot)
+  const liveAngle = (() => {
+    if (!radial || isCenter) return data.radialAngle ?? 0
+    if (typeof data.radialCx === 'number' && typeof data.radialCy === 'number') {
+      const mid = RADIAL_HIT / 2
+      return Math.atan2(yPos + mid - data.radialCy, xPos + mid - data.radialCx)
+    }
+    return data.radialAngle ?? 0
+  })()
+  const labelSide = radial
+    ? radialLabelSide(liveAngle, isCenter)
+    : null
   const noteCount = data.noteCount ?? 0
   const showNoteBadge =
-    !isCollapsed && id !== '__map-left-pad' && (isCenter || data.kind === 'service')
+    !radial &&
+    !isCollapsed &&
+    id !== '__map-left-pad' &&
+    (isCenter || data.kind === 'service')
+  const label = (
+    <span
+      className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
+      data-tip={data.showTip ? data.fullLabel : undefined}
+    >
+      {data.label}
+    </span>
+  )
   return (
     <div
       className={[
@@ -173,6 +204,7 @@ function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
         data.bridge && 'bridge',
         data.match && 'match',
         !data.bridge && !data.match && data.hop > 1 && 'indirect',
+        radial && 'radial-dot',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -222,25 +254,40 @@ function ServiceNodeView({ id, data }: NodeProps<ServiceNodeData>) {
         </button>
       )}
       <div className="dd-node-body">
-        <span
-          className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
-          data-tip={data.showTip ? data.fullLabel : undefined}
-        >
-          {data.label}
-        </span>
-        {!isCenter && !isCollapsed && (
-          <span className="dd-node-hop">
-            {data.bridge
-              ? 'ara yol · filtre dışı'
-              : data.match
-                ? `${data.hop}. katman · eşleşen`
-                : `${data.hop}. katman`}
-          </span>
-        )}
-        {isCollapsed && (
-          <span className="dd-node-hop">genişlet · {data.count} servis</span>
+        {!radial && (
+          <>
+            {label}
+            {!isCenter && !isCollapsed && (
+              <span className="dd-node-hop">
+                {data.bridge
+                  ? 'ara yol · filtre dışı'
+                  : data.match
+                    ? `${data.hop}. katman · eşleşen`
+                    : `${data.hop}. katman`}
+              </span>
+            )}
+            {isCollapsed && (
+              <span className="dd-node-hop">genişlet · {data.count} servis</span>
+            )}
+          </>
         )}
       </div>
+      {radial && (
+        <>
+          <span
+            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
+            aria-hidden
+          />
+          <span
+            className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
+            data-tip={data.showTip ? data.fullLabel : undefined}
+            title={data.fullLabel}
+          >
+            {isCenter && <span className="dd-radial-kicker">Merkez</span>}
+            <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+          </span>
+        </>
+      )}
       <Handle
         type="source"
         position={Position.Right}
@@ -733,6 +780,13 @@ type FanEdgeData = {
   /** Radial eğri için halka merkezi */
   cx?: number
   cy?: number
+  /** Düğüm merkezleri + daire yarıçapı (kenar handle değil) */
+  sx?: number
+  sy?: number
+  sr?: number
+  tx?: number
+  ty?: number
+  tr?: number
 }
 
 /**
@@ -791,7 +845,7 @@ function FanEdge({
   )
 }
 
-/** Radial: referans gibi fan eğrisi (yarıçap ↑, açı açılır) */
+/** Radial: eğri + yön oku yolun ortasında (uçta isim/nokta ile kesişmesin) */
 function RadialEdge({
   id,
   sourceX,
@@ -799,23 +853,47 @@ function RadialEdge({
   targetX,
   targetY,
   style,
-  markerEnd,
   data,
 }: EdgeProps<FanEdgeData>) {
   const cx = data?.cx
   const cy = data?.cy
-  const path =
-    typeof cx === 'number' && typeof cy === 'number'
-      ? radialEdgePath(sourceX, sourceY, targetX, targetY, cx, cy)
-      : getStraightPath({ sourceX, sourceY, targetX, targetY })[0]
+  const geom = (() => {
+    if (typeof cx !== 'number' || typeof cy !== 'number') {
+      const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
+      const mx = (sourceX + targetX) / 2
+      const my = (sourceY + targetY) / 2
+      return {
+        path,
+        mx,
+        my,
+        angle: Math.atan2(targetY - sourceY, targetX - sourceX),
+      }
+    }
+    const ends = radialSpokeEnds(
+      cx,
+      cy,
+      { x: sourceX, y: sourceY, r: data?.sr ?? 5 },
+      { x: targetX, y: targetY, r: data?.tr ?? 5 },
+    )
+    return radialEdgeGeometry(ends.sx, ends.sy, ends.tx, ends.ty, cx, cy)
+  })()
+  const fill = (style?.stroke as string) || '#6e6e6e'
   return (
-    <BaseEdge
-      id={id}
-      path={path}
-      style={style}
-      markerEnd={markerEnd}
-      interactionWidth={28}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={geom.path}
+        style={style}
+        interactionWidth={28}
+      />
+      <polygon
+        className="dd-radial-mid-arrow"
+        points="-6,-5 10,0 -6,5 -1.5,0"
+        fill={fill}
+        transform={`translate(${geom.mx},${geom.my}) rotate(${(geom.angle * 180) / Math.PI})`}
+        pointerEvents="none"
+      />
+    </>
   )
 }
 
@@ -957,7 +1035,7 @@ function buildGraph(
       data: {
         label: center.name,
         fullLabel: center.name,
-        showTip: mapLabelNeedsTip(center.name, tipChars),
+        showTip: mapLabelNeedsTip(center.name, layoutMode === 'radial' ? 48 : tipChars),
         size: centerSize,
         kind: 'center',
         hop: 0,
@@ -989,7 +1067,10 @@ function buildGraph(
         data: {
           label: n.service.name,
           fullLabel: n.service.name,
-          showTip: mapLabelNeedsTip(n.service.name, tipChars),
+          showTip: mapLabelNeedsTip(
+            n.service.name,
+            layoutMode === 'radial' ? 48 : tipChars,
+          ),
           size: nodeSize,
           kind: 'service',
           hop,
@@ -1090,6 +1171,7 @@ function buildGraph(
     /** Geriye cascade: sağ rota + çift ok */
     const sideRoute = isCascade && (sameColumn || fromHop > toHop)
     const stroke = isCascade ? '#c4783a' : direct ? '#3d7a60' : '#a39e94'
+    const radialTree = layoutMode === 'radial' && !isCascade
     edges.push({
       id: key,
       source,
@@ -1100,20 +1182,31 @@ function buildGraph(
       animated: false,
       className: isCascade
         ? 'dd-edge cascade'
-        : direct
-          ? 'dd-edge direct'
-          : 'dd-edge indirect',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: isCascade ? 18 : 16,
-        height: isCascade ? 18 : 16,
-        color: isCascade ? '#c4783a' : direct ? '#2f6f55' : '#8a847a',
-      },
-      style: {
-        stroke,
-        strokeWidth: isCascade ? 2.2 : direct ? 2.2 : 1.4,
-        strokeDasharray: isCascade ? '5 4' : direct ? undefined : '6 5',
-      },
+        : radialTree
+          ? 'dd-edge radial-link'
+          : direct
+            ? 'dd-edge direct'
+            : 'dd-edge indirect',
+      markerEnd: radialTree
+        ? undefined
+        : {
+            type: MarkerType.ArrowClosed,
+            width: isCascade ? 18 : 16,
+            height: isCascade ? 18 : 16,
+            color: isCascade ? '#c4783a' : direct ? '#2f6f55' : '#8a847a',
+          },
+      style: radialTree
+        ? {
+            stroke: '#555',
+            strokeWidth: 1.5,
+            opacity: 0.42,
+            fill: 'none',
+          }
+        : {
+            stroke,
+            strokeWidth: isCascade ? 2.2 : direct ? 2.2 : 1.4,
+            strokeDasharray: isCascade ? '5 4' : direct ? undefined : '6 5',
+          },
       data: {
         fromId: e.fromId,
         toId: e.toId,
@@ -1128,7 +1221,7 @@ function buildGraph(
   const positioned =
     layoutMode === 'radial'
       ? (() => {
-          const { nodes: placed, rings, cx, cy } = applyRadialLayout(
+          const { nodes: placed, cx, cy } = applyRadialLayout(
             nodes,
             layout,
             {
@@ -1138,30 +1231,7 @@ function buildGraph(
             },
           )
           radialCenter = { cx, cy }
-          const guides: Node<ServiceNodeData | RingGuideData>[] = rings.map(
-            (ring) => ({
-              id: `__ring-hop-${ring.hop}`,
-              type: 'radialRing',
-              data: { radius: ring.radius, hop: ring.hop },
-              position: {
-                x: cx - ring.radius,
-                y: cy - ring.radius,
-              },
-              style: {
-                width: ring.radius * 2,
-                height: ring.radius * 2,
-                padding: 0,
-                border: 'none',
-                background: 'transparent',
-              },
-              draggable: false,
-              selectable: false,
-              connectable: false,
-              focusable: false,
-              zIndex: -2,
-            }),
-          )
-          return [...guides, ...placed] as Node<ServiceNodeData>[]
+          return placed
         })()
       : nodes
 
@@ -1179,28 +1249,27 @@ function buildGraph(
       const s = posOf.get(e.source)
       const t = posOf.get(e.target)
       if (!s || !t) return e
-      const sw =
-        typeof s.style?.width === 'number' ? s.style.width : layout.nodeW
-      const tw =
-        typeof t.style?.width === 'number' ? t.style.width : layout.nodeW
-      const sh = radialNodeHeight(
-        (s.data as ServiceNodeData).kind,
-        (s.data as ServiceNodeData).size,
-      )
-      const th = radialNodeHeight(
-        (t.data as ServiceNodeData).kind,
-        (t.data as ServiceNodeData).size,
-      )
+      const box = RADIAL_HIT
+      const visualR =
+        (s.data as ServiceNodeData).kind === 'center' ? 9 : 5
+      const visualRt =
+        (t.data as ServiceNodeData).kind === 'center' ? 9 : 5
       const handles = radialHandlePair(
-        { x: s.position.x, y: s.position.y, w: sw, h: sh },
-        { x: t.position.x, y: t.position.y, w: tw, h: th },
+        { x: s.position.x, y: s.position.y, w: box, h: box },
+        { x: t.position.x, y: t.position.y, w: box, h: box },
       )
       const prev = (e.data ?? {}) as FanEdgeData
       return {
         ...e,
         ...handles,
         type: 'radial' as const,
-        data: { ...prev, cx, cy },
+        data: {
+          ...prev,
+          cx,
+          cy,
+          sr: visualR,
+          tr: visualRt,
+        },
       }
     })
   }
@@ -1376,6 +1445,47 @@ export function ImpactMap({
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
 
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      if (layoutMode !== 'radial') {
+        onNodesChange(changes)
+        return
+      }
+      const centerMove = changes.find(
+        (c) =>
+          c.type === 'position' &&
+          c.id === graph.center.id &&
+          c.position,
+      )
+      const cx =
+        centerMove && centerMove.type === 'position' && centerMove.position
+          ? centerMove.position.x + RADIAL_HIT / 2
+          : null
+      const cy =
+        centerMove && centerMove.type === 'position' && centerMove.position
+          ? centerMove.position.y + RADIAL_HIT / 2
+          : null
+      setNodes((nds) => {
+        const next = applyNodeChanges(changes, nds)
+        if (cx == null || cy == null) return next
+        return next.map((n) => {
+          const d = n.data as ServiceNodeData
+          if (!d.radialDot) return n
+          return { ...n, data: { ...d, radialCx: cx, radialCy: cy } }
+        })
+      })
+      if (cx != null && cy != null) {
+        setEdges((eds) =>
+          eds.map((e) => ({
+            ...e,
+            data: { ...(e.data as FanEdgeData), cx, cy },
+          })),
+        )
+      }
+    },
+    [onNodesChange, layoutMode, graph.center.id, setNodes, setEdges],
+  )
+
   /** Via zinciri: tam graf ebeveynleri (filtre köprüsü dahil) */
   const parents = useMemo(
     () => discoveryParents(graph.center.id, graph.edges),
@@ -1515,8 +1625,7 @@ export function ImpactMap({
     const resetLayout =
       tidyNonce !== lastTidyRef.current ||
       centerChanged ||
-      epochChanged ||
-      layoutMode === 'radial'
+      epochChanged
     lastTidyRef.current = tidyNonce
 
     type AnyNode = Node<ServiceNodeData | MethodBadgeData | RingGuideData>
@@ -1554,8 +1663,10 @@ export function ImpactMap({
               expanded: expandedMethodServiceId === n.id,
             },
             position: {
-              x: n.position.x + layout.nodeW + BADGE_GAP,
-              y: n.position.y + 18,
+              x: n.position.x + (layoutMode === 'radial' ? 0 : layout.nodeW + BADGE_GAP),
+              y:
+                n.position.y +
+                (layoutMode === 'radial' ? layout.nodeW + 6 : 18),
             },
             draggable: false,
             selectable: true,
@@ -1627,6 +1738,7 @@ export function ImpactMap({
     const focusing = Boolean(focusId || focusEdgeId)
     setEdges(
       built.edges.map((e) => {
+        const isRadialLink = String(e.className ?? '').includes('radial-link')
         const on = focusEdgeId
           ? e.id === focusEdgeId
           : edgeTouchesFocus(e, focusId)
@@ -1635,15 +1747,21 @@ export function ImpactMap({
             ? 'cascade'
             : 'tree'
         const hot = focusing && on
-        const color = !focusing
-          ? kind === 'cascade'
-            ? '#c4783a'
-            : ((e.style?.stroke as string) ?? '#3d7a60')
-          : hot
+        const color = isRadialLink
+          ? !focusing || on
+            ? hot
+              ? '#333'
+              : '#555'
+            : '#d4d0c8'
+          : !focusing
             ? kind === 'cascade'
-              ? '#a85f24'
-              : '#2f6f55'
-            : '#cfc8bc'
+              ? '#c4783a'
+              : ((e.style?.stroke as string) ?? '#3d7a60')
+            : hot
+              ? kind === 'cascade'
+                ? '#a85f24'
+                : '#2f6f55'
+              : '#cfc8bc'
         return {
           ...e,
           animated: false,
@@ -1657,12 +1775,14 @@ export function ImpactMap({
           ]
             .filter(Boolean)
             .join(' '),
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            width: hot ? 18 : 16,
-            height: hot ? 18 : 16,
-            color,
-          },
+          markerEnd: isRadialLink
+            ? undefined
+            : {
+                type: MarkerType.ArrowClosed,
+                width: hot ? 18 : 16,
+                height: hot ? 18 : 16,
+                color,
+              },
           markerStart: undefined,
           style: {
             ...e.style,
@@ -1989,7 +2109,7 @@ export function ImpactMap({
         onInit={(inst) => {
           rfInstance.current = inst
         }}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         nodesDraggable
         nodeDragThreshold={4}

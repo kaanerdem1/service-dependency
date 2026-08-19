@@ -27,6 +27,8 @@ import {
   mapLabelNeedsTip,
   mapLayoutForDepth,
   mapLayoutForRadial,
+  RADIAL_HIT,
+  radialLabelSide,
   type MapLayout,
   type MapLayoutMode,
 } from '../impact/mapLayout'
@@ -71,11 +73,35 @@ type MapNodeData = {
   methodId?: string
   count?: number
   hiddenIds?: string[]
+  radialDot?: boolean
+  radialAngle?: number
+  radialCx?: number
+  radialCy?: number
 }
 
-function MapNodeView({ data }: NodeProps<MapNodeData>) {
+function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
   const isCenter = data.kind === 'center'
   const isCollapsed = data.kind === 'collapsed'
+  const radial = Boolean(data.radialDot)
+  const liveAngle = (() => {
+    if (!radial || isCenter) return data.radialAngle ?? 0
+    if (typeof data.radialCx === 'number' && typeof data.radialCy === 'number') {
+      const mid = RADIAL_HIT / 2
+      return Math.atan2(yPos + mid - data.radialCy, xPos + mid - data.radialCx)
+    }
+    return data.radialAngle ?? 0
+  })()
+  const labelSide = radial
+    ? radialLabelSide(liveAngle, isCenter)
+    : null
+  const label = (
+    <span
+      className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
+      data-tip={data.showTip ? data.fullLabel : undefined}
+    >
+      {data.label}
+    </span>
+  )
   return (
     <div
       className={[
@@ -84,6 +110,7 @@ function MapNodeView({ data }: NodeProps<MapNodeData>) {
         isCenter && 'center',
         isCollapsed && 'collapsed',
         data.kind === 'service' && 'svc-agg',
+        radial && 'radial-dot',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -91,23 +118,32 @@ function MapNodeView({ data }: NodeProps<MapNodeData>) {
       <Handle type="target" position={Position.Left} id="in" className="dd-handle" />
       <div className="dd-node-ring" />
       <div className="dd-node-body">
-        <span
-          className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
-          data-tip={data.showTip ? data.fullLabel : undefined}
-        >
-          {data.label}
-        </span>
-        <span className="dd-node-hop">{data.sub}</span>
-        {!isCenter && !isCollapsed && (
-          <span className="dd-node-hop">{data.hop}. katman</span>
-        )}
-        {isCollapsed && (
-          <span className="dd-node-hop">
-            genişlet · {data.count}{' '}
-            {data.kind === 'collapsed' ? 'öğe' : ''}
-          </span>
+        {!radial && (
+          <>
+            {label}
+            <span className="dd-node-hop">{data.sub}</span>
+            {!isCenter && !isCollapsed && (
+              <span className="dd-node-hop">{data.hop}. katman</span>
+            )}
+            {isCollapsed && (
+              <span className="dd-node-hop">
+                genişlet · {data.count}{' '}
+                {data.kind === 'collapsed' ? 'öğe' : ''}
+              </span>
+            )}
+          </>
         )}
       </div>
+      {radial && (
+        <span
+          className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
+          data-tip={data.showTip ? data.fullLabel : undefined}
+          title={data.fullLabel}
+        >
+          {isCenter && <span className="dd-radial-kicker">Merkez</span>}
+          <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+        </span>
+      )}
       <Handle type="source" position={Position.Right} id="out" className="dd-handle" />
     </div>
   )
@@ -275,7 +311,10 @@ function buildLayeredMap(
         data: {
           label: it.label,
           fullLabel: it.label,
-          showTip: mapLabelNeedsTip(it.label, tipChars),
+          showTip: mapLabelNeedsTip(
+            it.label,
+            layoutMode === 'radial' ? 14 : tipChars,
+          ),
           size,
           sub: compactMapLabel(it.sub, Math.min(32, tipChars - 4)),
           kind: it.kind,
@@ -582,7 +621,7 @@ export function MethodImpactMap({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map method-impact-map ${focusId ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}`}
+      className={`impact-map dd-map method-impact-map ${focusId ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}`}
       onMouseLeave={() => setFocusId(null)}
     >
       <div className="path-layer-bar">

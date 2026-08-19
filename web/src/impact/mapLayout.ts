@@ -32,19 +32,29 @@ type RadialLayoutNode = {
     label?: string
     fullLabel?: string
     size?: MapNodeSize
+    /** Halka: daire + ışın etiketi (LTR kartı değil) */
+    radialDot?: boolean
+    /** 0 = doğu, ekran atan2 (saat yönü) */
+    radialAngle?: number
+    radialCx?: number
+    radialCy?: number
   }
-  style?: { width?: number | string } | null
+  style?: { width?: number | string; height?: number | string } | null
 }
 
-/** CSS ile uyumlu yaklaşık düğüm yükseklikleri (body min-height + padding) */
+/** Halka daire çapı — kart değil; ok 2. adımda çevreye oturur */
+/** Halka daire (görsel); RF kutusu etiket için büyük */
+export const RADIAL_DOT_W = 8
+export const RADIAL_CENTER_W = 10
+export const RADIAL_HIT = 22
+
+/** CSS ile uyumlu daire çapı (kare RF kutusu) */
 export function radialNodeHeight(
   kind: string,
-  size: MapNodeSize | undefined,
+  _size?: MapNodeSize,
 ): number {
-  if (kind === 'center') return 140
-  if (size === 'lg') return 102
-  if (size === 'sm') return 78
-  return 88
+  if (kind === 'center') return RADIAL_CENTER_W
+  return RADIAL_DOT_W
 }
 
 /**
@@ -70,29 +80,26 @@ export function rectExtentAlongRay(
 export function mapLayoutForRadial(): MapLayout {
   return {
     size: 'md',
-    nodeW: 248,
+    nodeW: RADIAL_DOT_W,
     colGap: 300,
     rowGap: 112,
-    tipChars: 44,
-    minZoom: 0.22,
-    maxZoom: 1.25,
-    fitPadding: 0.08,
+    tipChars: 28,
+    minZoom: 0.18,
+    maxZoom: 1.4,
+    fitPadding: 0.18,
   }
 }
 
-export const RADIAL_CENTER_W = 292
-
-/** Hop halkası merkez yarıçapı — 1→2→3 eşit adım, 3 hop ekrana sığsın */
+/** Hop halkası merkez yarıçapı — daire + ışın etiketi sığsın */
 export function radialRingCenterRadius(
   hop: number,
-  layout: MapLayout,
-  centerW = RADIAL_CENTER_W,
-  centerH = 140,
+  _layout?: MapLayout,
+  _centerW = RADIAL_CENTER_W,
+  _centerH = RADIAL_CENTER_W,
 ): number {
   if (hop <= 0) return 0
-  const corner = Math.hypot(centerW / 2, centerH / 2)
-  const pitch = Math.max(168, layout.nodeW * 0.52 + 56)
-  const first = corner + 52 + layout.nodeW * 0.28
+  const first = 252
+  const pitch = 228
   return first + (hop - 1) * pitch
 }
 
@@ -200,10 +207,91 @@ export function radialHandlePair(
     : { sourceHandle: 'out-top', targetHandle: 'in-bottom' }
 }
 
+export type RadialLabelSide = 'east' | 'west' | 'above' | 'below' | 'south'
+
+/** Uzun isim: yatay etiket, merkeze göre dışarı / kutuplarda üst-alt */
+export function radialLabelSide(
+  angle: number,
+  isCenter: boolean,
+): RadialLabelSide {
+  if (isCenter) return 'south'
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  if (Math.abs(c) >= 0.42) return c >= 0 ? 'east' : 'west'
+  return s >= 0 ? 'below' : 'above'
+}
+
+/**
+ * Daire çevresi: kaynak ışın boyunca dışarı, hedef içeri
+ * (merkez kaynakta açı = çocuk açısı → düz spoke).
+ */
+export function radialSpokeEnds(
+  cx: number,
+  cy: number,
+  source: { x: number; y: number; r: number },
+  target: { x: number; y: number; r: number },
+): { sx: number; sy: number; tx: number; ty: number } {
+  const aT = Math.atan2(target.y - cy, target.x - cx)
+  const rS = Math.hypot(source.x - cx, source.y - cy)
+  const rT = Math.hypot(target.x - cx, target.y - cy)
+  const aS = rS < 12 ? aT : Math.atan2(source.y - cy, source.x - cx)
+  const srcR = rS < 12 ? source.r : rS + source.r
+  const tgtR = Math.max(source.r + 8, rT - target.r)
+  return {
+    sx: cx + srcR * Math.cos(aS),
+    sy: cy + srcR * Math.sin(aS),
+    tx: cx + tgtR * Math.cos(aT),
+    ty: cy + tgtR * Math.sin(aT),
+  }
+}
+
 /**
  * Radial kenar eğrisi — yarıçap boyunca ilerler, açı fan gibi açılır
  * (referans görüntüdeki kavisli dallar).
  */
+export function radialEdgeGeometry(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
+  cx: number,
+  cy: number,
+): { path: string; mx: number; my: number; angle: number } {
+  const a2 = Math.atan2(targetY - cy, targetX - cx)
+  const r1 = Math.hypot(sourceX - cx, sourceY - cy)
+  const r2 = Math.hypot(targetX - cx, targetY - cy)
+  const polar = (a: number, r: number) =>
+    [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const
+
+  let sa = Math.atan2(sourceY - cy, sourceX - cx)
+  let sr = r1
+  if (r1 < 24) {
+    sr = 0
+    sa = a2 - 0.16
+  }
+  const mid = (sr + r2) / 2
+  const [x0, y0] = polar(sa, sr)
+  const [c1x, c1y] = polar(sa, mid)
+  const [c2x, c2y] = polar(a2, mid)
+  const [x3, y3] = polar(a2, r2)
+  const t = 0.5
+  const u = 1 - t
+  const mx =
+    u * u * u * x0 + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * x3
+  const my =
+    u * u * u * y0 + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * y3
+  const dx =
+    3 * u * u * (c1x - x0) + 6 * u * t * (c2x - c1x) + 3 * t * t * (x3 - c2x)
+  const dy =
+    3 * u * u * (c1y - y0) + 6 * u * t * (c2y - c1y) + 3 * t * t * (y3 - c2y)
+  return {
+    path: `M ${x0},${y0} C ${c1x},${c1y} ${c2x},${c2y} ${x3},${y3}`,
+    mx,
+    my,
+    angle: Math.atan2(dy, dx),
+  }
+}
+
 export function radialEdgePath(
   sourceX: number,
   sourceY: number,
@@ -212,32 +300,7 @@ export function radialEdgePath(
   cx: number,
   cy: number,
 ): string {
-  const a1 = Math.atan2(sourceY - cy, sourceX - cx)
-  const a2 = Math.atan2(targetY - cy, targetX - cx)
-  const r1 = Math.hypot(sourceX - cx, sourceY - cy)
-  const r2 = Math.hypot(targetX - cx, targetY - cy)
-
-  // Merkeze çok yakın kaynak → düz spoke
-  if (r1 < 28) {
-    return `M ${sourceX},${sourceY} L ${targetX},${targetY}`
-  }
-
-  let da = a2 - a1
-  while (da > Math.PI) da -= 2 * Math.PI
-  while (da < -Math.PI) da += 2 * Math.PI
-
-  // Küçük açı farkı → hafif eğri / düz
-  if (Math.abs(da) < 0.04) {
-    return `M ${sourceX},${sourceY} L ${targetX},${targetY}`
-  }
-
-  const c1r = r1 + (r2 - r1) * 0.35
-  const c2r = r1 + (r2 - r1) * 0.7
-  const c1x = cx + c1r * Math.cos(a1)
-  const c1y = cy + c1r * Math.sin(a1)
-  const c2x = cx + c2r * Math.cos(a2)
-  const c2y = cy + c2r * Math.sin(a2)
-  return `M ${sourceX},${sourceY} C ${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`
+  return radialEdgeGeometry(sourceX, sourceY, targetX, targetY, cx, cy).path
 }
 
 export type RadialLayoutResult<T> = {
@@ -268,7 +331,6 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   const {
     centerId,
     leftPadId = '__map-left-pad',
-    centerWidth,
     originX = mapLeftX(),
     treeParent,
   } = options
@@ -292,14 +354,8 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   }
 
   const hops = [...byHop.keys()].sort((a, b) => a - b)
-  const cW =
-    centerWidth ??
-    (typeof center.style?.width === 'number'
-      ? center.style.width
-      : RADIAL_CENTER_W)
-  const cH = radialNodeHeight('center', 'lg')
-  const halfCW = cW / 2
-  const halfCH = cH / 2
+  const cW = RADIAL_CENTER_W
+  const cH = RADIAL_CENTER_W
 
   const nodeIds = new Set(idToNode.keys())
   const angles = assignRadialAngles(
@@ -332,9 +388,12 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
         return { ...n, position: { x: 0, y: cy - 12 } }
       }
       if (n.id === centerId) {
+        const box = RADIAL_HIT
         return {
           ...n,
-          position: { x: cx - halfCW, y: cy - halfCH },
+          position: { x: cx - box / 2, y: cy - box / 2 },
+          data: { ...n.data, radialDot: true, radialAngle: 0, radialCx: cx, radialCy: cy },
+          style: { ...n.style, width: box, height: box },
         }
       }
       return n
@@ -344,13 +403,24 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
     const R = radiusByHop.get(hop) ?? radialRingCenterRadius(hop, layout, cW, cH)
     for (const item of byHop.get(hop) ?? []) {
       const angle = angles.get(item.id) ?? 0
-      const w = nodeWidth(item, layout)
-      const h = radialNodeHeight(item.data.kind, item.data.size)
-      const x = cx + R * Math.cos(angle) - w / 2
-      const y = cy + R * Math.sin(angle) - h / 2
+      const box = RADIAL_HIT
+      const x = cx + R * Math.cos(angle) - box / 2
+      const y = cy + R * Math.sin(angle) - box / 2
       const idx = next.findIndex((n) => n.id === item.id)
       if (idx >= 0) {
-        next[idx] = { ...next[idx]!, position: { x, y } }
+        const cur = next[idx]!
+        next[idx] = {
+          ...cur,
+          position: { x, y },
+          data: {
+            ...cur.data,
+            radialDot: true,
+            radialAngle: angle,
+            radialCx: cx,
+            radialCy: cy,
+          },
+          style: { ...cur.style, width: box, height: box },
+        }
       }
     }
   }

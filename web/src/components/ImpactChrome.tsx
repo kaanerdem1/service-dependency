@@ -436,12 +436,14 @@ export function MapInfoPanel({
                 <dl className="map-info-stats">
                   <div className="map-info-stat">
                     <dt>
-                      {filtered ? 'Eşleşen (1. katman)' : 'Bağlantılı servis'}
+                      {filtered ? 'Eşleşen (1. katman)' : 'Doğrudan bağlı'}
                     </dt>
                     <dd>{stats.hop1Count}</dd>
                   </div>
                   <div className="map-info-stat">
-                    <dt>Etkileyebileceği servis</dt>
+                    <dt title="Hop 2 ve sonrası — doğrudan bağlıların dışındaki etkilenenler">
+                      Dolaylı etkilenen
+                    </dt>
                     <dd>
                       {Math.max(0, stats.serviceCount - stats.hop1Count)}
                     </dd>
