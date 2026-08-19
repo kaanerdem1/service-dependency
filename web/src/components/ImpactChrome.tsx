@@ -454,9 +454,8 @@ export function MapInfoPanel({
             <div className="map-info-focus">
               <span className="map-info-focus-label">Seçilen Servis</span>
               <strong
-                className="map-info-focus-name name-tip"
-                data-tip={center.name}
-                title={center.name}
+                className={`map-info-focus-name${center.name.length > 28 ? ' name-tip is-short' : ''}`}
+                data-tip={center.name.length > 28 ? center.name : undefined}
               >
                 {center.name}
               </strong>
@@ -643,6 +642,8 @@ type LayerControlsProps = {
   layoutMode?: MapLayoutMode
   layout?: MapLayout
   cascadeCount?: number
+  showCascadeEdges?: boolean
+  onToggleCascadeEdges?: () => void
   truncated?: boolean
 }
 
@@ -885,7 +886,8 @@ export function MapCanvasBar({
   layoutMode = 'ltr',
   layout,
   cascadeCount,
-  truncated,
+  showCascadeEdges = false,
+  onToggleCascadeEdges,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1025,99 +1027,141 @@ export function MapCanvasBar({
             </span>
           </span>
 
-          <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
-            <IconZoomOut />
-          </DockBtn>
-          <DockBtn label="Yakınlaştır" onClick={() => zoomIn({ duration: 180 })}>
-            <IconZoomIn />
-          </DockBtn>
-          <DockBtn
-            label="Ekrana sığdır"
-            onClick={() => fitView({ padding: fitPadding, duration: 220 })}
-          >
-            <IconFit />
-          </DockBtn>
-          {onTidyUp && (
-            <DockBtn
-              label="Hizala — düğümleri eski düzene al"
-              onClick={() => {
-                onTidyUp()
-                window.setTimeout(() => {
-                  fitView({ padding: fitPadding, duration: 280 })
-                }, 40)
-              }}
-            >
-              <IconTidy />
-            </DockBtn>
-          )}
-          {onToggleLayoutMode && (
-            <DockBtn
-              label={
-                radialOn
-                  ? 'Katmanlı görünüm — sola/sağa düzen'
-                  : 'Halka görünüm — merkez etrafında'
-              }
-              pressed={radialOn}
-              onClick={() => {
-                onToggleLayoutMode()
-                window.setTimeout(() => {
-                  fitView({ padding: fitPadding, duration: 280 })
-                }, 40)
-              }}
-            >
-              <IconRadial />
-            </DockBtn>
-          )}
+          <span className="map-dock-sep" aria-hidden />
+
+          <div className="map-dock-group">
+            <span className="map-dock-group-kicker">Görünüm</span>
+            <div className="map-dock-group-row">
+              <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
+                <IconZoomOut />
+              </DockBtn>
+              <DockBtn label="Yakınlaştır" onClick={() => zoomIn({ duration: 180 })}>
+                <IconZoomIn />
+              </DockBtn>
+              <DockBtn
+                label="Ekrana sığdır"
+                onClick={() => fitView({ padding: fitPadding, duration: 220 })}
+              >
+                <IconFit />
+              </DockBtn>
+              {onTidyUp && (
+                <DockBtn
+                  label="Hizala — düğümleri eski düzene al"
+                  onClick={() => {
+                    onTidyUp()
+                    window.setTimeout(() => {
+                      fitView({ padding: fitPadding, duration: 280 })
+                    }, 40)
+                  }}
+                >
+                  <IconTidy />
+                </DockBtn>
+              )}
+              {onToggleLayoutMode && (
+                <DockBtn
+                  label={
+                    radialOn
+                      ? 'Katmanlı görünüm — sola/sağa düzen'
+                      : 'Halka görünüm — merkez etrafında'
+                  }
+                  pressed={radialOn}
+                  onClick={() => {
+                    onToggleLayoutMode()
+                    window.setTimeout(() => {
+                      fitView({ padding: fitPadding, duration: 280 })
+                    }, 40)
+                  }}
+                >
+                  <IconRadial />
+                </DockBtn>
+              )}
+            </div>
+          </div>
 
           <span className="map-dock-sep" aria-hidden />
 
-          <DockBtn
-            label="Sadece 1. katman — doğrudan komşular"
-            disabled={!canCollapse}
-            onClick={onCollapseAll}
-          >
-            <IconNeighbors />
-          </DockBtn>
-          <DockBtn
-            label={canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular'}
-            disabled={!canCollapse}
-            onClick={onCollapseLayer}
-          >
-            <IconLayerBack />
-          </DockBtn>
-          <span className="map-dock-wrap">
-            <span
-              className="map-dock-hop"
-              title={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable} — 1 doğrudan komşu, sonrası dolaylı`}
-              aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
-            >
-              <span className="map-dock-hop-kicker">Katman</span>
-              <span className="map-dock-hop-count">
-                {visibleMaxHop}/{maxHopAvailable}
+          <div className="map-dock-group">
+            <span className="map-dock-group-kicker">Katman</span>
+            <div className="map-dock-group-row">
+              <DockBtn
+                label="Sadece 1. katman — doğrudan komşular"
+                disabled={!canCollapse}
+                onClick={onCollapseAll}
+              >
+                <IconNeighbors />
+              </DockBtn>
+              <DockBtn
+                label={canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular'}
+                disabled={!canCollapse}
+                onClick={onCollapseLayer}
+              >
+                <IconLayerBack />
+              </DockBtn>
+              <span className="map-dock-wrap">
+                <span
+                  className="map-dock-hop is-compact"
+                  title={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+                  aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+                >
+                  <span className="map-dock-hop-count">
+                    {visibleMaxHop}/{maxHopAvailable}
+                  </span>
+                </span>
+                <span className="map-dock-tip" role="tooltip">
+                  Katman {visibleMaxHop} / {maxHopAvailable} görünür
+                </span>
               </span>
-            </span>
-            <span className="map-dock-tip" role="tooltip">
-              Katman {visibleMaxHop} / {maxHopAvailable} görünür
-            </span>
-          </span>
-          <DockBtn
-            label={
-              nextHop
-                ? `Bir katman ileri — ${nextHop}. katman`
-                : 'Tüm katmanlar açık'
-            }
-            disabled={!canExpand}
-            onClick={onExpandLayer}
-          >
-            <IconLayerForward />
-          </DockBtn>
-          <DockBtn
-            label="Tüm etki zincirini aç"
-            disabled={!canExpand}
-            onClick={onExpandAll}
-          >
-            <IconFullChain />
-          </DockBtn>
+              <DockBtn
+                label={
+                  nextHop
+                    ? `Bir katman ileri — ${nextHop}. katman`
+                    : 'Tüm katmanlar açık'
+                }
+                disabled={!canExpand}
+                onClick={onExpandLayer}
+              >
+                <IconLayerForward />
+              </DockBtn>
+              <DockBtn
+                label="Tüm etki zincirini aç"
+                disabled={!canExpand}
+                onClick={onExpandAll}
+              >
+                <IconFullChain />
+              </DockBtn>
+            </div>
+          </div>
+
+          {onToggleCascadeEdges && (cascadeCount ?? 0) > 0 && (
+            <>
+              <span className="map-dock-sep" aria-hidden />
+              <div className="map-dock-group">
+                <span className="map-dock-group-kicker">Yan bağ</span>
+                <div className="map-dock-group-row">
+                  <span className="map-dock-wrap">
+                    <button
+                      type="button"
+                      className={`map-dock-cascade${showCascadeEdges ? ' is-on' : ''}`}
+                      aria-pressed={showCascadeEdges}
+                      aria-label={
+                        showCascadeEdges
+                          ? 'Yan bağları gizle'
+                          : 'Yan bağları göster'
+                      }
+                      onClick={onToggleCascadeEdges}
+                    >
+                      <span className="map-dock-cascade-count">{cascadeCount}</span>
+                    </button>
+                    <span className="map-dock-tip" role="tooltip">
+                      {showCascadeEdges
+                        ? 'Alternatif yolları gizle — ek task açmaz'
+                        : 'Alternatif bağımlılık yollarını göster'}
+                    </span>
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
 
           <span className="map-dock-sep" aria-hidden />
 
@@ -1137,24 +1181,23 @@ export function MapCanvasBar({
                 <span className="path-legend-item">
                   <span className="legend-swatch tree" aria-hidden />
                   <span>
-                    <strong>Yeşil</strong> — odak ve ana etki yolu
+                    <strong>Yeşil düz</strong> — doğrudan ana yol (1. katman)
+                  </span>
+                </span>
+                <span className="path-legend-item">
+                  <span className="legend-swatch indirect" aria-hidden />
+                  <span>
+                    <strong>Gri kesikli</strong> — dolaylı ana yol (2+ katman)
                   </span>
                 </span>
                 <span className="path-legend-item">
                   <span className="legend-swatch cascade" aria-hidden />
                   <span>
-                    <strong>Kehribar</strong> — yan bağ (asıl yol değil)
+                    <strong>Kahverengi kesikli</strong> — yan bağ (alternatif yol)
                     {typeof cascadeCount === 'number' && cascadeCount > 0
                       ? ` · ${cascadeCount}`
                       : ''}
                   </span>
-                </span>
-                <span className="path-legend-note">
-                  Ok ucu etkilenen servise bakar. Hover’da yalnız o düğümün bağları.
-                  {truncated ? ' Görünüm kısaltıldı.' : ''}
-                  {radialOn
-                    ? ' Halka: yalnız ana etki yolu; mesafe = hop, eşit açı.'
-                    : ''}
                 </span>
               </div>
             </div>
@@ -1165,7 +1208,7 @@ export function MapCanvasBar({
   )
 }
 
-export function ImpactLegend({ cascadeCount, truncated }: LegendProps) {
+export function ImpactLegend({ cascadeCount }: LegendProps) {
   return (
     <div className="map-legend-fab">
       <button
@@ -1182,21 +1225,23 @@ export function ImpactLegend({ cascadeCount, truncated }: LegendProps) {
           <span className="path-legend-item">
             <span className="legend-swatch tree" aria-hidden />
             <span>
-              <strong>Yeşil</strong> — odak ve ana etki yolu
+              <strong>Yeşil düz</strong> — doğrudan ana yol (1. katman)
+            </span>
+          </span>
+          <span className="path-legend-item">
+            <span className="legend-swatch indirect" aria-hidden />
+            <span>
+              <strong>Gri kesikli</strong> — dolaylı ana yol (2+ katman)
             </span>
           </span>
           <span className="path-legend-item">
             <span className="legend-swatch cascade" aria-hidden />
             <span>
-              <strong>Kehribar</strong> — yan bağ (asıl yol değil)
+              <strong>Kahverengi kesikli</strong> — yan bağ (alternatif yol)
               {typeof cascadeCount === 'number' && cascadeCount > 0
                 ? ` · ${cascadeCount}`
                 : ''}
             </span>
-          </span>
-          <span className="path-legend-note">
-            Ok ucu etkilenen servise bakar. Hover’da yalnız o düğümün bağları.
-            {truncated ? ' Görünüm kısaltıldı.' : ''}
           </span>
         </div>
       </div>

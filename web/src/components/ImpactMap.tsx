@@ -278,7 +278,6 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
           <span
             className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
             data-tip={data.showTip ? data.fullLabel : undefined}
-            title={data.fullLabel}
           >
             {isCenter && <span className="dd-radial-kicker">Merkez</span>}
             <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
@@ -329,9 +328,9 @@ function MethodBadgeView({ data }: NodeProps<MethodBadgeData>) {
   return (
     <div
       className={`dd-method-badge ${data.expanded ? 'expanded' : ''}`}
-      title="Bu servisin method’ları"
+      title={`${data.count} metod çağırıyor — listeyi aç`}
     >
-      {data.count} method
+      {data.count} metod
     </div>
   )
 }
@@ -343,6 +342,11 @@ const nodeTypes = {
 }
 
 const BADGE_GAP = 14
+
+/** Serviste başka yere çağrı yapan metodlar */
+function methodsWithOutgoing(list: MethodRef[]) {
+  return list.filter((m) => m.calleeCount > 0)
+}
 
 /** Harita zoom’unu bozmayan taşınabilir metod penceresi (varsayılan yukarı) */
 function MethodPopover({
@@ -427,16 +431,18 @@ function MethodPopover({
 
   const ranked = useMemo(() => {
     const q = filter.trim().toLowerCase()
-    return [...methods]
+    return methodsWithOutgoing(methods)
       .filter(
         (m) =>
           !q ||
           m.name.toLowerCase().includes(q) ||
           m.className.toLowerCase().includes(q),
       )
-      .sort(
-        (a, b) =>
-          b.callerCount + b.calleeCount - (a.callerCount + a.calleeCount),
+      .sort((a, b) =>
+        `${a.className}.${a.name}`.localeCompare(
+          `${b.className}.${b.name}`,
+          'tr',
+        ),
       )
   }, [methods, filter])
 
@@ -455,7 +461,7 @@ function MethodPopover({
         title="Sürükleyerek taşı"
       >
         <div className="method-popover-title">
-          <strong>{methods.length} method</strong>
+          <strong>{ranked.length} metod</strong>
           <span className="muted"> · {serviceName}</span>
           <span className="method-popover-drag-hint" aria-hidden>
             ⠿
@@ -471,11 +477,6 @@ function MethodPopover({
           ×
         </button>
       </header>
-      <p className="method-popover-legend">
-        <span title="Bu method’u çağıranlar">çağıran ←</span>
-        <span aria-hidden>·</span>
-        <span title="Bu method’un çağırdıkları">çağırılan →</span>
-      </p>
       <input
         type="search"
         className="method-popover-filter"
@@ -485,7 +486,7 @@ function MethodPopover({
       />
       <ul className="method-popover-list">
         {ranked.length === 0 ? (
-          <li className="method-popover-empty">Eşleşme yok</li>
+          <li className="method-popover-empty">Çağrı yapan metod yok</li>
         ) : (
           ranked.map((m) => (
             <li key={m.id}>
@@ -495,15 +496,6 @@ function MethodPopover({
               >
                 <span className="fly-class">{m.className}</span>
                 <span className="fly-name">{m.name}</span>
-                <span className="fly-meta">
-                  <span title="Çağıran (kim çağırıyor)">
-                    çağıran {m.callerCount}
-                  </span>
-                  <span aria-hidden> · </span>
-                  <span title="Çağırılan (kimi çağırıyor)">
-                    çağırılan {m.calleeCount}
-                  </span>
-                </span>
               </button>
             </li>
           ))
@@ -1326,6 +1318,7 @@ export function ImpactMap({
   const [focusId, setFocusId] = useState<string | null>(null)
   const [focusEdgeId, setFocusEdgeId] = useState<string | null>(null)
   const [showLinkedMethods, setShowLinkedMethods] = useState(false)
+  const [showCascadeEdges, setShowCascadeEdges] = useState(false)
   const [expandedMethodServiceId, setExpandedMethodServiceId] = useState<
     string | null
   >(null)
@@ -1414,6 +1407,15 @@ export function ImpactMap({
       layoutMode,
     ],
   )
+
+  const cascadeCount = useMemo(
+    () =>
+      built.edges.filter(
+        (e) => (e.data as { kind?: string } | undefined)?.kind === 'cascade',
+      ).length,
+    [built.edges],
+  )
+
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
 
@@ -1629,7 +1631,7 @@ export function ImpactMap({
           if (!('kind' in d) || (d.kind !== 'center' && d.kind !== 'service')) {
             continue
           }
-          const count = (methodsByService[n.id] ?? []).length
+          const count = methodsWithOutgoing(methodsByService[n.id] ?? []).length
           if (!count) continue
           out.push({
             id: `mbadge-${n.id}`,
@@ -1710,11 +1712,17 @@ export function ImpactMap({
     expandedMethodServiceId,
   ])
 
-  // Hover: yalnız oğuna değen kenarlar · tree yeşil / cascade turuncu
+  // Hover: yalnız oğuna değen kenarlar · tree yeşil / cascade kahverengi
   useEffect(() => {
     const focusing = Boolean(focusId || focusEdgeId)
+    const sourceEdges = showCascadeEdges
+      ? built.edges
+      : built.edges.filter(
+          (e) =>
+            (e.data as { kind?: string } | undefined)?.kind !== 'cascade',
+        )
     setEdges(
-      built.edges.map((e) => {
+      sourceEdges.map((e) => {
         const isRadialLink = String(e.className ?? '').includes('radial-link')
         const on = focusEdgeId
           ? e.id === focusEdgeId
@@ -1777,7 +1785,7 @@ export function ImpactMap({
         }
       }),
     )
-  }, [built.edges, focusId, focusEdgeId, setEdges])
+  }, [built.edges, focusId, focusEdgeId, setEdges, showCascadeEdges])
 
   const pivotToNode = useCallback(
     async (node: Node) => {
@@ -2131,6 +2139,9 @@ export function ImpactMap({
           layout={layout}
           layoutMode={layoutMode}
           truncated={graph.truncated}
+          cascadeCount={cascadeCount}
+          showCascadeEdges={showCascadeEdges}
+          onToggleCascadeEdges={() => setShowCascadeEdges((v) => !v)}
           onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
           onExpandLayer={() =>
             setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
@@ -2182,13 +2193,16 @@ export function ImpactMap({
       </div>
       {expandedMethodServiceId &&
         onSelectMethod &&
-        (methodsByService[expandedMethodServiceId]?.length ?? 0) > 0 && (
+        methodsWithOutgoing(methodsByService[expandedMethodServiceId] ?? [])
+          .length > 0 && (
           <MethodPopover
             serviceId={expandedMethodServiceId}
             serviceName={
               nameById.get(expandedMethodServiceId) ?? expandedMethodServiceId
             }
-            methods={methodsByService[expandedMethodServiceId]!}
+            methods={methodsWithOutgoing(
+              methodsByService[expandedMethodServiceId]!,
+            )}
             mapRef={mapRef}
             onSelectMethod={onSelectMethod}
             onClose={() => setExpandedMethodServiceId(null)}

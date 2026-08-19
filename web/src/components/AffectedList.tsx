@@ -12,6 +12,9 @@ type Props = {
   callees: AffectedService[]
   loading?: boolean
   onPivot: (serviceId: string) => void
+  projectLabels: Map<string, string>
+  /** Sol ağaçtaki proje sırası (HAZINE → MEVDUAT → KREDI) */
+  projectOrder: string[]
 }
 
 type SortKey = 'name' | 'affected' | 'depends'
@@ -20,8 +23,8 @@ type Kind = 'callers' | 'callees'
 const PAGE = 20
 const GROUP_PAGE = 8
 
-function teamOf(s: Service) {
-  return s.owner?.team?.trim() || 'Ekip yok'
+function projectOf(s: Service, projectLabels: Map<string, string>) {
+  return projectLabels.get(s.projectId) ?? s.projectId
 }
 
 function sortServices(list: Service[], sort: SortKey) {
@@ -41,6 +44,8 @@ function Column({
   items,
   empty,
   onPivot,
+  projectLabels,
+  projectOrder,
 }: {
   title: string
   hint: string
@@ -48,12 +53,19 @@ function Column({
   items: AffectedService[]
   empty: string
   onPivot: (serviceId: string) => void
+  projectLabels: Map<string, string>
+  projectOrder: string[]
 }) {
   const [q, setQ] = useState('')
   const [sort, setSort] = useState<SortKey>('name')
-  const [groupByTeam, setGroupByTeam] = useState(true)
+  const [groupByProject, setGroupByProject] = useState(true)
   const [limit, setLimit] = useState(PAGE)
   const [groupLimit, setGroupLimit] = useState<Record<string, number>>({})
+
+  const projectRank = useMemo(
+    () => new Map(projectOrder.map((id, i) => [id, i])),
+    [projectOrder],
+  )
 
   const services = useMemo(() => items.map((x) => x.service), [items])
 
@@ -61,24 +73,37 @@ function Column({
     const needle = q.trim().toLowerCase()
     const base = needle
       ? services.filter((s) => {
-          const blob = `${s.name} ${s.owner?.name ?? ''} ${teamOf(s)}`.toLowerCase()
+          const blob = `${s.name} ${projectOf(s, projectLabels)} ${s.owner?.name ?? ''} ${s.owner?.team ?? ''}`.toLowerCase()
           return blob.includes(needle)
         })
       : services
     return sortServices(base, sort)
-  }, [services, q, sort])
+  }, [services, q, sort, projectLabels])
 
   const groups = useMemo(() => {
-    if (!groupByTeam) return null
+    if (!groupByProject) return null
     const map = new Map<string, Service[]>()
     for (const s of filtered) {
-      const t = teamOf(s)
-      const arr = map.get(t)
+      const key = s.projectId
+      const arr = map.get(key)
       if (arr) arr.push(s)
-      else map.set(t, [s])
+      else map.set(key, [s])
     }
-    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0], 'tr'))
-  }, [filtered, groupByTeam])
+    return [...map.entries()]
+      .sort((a, b) => {
+        const ai = projectRank.get(a[0]) ?? 999
+        const bi = projectRank.get(b[0]) ?? 999
+        if (ai !== bi) return ai - bi
+        return projectOf(a[1][0], projectLabels).localeCompare(
+          projectOf(b[1][0], projectLabels),
+          'tr',
+        )
+      })
+      .map(
+        ([projectId, rows]) =>
+          [projectId, projectOf(rows[0], projectLabels), rows] as const,
+      )
+  }, [filtered, groupByProject, projectLabels, projectRank])
 
   const visibleFlat = filtered.slice(0, limit)
 
@@ -101,7 +126,7 @@ function Column({
               setQ(e.target.value)
               setLimit(PAGE)
             }}
-            placeholder="İsim veya ekip ara…"
+            placeholder="İsim veya proje ara…"
             aria-label={`${title} içinde ara`}
           />
           <label className="neighbor-sort">
@@ -118,10 +143,10 @@ function Column({
           <label className="neighbor-group">
             <input
               type="checkbox"
-              checked={groupByTeam}
-              onChange={(e) => setGroupByTeam(e.target.checked)}
+              checked={groupByProject}
+              onChange={(e) => setGroupByProject(e.target.checked)}
             />
-            Ekibe göre
+            Projeye göre
           </label>
         </div>
       )}
@@ -132,13 +157,13 @@ function Column({
         <p className="empty-hint neighbor-empty">Eşleşen servis yok.</p>
       ) : groups ? (
         <div className="neighbor-groups">
-          {groups.map(([team, rows]) => {
-            const cap = groupLimit[team] ?? GROUP_PAGE
+          {groups.map(([projectId, label, rows]) => {
+            const cap = groupLimit[projectId] ?? GROUP_PAGE
             const shown = rows.slice(0, cap)
             return (
-              <div key={team} className="neighbor-group-block">
+              <div key={projectId} className="neighbor-group-block">
                 <h4 className="neighbor-group-title">
-                  {team}
+                  {label}
                   <span>{rows.length}</span>
                 </h4>
                 <ul className="affected-list">
@@ -155,7 +180,7 @@ function Column({
                     onClick={() =>
                       setGroupLimit((m) => ({
                         ...m,
-                        [team]: cap + GROUP_PAGE,
+                        [projectId]: cap + GROUP_PAGE,
                       }))
                     }
                   >
@@ -213,30 +238,23 @@ function NeighborRow({
     >
       <span className="affected-row-body">
         <span className="svc-name">{service.name}</span>
-        <span className="svc-meta">
-          {service.owner?.team ?? '—'} ·{' '}
-          {service.owner?.name ?? 'Owner atanmamış'}
+        <span className="rel-pill" title={reverse}>
+          {reverse}
         </span>
-        <span className="rel-pill">{reverse}</span>
       </span>
-      <span className="affected-row-go" aria-hidden>
-        görüntüle
-        <svg viewBox="0 0 16 16" width="14" height="14">
-          <path
-            d="M6 3.5L11 8l-5 4.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </span>
+      <span className="affected-row-action">Servisi seç</span>
     </button>
   )
 }
 
-export function AffectedList({ callers, callees, loading, onPivot }: Props) {
+export function AffectedList({
+  callers,
+  callees,
+  loading,
+  onPivot,
+  projectLabels,
+  projectOrder,
+}: Props) {
   if (loading) {
     return (
       <div className="neighbor-grid">
@@ -260,6 +278,8 @@ export function AffectedList({ callers, callees, loading, onPivot }: Props) {
         items={callers}
         empty="Bu servisi çağıran yok."
         onPivot={onPivot}
+        projectLabels={projectLabels}
+        projectOrder={projectOrder}
       />
       <Column
         title="Bu Servisin Çağırdıkları"
@@ -268,6 +288,8 @@ export function AffectedList({ callers, callees, loading, onPivot }: Props) {
         items={callees}
         empty="Çağırdığı servis yok."
         onPivot={onPivot}
+        projectLabels={projectLabels}
+        projectOrder={projectOrder}
       />
     </div>
   )

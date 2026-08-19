@@ -138,7 +138,6 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
         <span
           className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
           data-tip={data.showTip ? data.fullLabel : undefined}
-          title={data.fullLabel}
         >
           {isCenter && <span className="dd-radial-kicker">Merkez</span>}
           <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>

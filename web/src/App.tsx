@@ -85,6 +85,32 @@ export default function App() {
 
   const [session, setSession] = useState<SessionUser>()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
+  const [liveStatus, setLiveStatus] = useState('')
+
+  useEffect(() => {
+    if (apiError) return
+    if (loading && pivotId) {
+      setLiveStatus('Servis bilgileri yükleniyor…')
+      return
+    }
+    if (tab === 'map' && selectedMethodId && !methodImpact) {
+      setLiveStatus('Method etki grafı yükleniyor…')
+      return
+    }
+    if (service) {
+      setLiveStatus(`Merkez servis: ${service.name}`)
+      return
+    }
+    setLiveStatus('')
+  }, [
+    apiError,
+    loading,
+    pivotId,
+    tab,
+    selectedMethodId,
+    methodImpact,
+    service,
+  ])
 
   useEffect(() => {
     void (async () => {
@@ -166,6 +192,10 @@ export default function App() {
   }, [pivotId])
 
   const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
+  const projectOrder = useMemo(
+    () => tree.filter((n) => n.kind === 'project').map((n) => n.id),
+    [tree],
+  )
   const impactProjectOptions = useMemo(
     () => (impact ? projectsInImpact(impact, projectLabels) : []),
     [impact, projectLabels],
@@ -317,7 +347,19 @@ export default function App() {
 
   return (
     <div className="app">
-      {apiError && <div className="api-banner">{apiError}</div>}
+      {apiError && (
+        <div className="api-banner" role="alert" aria-live="assertive">
+          {apiError}
+        </div>
+      )}
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="app-status-live sr-only"
+      >
+        {liveStatus}
+      </div>
 
       <div className={`shell${navOpen ? '' : ' is-nav-collapsed'}`}>
         <aside className="module-sidebar">
@@ -329,7 +371,14 @@ export default function App() {
               placeholder="Servis veya method ara…"
             />
             {query && (hits.length > 0 || methodHits.length > 0) && (
-              <ul className="search-hits">
+              <>
+                <button
+                  type="button"
+                  className="search-backdrop"
+                  aria-label="Aramayı kapat"
+                  onClick={() => setQuery('')}
+                />
+                <ul className="search-hits">
                 {hits.map((s) => (
                   <li key={s.id}>
                     <button
@@ -340,7 +389,10 @@ export default function App() {
                       }}
                     >
                       <span className="search-hit-main">
-                        <span className="search-hit-text" title={s.name}>
+                        <span
+                          className="search-hit-text name-tip is-short"
+                          data-tip={s.name}
+                        >
                           <strong>{s.name}</strong>
                         </span>
                         <span className="hit-tag hit-tag-service">Servis</span>
@@ -359,8 +411,8 @@ export default function App() {
                     >
                       <span className="search-hit-main">
                         <span
-                          className="search-hit-text"
-                          title={`${m.className}.${m.name}`}
+                          className="search-hit-text name-tip is-short"
+                          data-tip={`${m.className}.${m.name}`}
                         >
                           <strong>
                             {m.className}.{m.name}
@@ -368,13 +420,17 @@ export default function App() {
                         </span>
                         <span className="hit-tag hit-tag-method">Method</span>
                       </span>
-                      <span className="method-hit-svc" title={m.serviceName}>
+                      <span
+                        className="method-hit-svc name-tip is-short"
+                        data-tip={m.serviceName}
+                      >
                         {m.serviceName}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
+              </>
             )}
           </label>
           <div className="module-sidebar-head">
@@ -382,13 +438,22 @@ export default function App() {
             <button
               type="button"
               className="nav-toggle"
-              title={navOpen ? 'Paneli gizle' : 'Modülleri göster'}
-              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini göster'}
+              title={navOpen ? 'Paneli gizle' : 'Modül panelini aç'}
+              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini aç'}
               aria-expanded={navOpen}
               onClick={() => setNavOpen((v) => !v)}
             >
               {navOpen ? '‹' : '›'}
             </button>
+            {!navOpen && (
+              <span className="module-rail-hint">Aç</span>
+            )}
+          </div>
+          <div className="module-kind-legend" aria-label="Tür renkleri">
+            <span className="module-kind-chip is-project">Proje</span>
+            <span className="module-kind-chip is-package">Paket</span>
+            <span className="module-kind-chip is-service">Servis</span>
+            <span className="module-kind-chip is-method">Method</span>
           </div>
           <div className="module-sidebar-body">
             <ModuleTree
@@ -417,20 +482,30 @@ export default function App() {
         >
           {!hasSelection && (
             <div className="welcome">
-              <h2>Servis seçin</h2>
+              <h1>Servis seçin</h1>
               <p>
                 Soldaki aramadan veya ağaçtan bir servis seçerek ilişkileri ve
-                etki yolunu görün. Seçili servise tekrar tıklayınca seçim kalkar.
+                etki yolunu görün.
               </p>
+              <ol className="welcome-steps">
+                <li>Servis ara veya modül ağacından seç</li>
+                <li>Haritada etki zincirini incele</li>
+                <li>İlişkiler sekmesinde komşulara bak</li>
+              </ol>
             </div>
           )}
 
           {hasSelection && (
             <>
               <div ref={stageTopRef} className="stage-top">
-                <div className="tabs">
+                <h1 className="main-heading" title={service?.name}>
+                  {service?.name}
+                </h1>
+                <nav className="tabs" aria-label="Görünüm">
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={tab === 'map'}
                     className={tab === 'map' ? 'on' : ''}
                     onClick={() => setTab('map')}
                   >
@@ -438,6 +513,8 @@ export default function App() {
                   </button>
                   <button
                     type="button"
+                    role="tab"
+                    aria-selected={tab === 'affected'}
                     className={tab === 'affected' ? 'on' : ''}
                     onClick={() => {
                       setMapExpanded(false)
@@ -453,7 +530,7 @@ export default function App() {
                   >
                     Seçimi bırak
                   </button>
-                </div>
+                </nav>
               </div>
 
               {tab === 'map' && selectedMethodId && methodImpact && (
@@ -487,7 +564,7 @@ export default function App() {
 
               {tab === 'map' && !selectedMethodId && impact && (
                 <MapStage
-                  title="Harita"
+                  title={service?.name ?? 'Harita'}
                   expanded={mapExpanded}
                   onExpandedChange={setMapExpanded}
                 >
@@ -614,6 +691,8 @@ export default function App() {
                     callees={callees}
                     loading={loading}
                     onPivot={(id) => selectPivot(id)}
+                    projectLabels={projectLabels}
+                    projectOrder={projectOrder}
                   />
                 </>
               )}
