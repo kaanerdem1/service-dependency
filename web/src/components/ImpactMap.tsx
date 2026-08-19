@@ -86,6 +86,10 @@ import {
   RadialLabelZoomSync,
   type VisitStep,
 } from './ImpactChrome'
+import { saveExploreSnapshot } from '../api/client'
+import { captureSnapshotScreenshots } from '../snapshot/capture'
+import { useSnapshotTrailOptional } from '../snapshot/trail'
+import { snapshotWatermarkLines } from '../snapshot/useSnapshotPack'
 
 type Props = {
   graph: ImpactGraph
@@ -112,8 +116,11 @@ type Props = {
   }) => void
   navDirection?: 'back' | 'forward' | null
   onNavDirectionConsumed?: () => void
-  /** Session kullanıcı — notlar için */
+  /** Session kullanıcı — notlar + snapshot */
   sessionUserId?: string
+  sessionUserName?: string
+  onMapRoot?: (el: HTMLDivElement | null) => void
+  onSnapshotSaved?: (snapshot: import('../types').Snapshot) => void
 }
 
 const LEFT_X = mapLeftX()
@@ -1299,8 +1306,13 @@ export function ImpactMap({
   navDirection = null,
   onNavDirectionConsumed,
   sessionUserId,
+  sessionUserName,
+  onMapRoot,
+  onSnapshotSaved,
 }: Props) {
   const [infoPanelOpen, setInfoPanelOpen] = useState(false)
+  const [snapshotSaving, setSnapshotSaving] = useState(false)
+  const trail = useSnapshotTrailOptional()
 
   const restoredViewRef = useRef(restoredView)
   restoredViewRef.current = restoredView
@@ -1374,6 +1386,64 @@ export function ImpactMap({
     for (const n of filteredGraph.nodes) m = Math.max(m, n.hop)
     return m
   }, [filteredGraph.nodes])
+
+  useEffect(() => {
+    trail?.syncView({
+      layout: layoutMode,
+      visibleMaxHop,
+      maxHopAvailable,
+      showCascadeEdges,
+    })
+  }, [trail, layoutMode, visibleMaxHop, maxHopAvailable, showCascadeEdges])
+
+  useEffect(() => {
+    trail?.syncUi({ drawerOpen: infoPanelOpen })
+  }, [trail, infoPanelOpen])
+
+  useEffect(() => {
+    trail?.syncFocus({
+      level: 'service',
+      id: graph.center.id,
+      label: graph.center.name,
+      treePath: [
+        graph.center.projectId,
+        graph.center.packageId,
+        graph.center.name,
+      ],
+      serviceId: graph.center.id,
+    })
+  }, [trail, graph.center])
+
+  const attachMapRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      mapRef.current = el
+      onMapRoot?.(el)
+    },
+    [onMapRoot],
+  )
+
+  const handleSaveSnapshot = useCallback(async () => {
+    if (!sessionUserId || !trail) return
+    setSnapshotSaving(true)
+    try {
+      const base = trail.getClientPayload()
+      const screenshots = await captureSnapshotScreenshots({
+        mapRoot: mapRef.current,
+        workspaceRoot: document.querySelector('.workspace'),
+        watermark: snapshotWatermarkLines([`Keşif · ${graph.center.name}`]),
+      })
+      const snap = await saveExploreSnapshot({
+        personId: sessionUserId,
+        personName: sessionUserName,
+        client: { ...base, screenshots },
+      })
+      onSnapshotSaved?.(snap)
+    } catch (e) {
+      console.error('[snapshot]', e)
+    } finally {
+      setSnapshotSaving(false)
+    }
+  }, [sessionUserId, sessionUserName, trail, graph.center.name, onSnapshotSaved])
 
   const layout = useMemo(
     () =>
@@ -2012,7 +2082,7 @@ export function ImpactMap({
 
   return (
     <div
-      ref={mapRef}
+      ref={attachMapRef}
       className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
@@ -2141,16 +2211,25 @@ export function ImpactMap({
           truncated={graph.truncated}
           cascadeCount={cascadeCount}
           showCascadeEdges={showCascadeEdges}
-          onToggleCascadeEdges={() => setShowCascadeEdges((v) => !v)}
-          onCollapseLayer={() => setVisibleMaxHop((h) => Math.max(1, h - 1))}
-          onExpandLayer={() =>
+          onToggleCascadeEdges={() => {
+            trail?.record('cascade_toggle')
+            setShowCascadeEdges((v) => !v)
+          }}
+          onCollapseLayer={() => {
+            trail?.record('layer_change')
+            setVisibleMaxHop((h) => Math.max(1, h - 1))
+          }}
+          onExpandLayer={() => {
+            trail?.record('layer_change')
             setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
-          }
+          }}
           onExpandAll={() => {
+            trail?.record('layer_change')
             setVisibleMaxHop(maxHopAvailable)
             setExpandedLayers(new Set(filteredGraph.nodes.map((n) => n.hop)))
           }}
           onCollapseAll={() => {
+            trail?.record('layer_change')
             setVisibleMaxHop(1)
             setExpandedLayers(new Set())
           }}
@@ -2159,10 +2238,15 @@ export function ImpactMap({
             setTidyNonce((n) => n + 1)
           }}
           onToggleLayoutMode={() => {
+            trail?.record('layout_toggle')
             layoutDirtyRef.current = false
             setLayoutMode((m) => (m === 'ltr' ? 'radial' : 'ltr'))
             setTidyNonce((n) => n + 1)
           }}
+          onSaveSnapshot={
+            sessionUserId && trail ? () => void handleSaveSnapshot() : undefined
+          }
+          snapshotSaving={snapshotSaving}
         />
       </ReactFlow>
       </div>
@@ -2188,7 +2272,10 @@ export function ImpactMap({
           id === graph.center.id ? onClearCenter?.() : onPivot(id)
         }
         open={infoPanelOpen}
-        onOpenChange={setInfoPanelOpen}
+        onOpenChange={(open) => {
+          trail?.record('drawer_toggle')
+          setInfoPanelOpen(open)
+        }}
       />
       </div>
       {expandedMethodServiceId &&

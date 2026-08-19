@@ -48,12 +48,18 @@ import {
   listNotesForService,
   noteCountsForServices,
 } from './notes.js'
+import {
+  createSnapshot,
+  getSnapshot,
+  listSnapshotsForRequest,
+} from './snapshots.js'
+import type { SnapshotClientPayload } from './snapshotTypes.js'
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 4000)
 
 app.use(cors())
-app.use(express.json())
+app.use(express.json({ limit: '15mb' }))
 
 // —— Sağlık / oturum / ağaç ——
 app.get('/api/health', (_req, res) => {
@@ -281,7 +287,34 @@ app.post('/api/change-requests', (req, res) => {
       department: body.department,
       affectedServiceIds,
     })
-    res.status(201).json(created)
+    const snapshotContext = body.snapshotContext as SnapshotClientPayload | undefined
+    let snapshots: ReturnType<typeof createSnapshot>[] = []
+    if (snapshotContext && created.length > 0) {
+      try {
+        snapshots.push(
+          createSnapshot({
+            type: 'cr_open',
+            actor: {
+              userId: body.personId,
+              displayName: body.personName ?? body.personId,
+            },
+            changeRequestId: created[0]!.id,
+            relatedRequestIds: created.map((c) => c.id),
+            batchId: created[0]!.batchId,
+            client: {
+              ...snapshotContext,
+              changeSummary: {
+                title: body.summary,
+                reason: body.rationale,
+              },
+            },
+          }),
+        )
+      } catch (e) {
+        console.warn('[snapshot] cr_open failed', e)
+      }
+    }
+    res.status(201).json({ requests: created, snapshots })
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'bad_request'
     const status =
@@ -307,6 +340,10 @@ app.post('/api/inbox/:ownerId/read', (req, res) => {
 
 app.patch('/api/change-requests/:id/flags/:serviceId', (req, res) => {
   try {
+    const wasOpen = (() => {
+      const prev = getChangeRequest(req.params.id)
+      return prev ? prev.impacted.every((i) => i.flag === 'accepted') : false
+    })()
     const cr = setFlag({
       requestId: req.params.id,
       serviceId: req.params.serviceId,
@@ -315,10 +352,92 @@ app.patch('/api/change-requests/:id/flags/:serviceId', (req, res) => {
       actorOwnerId: req.body.actorOwnerId,
     })
     if (!cr) return res.status(404).json({ error: 'not_found_or_forbidden' })
-    res.json(cr)
+    const snapshotContext = req.body.snapshotContext as SnapshotClientPayload | undefined
+    const snapshots: ReturnType<typeof createSnapshot>[] = []
+    if (snapshotContext) {
+      try {
+        const row = cr.impacted.find((i) => i.serviceId === req.params.serviceId)
+        snapshots.push(
+          createSnapshot({
+            type: 'approval',
+            actor: {
+              userId: req.body.actorOwnerId,
+              displayName: row?.ownerName,
+            },
+            changeRequestId: cr.id,
+            client: snapshotContext,
+            approvals: [
+              {
+                ownerId: req.body.actorOwnerId,
+                serviceId: req.params.serviceId,
+                flag: req.body.flag,
+                note: req.body.note?.trim() || undefined,
+                at: new Date().toISOString(),
+              },
+            ],
+          }),
+        )
+        const nowOpen = cr.impacted.every((i) => i.flag === 'accepted')
+        if (nowOpen && !wasOpen) {
+          snapshots.push(
+            createSnapshot({
+              type: 'gate_open',
+              actor: {
+                userId: req.body.actorOwnerId,
+                displayName: row?.ownerName,
+              },
+              changeRequestId: cr.id,
+              client: snapshotContext,
+              approvals: cr.impacted.map((i) => ({
+                ownerId: i.ownerId ?? '',
+                serviceId: i.serviceId,
+                flag: i.flag,
+                note: i.note,
+                at: cr.updatedAt,
+              })),
+            }),
+          )
+        }
+      } catch (e) {
+        console.warn('[snapshot] approval failed', e)
+      }
+    }
+    res.json({ request: cr, snapshots })
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : 'bad_request' })
   }
+})
+
+app.post('/api/snapshots', (req, res) => {
+  const body = req.body ?? {}
+  if (!body.personId || !body.client) {
+    return res.status(400).json({ error: 'missing_fields' })
+  }
+  try {
+    const snapshot = createSnapshot({
+      type: 'explore',
+      actor: {
+        userId: body.personId,
+        displayName: body.personName ?? body.personId,
+      },
+      changeRequestId: body.changeRequestId,
+      client: body.client as SnapshotClientPayload,
+    })
+    res.status(201).json(snapshot)
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'bad_request'
+    res.status(400).json({ error: msg })
+  }
+})
+
+app.get('/api/snapshots/:id', (req, res) => {
+  const snap = getSnapshot(req.params.id)
+  if (!snap) return res.status(404).json({ error: 'not_found' })
+  res.json(snap)
+})
+
+app.get('/api/change-requests/:id/snapshots', (req, res) => {
+  res.json(listSnapshotsForRequest(req.params.id))
 })
 
 app.listen(PORT, () => {

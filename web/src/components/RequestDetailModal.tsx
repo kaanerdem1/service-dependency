@@ -6,27 +6,37 @@ import {
   taskHeadline,
   type ChangeRequest,
   type FlagStatus,
+  type SnapshotClientPayload,
 } from '../types'
 import { setFlag } from '../api/client'
 import type { SessionUser } from '../mock/session'
+import { SnapshotList } from './SnapshotList'
 
 type Props = {
   request: ChangeRequest
   session: SessionUser
   onClose: () => void
   onUpdated: (request: ChangeRequest) => void
+  buildSnapshotContext?: () => Promise<SnapshotClientPayload | undefined>
 }
 
-type TabId = 'general' | 'service' | 'data' | 'approval'
+type TabId = 'general' | 'service' | 'data' | 'approval' | 'snapshots'
 
 const TABS: { id: TabId; label: string }[] = [
   { id: 'general', label: 'Genel' },
   { id: 'service', label: 'Servis etkisi' },
   { id: 'data', label: 'Veri etkisi' },
   { id: 'approval', label: 'Onay' },
+  { id: 'snapshots', label: 'Snapshot' },
 ]
 
-export function RequestDetailModal({ request, session, onClose, onUpdated }: Props) {
+export function RequestDetailModal({
+  request,
+  session,
+  onClose,
+  onUpdated,
+  buildSnapshotContext,
+}: Props) {
   const [tab, setTab] = useState<TabId>('general')
   const open = isApprovalOpen(request)
   const row = request.impacted[0]
@@ -39,12 +49,16 @@ export function RequestDetailModal({ request, session, onClose, onUpdated }: Pro
     if (!row) return
     setError(undefined)
     try {
-      const updated = await setFlag({
+      const snapshotContext = buildSnapshotContext
+        ? await buildSnapshotContext()
+        : undefined
+      const { request: updated } = await setFlag({
         requestId: request.id,
         serviceId: row.serviceId,
         flag,
         note,
         actorOwnerId: session.id,
+        snapshotContext,
       })
       onUpdated(updated)
     } catch (e) {
@@ -202,6 +216,17 @@ export function RequestDetailModal({ request, session, onClose, onUpdated }: Pro
                 </div>
               )}
               {error && <p className="form-error">{error}</p>}
+            </div>
+          )}
+
+          {tab === 'snapshots' && (
+            <div className="task-pane">
+              <h3 className="section-title">Snapshot kayıtları</h3>
+              <p className="hint-sm">
+                Talep açılışı, onay ve kapı açılışı otomatik kaydedilir. PNG + JSON
+                indirilebilir.
+              </p>
+              <SnapshotList requestId={request.id} />
             </div>
           )}
         </div>

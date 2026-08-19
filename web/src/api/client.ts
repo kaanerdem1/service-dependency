@@ -17,6 +17,8 @@ import type {
   Service,
   ServiceNeighbors,
   ServiceNote,
+  Snapshot,
+  SnapshotClientPayload,
 } from '../types'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -112,11 +114,15 @@ export function createChangeRequest(input: {
   team?: string
   department?: string
   affectedServiceIds: string[]
+  snapshotContext?: SnapshotClientPayload
 }) {
-  return request<ChangeRequest[]>('/change-requests', {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })
+  return request<{ requests: ChangeRequest[]; snapshots: Snapshot[] }>(
+    '/change-requests',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  )
 }
 
 export function getInbox(ownerId: string) {
@@ -143,8 +149,9 @@ export function setFlag(input: {
   flag: FlagStatus
   note?: string
   actorOwnerId: string
+  snapshotContext?: SnapshotClientPayload
 }) {
-  return request<ChangeRequest>(
+  return request<{ request: ChangeRequest; snapshots: Snapshot[] }>(
     `/change-requests/${input.requestId}/flags/${input.serviceId}`,
     {
       method: 'PATCH',
@@ -152,9 +159,30 @@ export function setFlag(input: {
         flag: input.flag,
         note: input.note,
         actorOwnerId: input.actorOwnerId,
+        snapshotContext: input.snapshotContext,
       }),
     },
   )
+}
+
+export function saveExploreSnapshot(input: {
+  personId: string
+  personName?: string
+  changeRequestId?: string
+  client: SnapshotClientPayload
+}) {
+  return request<Snapshot>('/snapshots', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function getSnapshot(id: string) {
+  return request<Snapshot>(`/snapshots/${id}`)
+}
+
+export function listSnapshotsForRequest(changeRequestId: string) {
+  return request<Snapshot[]>(`/change-requests/${changeRequestId}/snapshots`)
 }
 
 export function getSessionUsers() {

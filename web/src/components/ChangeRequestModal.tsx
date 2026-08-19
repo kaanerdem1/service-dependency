@@ -13,6 +13,7 @@ type Props = {
   session: SessionUser
   onClose: () => void
   onCreated: (requestIds: string[]) => void
+  buildSnapshotContext?: () => Promise<import('../types').SnapshotClientPayload | undefined>
 }
 
 type TabId = 'change' | 'impact' | 'approval'
@@ -29,6 +30,7 @@ export function ChangeRequestModal({
   session,
   onClose,
   onCreated,
+  buildSnapshotContext,
 }: Props) {
   const [tab, setTab] = useState<TabId>('change')
   const [summary, setSummary] = useState('')
@@ -66,7 +68,10 @@ export function ChangeRequestModal({
     }
     setSaving(true)
     try {
-      const created = await createChangeRequest({
+      const snapshotContext = buildSnapshotContext
+        ? await buildSnapshotContext()
+        : undefined
+      const { requests: created } = await createChangeRequest({
         kind: 'change',
         targetServiceId: service.id,
         summary,
@@ -79,6 +84,7 @@ export function ChangeRequestModal({
         team,
         department,
         affectedServiceIds: affected.map((a) => a.service.id),
+        snapshotContext,
       })
       onCreated(created.map((c) => c.id))
     } catch (err) {

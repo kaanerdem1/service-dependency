@@ -266,7 +266,7 @@ export function NewServiceRequestModal({
     }
     setSaving(true)
     try {
-      const created = await createChangeRequest({
+      const { requests: created } = await createChangeRequest({
         kind: 'new_service',
         proposedServiceName: techName.trim(),
         proposedProjectId: selectedPkg.projectId,

@@ -194,9 +194,10 @@ export function radialClearance(hop: number, layout: MapLayout): number {
   return radialRingCenterRadius(hop, layout) - RADIAL_CENTER_W / 2
 }
 
-function nodeWidth(n: RadialLayoutNode, layout: MapLayout): number {
+function _nodeWidth(n: RadialLayoutNode, layout: MapLayout): number {
   return typeof n.style?.width === 'number' ? n.style.width : layout.nodeW
 }
+void _nodeWidth
 
 /** Alt ağaç yaprağı sayısı — dilim genişliği buna göre */
 function subtreeWeight(

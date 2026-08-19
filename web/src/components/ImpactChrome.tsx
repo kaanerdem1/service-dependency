@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
 import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
 import { fitViewPaddingForLayout, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
@@ -645,6 +645,8 @@ type LayerControlsProps = {
   showCascadeEdges?: boolean
   onToggleCascadeEdges?: () => void
   truncated?: boolean
+  onSaveSnapshot?: () => void
+  snapshotSaving?: boolean
 }
 
 function DockBtn({
@@ -870,6 +872,17 @@ function IconRadial() {
   )
 }
 
+function IconSave() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path
+        fill="currentColor"
+        d="M4 1h5.5L13 4.5V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1Zm1 2v3h6V3.6L9.4 3H5Zm1 5h4v5H6V8Z"
+      />
+    </svg>
+  )
+}
+
 /**
  * Orta-alt (veya serbest) harita dock’u: sürükle, dikey/kenar.
  * React Flow çocuğu olmalı (useReactFlow).
@@ -888,6 +901,8 @@ export function MapCanvasBar({
   cascadeCount,
   showCascadeEdges = false,
   onToggleCascadeEdges,
+  onSaveSnapshot,
+  snapshotSaving = false,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1158,6 +1173,24 @@ export function MapCanvasBar({
                         : 'Alternatif bağımlılık yollarını göster'}
                     </span>
                   </span>
+                </div>
+              </div>
+            </>
+          )}
+
+          {onSaveSnapshot && (
+            <>
+              <span className="map-dock-sep" aria-hidden />
+              <div className="map-dock-group">
+                <span className="map-dock-group-kicker">Kayıt</span>
+                <div className="map-dock-group-row">
+                  <DockBtn
+                    label="Snapshot kaydet"
+                    disabled={snapshotSaving}
+                    onClick={onSaveSnapshot}
+                  >
+                    <IconSave />
+                  </DockBtn>
                 </div>
               </div>
             </>

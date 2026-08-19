@@ -15,12 +15,17 @@ import {
   projectsInImpact,
 } from './impact/projectFilter'
 import { AffectedList } from './components/AffectedList'
+import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { ImpactMap } from './components/ImpactMap'
+import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
+import { RequestDetailModal } from './components/RequestDetailModal'
 import {
+  getChangeRequest,
   getImpactGraph,
+  getInbox,
   getMethodImpactGraph,
   getModuleTree,
   getNeighbors,
@@ -29,14 +34,18 @@ import {
   searchMethods,
   searchServices,
 } from './api/client'
+import { canOpenChangeRequest } from './auth/permissions'
+import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
 import type { SessionUser } from './mock/session'
 import type {
   AffectedService,
+  ChangeRequest,
   ImpactGraph,
   MethodImpactGraph,
   MethodRef,
   ModuleNode,
   Service,
+  Snapshot,
 } from './types'
 import './App.css'
 
@@ -82,10 +91,23 @@ export default function App() {
   )
   const stageTopRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
+  const mapRootRef = useRef<HTMLDivElement | null>(null)
+  const workspaceRef = useRef<HTMLDivElement>(null)
+
+  const { trail, buildClientPayload } = useSnapshotPack()
 
   const [session, setSession] = useState<SessionUser>()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
   const [liveStatus, setLiveStatus] = useState('')
+  const [crOpen, setCrOpen] = useState(false)
+  const [inboxOpen, setInboxOpen] = useState(false)
+  const [inbox, setInbox] = useState<{
+    actions: { request: ChangeRequest; row: import('./types').ImpactedFlag }[]
+    updates: import('./types').InboxNotification[]
+    pending: number
+  }>()
+  const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
+  const [snapshotToast, setSnapshotToast] = useState<string>()
 
   useEffect(() => {
     if (apiError) return
@@ -191,6 +213,59 @@ export default function App() {
     }
   }, [pivotId])
 
+  const refreshInbox = useCallback(async () => {
+    if (!session) return
+    try {
+      const data = await getInbox(session.id)
+      setInbox(data)
+    } catch {
+      /* mock */
+    }
+  }, [session])
+
+  useEffect(() => {
+    void refreshInbox()
+  }, [refreshInbox])
+
+  useEffect(() => {
+    trail.syncUi({
+      activeTab: tab,
+      sidebarOpen: navOpen,
+      searchOpen: Boolean(query.trim()),
+      selectedMethodId: selectedMethodId ?? null,
+    })
+  }, [trail, tab, navOpen, query, selectedMethodId])
+
+  useEffect(() => {
+    if (!service) return
+    trail.syncFocus({
+      level: selectedMethodId ? 'method' : 'service',
+      id: selectedMethodId ?? service.id,
+      label: service.name,
+      treePath: [service.projectId, service.packageId, service.name],
+      serviceId: service.id,
+    })
+  }, [trail, service, selectedMethodId])
+
+  const makeSnapshotContext = useCallback(async () => {
+    if (!service) return undefined
+    return buildClientPayload({
+      mapEl: mapRootRef.current,
+      workspaceEl: workspaceRef.current,
+      watermarkLines: snapshotWatermarkLines([service.name]),
+    })
+  }, [buildClientPayload, service])
+
+  const openRequestDetail = useCallback(async (requestId: string) => {
+    try {
+      const req = await getChangeRequest(requestId)
+      setRequestDetail(req)
+      setInboxOpen(false)
+    } catch {
+      setSnapshotToast('Talep yüklenemedi')
+    }
+  }, [])
+
   const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
   const projectOrder = useMemo(
     () => tree.filter((n) => n.kind === 'project').map((n) => n.id),
@@ -228,11 +303,17 @@ export default function App() {
   }, [])
 
   const selectPivot = useCallback(
-    (id: string, opts?: { resetHistory?: boolean }) => {
+    (id: string, opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' }) => {
       if (id === pivotId && !selectedMethodId) {
         clearSelection()
         return
       }
+      const label = catalogServices.find((s) => s.id === id)?.name ?? id
+      trail.record(opts?.source === 'map' ? 'map_select' : opts?.source === 'search' ? 'search_select' : 'tree_select', {
+        level: 'service',
+        id,
+        label,
+      })
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
       if (opts?.resetHistory) {
@@ -249,7 +330,7 @@ export default function App() {
       setHistoryIndex(next.length - 1)
       setPivotId(id)
     },
-    [clearSelection, history, historyIndex, pivotId, selectedMethodId],
+    [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
   )
 
   const selectMethod = useCallback(
@@ -296,6 +377,7 @@ export default function App() {
       return
     }
     if (historyIndex <= 0) return
+    trail.record('nav_back')
     const i = historyIndex - 1
     setNavDirection('back')
     setHistoryIndex(i)
@@ -304,6 +386,7 @@ export default function App() {
 
   const goForward = () => {
     if (historyIndex < 0 || historyIndex >= history.length - 1) return
+    trail.record('nav_forward')
     const i = historyIndex + 1
     setNavDirection('forward')
     setHistoryIndex(i)
@@ -339,6 +422,8 @@ export default function App() {
       ? history[historyIndex]
       : undefined
   const hasSelection = !!pivotId
+  const canChange =
+    session && service ? canOpenChangeRequest(session, service) : false
   const serviceNameById = (() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
     if (service) m.set(service.id, service.name)
@@ -384,7 +469,7 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => {
-                        selectPivot(s.id, { resetHistory: true })
+                        selectPivot(s.id, { resetHistory: true, source: 'search' })
                         setQuery('')
                       }}
                     >
@@ -441,7 +526,10 @@ export default function App() {
               title={navOpen ? 'Paneli gizle' : 'Modül panelini aç'}
               aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini aç'}
               aria-expanded={navOpen}
-              onClick={() => setNavOpen((v) => !v)}
+              onClick={() => {
+                trail.record('sidebar_toggle')
+                setNavOpen((v) => !v)
+              }}
             >
               {navOpen ? '‹' : '›'}
             </button>
@@ -460,13 +548,15 @@ export default function App() {
               nodes={tree}
               selectedServiceId={pivotId}
               selectedMethodId={selectedMethodId}
-              onSelectService={(id) => selectPivot(id, { resetHistory: true })}
+              onSelectService={(id) =>
+                selectPivot(id, { resetHistory: true, source: 'tree' })
+              }
               onSelectMethod={selectMethod}
             />
           </div>
         </aside>
 
-        <div className="workspace">
+        <div className="workspace" ref={workspaceRef}>
           <header className="topbar">
             <div className="brand">
               <span className="brand-mark">SD</span>
@@ -474,6 +564,18 @@ export default function App() {
                 <strong>Service Dependency</strong>
               </div>
             </div>
+            {session && (
+              <div className="topbar-actions">
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => setInboxOpen(true)}
+                >
+                  Inbox
+                  {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
+                </button>
+              </div>
+            )}
           </header>
 
           <main
@@ -507,7 +609,10 @@ export default function App() {
                     role="tab"
                     aria-selected={tab === 'map'}
                     className={tab === 'map' ? 'on' : ''}
-                    onClick={() => setTab('map')}
+                    onClick={() => {
+                      trail.record('tab_change')
+                      setTab('map')
+                    }}
                   >
                     Harita
                   </button>
@@ -517,6 +622,7 @@ export default function App() {
                     aria-selected={tab === 'affected'}
                     className={tab === 'affected' ? 'on' : ''}
                     onClick={() => {
+                      trail.record('tab_change')
                       setMapExpanded(false)
                       setTab('affected')
                     }}
@@ -530,6 +636,15 @@ export default function App() {
                   >
                     Seçimi bırak
                   </button>
+                  {canChange && affected.length > 0 && (
+                    <button
+                      type="button"
+                      className="btn primary compact"
+                      onClick={() => setCrOpen(true)}
+                    >
+                      Değişiklik talebi
+                    </button>
+                  )}
                 </nav>
               </div>
 
@@ -573,7 +688,7 @@ export default function App() {
                     graph={impact}
                     mapExpanded={mapExpanded}
                     projectOptions={impactProjectOptions}
-                    onPivot={(id) => selectPivot(id)}
+                    onPivot={(id) => selectPivot(id, { source: 'map' })}
                     onSelectMethod={selectMethod}
                     onBrowseMethods={browseServiceMethods}
                     onClearCenter={clearSelection}
@@ -601,6 +716,13 @@ export default function App() {
                     navDirection={navDirection}
                     onNavDirectionConsumed={() => setNavDirection(null)}
                     sessionUserId={session?.id}
+                    sessionUserName={session?.name}
+                    onMapRoot={(el) => {
+                      mapRootRef.current = el
+                    }}
+                    onSnapshotSaved={(snap: Snapshot) => {
+                      setSnapshotToast(`Snapshot kaydedildi · ${snap.id}`)
+                    }}
                     onVisitSelect={(i) => {
                       if (i === historyIndex) return
                       setNavDirection(i < historyIndex ? 'back' : 'forward')
@@ -701,6 +823,55 @@ export default function App() {
         </main>
         </div>
       </div>
+
+      {snapshotToast && (
+        <div className="snapshot-toast" role="status">
+          {snapshotToast}
+          <button type="button" onClick={() => setSnapshotToast(undefined)}>
+            ×
+          </button>
+        </div>
+      )}
+
+      {crOpen && service && session && (
+        <ChangeRequestModal
+          service={service}
+          affected={affected}
+          session={session}
+          buildSnapshotContext={makeSnapshotContext}
+          onClose={() => setCrOpen(false)}
+          onCreated={() => {
+            setCrOpen(false)
+            setSnapshotToast('Talep açıldı — cr_open snapshot kaydedildi')
+            void refreshInbox()
+          }}
+        />
+      )}
+
+      {inboxOpen && session && inbox && (
+        <InboxPanel
+          actions={inbox.actions}
+          updates={inbox.updates}
+          pending={inbox.pending}
+          onOpen={(id) => void openRequestDetail(id)}
+          onClose={() => setInboxOpen(false)}
+          onMarkRead={() => void refreshInbox()}
+        />
+      )}
+
+      {requestDetail && session && (
+        <RequestDetailModal
+          request={requestDetail}
+          session={session}
+          buildSnapshotContext={makeSnapshotContext}
+          onClose={() => setRequestDetail(undefined)}
+          onUpdated={(req) => {
+            setRequestDetail(req)
+            setSnapshotToast('Onay kaydedildi — snapshot alındı')
+            void refreshInbox()
+          }}
+        />
+      )}
     </div>
   )
 }
