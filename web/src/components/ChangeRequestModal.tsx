@@ -47,8 +47,6 @@ export function ChangeRequestModal({
     () =>
       affected.map(({ service: s }) => ({
         serviceName: s.name,
-        owner: s.owner?.name ?? 'Owner atanmamış',
-        team: (s.owner?.team ?? 'Ekip').toLocaleUpperCase('tr-TR'),
       })),
     [affected],
   )
@@ -232,8 +230,8 @@ export function ChangeRequestModal({
               <div className="ns-pane">
                 <h3 className="section-title">Açılacak task’lar</h3>
                 <p className="hint-sm">
-                  {service.name}’i çağıran servisler (tüketiciler). Onay = tüketicinin
-                  owner’ı.
+                  {service.name}’i çağıran servisler (tüketiciler). Her biri için ayrı
+                  task açılır.
                 </p>
                 {tasksPreview.length === 0 ? (
                   <p className="empty-hint">Doğrudan etkilenen yok.</p>
@@ -241,13 +239,7 @@ export function ChangeRequestModal({
                   <ul className="task-preview-list">
                     {tasksPreview.map((t) => (
                       <li key={t.serviceName}>
-                        <strong>
-                          T-… — {t.team} — {t.serviceName}
-                        </strong>
-                        <span className="approver-line">
-                          Onayı verecek: <strong>{t.owner}</strong>
-                          {t.team ? ` · ${t.team}` : ''}
-                        </span>
+                        <strong>T-… — {t.serviceName}</strong>
                       </li>
                     ))}
                   </ul>

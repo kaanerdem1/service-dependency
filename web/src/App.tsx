@@ -26,6 +26,7 @@ import {
   getChangeRequest,
   getImpactGraph,
   getInbox,
+  markInboxRead,
   getMethodImpactGraph,
   getModuleTree,
   getNeighbors,
@@ -107,6 +108,7 @@ export default function App() {
     pending: number
   }>()
   const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
+  const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
 
   useEffect(() => {
@@ -256,15 +258,27 @@ export default function App() {
     })
   }, [buildClientPayload, service])
 
-  const openRequestDetail = useCallback(async (requestId: string) => {
+  const openRequestDetail = useCallback(async (requestId: string, fromInbox = false) => {
     try {
       const req = await getChangeRequest(requestId)
       setRequestDetail(req)
-      setInboxOpen(false)
+      if (fromInbox) {
+        setReturnToInbox(true)
+        setInboxOpen(false)
+      } else {
+        setReturnToInbox(false)
+      }
     } catch {
       setSnapshotToast('Talep yüklenemedi')
     }
   }, [])
+
+  const backToInbox = useCallback(() => {
+    setRequestDetail(undefined)
+    setReturnToInbox(false)
+    setInboxOpen(true)
+    void refreshInbox()
+  }, [refreshInbox])
 
   const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
   const projectOrder = useMemo(
@@ -721,7 +735,11 @@ export default function App() {
                       mapRootRef.current = el
                     }}
                     onSnapshotSaved={(snap: Snapshot) => {
-                      setSnapshotToast(`Snapshot kaydedildi · ${snap.id}`)
+                      setSnapshotToast(
+                        snap.imageUrl
+                          ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
+                          : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
+                      )
                     }}
                     onVisitSelect={(i) => {
                       if (i === historyIndex) return
@@ -842,7 +860,9 @@ export default function App() {
           onClose={() => setCrOpen(false)}
           onCreated={() => {
             setCrOpen(false)
-            setSnapshotToast('Talep açıldı — cr_open snapshot kaydedildi')
+            setSnapshotToast(
+              'Talep açıldı — Snapshot sekmesinden PNG indirebilirsiniz',
+            )
             void refreshInbox()
           }}
         />
@@ -852,10 +872,12 @@ export default function App() {
         <InboxPanel
           actions={inbox.actions}
           updates={inbox.updates}
-          pending={inbox.pending}
-          onOpen={(id) => void openRequestDetail(id)}
+          onOpen={(id) => void openRequestDetail(id, true)}
           onClose={() => setInboxOpen(false)}
-          onMarkRead={() => void refreshInbox()}
+          onMarkRead={() => {
+            if (!session) return
+            void markInboxRead(session.id).then(() => refreshInbox())
+          }}
         />
       )}
 
@@ -864,7 +886,11 @@ export default function App() {
           request={requestDetail}
           session={session}
           buildSnapshotContext={makeSnapshotContext}
-          onClose={() => setRequestDetail(undefined)}
+          onBackToInbox={returnToInbox ? backToInbox : undefined}
+          onClose={() => {
+            if (returnToInbox) backToInbox()
+            else setRequestDetail(undefined)
+          }}
           onUpdated={(req) => {
             setRequestDetail(req)
             setSnapshotToast('Onay kaydedildi — snapshot alındı')

@@ -50,7 +50,12 @@ export function SnapshotList({ requestId }: Props) {
   }
 
   return (
-    <ul className="snapshot-list">
+    <>
+      <p className="hint-sm">
+        Talep ve onay anında otomatik kaydedilir. Küçük resme tıklayın veya PNG
+        ile indirin.
+      </p>
+      <ul className="snapshot-list">
       {items.map((snap) => {
         const when = new Date(snap.createdAt).toLocaleString('tr-TR')
         const hop1 = snap.impact.hop1.map((h) => h.label).join(', ') || '—'
@@ -102,6 +107,7 @@ export function SnapshotList({ requestId }: Props) {
           </li>
         )
       })}
-    </ul>
+      </ul>
+    </>
   )
 }

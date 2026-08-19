@@ -16,6 +16,7 @@ type Props = {
   request: ChangeRequest
   session: SessionUser
   onClose: () => void
+  onBackToInbox?: () => void
   onUpdated: (request: ChangeRequest) => void
   buildSnapshotContext?: () => Promise<SnapshotClientPayload | undefined>
 }
@@ -34,6 +35,7 @@ export function RequestDetailModal({
   request,
   session,
   onClose,
+  onBackToInbox,
   onUpdated,
   buildSnapshotContext,
 }: Props) {
@@ -71,16 +73,17 @@ export function RequestDetailModal({
       <div className="modal wide task-detail" role="dialog" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head task-head">
           <div>
+            {onBackToInbox && (
+              <button type="button" className="btn ghost inbox-back" onClick={onBackToInbox}>
+                ← Inbox’a dön
+              </button>
+            )}
             <h2 className="task-headline">{taskHeadline(request)}</h2>
             <p className="task-subline">
               {request.kind === 'new_service'
-                ? `Yeni Servis “${request.proposedServiceName ?? request.targetServiceName}” · onay: ekip lideri`
+                ? `Yeni Servis “${request.proposedServiceName ?? request.targetServiceName}”`
                 : `${request.targetServiceName} → ${request.assigneeServiceName}`}
               {request.batchId ? ` · grup ${request.batchId}` : ''}
-            </p>
-            <p className="approver-line prominent">
-              Onayı verecek: <strong>{approver.label}</strong>
-              {mine ? ' · (siz)' : ''}
             </p>
           </div>
           <button type="button" className="btn ghost" onClick={onClose}>
@@ -90,8 +93,8 @@ export function RequestDetailModal({
 
         <div className={`approval-banner ${open ? 'open' : 'closed'}`}>
           {open
-            ? `Onay açık — ${approver.name} kabul etti`
-            : `Onay kapalı — beklenen: ${approver.label} · ${FLAG_LABEL[row?.flag ?? 'unseen']}`}
+            ? `Onay açık — ${approver.label} kabul etti`
+            : `Onay kapalı — ${approver.label} · ${FLAG_LABEL[row?.flag ?? 'unseen']}`}
         </div>
 
         <div className="task-tabs" role="tablist">
@@ -113,10 +116,9 @@ export function RequestDetailModal({
           {tab === 'general' && (
             <div className="task-pane">
               <label className="task-field">
-                <span>Onayı verecek</span>
+                <span>Etkilenen servis</span>
                 <p>
                   <strong>{approver.label}</strong>
-                  {!row?.ownerId ? ' — bu task’a owner atanmalı' : ''}
                 </p>
               </label>
               <label className="task-field">
@@ -142,11 +144,7 @@ export function RequestDetailModal({
                 </label>
               )}
               <p className="cr-meta">
-                <strong>Talep eden:</strong> {request.requestedBy.personName}
-                {request.requestedBy.team ? ` · ${request.requestedBy.team}` : ''}
-                {request.requestedBy.department
-                  ? ` · ${request.requestedBy.department}`
-                  : ''}
+                <strong>Hedef servis:</strong> {request.targetServiceName}
               </p>
             </div>
           )}
@@ -163,10 +161,6 @@ export function RequestDetailModal({
                 <li>
                   <span>Etkilenen servis</span>
                   <strong>{request.assigneeServiceName}</strong>
-                </li>
-                <li>
-                  <span>Onayı verecek</span>
-                  <strong>{approver.label}</strong>
                 </li>
               </ul>
             </div>
@@ -185,14 +179,14 @@ export function RequestDetailModal({
           {tab === 'approval' && row && (
             <div className="task-pane">
               <h3 className="section-title">Onay</h3>
-              <p className="approver-line prominent">
-                Onayı verecek: <strong>{approver.label}</strong>
+              <p className="hint-sm">
+                Onay bekleyen servis: <strong>{approver.label}</strong>
               </p>
               <div className={`flag-pill ${row.flag}`}>{FLAG_LABEL[row.flag]}</div>
               {row.note && <p className="flag-note">Not: {row.note}</p>}
               {!mine && (
                 <p className="hint-sm">
-                  Bu task’ın onaycısı {approver.name}. Siz yalnızca durumu görebilirsiniz.
+                  Bu oturumda onay aksiyonu yok; yalnızca durumu görebilirsiniz.
                 </p>
               )}
               {mine && (

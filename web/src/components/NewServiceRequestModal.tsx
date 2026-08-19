@@ -812,18 +812,7 @@ export function NewServiceRequestModal({
               <div className="ns-pane">
                 <ul className="task-preview-list">
                   <li>
-                    <strong>
-                      T-… — {(team || session.team || 'Ekip').toLocaleUpperCase('tr-TR')} — Yeni:{' '}
-                      {techName.trim() || '…'}
-                    </strong>
-                    <span className="approver-line">
-                      Onayı verecek: <strong>ekip lideri</strong>
-                      {session.role === 'lead' ? ` · ${session.name}` : ` · ${leadHint}`}
-                    </span>
-                    <span className="svc-meta">
-                      Talep eden: {session.name}
-                      {session.role === 'member' ? ' (çalışan → lider onayı)' : ''}
-                    </span>
+                    <strong>T-… — Yeni: {techName.trim() || '…'}</strong>
                     {selected.length > 0 && (
                       <span className="svc-meta">
                         Çağıracakları (bilgi): {selected.map((s) => s.name).join(', ')}

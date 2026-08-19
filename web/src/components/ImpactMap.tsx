@@ -87,7 +87,7 @@ import {
   type VisitStep,
 } from './ImpactChrome'
 import { saveExploreSnapshot } from '../api/client'
-import { captureSnapshotScreenshots } from '../snapshot/capture'
+import { captureSnapshotScreenshots, downloadSnapshotPng } from '../snapshot/capture'
 import { useSnapshotTrailOptional } from '../snapshot/trail'
 import { snapshotWatermarkLines } from '../snapshot/useSnapshotPack'
 
@@ -1437,6 +1437,9 @@ export function ImpactMap({
         personName: sessionUserName,
         client: { ...base, screenshots },
       })
+      if (snap.imageUrl) {
+        downloadSnapshotPng(snap.imageUrl, `${snap.id}.png`)
+      }
       onSnapshotSaved?.(snap)
     } catch (e) {
       console.error('[snapshot]', e)

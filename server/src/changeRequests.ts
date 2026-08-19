@@ -20,6 +20,8 @@ export type InboxNotification = {
   body: string
   flag?: FlagStatus
   serviceName?: string
+  batchId?: string
+  relatedTasks?: { id: string; serviceName: string }[]
   read: boolean
   createdAt: string
 }
@@ -171,7 +173,6 @@ export function createChangeRequest(input: {
       flag: 'unseen',
     }
 
-    const teamLabel = (assignee.owner?.team ?? 'Ekip').toLocaleUpperCase('tr-TR')
     const cr: ChangeRequest = {
       id: `T-${seq++}`,
       batchId,
@@ -188,7 +189,7 @@ export function createChangeRequest(input: {
         `${input.summary.trim()}\n\n${input.rationale.trim()}`,
       serviceImpact:
         input.serviceImpact?.trim() ||
-        `${targetServiceName} değişikliği, ${assignee.name} servisinin runtime / API sözleşmesini etkileyebilir. Owner: ${assignee.owner?.name ?? 'atanmamış'} (${teamLabel}).`,
+        `${targetServiceName} değişikliği, ${assignee.name} servisinin runtime / API sözleşmesini etkileyebilir.`,
       dataImpact:
         input.dataImpact?.trim() ||
         `${assignee.name} üzerinden okunan/yazılan veri sözleşmeleri gözden geçirilmeli. (Mock veri etkisi.)`,
@@ -210,8 +211,8 @@ export function createChangeRequest(input: {
         userId: row.ownerId,
         kind: 'approval_needed',
         requestId: cr.id,
-        title: `${cr.id} — ${teamLabel} — onay bekleniyor`,
-        body: `${targetServiceName} → ${assignee.name} için yanıtın gerekiyor.`,
+        title: `${cr.id} · ${assignee.name} onay bekleniyor`,
+        body: `${targetServiceName} → ${assignee.name} için yanıt gerekiyor.`,
         serviceName: assignee.name,
         flag: 'unseen',
       })
@@ -219,12 +220,20 @@ export function createChangeRequest(input: {
   }
 
   if (created.length > 0) {
+    const relatedTasks = created.map((c) => ({
+      id: c.id,
+      serviceName: c.assigneeServiceName,
+    }))
     pushNotif({
       userId: input.personId,
       kind: 'flag_update',
-      requestId: created[0].id,
-      title: `${created.length} Task açıldı`,
-      body: created.map((c) => c.id).join(', ') + (batchId ? ` · grup ${batchId}` : ''),
+      requestId: created[0]!.id,
+      title: batchId
+        ? `${created.length} task açıldı · ${batchId}`
+        : `${created.length} task açıldı`,
+      body: `${targetServiceName} değişikliği · ${relatedTasks.map((t) => `${t.id} (${t.serviceName})`).join(' · ')}`,
+      batchId,
+      relatedTasks,
     })
   }
 
@@ -267,7 +276,6 @@ function createNewServiceRequest(
       : 'henüz seçilmedi'
 
   const targetServiceId = `proposed:${name.toLowerCase().replace(/\s+/g, '-')}`
-  const teamLabel = (lead.team ?? 'Ekip').toLocaleUpperCase('tr-TR')
 
   const row: ImpactedFlag = {
     serviceId: targetServiceId,
@@ -296,7 +304,7 @@ function createNewServiceRequest(
     description:
       input.description?.trim() ||
       `${input.summary.trim()}\n\n${input.rationale.trim()}`,
-    serviceImpact: `Yeni servis “${name}” ekip lideri onayı bekliyor (${lead.name}). Çağıracağı servisler (bilgi): ${dependsLabel}. Çağrılan servis owner’ından onay istenmez.`,
+    serviceImpact: `Yeni servis “${name}” onayı bekliyor. Çağıracağı servisler (bilgi): ${dependsLabel}.`,
     dataImpact: `Yeni servis veri sözleşmeleri gözden geçirilmeli. Bağımlı servisler: ${dependsLabel}. (Mock)`,
     requestedBy: {
       personId: input.personId,
@@ -315,8 +323,8 @@ function createNewServiceRequest(
     userId: lead.id,
     kind: 'approval_needed',
     requestId: cr.id,
-    title: `${cr.id} — ${teamLabel} — Yeni Servis onayı`,
-    body: `“${name}” için ekip lideri onayı gerekiyor. Çağıracakları: ${dependsLabel}.`,
+    title: `${cr.id} · ${name} · Yeni Servis onayı`,
+    body: `“${name}” için onay gerekiyor. Çağıracakları: ${dependsLabel}.`,
     serviceName: name,
     flag: 'unseen',
   })
@@ -327,7 +335,7 @@ function createNewServiceRequest(
       kind: 'flag_update',
       requestId: cr.id,
       title: `Yeni Servis Talebi · ${cr.id}`,
-      body: `Onayı verecek: ${lead.name} (ekip lideri).`,
+      body: `“${name}” için onay bekleniyor.`,
     })
   }
 
@@ -353,23 +361,22 @@ export function setFlag(input: {
   row.note = input.note?.trim() || undefined
   cr.updatedAt = new Date().toISOString()
 
-  const actor = services[input.serviceId]?.owner?.name ?? input.actorOwnerId
   const msg = FLAG_MSG[input.flag]
-  const teamLabel = (cr.assigneeTeam ?? 'EKİP').toLocaleUpperCase('tr-TR')
+  const svcLabel = row.serviceName
 
   pushNotif({
     userId: cr.requestedBy.personId,
     kind: input.flag === 'rejected' ? 'approval_blocked' : 'flag_update',
     requestId: cr.id,
-    title: `${cr.id} — ${teamLabel} — ${row.serviceName} ${msg}`,
+    title: `${cr.id} · ${svcLabel} ${msg}`,
     body:
       input.flag === 'rejected'
-        ? `${actor}: reddetti.${row.note ? ` Gerekçe: ${row.note}` : ''}`
+        ? `${svcLabel} reddetti.${row.note ? ` Gerekçe: ${row.note}` : ''}`
         : input.flag === 'hold_editing'
-          ? `${actor}: düzenleme yapıyor / bekletti.`
+          ? `${svcLabel} düzenleme / bekletme durumunda.`
           : input.flag === 'accepted'
-            ? `${actor}: kabul etti.`
-            : `${actor}: durum güncellendi (${prev} → ${input.flag}).`,
+            ? `${svcLabel} kabul etti.`
+            : `${svcLabel} durumu güncellendi (${prev} → ${input.flag}).`,
     flag: input.flag,
     serviceName: row.serviceName,
   })
@@ -379,7 +386,7 @@ export function setFlag(input: {
       userId: cr.requestedBy.personId,
       kind: 'approval_open',
       requestId: cr.id,
-      title: `${cr.id} — Onay açık`,
+      title: `${cr.id} · Onay açık`,
       body: `${cr.assigneeServiceName} kabul etti. Bu task için kapı açık.`,
     })
   }

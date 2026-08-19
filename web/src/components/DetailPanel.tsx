@@ -9,7 +9,6 @@ import {
   FLAG_LABEL,
   groupRequestsByBatch,
   isApprovalOpen,
-  taskApprover,
   taskHeadline,
 } from '../types'
 import {
@@ -312,7 +311,6 @@ export function DetailPanel({
                   if (!isBatch) {
                     const r = g.items[0]!
                     const flag = r.impacted[0]?.flag ?? 'unseen'
-                    const approver = taskApprover(r)
                     return (
                       <li key={g.key}>
                         <button
@@ -323,9 +321,6 @@ export function DetailPanel({
                             <span className="kind-pill">Yeni Servis</span>
                           )}
                           <span className="inbox-id">{taskHeadline(r)}</span>
-                          <span className="approver-line">
-                            Onayı verecek: <strong>{approver.label}</strong>
-                          </span>
                           <span className={isApprovalOpen(r) ? 'ok' : 'blocked'}>
                             {isApprovalOpen(r) ? 'Onay açık' : 'Onay kapalı'}
                           </span>
@@ -364,7 +359,6 @@ export function DetailPanel({
                         <ul className="batch-children">
                           {g.items.map((r) => {
                             const flag = r.impacted[0]?.flag ?? 'unseen'
-                            const approver = taskApprover(r)
                             return (
                               <li key={r.id}>
                                 <button
@@ -373,10 +367,6 @@ export function DetailPanel({
                                 >
                                   <span className="inbox-id">
                                     {taskHeadline(r)}
-                                  </span>
-                                  <span className="approver-line">
-                                    Onayı verecek:{' '}
-                                    <strong>{approver.label}</strong>
                                   </span>
                                   <span
                                     className={
@@ -402,8 +392,8 @@ export function DetailPanel({
               </ul>
             )}
             <p className="hint-sm">
-              Aynı formdan açılan task’lar <strong>grup</strong> altında. Onay servis
-              owner’ındadır.
+              Aynı formdan açılan task’lar <strong>grup</strong> altında; her satır bir
+              etkilenen servis.
             </p>
             <p className="hint-sm">
               Yeni Servis Talebi için seçimi bırakın — panel boşken buton görünür.

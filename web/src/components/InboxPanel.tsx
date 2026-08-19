@@ -1,10 +1,11 @@
 /**
- * Inbox: onay bekleyen aksiyonlar + okunmamış bildirimler.
- * actions = bu kullanıcının owner olduğu unseen/yanıt bekleyen satırlar.
+ * Inbox: Onay bekleyen + Güncellemeler (iki bölüm).
+ * Onay satırları actions’tan; güncellemeler bildirimlerden gelir.
+ * approval_needed bildirimi, aynı talep zaten onay listesindeyse gösterilmez.
  */
+import { useMemo, useState } from 'react'
 import {
   FLAG_LABEL,
-  isApprovalOpen,
   type ChangeRequest,
   type ImpactedFlag,
   type InboxNotification,
@@ -15,7 +16,6 @@ type ActionItem = { request: ChangeRequest; row: ImpactedFlag }
 type Props = {
   actions: ActionItem[]
   updates: InboxNotification[]
-  pending: number
   onOpen: (requestId: string) => void
   onClose: () => void
   onMarkRead: () => void
@@ -24,14 +24,91 @@ type Props = {
 export function InboxPanel({
   actions,
   updates,
-  pending,
   onOpen,
   onClose,
   onMarkRead,
 }: Props) {
-  const needAction = actions.filter((i) => i.row.flag === 'unseen')
-  const myOther = actions.filter((i) => i.row.flag !== 'unseen')
-  const unreadUpdates = updates.filter((u) => !u.read)
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set())
+
+  const pendingApprovals = actions.filter((i) => i.row.flag === 'unseen')
+  const pendingApprovalIds = useMemo(
+    () => new Set(pendingApprovals.map(({ request }) => request.id)),
+    [pendingApprovals],
+  )
+  const updatesFiltered = useMemo(
+    () =>
+      updates.filter(
+        (n) => !(n.kind === 'approval_needed' && pendingApprovalIds.has(n.requestId)),
+      ),
+    [updates, pendingApprovalIds],
+  )
+  const unreadUpdates = updatesFiltered.filter((u) => !u.read)
+
+  const toggleGroup = (id: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const renderUpdate = (n: InboxNotification) => {
+    const tasks = n.relatedTasks
+    const isGroup = tasks && tasks.length > 1
+    const expanded = expandedGroups.has(n.id)
+
+    if (isGroup) {
+      return (
+        <li key={n.id} className="inbox-batch-group">
+          <button
+            type="button"
+            className={`inbox-item update ${n.read ? 'read' : 'unread'} kind-${n.kind}`}
+            onClick={() => toggleGroup(n.id)}
+          >
+            {!n.read && <span className="inbox-kind">YENİ</span>}
+            <span className="inbox-id">{n.batchId ?? n.requestId}</span>
+            <span className="inbox-title">{n.title}</span>
+            <span className="svc-meta">
+              {expanded ? '▾' : '▸'} {tasks.length} task · {n.body}
+            </span>
+          </button>
+          {expanded && (
+            <ul className="inbox-batch-children">
+              {tasks.map((t) => (
+                <li key={t.id}>
+                  <button type="button" className="inbox-item read" onClick={() => onOpen(t.id)}>
+                    <span className="inbox-id">{t.id}</span>
+                    <span className="inbox-title">{t.serviceName}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </li>
+      )
+    }
+
+    const openId = tasks?.length === 1 ? tasks[0]!.id : n.requestId
+
+    return (
+      <li key={n.id}>
+        <button
+          type="button"
+          className={`inbox-item update ${n.read ? 'read' : 'unread'} kind-${n.kind}`}
+          onClick={() => onOpen(openId)}
+        >
+          {!n.read && <span className="inbox-kind">YENİ</span>}
+          <span className="inbox-id">{n.requestId}</span>
+          <span className="inbox-title">{n.title}</span>
+          {n.flag && (
+            <span className={`flag-pill ${n.flag}`}>{FLAG_LABEL[n.flag]}</span>
+          )}
+          <span className="svc-meta">{n.body}</span>
+        </button>
+      </li>
+    )
+  }
 
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
@@ -50,17 +127,16 @@ export function InboxPanel({
           </div>
         </header>
         <p className="modal-sub">
-          {pending} bekleyen · {needAction.length} onay aksiyonu · {unreadUpdates.length} okunmamış
-          güncelleme
+          {pendingApprovals.length} onay bekleyen · {unreadUpdates.length} okunmamış güncelleme
         </p>
 
         <section className="inbox-section">
-          <h3 className="section-title">Senin onaylaman gerekenler</h3>
-          {needAction.length === 0 ? (
-            <p className="empty-hint">Bekleyen onay aksiyonu yok.</p>
+          <h3 className="section-title">Onay bekleyen</h3>
+          {pendingApprovals.length === 0 ? (
+            <p className="empty-hint">Bekleyen onay yok.</p>
           ) : (
             <ul className="inbox-list">
-              {needAction.map(({ request, row }) => (
+              {pendingApprovals.map(({ request, row }) => (
                 <li key={`a-${request.id}-${row.serviceId}`}>
                   <button
                     type="button"
@@ -69,12 +145,7 @@ export function InboxPanel({
                   >
                     <span className="inbox-kind">ONAY GEREKİYOR</span>
                     <span className="inbox-id">{request.id}</span>
-                    <span className="approver-line">
-                      Onayı verecek: <strong>{row.ownerName ?? 'Owner atanmamış'}</strong>
-                      {row.team ? ` · ${row.team}` : ''}
-                    </span>
                     <span className="inbox-title">
-                      {(row.team ?? 'Ekip').toLocaleUpperCase('tr-TR')} —{' '}
                       <strong>{row.serviceName}</strong>
                       <span className="svc-meta">
                         {' '}
@@ -90,57 +161,13 @@ export function InboxPanel({
         </section>
 
         <section className="inbox-section">
-          <h3 className="section-title">Taleplerinin durumu (bildirimler)</h3>
-          {updates.length === 0 ? (
-            <p className="empty-hint">Henüz durum bildirimi yok.</p>
+          <h3 className="section-title">Güncellemeler</h3>
+          {updatesFiltered.length === 0 ? (
+            <p className="empty-hint">Henüz güncelleme yok.</p>
           ) : (
-            <ul className="inbox-list">
-              {updates.map((n) => (
-                <li key={n.id}>
-                  <button
-                    type="button"
-                    className={`inbox-item update ${n.read ? 'read' : 'unread'} kind-${n.kind}`}
-                    onClick={() => onOpen(n.requestId)}
-                  >
-                    {!n.read && <span className="inbox-kind">YENİ</span>}
-                    <span className="inbox-id">{n.requestId}</span>
-                    <span className="inbox-title">{n.title}</span>
-                    {n.flag && (
-                      <span className={`flag-pill ${n.flag}`}>{FLAG_LABEL[n.flag]}</span>
-                    )}
-                    <span className="svc-meta">{n.body}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <ul className="inbox-list">{updatesFiltered.map(renderUpdate)}</ul>
           )}
         </section>
-
-        {myOther.length > 0 && (
-          <section className="inbox-section">
-            <h3 className="section-title">Yanıtladığın onaylar</h3>
-            <ul className="inbox-list">
-              {myOther.map(({ request, row }) => (
-                <li key={`d-${request.id}-${row.serviceId}`}>
-                  <button
-                    type="button"
-                    className="inbox-item read"
-                    onClick={() => onOpen(request.id)}
-                  >
-                    <span className="inbox-id">{request.id}</span>
-                    <span className="inbox-title">
-                      {row.serviceName} · {FLAG_LABEL[row.flag]}
-                    </span>
-                    <span className="svc-meta">
-                      {isApprovalOpen(request) ? 'Onay açık' : 'Onay kapalı'} ·{' '}
-                      {request.targetServiceName}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
     </div>
   )

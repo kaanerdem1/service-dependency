@@ -208,26 +208,19 @@ export function groupRequestsByBatch(requests: ChangeRequest[]): RequestBatchGro
   return groups.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
-/** Örn. T-546 — PLATFORM — ReportingService */
+/** Örn. T-546 — ReportingService */
 export function taskHeadline(cr: ChangeRequest): string {
-  const team = (cr.assigneeTeam ?? cr.impacted[0]?.team ?? 'EKİP').toLocaleUpperCase('tr-TR')
   if (cr.kind === 'new_service') {
     const neu = cr.proposedServiceName ?? cr.targetServiceName
-    return `${cr.id} — ${team} — Yeni: ${neu}`
+    return `${cr.id} — Yeni: ${neu}`
   }
-  return `${cr.id} — ${team} — ${cr.assigneeServiceName}`
+  return `${cr.id} — ${cr.assigneeServiceName}`
 }
 
-/** Onayı verecek kişi (etkilenen servis owner’ı) */
+/** Onay bekleyen servis (kişi/ekip adı yok) */
 export function taskApprover(cr: ChangeRequest): { name: string; team?: string; label: string } {
-  const row = cr.impacted[0]
-  const name = row?.ownerName ?? 'Owner atanmamış'
-  const team = row?.team ?? cr.assigneeTeam
-  return {
-    name,
-    team,
-    label: team ? `${name} · ${team}` : name,
-  }
+  const name = cr.impacted[0]?.serviceName ?? cr.assigneeServiceName
+  return { name, label: name }
 }
 
 export function isApprovalOpen(cr: ChangeRequest): boolean {
@@ -257,6 +250,9 @@ export type InboxNotification = {
   body: string
   flag?: FlagStatus
   serviceName?: string
+  batchId?: string
+  /** Grup bildirimi: tüm task satırları (I3) */
+  relatedTasks?: { id: string; serviceName: string }[]
   read: boolean
   createdAt: string
 }
