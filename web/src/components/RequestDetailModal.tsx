@@ -3,7 +3,6 @@ import {
   FLAG_LABEL,
   isApprovalOpen,
   taskApprover,
-  taskHeadline,
   type ChangeRequest,
   type FlagStatus,
   type SnapshotClientPayload,
@@ -71,31 +70,40 @@ export function RequestDetailModal({
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div className="modal wide task-detail" role="dialog" onClick={(e) => e.stopPropagation()}>
-        <header className="modal-head task-head">
-          <div>
-            {onBackToInbox && (
-              <button type="button" className="btn ghost inbox-back" onClick={onBackToInbox}>
+        <header className="task-head">
+          <div className="task-head-toolbar">
+            {onBackToInbox ? (
+              <button type="button" className="btn inbox-back-btn" onClick={onBackToInbox}>
                 ← Inbox’a dön
               </button>
+            ) : (
+              <span />
             )}
-            <h2 className="task-headline">{taskHeadline(request)}</h2>
-            <p className="task-subline">
-              {request.kind === 'new_service'
-                ? `Yeni Servis “${request.proposedServiceName ?? request.targetServiceName}”`
-                : `${request.targetServiceName} → ${request.assigneeServiceName}`}
-              {request.batchId ? ` · grup ${request.batchId}` : ''}
-            </p>
+            <button type="button" className="btn ghost task-close-btn" onClick={onClose}>
+              Kapat
+            </button>
           </div>
-          <button type="button" className="btn ghost" onClick={onClose}>
-            Kapat
-          </button>
-        </header>
 
-        <div className={`approval-banner ${open ? 'open' : 'closed'}`}>
-          {open
-            ? `Onay açık — ${approver.label} kabul etti`
-            : `Onay kapalı — ${approver.label} · ${FLAG_LABEL[row?.flag ?? 'unseen']}`}
-        </div>
+          <div className="task-service-pair">
+            <div className="task-service-block">
+              <span className="task-service-kicker">
+                {request.kind === 'new_service' ? 'Yeni servis' : 'Değişiklik yapılan'}
+              </span>
+              <strong className="task-service-name">{request.targetServiceName}</strong>
+            </div>
+            <span className="task-service-arrow" aria-hidden>
+              →
+            </span>
+            <div className="task-service-block">
+              <span className="task-service-kicker">Etkilenen</span>
+              <strong className="task-service-name">{request.assigneeServiceName}</strong>
+            </div>
+          </div>
+          <p className="task-head-meta">
+            {request.id}
+            {request.batchId ? ` · ${request.batchId}` : ''}
+          </p>
+        </header>
 
         <div className="task-tabs" role="tablist">
           {TABS.map((t) => (
@@ -115,12 +123,6 @@ export function RequestDetailModal({
         <div className="task-tab-body" role="tabpanel">
           {tab === 'general' && (
             <div className="task-pane">
-              <label className="task-field">
-                <span>Etkilenen servis</span>
-                <p>
-                  <strong>{approver.label}</strong>
-                </p>
-              </label>
               <label className="task-field">
                 <span>Özet</span>
                 <p>{request.summary}</p>
@@ -143,9 +145,6 @@ export function RequestDetailModal({
                   </p>
                 </label>
               )}
-              <p className="cr-meta">
-                <strong>Hedef servis:</strong> {request.targetServiceName}
-              </p>
             </div>
           )}
 
@@ -179,8 +178,10 @@ export function RequestDetailModal({
           {tab === 'approval' && row && (
             <div className="task-pane">
               <h3 className="section-title">Onay</h3>
-              <p className="hint-sm">
-                Onay bekleyen servis: <strong>{approver.label}</strong>
+              <p className={`approval-status-line ${open ? 'open' : 'closed'}`}>
+                {open
+                  ? `Onay açık — ${approver.label} kabul etti`
+                  : `Onay kapalı — ${approver.label} · ${FLAG_LABEL[row.flag]}`}
               </p>
               <div className={`flag-pill ${row.flag}`}>{FLAG_LABEL[row.flag]}</div>
               {row.note && <p className="flag-note">Not: {row.note}</p>}

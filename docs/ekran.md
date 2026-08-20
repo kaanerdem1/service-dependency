@@ -18,28 +18,3 @@ Bu chip'ler dokunulabilir/filtre gibi görünüyor (yuvarlak köşe, dolgu rengi
 **. Renk paleti tek düze**  
 Bej/krem tonlar (sol sidebar dahil) hep aynı sıcaklıkta — vurgu rengi (yeşil, mavi gibi aktif bir renk) sadece "SD" logosunda var. Boş durumda bu vurgu rengi hiç kullanılmamış, bu yüzden sayfa "canlı" hissetmiyor.
 
-?? snapshot kısmı şimdilik okay eğer png'de okların kaybolmasını duzelttiysen ama hala duzelmis gibi gorunmuyor pngde okların görünümü.Bu arada kullanıcı ve ekip yapısını kaldırdığımız için ona göre ayarla inbox bildirimi içindeki yazılarıda + herhangi bir servise tıkladığımda degisiklik talebi acabilmeliyim cunku artık kisi+ekip yok
-
-
-
-
-
-
-
-
-
----
-
-### **Inbox / talep (henüz dokunmadığım — önerilen sıradaki)**
-
-
-| **#**  | **Değişiklik**                                                            | **Ne yapar**                                        |
-| ------ | ------------------------------------------------------------------------- | --------------------------------------------------- |
-| **I1** | Owner/ekip/isim kaldır (Ayşe, Payments, “Onayı verecek…”)                 | Task + inbox + bildirim metinleri sadece servis adı |
-| **I2** | Inbox tek liste: **Onay bekleyen** + **Güncellemeler** (duplicate kaldır) | İki bölüm, net etiket                               |
-| **I3** | “5 Task açıldı” → grup özeti / tüm task’ları listele                      | Tek task’a atlama yerine                            |
-| **I4** | Task detayında **← Inbox’a dön**                                          | Modal kapanmak yerine inbox’a geri                  |
-| **I5** | Bildirim başlıklarından `PAYMENTS —` kaldır                               | Sunucu `pushNotif` metinleri                        |
-| **I6** | PNG ok düzeltmesi (`capture.ts`)                                          | Yukarıdaki fix                                      |
-
-

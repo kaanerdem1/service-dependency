@@ -7,6 +7,10 @@ import {
   downloadSnapshotJson,
   downloadSnapshotPng,
 } from '../snapshot/capture'
+import {
+  formatTrailSummary,
+  formatViewStateSummary,
+} from '../snapshot/formatTrail'
 import { listSnapshotsForRequest } from '../api/client'
 
 type Props = {
@@ -59,6 +63,8 @@ export function SnapshotList({ requestId }: Props) {
       {items.map((snap) => {
         const when = new Date(snap.createdAt).toLocaleString('tr-TR')
         const hop1 = snap.impact.hop1.map((h) => h.label).join(', ') || '—'
+        const trailLines = formatTrailSummary(snap.navigationTrail)
+        const viewSummary = formatViewStateSummary(snap)
         return (
           <li key={snap.id} className="snapshot-item">
             <div className="snapshot-item-head">
@@ -77,6 +83,17 @@ export function SnapshotList({ requestId }: Props) {
             <p className="snapshot-item-meta">
               Hop-1: {hop1} · Trail: {snap.navigationTrail.length} adım
             </p>
+            {trailLines.length > 0 && (
+              <details className="snapshot-trail-details">
+                <summary className="hint-sm">Gezinme özeti (metin)</summary>
+                <p className="snapshot-item-meta">{viewSummary}</p>
+                <ol className="snapshot-trail-list">
+                  {trailLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ol>
+              </details>
+            )}
             {snap.imageUrl && (
               <img
                 className="snapshot-thumb"

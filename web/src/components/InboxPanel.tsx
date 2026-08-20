@@ -1,7 +1,5 @@
 /**
- * Inbox: Onay bekleyen + Güncellemeler (iki bölüm).
- * Onay satırları actions’tan; güncellemeler bildirimlerden gelir.
- * approval_needed bildirimi, aynı talep zaten onay listesindeyse gösterilmez.
+ * Inbox: Yapman gerekenler + Açtığın talepler (iki bölüm).
  */
 import { useMemo, useState } from 'react'
 import {
@@ -118,7 +116,7 @@ export function InboxPanel({
           <div className="modal-head-actions">
             {unreadUpdates.length > 0 && (
               <button type="button" className="btn ghost" onClick={onMarkRead}>
-                Güncellemeleri okundu say
+                Bildirimleri okundu say
               </button>
             )}
             <button type="button" className="btn ghost" onClick={onClose}>
@@ -126,14 +124,18 @@ export function InboxPanel({
             </button>
           </div>
         </header>
-        <p className="modal-sub">
-          {pendingApprovals.length} onay bekleyen · {unreadUpdates.length} okunmamış güncelleme
+        <p className="modal-sub inbox-intro">
+          <strong>Yapman gerekenler</strong> = senin yanıtın beklenen task’lar ·{' '}
+          <strong>Açtığın talepler</strong> = senin açtığın değişikliklerin durum bildirimleri
         </p>
 
         <section className="inbox-section">
-          <h3 className="section-title">Onay bekleyen</h3>
+          <h3 className="section-title">Yapman gerekenler</h3>
+          <p className="inbox-section-hint">
+            Etkilenen servis olarak senden kabul / red / düzenleniyor yanıtı bekleniyor.
+          </p>
           {pendingApprovals.length === 0 ? (
-            <p className="empty-hint">Bekleyen onay yok.</p>
+            <p className="empty-hint">Şu an senden beklenen onay yok.</p>
           ) : (
             <ul className="inbox-list">
               {pendingApprovals.map(({ request, row }) => (
@@ -143,7 +145,7 @@ export function InboxPanel({
                     className="inbox-item action"
                     onClick={() => onOpen(request.id)}
                   >
-                    <span className="inbox-kind">ONAY GEREKİYOR</span>
+                    <span className="inbox-kind">YANIT BEKLENİYOR</span>
                     <span className="inbox-id">{request.id}</span>
                     <span className="inbox-title">
                       <strong>{row.serviceName}</strong>
@@ -161,9 +163,12 @@ export function InboxPanel({
         </section>
 
         <section className="inbox-section">
-          <h3 className="section-title">Güncellemeler</h3>
+          <h3 className="section-title">Açtığın talepler</h3>
+          <p className="inbox-section-hint">
+            Senin açtığın talepler hakkında: task açıldı, biri yanıtladı, onay açıldı vb.
+          </p>
           {updatesFiltered.length === 0 ? (
-            <p className="empty-hint">Henüz güncelleme yok.</p>
+            <p className="empty-hint">Henüz talep bildirimi yok.</p>
           ) : (
             <ul className="inbox-list">{updatesFiltered.map(renderUpdate)}</ul>
           )}

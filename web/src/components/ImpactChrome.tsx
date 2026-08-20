@@ -179,6 +179,44 @@ type LegendProps = {
   truncated?: boolean
 }
 
+function cascadeLegendSuffix(cascadeCount?: number) {
+  return typeof cascadeCount === 'number' && cascadeCount > 0 ? ` · ${cascadeCount} yol` : ''
+}
+
+function MapLegendContent({ cascadeCount }: { cascadeCount?: number }) {
+  const cascadeSuffix = cascadeLegendSuffix(cascadeCount)
+
+  return (
+    <>
+      <p className="map-legend-pop-title">Oklar</p>
+      <p className="map-legend-pop-lede">
+        <strong>Düz</strong> = doğrudan bağ · <strong>Kesikli</strong> = dolaylı veya alternatif
+      </p>
+      <div className="path-legend-block">
+        <span className="path-legend-item">
+          <span className="legend-swatch tree" aria-hidden />
+          <span>
+            <strong>Yeşil düz ok</strong> — ana yol, doğrudan (1. katman)
+          </span>
+        </span>
+        <span className="path-legend-item">
+          <span className="legend-swatch indirect" aria-hidden />
+          <span>
+            <strong>Gri kesikli ok</strong> — ana yol, dolaylı (2+ katman)
+          </span>
+        </span>
+        <span className="path-legend-item">
+          <span className="legend-swatch cascade" aria-hidden />
+          <span>
+            <strong>Turuncu kesikli ok</strong> — yan bağ (alternatif rota)
+            {cascadeSuffix}
+          </span>
+        </span>
+      </div>
+    </>
+  )
+}
+
 type BreadcrumbProps = {
   centerId: string
   focusId: string | null
@@ -1160,17 +1198,19 @@ export function MapCanvasBar({
                       aria-pressed={showCascadeEdges}
                       aria-label={
                         showCascadeEdges
-                          ? 'Yan bağları gizle'
-                          : 'Yan bağları göster'
+                          ? `Yan bağları gizle — toplam ${cascadeCount} alternatif yol`
+                          : `Yan bağları göster — toplam ${cascadeCount} alternatif yol`
                       }
                       onClick={onToggleCascadeEdges}
                     >
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
                     <span className="map-dock-tip" role="tooltip">
+                      Toplam {cascadeCount} alternatif yol (yan bağ).
                       {showCascadeEdges
-                        ? 'Alternatif yolları gizle — ek task açmaz'
-                        : 'Alternatif bağımlılık yollarını göster'}
+                        ? ' Haritada görünür — gizlemek için tıkla.'
+                        : ' Şu an gizli — göstermek için tıkla.'}{' '}
+                      Onay listesine task açmaz.
                     </span>
                   </span>
                 </div>
@@ -1198,43 +1238,25 @@ export function MapCanvasBar({
 
           <span className="map-dock-sep" aria-hidden />
 
-          <span className="map-dock-wrap map-dock-legend">
-            <button
-              type="button"
-              className="map-dock-btn map-dock-info"
-              aria-label="Ok anlamları"
-              title="Ok anlamları"
-              aria-describedby="map-legend-pop"
-            >
-              i
-            </button>
-            <div id="map-legend-pop" className="map-legend-pop" role="tooltip">
-              <p className="map-legend-pop-title">Oklar</p>
-              <div className="path-legend-block">
-                <span className="path-legend-item">
-                  <span className="legend-swatch tree" aria-hidden />
-                  <span>
-                    <strong>Yeşil düz</strong> — doğrudan ana yol (1. katman)
-                  </span>
-                </span>
-                <span className="path-legend-item">
-                  <span className="legend-swatch indirect" aria-hidden />
-                  <span>
-                    <strong>Gri kesikli</strong> — dolaylı ana yol (2+ katman)
-                  </span>
-                </span>
-                <span className="path-legend-item">
-                  <span className="legend-swatch cascade" aria-hidden />
-                  <span>
-                    <strong>Kahverengi kesikli</strong> — yan bağ (alternatif yol)
-                    {typeof cascadeCount === 'number' && cascadeCount > 0
-                      ? ` · ${cascadeCount}`
-                      : ''}
-                  </span>
-                </span>
-              </div>
+          <div className="map-dock-group">
+            <span className="map-dock-group-kicker">Bilgi</span>
+            <div className="map-dock-group-row">
+              <span className="map-dock-wrap map-dock-legend">
+                <button
+                  type="button"
+                  className="map-dock-btn map-dock-info"
+                  aria-label="Ok anlamları"
+                  title="Ok anlamları"
+                  aria-describedby="map-legend-pop-dock"
+                >
+                  i
+                </button>
+                <div id="map-legend-pop-dock" className="map-legend-pop" role="tooltip">
+                  <MapLegendContent cascadeCount={cascadeCount} />
+                </div>
+              </span>
             </div>
-          </span>
+          </div>
         </div>
       </div>
     </div>
@@ -1248,35 +1270,12 @@ export function ImpactLegend({ cascadeCount }: LegendProps) {
         type="button"
         className="map-legend-info"
         aria-label="Ok anlamları"
-        aria-describedby="map-legend-pop"
+        aria-describedby="map-legend-pop-fab"
       >
         i
       </button>
-      <div id="map-legend-pop" className="map-legend-pop" role="tooltip">
-        <p className="map-legend-pop-title">Oklar</p>
-        <div className="path-legend-block">
-          <span className="path-legend-item">
-            <span className="legend-swatch tree" aria-hidden />
-            <span>
-              <strong>Yeşil düz</strong> — doğrudan ana yol (1. katman)
-            </span>
-          </span>
-          <span className="path-legend-item">
-            <span className="legend-swatch indirect" aria-hidden />
-            <span>
-              <strong>Gri kesikli</strong> — dolaylı ana yol (2+ katman)
-            </span>
-          </span>
-          <span className="path-legend-item">
-            <span className="legend-swatch cascade" aria-hidden />
-            <span>
-              <strong>Kahverengi kesikli</strong> — yan bağ (alternatif yol)
-              {typeof cascadeCount === 'number' && cascadeCount > 0
-                ? ` · ${cascadeCount}`
-                : ''}
-            </span>
-          </span>
-        </div>
+      <div id="map-legend-pop-fab" className="map-legend-pop" role="tooltip">
+        <MapLegendContent cascadeCount={cascadeCount} />
       </div>
     </div>
   )

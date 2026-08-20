@@ -112,6 +112,12 @@ export default function App() {
   const [snapshotToast, setSnapshotToast] = useState<string>()
 
   useEffect(() => {
+    if (!snapshotToast) return
+    const timer = window.setTimeout(() => setSnapshotToast(undefined), 3000)
+    return () => window.clearTimeout(timer)
+  }, [snapshotToast])
+
+  useEffect(() => {
     if (apiError) return
     if (loading && pivotId) {
       setLiveStatus('Servis bilgileri yükleniyor…')
@@ -460,8 +466,52 @@ export default function App() {
         {liveStatus}
       </div>
 
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark">SD</span>
+          <div>
+            <strong>Service Dependency</strong>
+          </div>
+        </div>
+        {session && (
+          <div className="topbar-actions">
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => setInboxOpen(true)}
+            >
+              Inbox
+              {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
+            </button>
+          </div>
+        )}
+      </header>
+
       <div className={`shell${navOpen ? '' : ' is-nav-collapsed'}`}>
         <aside className="module-sidebar">
+          <div className="module-sidebar-head">
+            <h3>Modüller</h3>
+            <button
+              type="button"
+              className="nav-toggle"
+              title={navOpen ? 'Paneli gizle' : 'Modül panelini aç'}
+              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini aç'}
+              aria-expanded={navOpen}
+              onClick={() => {
+                trail.record(
+                  'sidebar_toggle',
+                  undefined,
+                  navOpen ? 'Sol modül paneli kapatıldı' : 'Sol modül paneli açıldı',
+                )
+                setNavOpen((v) => !v)
+              }}
+            >
+              {navOpen ? '‹' : '›'}
+            </button>
+            {!navOpen && (
+              <span className="module-rail-hint">Aç</span>
+            )}
+          </div>
           <label className="search">
             <span className="sr-only">Servis veya method ara</span>
             <input
@@ -532,25 +582,6 @@ export default function App() {
               </>
             )}
           </label>
-          <div className="module-sidebar-head">
-            <h3>Modüller</h3>
-            <button
-              type="button"
-              className="nav-toggle"
-              title={navOpen ? 'Paneli gizle' : 'Modül panelini aç'}
-              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini aç'}
-              aria-expanded={navOpen}
-              onClick={() => {
-                trail.record('sidebar_toggle')
-                setNavOpen((v) => !v)
-              }}
-            >
-              {navOpen ? '‹' : '›'}
-            </button>
-            {!navOpen && (
-              <span className="module-rail-hint">Aç</span>
-            )}
-          </div>
           <div className="module-kind-legend" aria-label="Tür renkleri">
             <span className="module-kind-chip is-project">Proje</span>
             <span className="module-kind-chip is-package">Paket</span>
@@ -571,27 +602,6 @@ export default function App() {
         </aside>
 
         <div className="workspace" ref={workspaceRef}>
-          <header className="topbar">
-            <div className="brand">
-              <span className="brand-mark">SD</span>
-              <div>
-                <strong>Service Dependency</strong>
-              </div>
-            </div>
-            {session && (
-              <div className="topbar-actions">
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => setInboxOpen(true)}
-                >
-                  Inbox
-                  {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
-                </button>
-              </div>
-            )}
-          </header>
-
           <main
           className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}`}
           ref={mainRef}
@@ -624,7 +634,7 @@ export default function App() {
                     aria-selected={tab === 'map'}
                     className={tab === 'map' ? 'on' : ''}
                     onClick={() => {
-                      trail.record('tab_change')
+                      trail.record('tab_change', undefined, 'Harita sekmesine geçildi')
                       setTab('map')
                     }}
                   >
@@ -636,7 +646,7 @@ export default function App() {
                     aria-selected={tab === 'affected'}
                     className={tab === 'affected' ? 'on' : ''}
                     onClick={() => {
-                      trail.record('tab_change')
+                      trail.record('tab_change', undefined, 'İlişkiler sekmesine geçildi')
                       setMapExpanded(false)
                       setTab('affected')
                     }}

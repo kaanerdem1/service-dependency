@@ -317,6 +317,8 @@ export type TrailEntry = {
   at: string
   action: TrailAction
   target?: { level: 'service' | 'method'; id: string; label: string }
+  /** İnsan okunur açıklama (ör. "Katman açıldı", "Yan bağ kapatıldı") */
+  detail?: string
   uiAfter: UiChromeState
 }
 

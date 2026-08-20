@@ -92,9 +92,7 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
     }
     return data.radialAngle ?? 0
   })()
-  const labelSide = radial
-    ? radialLabelSide(liveAngle, isCenter)
-    : null
+  const labelSide = radial ? radialLabelSide(liveAngle, isCenter) : null
   const label = (
     <span
       className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
@@ -135,13 +133,40 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
         )}
       </div>
       {radial && (
-        <span
-          className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
-          data-tip={data.showTip ? data.fullLabel : undefined}
-        >
-          {isCenter && <span className="dd-radial-kicker">Merkez</span>}
-          <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
-        </span>
+        <>
+          <span
+            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
+            aria-hidden
+          />
+          <span
+            className={[
+              'dd-radial-label',
+              labelSide && `is-${labelSide}`,
+              isCenter && 'is-center-label',
+              data.showTip && 'name-tip is-short',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            data-tip={data.showTip ? data.fullLabel : undefined}
+          >
+            {isCenter ? (
+              <>
+                <span className="dd-radial-kicker is-center-badge">Merkez</span>
+                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+              </>
+            ) : (
+              <>
+                {data.hop > 0 && !isCollapsed && (
+                  <span className="dd-radial-hop">{data.hop}. katman</span>
+                )}
+                {isCollapsed && (
+                  <span className="dd-radial-hop">Aç · {data.count ?? 0} öğe daha</span>
+                )}
+                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+              </>
+            )}
+          </span>
+        </>
       )}
       <Handle type="source" position={Position.Right} id="out" className="dd-handle" />
     </div>

@@ -159,6 +159,18 @@ type RingGuideData = {
   hop: number
 }
 
+function radialHopLine(
+  data: ServiceNodeData,
+  isCenter: boolean,
+  isCollapsed: boolean,
+): string | null {
+  if (isCenter) return null
+  if (isCollapsed) return `Aç · ${data.count ?? 0} servis daha`
+  if (data.bridge) return 'Ara yol · filtre dışı'
+  if (data.match) return `${data.hop}. katman · eşleşen`
+  return `${data.hop}. katman`
+}
+
 function RingGuideView({ data }: NodeProps<RingGuideData>) {
   return (
     <div
@@ -181,9 +193,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
     }
     return data.radialAngle ?? 0
   })()
-  const labelSide = radial
-    ? radialLabelSide(liveAngle, isCenter)
-    : null
+  const labelSide = radial ? radialLabelSide(liveAngle, isCenter) : null
   const noteCount = data.noteCount ?? 0
   const showNoteBadge =
     !radial &&
@@ -283,11 +293,32 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
             aria-hidden
           />
           <span
-            className={`dd-radial-label is-${labelSide}${data.showTip ? ' name-tip is-short' : ''}`}
+            className={[
+              'dd-radial-label',
+              labelSide && `is-${labelSide}`,
+              isCenter && 'is-center-label',
+              data.showTip && 'name-tip is-short',
+            ]
+              .filter(Boolean)
+              .join(' ')}
             data-tip={data.showTip ? data.fullLabel : undefined}
           >
-            {isCenter && <span className="dd-radial-kicker">Merkez</span>}
-            <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+            {isCenter ? (
+              <>
+                <span className="dd-radial-kicker is-center-badge">Merkez</span>
+                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const hopLine = radialHopLine(data, isCenter, isCollapsed)
+                  return hopLine ? (
+                    <span className="dd-radial-hop">{hopLine}</span>
+                  ) : null
+                })()}
+                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
+              </>
+            )}
           </span>
         </>
       )}
@@ -883,7 +914,7 @@ function RadialEdge({
       />
       <polygon
         className="dd-radial-mid-arrow"
-        points="-6,-5 10,0 -6,5 -1.5,0"
+        points="-9,-7 16,0 -9,7 -2,0"
         fill={fill}
         transform={`translate(${geom.mx},${geom.my}) rotate(${(geom.angle * 180) / Math.PI})`}
         pointerEvents="none"
@@ -1163,7 +1194,12 @@ function buildGraph(
             ? 'dd-edge direct'
             : 'dd-edge indirect',
       markerEnd: radialTree
-        ? undefined
+        ? {
+            type: MarkerType.ArrowClosed,
+            width: 18,
+            height: 18,
+            color: '#6a645a',
+          }
         : {
             type: MarkerType.ArrowClosed,
             width: isCascade ? 18 : 16,
@@ -1172,9 +1208,9 @@ function buildGraph(
           },
       style: radialTree
         ? {
-            stroke: '#555',
-            strokeWidth: 1.5,
-            opacity: 0.42,
+            stroke: '#6a645a',
+            strokeWidth: 2,
+            opacity: 0.55,
             fill: 'none',
           }
         : {
@@ -1226,9 +1262,9 @@ function buildGraph(
       if (!s || !t) return e
       const box = RADIAL_HIT
       const visualR =
-        (s.data as ServiceNodeData).kind === 'center' ? 9 : 5
+        (s.data as ServiceNodeData).kind === 'center' ? 14 : 5
       const visualRt =
-        (t.data as ServiceNodeData).kind === 'center' ? 9 : 5
+        (t.data as ServiceNodeData).kind === 'center' ? 14 : 5
       const handles = radialHandlePair(
         { x: s.position.x, y: s.position.y, w: box, h: box },
         { x: t.position.x, y: t.position.y, w: box, h: box },
@@ -2215,24 +2251,46 @@ export function ImpactMap({
           cascadeCount={cascadeCount}
           showCascadeEdges={showCascadeEdges}
           onToggleCascadeEdges={() => {
-            trail?.record('cascade_toggle')
+            trail?.record(
+              'cascade_toggle',
+              undefined,
+              showCascadeEdges ? 'Yan bağ kapatıldı' : 'Yan bağ açıldı',
+            )
             setShowCascadeEdges((v) => !v)
           }}
           onCollapseLayer={() => {
-            trail?.record('layer_change')
-            setVisibleMaxHop((h) => Math.max(1, h - 1))
+            const next = Math.max(1, visibleMaxHop - 1)
+            trail?.record(
+              'layer_change',
+              undefined,
+              next === visibleMaxHop
+                ? 'Katman kapatıldı (zaten minimum)'
+                : `Katman kapatıldı (${visibleMaxHop} → ${next})`,
+            )
+            setVisibleMaxHop(next)
           }}
           onExpandLayer={() => {
-            trail?.record('layer_change')
-            setVisibleMaxHop((h) => Math.min(maxHopAvailable, h + 1))
+            const next = Math.min(maxHopAvailable, visibleMaxHop + 1)
+            trail?.record(
+              'layer_change',
+              undefined,
+              next === visibleMaxHop
+                ? 'Katman açıldı (zaten maksimum)'
+                : `Katman açıldı (${visibleMaxHop} → ${next})`,
+            )
+            setVisibleMaxHop(next)
           }}
           onExpandAll={() => {
-            trail?.record('layer_change')
+            trail?.record(
+              'layer_change',
+              undefined,
+              `Tüm katmanlar açıldı (${visibleMaxHop} → ${maxHopAvailable})`,
+            )
             setVisibleMaxHop(maxHopAvailable)
             setExpandedLayers(new Set(filteredGraph.nodes.map((n) => n.hop)))
           }}
           onCollapseAll={() => {
-            trail?.record('layer_change')
+            trail?.record('layer_change', undefined, 'Tüm katmanlar kapatıldı (→ 1)')
             setVisibleMaxHop(1)
             setExpandedLayers(new Set())
           }}
@@ -2241,7 +2299,11 @@ export function ImpactMap({
             setTidyNonce((n) => n + 1)
           }}
           onToggleLayoutMode={() => {
-            trail?.record('layout_toggle')
+            trail?.record(
+              'layout_toggle',
+              undefined,
+              layoutMode === 'ltr' ? 'Layout LTR → Radial' : 'Layout Radial → LTR',
+            )
             layoutDirtyRef.current = false
             setLayoutMode((m) => (m === 'ltr' ? 'radial' : 'ltr'))
             setTidyNonce((n) => n + 1)
@@ -2276,7 +2338,11 @@ export function ImpactMap({
         }
         open={infoPanelOpen}
         onOpenChange={(open) => {
-          trail?.record('drawer_toggle')
+          trail?.record(
+            'drawer_toggle',
+            undefined,
+            open ? 'Etki özeti açıldı' : 'Etki özeti kapatıldı',
+          )
           setInfoPanelOpen(open)
         }}
       />

@@ -19,7 +19,7 @@ import type {
 } from '../types'
 
 type SnapshotTrailContextValue = {
-  record: (action: TrailAction, target?: TrailEntry['target']) => void
+  record: (action: TrailAction, target?: TrailEntry['target'], detail?: string) => void
   syncUi: (patch: Partial<UiChromeState>) => void
   syncView: (view: SnapshotViewState) => void
   syncFocus: (focus: SnapshotFocus) => void
@@ -56,11 +56,12 @@ export function SnapshotTrailProvider({ children }: { children: ReactNode }) {
   })
 
   const record = useCallback(
-    (action: TrailAction, target?: TrailEntry['target']) => {
+    (action: TrailAction, target?: TrailEntry['target'], detail?: string) => {
       trailRef.current.push({
         at: new Date().toISOString(),
         action,
         target,
+        detail,
         uiAfter: { ...uiRef.current },
       })
     },

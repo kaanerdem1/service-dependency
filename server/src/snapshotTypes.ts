@@ -48,6 +48,7 @@ export type TrailEntry = {
   at: string
   action: TrailAction
   target?: { level: 'service' | 'method'; id: string; label: string }
+  detail?: string
   uiAfter: UiChromeState
 }
 

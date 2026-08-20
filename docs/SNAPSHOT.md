@@ -294,19 +294,6 @@ flowchart TD
 
 
 
-### P0 — ilk teslim
-
-- [ ] `explore`: manuel kaydet (yol geçmişi + viewState + impact JSON)
-- [ ] `cr_open`: talep açılışında otomatik snapshot
-- [ ] `approval`: flag atınca otomatik snapshot
-- [ ] Talep detayında snapshot listesi + JSON indir
-- [ ] `catalogRevision` alanı (mock: sabit hash yeterli)
-- [ ] `navigationTrail` (ağaç + harita + sekme + drawer + geri/ileri + katman/yan bağ/layout)
-- [ ] `uiChrome` her trail adımında (`uiAfter`)
-- [ ] `cr_open` / `approval`: birincil harita PNG + isteğe bağlı `full_app` (P0 — otomatik, kullanıcıya bırakılmaz)
-
-
-
 ### P1
 
 - [ ] Çoklu yüzey PNG (`affected`, `drawer`, `full_app` paketi)
@@ -374,19 +361,11 @@ Yönetici şu soruya **5 dakikada**, snapshot olmadan değil snapshot ile cevap 
 
 ### S1 — “Kullanıcının gittiği yollar, harita mı ilişkiler mi, etki özeti açık mı… hiçbir detay kaçmasın; gerekli yerde screenshot da olsun.”
 
-**Kısmen vardı, şimdi genişletildi.**
+Trail, `uiChrome`, sekme/drawer/sidebar/katman/yan bağ/layout olayları kodda kayıtlı.
 
-| Detay | Önceki spec | Durum |
-|-------|-------------|--------|
-| Ağaç / harita / arama seçimi | `navigationTrail` (4 action) | ✅ vardı |
-| Harita ↔ **İlişkiler** sekmesi | `tab_change` adı geçiyordu, tanım yoktu | ✅ §3’te `activeTab` + `tab_change` |
-| Geri / ileri (gezinme geçmişi) | ❌ yoktu | ✅ `nav_back` / `nav_forward` |
-| **Etki özeti** drawer açık/kapalı | ❌ yoktu | ✅ `drawer_toggle` + `uiChrome.drawerOpen` |
-| Modül paneli açık/kapalı | ❌ yoktu | ✅ `sidebar_toggle` |
-| Katman / yan bağ / layout değişimi | yalnız `viewState` son hali | ✅ trail’de `layer_change`, `cascade_toggle`, `layout_toggle` |
-| Metod popover | ❌ yoktu | ✅ `method_popover_open` |
-| Her adımda UI durumu | ❌ yoktu | ✅ `uiAfter: UiChromeState` |
-| Screenshot | P1, tek PNG | ⚠️ **P0’a çekildi** — `cr_open` / `approval` otomatik harita PNG; tam kanıt için `full_app` P1 |
+| Detay | Durum |
+|-------|--------|
+| Screenshot | ⚠️ `cr_open` / `approval` harita PNG mevcut; tam kanıt için `full_app` paketi P1 |
 
 **Kaçınılacak (gürültü):** scroll, zoom, hover, mouse hareketi — trail’i şişirir, post-mortem değeri düşük. Zoom/pan yalnızca son `viewState.viewport`’ta.
 
@@ -429,13 +408,6 @@ Araştırma özeti (NIST SP 800-171 / CMMC 3.4.3–3.4.5, SOC2 CC8.1, ITIL chang
 ---
 
 ### S3 — Özet: spec ile soruların hizası
-
-| Soru özü | Eşleşiyor mu? |
-|----------|----------------|
-| Tam UI oturumu (sekme, drawer, geri/ileri) | ✅ §3 güncellemesi ile |
-| Screenshot tam kanıt olarak | ✅ kısmen — otomatik PNG onay/talep P0; tam ekran P1 |
-| Yönetici post-mortem | ✅ §1, §5, §9 |
-| Güvenlik sektörü pratikleri | ✅ §10 S2 + `manifest` |
 
 **Hâlâ açık (implementasyon kararı):**
 
