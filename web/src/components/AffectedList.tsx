@@ -169,7 +169,7 @@ function Column({
                 <ul className="affected-list">
                   {shown.map((s) => (
                     <li key={s.id}>
-                      <NeighborRow kind={kind} service={s} onPivot={onPivot} />
+                      <NeighborRow service={s} onPivot={onPivot} />
                     </li>
                   ))}
                 </ul>
@@ -196,7 +196,7 @@ function Column({
           <ul className="affected-list">
             {visibleFlat.map((s) => (
               <li key={s.id}>
-                <NeighborRow kind={kind} service={s} onPivot={onPivot} />
+                <NeighborRow service={s} onPivot={onPivot} />
               </li>
             ))}
           </ul>
@@ -216,18 +216,13 @@ function Column({
 }
 
 function NeighborRow({
-  kind,
   service,
   onPivot,
 }: {
-  kind: Kind
   service: Service
   onPivot: (serviceId: string) => void
 }) {
-  const meta =
-    kind === 'callers'
-      ? `${service.affectedCount} çağıran`
-      : `${service.dependsOnCount} çağırdığı`
+  const meta = `${service.affectedCount} çağıran`
 
   return (
     <button
@@ -283,7 +278,7 @@ export function AffectedList({
       />
       <Column
         title="Bu Servisin Çağırdıkları"
-        hint="Bu servisin doğrudan çağırdığı servisler"
+        hint="Doğrudan çağırdığı servisler — değişince etkilenecek çağıran sayısı"
         kind="callees"
         items={callees}
         empty="Çağırdığı servis yok."

@@ -48,6 +48,16 @@ export const RADIAL_DOT_W = 8
 export const RADIAL_CENTER_W = 10
 export const RADIAL_HIT = 22
 
+/** Görsel daire yarıçapı (CSS .dd-radial-core ile uyumlu) */
+export const RADIAL_DOT_R = 4.5
+export const RADIAL_CENTER_DOT_R = 10.5
+/** Nokta kenarı ile etiket kutusu arası */
+export const RADIAL_LABEL_GAP = 8
+
+function radialDotRadius(isCenter: boolean): number {
+  return isCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R
+}
+
 /** CSS ile uyumlu daire çapı (kare RF kutusu) */
 export function radialNodeHeight(
   kind: string,
@@ -93,7 +103,6 @@ export function mapLayoutForRadial(): MapLayout {
 const RADIAL_LABEL_MAX_W = 156
 const RADIAL_LABEL_CHAR_W = 6.9
 const RADIAL_LABEL_LINE_H = 15.4
-const RADIAL_LABEL_GAP = 12
 
 export function radialLabelMetrics(name: string, isCenter: boolean): {
   w: number
@@ -117,9 +126,10 @@ export function radialLabelBox(
   isCenter: boolean,
 ): { x: number; y: number; w: number; h: number } {
   const { w, h } = radialLabelMetrics(name, isCenter)
-  const g = RADIAL_LABEL_GAP
-  if (side === 'east') return { x: cx + g, y: cy - h / 2, w, h }
-  if (side === 'west') return { x: cx - g - w, y: cy - h / 2, w, h }
+  const dotR = radialDotRadius(isCenter)
+  const g = dotR + RADIAL_LABEL_GAP
+  if (side === 'east') return { x: cx + g, y: cy - dotR, w, h }
+  if (side === 'west') return { x: cx - g - w, y: cy - dotR, w, h }
   if (side === 'above') return { x: cx - w / 2, y: cy - g - h, w, h }
   return { x: cx - w / 2, y: cy + g, w, h }
 }
@@ -152,7 +162,8 @@ export function occludedRadialLabelIds(
   const hidden = new Set<string>()
   const kept: { x: number; y: number; w: number; h: number }[] = []
   for (const it of items) {
-    const d = 10
+    const dotR = radialDotRadius(it.kind === 'center')
+    const d = dotR * 2 + 4
     kept.push({ x: it.cx - d / 2, y: it.cy - d / 2, w: d, h: d })
   }
   const ranked = [...items].sort((a, b) => {

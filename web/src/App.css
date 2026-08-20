@@ -1085,15 +1085,12 @@
 }
 
 .map-stage-chrome.is-compact {
-  justify-content: flex-end;
-  padding: 6px 8px;
-  border-bottom: none;
-  background: transparent;
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 4;
-  pointer-events: none;
+  justify-content: flex-start;
+  padding: 6px 10px;
+  min-height: 28px;
+  border-bottom: 1px solid var(--line);
+  background: #faf8f4;
+  flex-shrink: 0;
 }
 
 .map-stage-chrome.is-compact .tl-zoom {
@@ -1177,7 +1174,6 @@
 }
 
 .map-stage:not(.is-expanded) .map-stage-body {
-  position: relative;
   flex: 1;
   height: auto;
   min-height: min(420px, calc(100vh - 220px));
@@ -1332,9 +1328,15 @@
 .dd-map.is-radial .dd-node.radial-dot.center.size-lg,
 .dd-map.is-radial .dd-node.radial-dot.center.size-md,
 .dd-map.is-radial .dd-node.radial-dot.center.size-sm {
+  --radial-dot-r: 4.5px;
+  --radial-label-gap: 8px;
   width: 22px;
   height: 22px;
   overflow: visible;
+}
+
+.dd-map.is-radial .dd-node.radial-dot.center {
+  --radial-dot-r: 10.5px;
 }
 
 .dd-map.is-radial .dd-node.radial-dot .dd-node-body,
@@ -1360,14 +1362,13 @@
 }
 
 .dd-radial-core.is-center {
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  background: var(--map-focus, #1e3a2f);
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  background: var(--map-path, #2f6f55);
   box-shadow:
-    0 0 0 3px var(--map-halo),
-    0 0 0 7px var(--map-path),
-    0 0 18px color-mix(in srgb, var(--map-path) 50%, transparent);
+    0 0 0 2px var(--surface),
+    0 0 0 3.5px color-mix(in srgb, var(--map-path, #2f6f55) 22%, transparent);
 }
 
 .dd-radial-label {
@@ -1403,22 +1404,25 @@
 .dd-radial-label.is-center-label {
   max-width: 196px;
   padding: 5px 8px;
-  background: color-mix(in srgb, #e7f1eb 42%, transparent);
-  backdrop-filter: blur(12px) saturate(1.1);
-  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--map-path, #2f6f55) 14%, var(--line));
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .dd-radial-kicker.is-center-badge {
-  display: inline-block;
-  align-self: flex-start;
-  margin-bottom: 3px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--map-path, #2f6f55) 82%, transparent);
-  color: #f4f7f5;
+  display: block;
+  align-self: center;
+  margin-bottom: 2px;
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: color-mix(in srgb, var(--map-path, #2f6f55) 72%, var(--muted));
   font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
@@ -1434,9 +1438,10 @@
 }
 
 .dd-radial-label.is-center-label .dd-radial-label-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: #1e3a2f;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-shadow: none;
 }
 
 .dd-radial-label-text {
@@ -1476,8 +1481,8 @@
 
 .dd-radial-label.is-east {
   left: 50%;
-  top: 50%;
-  transform: translate(12px, -50%);
+  top: calc(50% - var(--radial-dot-r));
+  transform: translate(calc(var(--radial-dot-r) + var(--radial-label-gap)), 0);
   text-align: left;
   align-items: flex-start;
 }
@@ -1485,16 +1490,17 @@
 .dd-radial-label.is-west {
   right: 50%;
   left: auto;
-  top: 50%;
-  transform: translate(-12px, -50%);
+  top: calc(50% - var(--radial-dot-r));
+  transform: translate(calc(-1 * (var(--radial-dot-r) + var(--radial-label-gap))), 0);
   text-align: right;
   align-items: flex-end;
 }
 
 .dd-radial-label.is-above {
   left: 50%;
-  bottom: 50%;
-  transform: translate(-50%, -12px);
+  bottom: calc(50% + var(--radial-dot-r) + var(--radial-label-gap));
+  top: auto;
+  transform: translateX(-50%);
   text-align: center;
   align-items: center;
 }
@@ -1502,8 +1508,8 @@
 .dd-radial-label.is-below,
 .dd-radial-label.is-south {
   left: 50%;
-  top: 50%;
-  transform: translate(-50%, 12px);
+  top: calc(50% + var(--radial-dot-r) + var(--radial-label-gap));
+  transform: translateX(-50%);
   text-align: center;
   align-items: center;
 }
@@ -1511,7 +1517,10 @@
 .dd-radial-label.is-south {
   width: 200px;
   max-width: 200px;
-  color: #1e3a2f;
+}
+
+.dd-radial-label.is-center-label.is-south {
+  color: var(--text);
 }
 
 .dd-map.is-radial.is-focusing .react-flow__node.rf-path-off {
