@@ -1,0 +1,12 @@
+{
+  "name": "service-dependency",
+  "private": true,
+  "scripts": {
+    "bootstrap": "npm install && npm install --prefix server && npm install --prefix web",
+    "devall": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
+    "dev": "npm run devall"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

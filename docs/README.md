@@ -92,7 +92,16 @@ Tutarlılık (opsiyonel): `curl -s http://127.0.0.1:4000/api/meta/call-graph-con
 
 ## Çalıştırma
 
-İki terminal:
+Tek terminal (önerilen):
+
+```bash
+npm run bootstrap   # ilk sefer
+npm run devall
+```
+
+`devall`, API ve UI’yi birlikte başlatır. Kısa alias: `npm run dev`.
+
+İki terminal (alternatif):
 
 ```bash
 # API
