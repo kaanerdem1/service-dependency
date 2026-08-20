@@ -51,10 +51,20 @@ Servis seçimi, pivot, toast, gelen kutusu sayacı.
 **18. Responsive: dar ekran**  
 `<1024px` sidebar overlay; boş durum kartı; dock tek satır.
 
----
 
-## Tamamlanan
 
-- ~~Batch 1: Başlangıç ekranı + lejant~~
-- ~~Gelen kutusu~~
-- ~~Mini rehber ve demo CTA kaldırıldı; welcome metni güncellendi~~
+
+
+**. Lejant renkleri birbirine çok yakın**  
+Sol üstteki "Proje / Paket / Servis / Metod" noktaları — Proje (turuncu-sarı) ile Metod (kahve-turuncu) tonları göz düzeyinde neredeyse ayırt edilemiyor. Renk körlüğü olan kullanıcılar için bu ayrım daha da zorlaşır.
+
+
+
+**3. "17" (Yan Bağ) hâlâ açıklanmıyor**  
+Geçen turda sorduğum soru hâlâ cevapsız — bu sayı neyi temsil ediyor, üstüne gelince tooltip var mı yok, belli değil.
+
+
+
+**1. Sağdaki node kartları panel tarafından kesiliyor**  
+"Etki Özeti" paneli açılınca canvas genişliği daralmış ama 2. katman kartları hâlâ eski konumlarında duruyor — bu yüzden `outbound_multichannel_notification_delivery_router` gibi isimler `notifilivery_router` şeklinde çirkin bir şekilde bölünmüş, `digital_storefront_catalog_ch` / `perience_api` de aynı şekilde kesik. Bu bir layout/responsive hatası: panel açıldığında canvas'ın kendini yeniden hizalaması (re-layout) gerekiyor, şu an sadece üstüne biniyor.
+
