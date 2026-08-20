@@ -535,6 +535,21 @@ export function fitViewPaddingForLayout(layout: MapLayout): number {
   return layout.fitPadding + 0.05
 }
 
+export type FitChromeOpts = {
+  drawerOpen?: boolean
+}
+
+/** Drawer + alt dock için fitView padding (tek sayı — React Flow sınırı) */
+export function fitViewPaddingForChrome(
+  layout: MapLayout,
+  opts?: FitChromeOpts,
+): number {
+  let p = layout.fitPadding + 0.05 + 0.08
+  if (opts?.drawerOpen) p += 0.14
+  else p += 0.03
+  return p
+}
+
 export function mapNodeWidth(size: MapNodeSize): number {
   if (size === 'lg') return 320
   if (size === 'md') return 280

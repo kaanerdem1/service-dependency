@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
 import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
-import { fitViewPaddingForLayout, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
+import { fitViewPaddingForChrome, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
 import {
   animateViewport,
   easeInOutCubic,
@@ -24,6 +24,7 @@ export function MapViewportSync({
   visibleMaxHop,
   layoutKey,
   layout,
+  drawerOpen = false,
   navDirection = null,
   onNavDirectionConsumed,
 }: {
@@ -31,6 +32,7 @@ export function MapViewportSync({
   visibleMaxHop: number
   layoutKey: string | number | boolean
   layout: MapLayout
+  drawerOpen?: boolean
   navDirection?: 'back' | 'forward' | null
   onNavDirectionConsumed?: () => void
 }) {
@@ -52,7 +54,7 @@ export function MapViewportSync({
 
     const id = window.setTimeout(() => {
       void (async () => {
-        const padding = fitViewPaddingForLayout(layout)
+        const padding = fitViewPaddingForChrome(layout, { drawerOpen })
         const fitOpts = {
           padding,
           minZoom: layout.minZoom,
@@ -81,7 +83,7 @@ export function MapViewportSync({
       })()
     }, 50)
     return () => window.clearTimeout(id)
-  }, [centerId, visibleMaxHop, layoutKey, layout, rf])
+  }, [centerId, visibleMaxHop, layoutKey, layout, drawerOpen, rf])
 
   const paneW = useStore((s) => s.width)
   const paneH = useStore((s) => s.height)
@@ -94,7 +96,7 @@ export function MapViewportSync({
     const [pw, ph] = prev.split('x').map(Number)
     prevPane.current = next
     if (!pw || (Math.abs(pw - paneW) < 20 && Math.abs(ph - paneH) < 20)) return
-    const padding = fitViewPaddingForLayout(layout)
+    const padding = fitViewPaddingForChrome(layout, { drawerOpen })
     const id = window.setTimeout(() => {
       void rf.fitView({
         padding,
@@ -104,7 +106,7 @@ export function MapViewportSync({
       })
     }, 100)
     return () => window.clearTimeout(id)
-  }, [paneW, paneH, layout, rf])
+  }, [paneW, paneH, layout, drawerOpen, rf])
 
   return null
 }
@@ -679,6 +681,7 @@ type LayerControlsProps = {
   onToggleLayoutMode?: () => void
   layoutMode?: MapLayoutMode
   layout?: MapLayout
+  drawerOpen?: boolean
   cascadeCount?: number
   showCascadeEdges?: boolean
   onToggleCascadeEdges?: () => void
@@ -936,6 +939,7 @@ export function MapCanvasBar({
   onToggleLayoutMode,
   layoutMode = 'ltr',
   layout,
+  drawerOpen = false,
   cascadeCount,
   showCascadeEdges = false,
   onToggleCascadeEdges,
@@ -946,7 +950,9 @@ export function MapCanvasBar({
   const canExpand = visibleMaxHop < maxHopAvailable
   const canCollapse = visibleMaxHop > 1
   const nextHop = canExpand ? visibleMaxHop + 1 : null
-  const fitPadding = layout ? fitViewPaddingForLayout(layout) : 0.22
+  const fitPadding = layout
+    ? fitViewPaddingForChrome(layout, { drawerOpen })
+    : 0.22
   const radialOn = layoutMode === 'radial'
 
   const rootRef = useRef<HTMLDivElement>(null)
@@ -1201,20 +1207,17 @@ export function MapCanvasBar({
                           ? `Yan bağları gizle — ${cascadeCount} alternatif rota`
                           : `Yan bağları göster — ${cascadeCount} alternatif rota`
                       }
-                      title={`Yan bağ: ${cascadeCount} alternatif rota (BFS ana yol dışı)`}
+                      title={`${cascadeCount} alternatif rota (BFS ana yol dışı)`}
                       onClick={onToggleCascadeEdges}
                     >
-                      <span className="map-dock-cascade-label">Yan bağ</span>
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
                     <span className="map-dock-tip" role="tooltip">
-                      <strong>Yan bağ ({cascadeCount})</strong> — ana etki yoluna
-                      girmeyen alternatif rotalar. Turuncu kesikli oklarla gösterilir;
-                      onay listesine otomatik task eklemez.
+                      <strong>{cascadeCount} alternatif rota</strong> — ana etki yoluna
+                      girmeyen bağlantılar. Turuncu kesikli oklarla gösterilir.
                       {showCascadeEdges
                         ? ' Haritada görünür — gizlemek için tıkla.'
-                        : ' Şu an gizli — göstermek için tıkla.'}{' '}
-                      Onay listesine task açmaz.
+                        : ' Şu an gizli — göstermek için tıkla.'}
                     </span>
                   </span>
                 </div>

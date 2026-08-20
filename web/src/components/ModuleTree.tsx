@@ -15,7 +15,7 @@ const KIND_LABEL: Record<ModuleNode['kind'], string> = {
   project: 'proje',
   package: 'paket',
   service: 'servis',
-  method: 'method',
+  method: 'metod',
 }
 
 type Props = {

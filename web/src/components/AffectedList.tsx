@@ -3,6 +3,7 @@
  * Satıra tıklayınca pivot değişir (Harita ile aynı gezinme geçmişi).
  */
 import { useMemo, useState } from 'react'
+import { EmptyState } from './EmptyState'
 import type { AffectedService, Service } from '../types'
 
 type Props = {
@@ -42,7 +43,8 @@ function Column({
   hint,
   kind,
   items,
-  empty,
+  emptyWhat,
+  emptyAction,
   onPivot,
   projectLabels,
   projectOrder,
@@ -51,7 +53,8 @@ function Column({
   hint: string
   kind: Kind
   items: AffectedService[]
-  empty: string
+  emptyWhat: string
+  emptyAction?: string
   onPivot: (serviceId: string) => void
   projectLabels: Map<string, string>
   projectOrder: string[]
@@ -152,9 +155,17 @@ function Column({
       )}
 
       {items.length === 0 ? (
-        <p className="empty-hint neighbor-empty">{empty}</p>
+        <EmptyState
+          className="neighbor-empty"
+          what={emptyWhat}
+          action={emptyAction}
+        />
       ) : filtered.length === 0 ? (
-        <p className="empty-hint neighbor-empty">Eşleşen servis yok.</p>
+        <EmptyState
+          className="neighbor-empty"
+          what="Arama veya filtreye uyan servis yok."
+          action="Arama metnini temizleyin veya sıralamayı değiştirin."
+        />
       ) : groups ? (
         <div className="neighbor-groups">
           {groups.map(([projectId, label, rows]) => {
@@ -271,7 +282,8 @@ export function AffectedList({
         hint="Bu servis değişirse etkilenenler"
         kind="callers"
         items={callers}
-        empty="Bu servisi çağıran yok."
+        emptyWhat="Bu servisi çağıran başka servis yok."
+        emptyAction="Bu servis yalnızca dış sistemlerden veya doğrudan API'den tetikleniyor olabilir."
         onPivot={onPivot}
         projectLabels={projectLabels}
         projectOrder={projectOrder}
@@ -281,7 +293,8 @@ export function AffectedList({
         hint="Doğrudan çağırdığı servisler — değişince etkilenecek çağıran sayısı"
         kind="callees"
         items={callees}
-        empty="Çağırdığı servis yok."
+        emptyWhat="Bu servisin doğrudan çağırdığı servis yok."
+        emptyAction="Yalnızca gelen çağrılar var; downstream bağımlılık bulunmuyor."
         onPivot={onPivot}
         projectLabels={projectLabels}
         projectOrder={projectOrder}

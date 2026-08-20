@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { EmptyState } from './EmptyState'
 import type { Service } from '../types'
 
 type Props = {
@@ -127,7 +128,12 @@ export function ServiceOverview({
   }, [service.id, baseline])
 
   if (loading) {
-    return <p className="empty-hint">Servis bilgisi yükleniyor…</p>
+    return (
+      <EmptyState
+        what="Servis bilgisi yükleniyor."
+        action="Birkaç saniye bekleyin; sorun sürerse başka bir servis seçin."
+      />
+    )
   }
 
   const summary = saved ?? baseline

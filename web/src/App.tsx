@@ -18,6 +18,7 @@ import { AffectedList } from './components/AffectedList'
 import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
+import { EmptyState } from './components/EmptyState'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
@@ -458,6 +459,10 @@ export default function App() {
       {apiError && (
         <div className="api-banner" role="alert" aria-live="assertive">
           {apiError}
+          <span className="api-banner-hint">
+            {' '}
+            Sunucunun çalıştığından emin olun (<code>npm run dev</code>) ve sayfayı yenileyin.
+          </span>
         </div>
       )}
       <div
@@ -816,7 +821,10 @@ export default function App() {
               )}
 
               {tab === 'map' && selectedMethodId && !methodImpact && (
-                <p className="empty-hint">Method etki grafı yükleniyor…</p>
+                <EmptyState
+                  what="Metod etki grafiği yükleniyor."
+                  action="Harita sekmesinde kalın; yükleme bitince method zinciri görünür."
+                />
               )}
 
               {tab === 'overview' && service && (

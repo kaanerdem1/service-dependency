@@ -2,6 +2,7 @@
  * Inbox: Yapman gerekenler + Açtığın talepler (iki bölüm).
  */
 import { useMemo, useState } from 'react'
+import { EmptyState } from './EmptyState'
 import {
   FLAG_LABEL,
   type ChangeRequest,
@@ -135,7 +136,10 @@ export function InboxPanel({
             Etkilenen servis olarak senden kabul / red / düzenleniyor yanıtı bekleniyor.
           </p>
           {pendingApprovals.length === 0 ? (
-            <p className="empty-hint">Şu an senden beklenen onay yok.</p>
+            <EmptyState
+              what="Şu an senden beklenen onay yok."
+              action="Başka bir serviste değişiklik talebi açıldığında burada görünür."
+            />
           ) : (
             <ul className="inbox-list">
               {pendingApprovals.map(({ request, row }) => (
@@ -168,7 +172,10 @@ export function InboxPanel({
             Senin açtığın talepler hakkında: task açıldı, biri yanıtladı, onay açıldı vb.
           </p>
           {updatesFiltered.length === 0 ? (
-            <p className="empty-hint">Henüz talep bildirimi yok.</p>
+            <EmptyState
+              what="Henüz talep bildirimi yok."
+              action="Değişiklik talebi açtığınızda durum güncellemeleri bu bölümde listelenir."
+            />
           ) : (
             <ul className="inbox-list">{updatesFiltered.map(renderUpdate)}</ul>
           )}

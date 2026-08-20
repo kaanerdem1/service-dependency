@@ -2233,6 +2233,7 @@ export function ImpactMap({
           visibleMaxHop={visibleMaxHop}
           layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}-${infoPanelOpen}`}
           layout={layout}
+          drawerOpen={infoPanelOpen}
           navDirection={navDirection}
           onNavDirectionConsumed={onNavDirectionConsumed}
         />
@@ -2246,6 +2247,7 @@ export function ImpactMap({
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
           layout={layout}
+          drawerOpen={infoPanelOpen}
           layoutMode={layoutMode}
           truncated={graph.truncated}
           cascadeCount={cascadeCount}
