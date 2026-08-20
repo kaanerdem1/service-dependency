@@ -4,55 +4,41 @@
 
 ---
 
-## Tamamlandı (bu tur)
+## Tamamlandı
 
-- **Service 360 tarzı sekme satırı** — başlık solda, Harita / İlişkiler / Servis İşlevi sekmeleri + ikonlar sağda
-- **Sidebar üst boşluk** — Modüller başlığı, arama, lejant arası padding sıkılaştırıldı
-
----
-
-## Batch A — Hızlı kazanım
-
-**1. Title + meta + og tags**  
-`index.html`: `Servis Bağımlılık Haritası`, meta description, og:title/description.
-
-**2. Collapse butonunu sidebar içine taşı**  
-`‹` butonu main’e taşmasın; Modüller satırının içinde kalsın.
-
-**3. "17" (Yan Bağ) açıklaması**  
-Sayının ne olduğu tooltip veya kısa etiket ile görünsün.
+- Service 360 sekmeleri + Servis İşlevi sekmesi
+- Sidebar üst boşluk sıkılaştırma
+- **Batch A:** title/meta/og, collapse butonu sidebar içi, Yan bağ etiketi + tooltip
+- **Batch B (kısmi):** lejant renk ayrımı (Proje mavi / Metod turuncu)
+- Topbar ürün açıklaması
+- Arama placeholder: metod
 
 ---
 
-## Batch B — Görsel cilalama
+## Batch B — Görsel cilalama (kalan)
 
 **4. Sidebar + tree IDE tarzı**  
-Ağır kutu/gölge yerine düz liste; proje başlıkları, sakin tipografi (audit madde 6–7).
-
-**5. Lejant renk ayrımı**  
-Proje / Metod tonları birbirinden net ayrılsın (renk körlüğü).
+Ağır kutu/gölge yerine düz liste; proje başlıkları, sakin tipografi.
 
 ---
 
-## Batch C — İçerik
-
-**6. Servis özeti şablonu (genişlet)**  
-Servis İşlevi sekmesindeki metin; upstream/downstream sayılarından otomatik özet.
-
-**7. Topbar kısa ürün açıklaması**  
-*「Servis bağımlılıkları ve değişiklik etkisi」* alt satır.
+## Batch C — İçerik (kalan)
 
 **8. Boş durum / yükleme metinleri**  
-Ne olacak + Ne yapmalısın şablonu; `changes.md` Batch 3 ile uyumlu.
+Ne olacak + Ne yapmalısın şablonu.
 
 ---
 
 ## Bug fix (P0)
 
 **9. Panel açılınca canvas re-layout**  
-Etki Özeti drawer açıldığında node kartları kesiliyor; `mapLayout` yeniden hizalamalı.
+Etki Özeti drawer açıldığında node kartları kesiliyor.
+
+**10. Harita alt dock çakışması**  
+En alttaki node ile alttaki dock üst üste biniyor — canvas alt padding / fitView ayarı.
 
 ---
 
-Harita görünümünde bazen en alttaki node ile alttaki dock üst üste biniyor onu düzgün ayarla ne yapabiliriz söyle. 
+## Ertelenen
 
+SSR / indexlenebilir servis URL’leri — iç araç için şimdilik gerek yok.

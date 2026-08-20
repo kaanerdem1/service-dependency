@@ -1198,15 +1198,19 @@ export function MapCanvasBar({
                       aria-pressed={showCascadeEdges}
                       aria-label={
                         showCascadeEdges
-                          ? `Yan bağları gizle — toplam ${cascadeCount} alternatif yol`
-                          : `Yan bağları göster — toplam ${cascadeCount} alternatif yol`
+                          ? `Yan bağları gizle — ${cascadeCount} alternatif rota`
+                          : `Yan bağları göster — ${cascadeCount} alternatif rota`
                       }
+                      title={`Yan bağ: ${cascadeCount} alternatif rota (BFS ana yol dışı)`}
                       onClick={onToggleCascadeEdges}
                     >
+                      <span className="map-dock-cascade-label">Yan bağ</span>
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
                     <span className="map-dock-tip" role="tooltip">
-                      Toplam {cascadeCount} alternatif yol (yan bağ).
+                      <strong>Yan bağ ({cascadeCount})</strong> — ana etki yoluna
+                      girmeyen alternatif rotalar. Turuncu kesikli oklarla gösterilir;
+                      onay listesine otomatik task eklemez.
                       {showCascadeEdges
                         ? ' Haritada görünür — gizlemek için tıkla.'
                         : ' Şu an gizli — göstermek için tıkla.'}{' '}

@@ -43,6 +43,15 @@
   font-size: 15px;
 }
 
+.brand-tagline {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .muted {
   color: var(--muted);
   font-size: 13px;
@@ -254,8 +263,8 @@
 .module-sidebar-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  justify-content: flex-start;
+  gap: 8px;
   margin: 0 0 6px;
   padding: 0 2px 6px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent);
@@ -274,16 +283,16 @@
 }
 
 .shell.is-nav-collapsed .module-sidebar-head .nav-toggle {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  min-height: 40px;
-  font-size: 20px;
-  font-weight: 750;
-  border-width: 1.5px;
-  border-color: #bfb8ab;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(40, 35, 28, 0.1);
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  font-size: 16px;
+  font-weight: 700;
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .module-rail-hint {
@@ -351,7 +360,7 @@
 }
 
 .module-kind-dot.is-project {
-  background: #c9b46a;
+  background: #2563eb;
 }
 
 .module-kind-dot.is-package {
@@ -363,7 +372,7 @@
 }
 
 .module-kind-dot.is-method {
-  background: #d4a06a;
+  background: #c2410c;
 }
 
 .module-kind-chip {
@@ -407,15 +416,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  min-height: 44px;
-  width: 44px;
-  height: 44px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 88%, #f4eee4);
-  color: #5c564c;
-  font-size: 16px;
+  min-width: 26px;
+  min-height: 26px;
+  width: 26px;
+  height: 26px;
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  color: var(--muted);
+  font-size: 14px;
   font-weight: 650;
   line-height: 1;
   cursor: pointer;
@@ -3494,10 +3503,11 @@
 }
 
 .map-dock-cascade {
-  min-width: 40px;
+  min-width: auto;
   height: 32px;
-  padding: 0 8px;
-  display: flex;
+  padding: 0 10px;
+  gap: 6px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -3519,11 +3529,20 @@
   box-shadow: inset 0 0 0 1px #d4a06a;
 }
 
+.map-dock-cascade-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: #6a645a;
+}
+
 .map-dock-cascade-count {
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  color: #6a3d12;
 }
 
 .map-legend-pop-lede {

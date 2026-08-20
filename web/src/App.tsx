@@ -474,6 +474,9 @@ export default function App() {
           <span className="brand-mark">SD</span>
           <div>
             <strong>Service Dependency</strong>
+            <span className="brand-tagline">
+              Servis bağımlılıkları ve değişiklik etkisi
+            </span>
           </div>
         </div>
         {session && (
@@ -516,11 +519,11 @@ export default function App() {
             )}
           </div>
           <label className="search">
-            <span className="sr-only">Servis veya method ara</span>
+            <span className="sr-only">Servis veya metod ara</span>
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Servis veya method ara…"
+              placeholder="Servis veya metod ara…"
             />
             {query && (hits.length > 0 || methodHits.length > 0) && (
               <>
