@@ -1,9 +1,15 @@
 :root {
-  --bg: #f3f1ec;
-  --surface: #fbfaf7;
-  --ink: #1c1b19;
-  --muted: #6f6a62;
-  --line: #ddd7cc;
+  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  line-height: 1.45;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Paylaşılan semantik tokenlar (her iki temada aynı) */
+:root,
+[data-theme='mixed'],
+[data-theme='white'] {
   --accent: #2f5d4a;
   --accent-soft: #e4efe9;
   --warn-bg: #f3ebe3;
@@ -12,15 +18,6 @@
   --overlay: rgba(40, 35, 28, 0.16);
   --shadow-soft: rgba(40, 35, 28, 0.06);
   --shadow-mid: rgba(40, 35, 28, 0.12);
-  --app-gradient-a: #e7eee9;
-  --app-gradient-b: #efe8df;
-  --map-bg: #ffffff;
-  --map-bg-alt: #ffffff;
-  --map-surface: #ffffff;
-  --map-panel: #f4f1ea;
-  --map-dot: #bdb6aa;
-  --map-halo: #ffffff;
-  --map-panel-border: #cfc8bc;
   --map-focus: #1e3a2f;
   --map-path: #2f6f55;
   --map-path-mid: #3d7a60;
@@ -30,13 +27,149 @@
   --map-idle-line: #a39e94;
   --map-radial-dot: #8a8a8a;
   --map-radial-dot-hover: #666;
-  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
-  line-height: 1.45;
+}
+
+[data-theme='white'] {
+  --bg: #f3f1ec;
+  --surface: #fbfaf7;
+  --ink: #1c1b19;
+  --muted: #6f6a62;
+  --line: #ddd7cc;
+  --app-gradient-a: #e7eee9;
+  --app-gradient-b: #efe8df;
+  --map-bg: #fbfaf7;
+  --map-bg-alt: #f3efe8;
+  --map-surface: #fbfaf7;
+  --map-panel: #f4f1ea;
+  --map-dot: #bdb6aa;
+  --map-halo: #fbfaf7;
+  --map-panel-border: #cfc8bc;
+
+  --shell-bg: #f3f1ec;
+  --shell-sidebar-bg: #f3f1ec;
+  --shell-sidebar-fg: #1c1b19;
+  --shell-sidebar-muted: #6f6a62;
+  --shell-sidebar-heading: #6f6a62;
+  --shell-brand-title: #1c1b19;
+  --shell-brand-tagline: #6f6a62;
+  --shell-sidebar-input-bg: #fbfaf7;
+  --shell-sidebar-input-border: color-mix(in srgb, #ddd7cc 65%, transparent);
+  --shell-sidebar-input-fg: #1c1b19;
+  --shell-sidebar-input-placeholder: #8a847a;
+  --shell-sidebar-input-focus-border: color-mix(in srgb, #2f5d4a 35%, #ddd7cc);
+  --shell-sidebar-input-focus-ring: color-mix(in srgb, #e4efe9 70%, transparent);
+  --shell-nav-toggle-bg: #fbfaf7;
+  --shell-nav-toggle-border: color-mix(in srgb, #ddd7cc 80%, transparent);
+  --shell-nav-toggle-fg: #6f6a62;
+  --shell-nav-toggle-hover-bg: #efeae2;
+  --shell-nav-toggle-hover-border: #cfc8bc;
+  --shell-nav-toggle-hover-fg: #1c1b19;
+  --shell-nav-toggle-collapsed-bg: #fbfaf7;
+  --shell-nav-toggle-collapsed-border: color-mix(in srgb, #ddd7cc 80%, transparent);
+  --shell-workspace-bg: #f3f1ec;
+  --shell-workspace-panel: #ffffff;
+  --shell-workspace-radius: 14px 0 0 0;
+  --shell-topbar-btn-bg: #fbfaf7;
+  --shell-topbar-btn-border: #ddd7cc;
+  --shell-topbar-btn-fg: #1c1b19;
+  --shell-topbar-btn-hover-bg: #efeae2;
+  --shell-topbar-btn-hover-border: #cfc8bc;
+  --shell-topbar-btn-hover-fg: #1c1b19;
+  --shell-kind-key-fg: #6f6a62;
+  --shell-tree-fg: #1c1b19;
+  --shell-tree-hover-bg: rgba(28, 27, 25, 0.05);
+  --shell-tree-selected-bg: rgba(126, 171, 151, 0.14);
+  --shell-tree-selected-accent: #7eab97;
+  --shell-tree-method-selected-bg: rgba(212, 160, 106, 0.14);
+  --shell-tree-method-selected-accent: #d4a06a;
+  --shell-tree-project-label: #5c4a14;
+  --shell-tree-package-label: #2e4a78;
+  --shell-tree-service-label: #1a4a36;
+  --shell-tree-method-label: #5c5348;
+  --shell-tree-chev: #8a847a;
+  --shell-tree-chev-hover-bg: rgba(28, 27, 25, 0.06);
+  --shell-tree-chev-hover-fg: #1c1b19;
+
   color: var(--ink);
   background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+}
+
+[data-theme='mixed'] {
+  --bg: #f3f1ec;
+  --surface: #fbfaf7;
+  --ink: #1c1b19;
+  --muted: #6f6a62;
+  --line: #ddd7cc;
+  --app-gradient-a: #e7eee9;
+  --app-gradient-b: #efe8df;
+  --map-bg: #ffffff;
+  --map-bg-alt: #ffffff;
+  --map-surface: #ffffff;
+  --map-panel: #f4f1ea;
+  --map-dot: #bdb6aa;
+  --map-halo: #ffffff;
+  --map-panel-border: #cfc8bc;
+
+  --shell-bg: #323338;
+  --shell-sidebar-bg: #323338;
+  --shell-sidebar-fg: #e4e7eb;
+  --shell-sidebar-muted: #c1c4cb;
+  --shell-sidebar-heading: #c5c8ce;
+  --shell-brand-title: #f0f2f5;
+  --shell-brand-tagline: #b9bdc5;
+  --shell-sidebar-input-bg: #3a3b40;
+  --shell-sidebar-input-border: #4a4c52;
+  --shell-sidebar-input-fg: #e8eaed;
+  --shell-sidebar-input-placeholder: #7a8494;
+  --shell-sidebar-input-focus-border: #4a5568;
+  --shell-sidebar-input-focus-ring: rgba(74, 144, 226, 0.22);
+  --shell-search-dropdown-bg: #3a3b40;
+  --shell-search-dropdown-border: #4a4c52;
+  --shell-search-dropdown-fg: #e8eaed;
+  --shell-search-dropdown-muted: #9aa3b2;
+  --shell-search-dropdown-hover-bg: rgba(255, 255, 255, 0.08);
+  --shell-search-dropdown-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  --shell-nav-toggle-bg: #3a3b40;
+  --shell-nav-toggle-border: #4a4c52;
+  --shell-nav-toggle-fg: #c5cad3;
+  --shell-nav-toggle-hover-bg: #48494f;
+  --shell-nav-toggle-hover-border: #5b5d63;
+  --shell-nav-toggle-hover-fg: #ffffff;
+  --shell-nav-toggle-collapsed-bg: #232830;
+  --shell-nav-toggle-collapsed-border: #343b46;
+  --shell-workspace-bg: #323338;
+  --shell-workspace-panel: #ffffff;
+  --shell-workspace-radius: 14px 0 0 0;
+  --shell-topbar-btn-bg: #3b3c41;
+  --shell-topbar-btn-border: #4a4b50;
+  --shell-topbar-btn-fg: #dce2ea;
+  --shell-topbar-btn-hover-bg: #48494f;
+  --shell-topbar-btn-hover-border: #5b5d63;
+  --shell-topbar-btn-hover-fg: #ffffff;
+  --shell-kind-key-fg: #c1c4cb;
+  --shell-tree-fg: #eef1f4;
+  --shell-tree-hover-bg: rgba(255, 255, 255, 0.07);
+  --shell-tree-selected-bg: rgba(126, 171, 151, 0.12);
+  --shell-tree-selected-accent: #8bb7a3;
+  --shell-tree-method-selected-bg: rgba(212, 160, 106, 0.12);
+  --shell-tree-method-selected-accent: #d4a06a;
+  --shell-tree-project-label: #f2f4f7;
+  --shell-tree-package-label: #e2e7ed;
+  --shell-tree-service-label: #e5eee9;
+  --shell-tree-method-label: #ece5da;
+  --shell-tree-chev: #8b95a5;
+  --shell-tree-chev-hover-bg: rgba(255, 255, 255, 0.08);
+  --shell-tree-chev-hover-fg: #e4e7eb;
+
+  color: var(--ink);
+  background: var(--shell-bg);
+}
+
+[data-theme='white'] .app {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, var(--app-gradient-a) 0%, transparent 55%),
+    radial-gradient(900px 400px at 100% 0%, var(--app-gradient-b) 0%, transparent 50%),
+    var(--bg);
 }
 
 * {

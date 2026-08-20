@@ -26,6 +26,13 @@ import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import {
+  APP_THEME_KEY,
+  readAppTheme,
+  themeLabel,
+  type AppTheme,
+} from './theme'
+import { ThemeSwitch } from './components/ThemeSwitch'
+import {
   getChangeRequest,
   getImpactGraph,
   getInbox,
@@ -90,6 +97,7 @@ export default function App() {
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
+  const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
   const [navOpen, setNavOpen] = useState(true)
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
     null,
@@ -114,6 +122,11 @@ export default function App() {
   const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = appTheme
+    window.localStorage.setItem(APP_THEME_KEY, appTheme)
+  }, [appTheme])
 
   useEffect(() => {
     if (!snapshotToast) return
@@ -458,7 +471,7 @@ export default function App() {
   })()
 
   return (
-    <div className="app">
+    <div className="app" data-theme={appTheme}>
       {apiError && (
         <div className="api-banner" role="alert" aria-live="assertive">
           {apiError}
@@ -615,6 +628,17 @@ export default function App() {
         <div className="workspace-column">
           {session && (
             <header className="workspace-topbar">
+              <ThemeSwitch
+                theme={appTheme}
+                onChange={(next) => {
+                  trail.record(
+                    'theme_toggle',
+                    undefined,
+                    `${themeLabel(appTheme)} → ${themeLabel(next)}`,
+                  )
+                  setAppTheme(next)
+                }}
+              />
               <button
                 type="button"
                 className="btn ghost"

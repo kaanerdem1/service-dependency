@@ -311,6 +311,7 @@ export type TrailAction =
   | 'layer_change'
   | 'cascade_toggle'
   | 'layout_toggle'
+  | 'theme_toggle'
   | 'method_popover_open'
 
 export type TrailEntry = {

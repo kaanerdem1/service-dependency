@@ -12,6 +12,7 @@ const ACTION_FALLBACK: Partial<Record<TrailAction, string>> = {
   layout_toggle: 'Layout değiştirildi',
   drawer_toggle: 'Etki özeti değiştirildi',
   sidebar_toggle: 'Sol modül paneli değiştirildi',
+  theme_toggle: 'Tema değiştirildi',
   tab_change: 'Sekme değiştirildi',
 }
 
