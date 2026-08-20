@@ -2240,7 +2240,7 @@ export function ImpactMap({
           variant={BackgroundVariant.Dots}
           gap={18}
           size={1.55}
-          color="#bdb6aa"
+          color="var(--map-dot)"
         />
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}

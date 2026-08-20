@@ -112,7 +112,7 @@ export function InboxPanel({
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div className="modal wide" role="dialog" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
-          <h2>Inbox</h2>
+          <h2>Gelen kutusu</h2>
           <div className="modal-head-actions">
             {unreadUpdates.length > 0 && (
               <button type="button" className="btn ghost" onClick={onMarkRead}>

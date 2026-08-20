@@ -137,7 +137,7 @@ function Column({
             >
               <option value="name">A–Z</option>
               <option value="affected">En çok çağıran</option>
-              <option value="depends">En çok bağımlılık</option>
+              <option value="depends">En çok çağırdığı</option>
             </select>
           </label>
           <label className="neighbor-group">
@@ -224,10 +224,10 @@ function NeighborRow({
   service: Service
   onPivot: (serviceId: string) => void
 }) {
-  const reverse =
+  const meta =
     kind === 'callers'
-      ? `${service.dependsOnCount} bağımlılık`
-      : `${service.affectedCount} çağıran`
+      ? `${service.affectedCount} çağıran`
+      : `${service.dependsOnCount} çağırdığı`
 
   return (
     <button
@@ -238,8 +238,8 @@ function NeighborRow({
     >
       <span className="affected-row-body">
         <span className="svc-name">{service.name}</span>
-        <span className="rel-pill" title={reverse}>
-          {reverse}
+        <span className="rel-pill" title={meta}>
+          {meta}
         </span>
       </span>
       <span className="affected-row-action">Servisi seç</span>
@@ -283,7 +283,7 @@ export function AffectedList({
       />
       <Column
         title="Bu Servisin Çağırdıkları"
-        hint="Bu servisin bağımlılıkları"
+        hint="Bu servisin doğrudan çağırdığı servisler"
         kind="callees"
         items={callees}
         empty="Çağırdığı servis yok."

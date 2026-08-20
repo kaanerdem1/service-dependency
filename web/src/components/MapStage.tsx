@@ -42,7 +42,7 @@ export function MapStage({
       aria-modal={expanded || undefined}
       aria-labelledby={expanded ? titleId : undefined}
     >
-      <div className="map-stage-chrome">
+      <div className={`map-stage-chrome${expanded ? '' : ' is-compact'}`}>
         <button
           type="button"
           className="tl-zoom"
@@ -90,9 +90,11 @@ export function MapStage({
             )}
           </span>
         </button>
-        <span id={titleId} className="map-stage-title">
-          {title}
-        </span>
+        {expanded && (
+          <span id={titleId} className="map-stage-title">
+            {title}
+          </span>
+        )}
       </div>
       <div className="map-stage-body">{children}</div>
     </div>

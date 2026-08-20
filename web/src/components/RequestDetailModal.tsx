@@ -74,7 +74,7 @@ export function RequestDetailModal({
           <div className="task-head-toolbar">
             {onBackToInbox ? (
               <button type="button" className="btn inbox-back-btn" onClick={onBackToInbox}>
-                ← Inbox’a dön
+                ← Gelen kutusuna dön
               </button>
             ) : (
               <span />

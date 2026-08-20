@@ -21,6 +21,7 @@ import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
+import { WelcomeScreen } from './components/WelcomeScreen'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import {
   getChangeRequest,
@@ -444,6 +445,7 @@ export default function App() {
   const hasSelection = !!pivotId
   const canChange =
     session && service ? canOpenChangeRequest(session, service) : false
+
   const serviceNameById = (() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
     if (service) m.set(service.id, service.name)
@@ -480,7 +482,7 @@ export default function App() {
               className="btn ghost"
               onClick={() => setInboxOpen(true)}
             >
-              Inbox
+              Gelen kutusu
               {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
             </button>
           </div>
@@ -583,10 +585,22 @@ export default function App() {
             )}
           </label>
           <div className="module-kind-legend" aria-label="Tür renkleri">
-            <span className="module-kind-chip is-project">Proje</span>
-            <span className="module-kind-chip is-package">Paket</span>
-            <span className="module-kind-chip is-service">Servis</span>
-            <span className="module-kind-chip is-method">Method</span>
+            <span className="module-kind-key">
+              <span className="module-kind-dot is-project" aria-hidden />
+              Proje
+            </span>
+            <span className="module-kind-key">
+              <span className="module-kind-dot is-package" aria-hidden />
+              Paket
+            </span>
+            <span className="module-kind-key">
+              <span className="module-kind-dot is-service" aria-hidden />
+              Servis
+            </span>
+            <span className="module-kind-key">
+              <span className="module-kind-dot is-method" aria-hidden />
+              Metod
+            </span>
           </div>
           <div className="module-sidebar-body">
             <ModuleTree
@@ -603,23 +617,10 @@ export default function App() {
 
         <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}`}
+          className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
-          {!hasSelection && (
-            <div className="welcome">
-              <h1>Servis seçin</h1>
-              <p>
-                Soldaki aramadan veya ağaçtan bir servis seçerek ilişkileri ve
-                etki yolunu görün.
-              </p>
-              <ol className="welcome-steps">
-                <li>Servis ara veya modül ağacından seç</li>
-                <li>Haritada etki zincirini incele</li>
-                <li>İlişkiler sekmesinde komşulara bak</li>
-              </ol>
-            </div>
-          )}
+          {!hasSelection && <WelcomeScreen />}
 
           {hasSelection && (
             <>
