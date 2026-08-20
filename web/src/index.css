@@ -14,12 +14,12 @@
   --shadow-mid: rgba(40, 35, 28, 0.12);
   --app-gradient-a: #e7eee9;
   --app-gradient-b: #efe8df;
-  --map-bg: #fbfaf7;
-  --map-bg-alt: #f3efe8;
-  --map-surface: #fbfaf7;
+  --map-bg: #ffffff;
+  --map-bg-alt: #ffffff;
+  --map-surface: #ffffff;
   --map-panel: #f4f1ea;
   --map-dot: #bdb6aa;
-  --map-halo: #fbfaf7;
+  --map-halo: #ffffff;
   --map-panel-border: #cfc8bc;
   --map-focus: #1e3a2f;
   --map-path: #2f6f55;

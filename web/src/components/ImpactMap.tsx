@@ -121,7 +121,11 @@ type Props = {
   sessionUserName?: string
   onMapRoot?: (el: HTMLDivElement | null) => void
   onSnapshotSaved?: (snapshot: import('../types').Snapshot) => void
+  /** Ağaç / arama ile yeni merkez → LTR'ye dön */
+  forceLtrSignal?: number
 }
+
+const MAP_LAYOUT_MODE_KEY = 'sd-impact-map-layout-mode'
 
 const LEFT_X = mapLeftX()
 /** İlk N görünür; kalan 1–2 ise hepsini göster, kalan ≥3 ise +N collapsed */
@@ -842,12 +846,12 @@ function FanEdge({
   if (sameCol) {
     // Tek yön ok (yalnız markerEnd) — sağ boşluğa yumuşak yay
     const bulge =
-      Math.max(sourceX, targetX) + 96 + fan * 40 + Math.abs(spread) * 0.5
-    const y1 = sourceY + spread * 0.35
-    const y2 = targetY + spread * 0.35
+      Math.max(sourceX, targetX) + 118 + fan * 38 + Math.abs(spread) * 0.45
+    const y1 = sourceY + spread * 0.28
+    const y2 = targetY + spread * 0.28
     edgePath = `M ${sourceX},${sourceY} C ${bulge},${y1} ${bulge},${y2} ${targetX},${targetY}`
   } else {
-    const curvature = 0.32 + Math.abs(fan - mid) * 0.05
+    const curvature = 0.52 + Math.abs(fan - mid) * 0.04
     const [path] = getBezierPath({
       sourceX,
       sourceY: sourceY + spread * 0.2,
@@ -1037,7 +1041,7 @@ function buildGraph(
       data: {
         label: center.name,
         fullLabel: center.name,
-        showTip: mapLabelNeedsTip(center.name, layoutMode === 'radial' ? 48 : tipChars),
+        showTip: false,
         size: centerSize,
         kind: 'center',
         hop: 0,
@@ -1345,8 +1349,9 @@ export function ImpactMap({
   sessionUserName,
   onMapRoot,
   onSnapshotSaved,
+  forceLtrSignal = 0,
 }: Props) {
-  const [infoPanelOpen, setInfoPanelOpen] = useState(false)
+  const [infoPanelOpen, setInfoPanelOpen] = useState(true)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
   const trail = useSnapshotTrailOptional()
 
@@ -1377,7 +1382,11 @@ export function ImpactMap({
   >({})
   const [methodsLoading, setMethodsLoading] = useState(false)
   const [tidyNonce, setTidyNonce] = useState(0)
-  const [layoutMode, setLayoutMode] = useState<MapLayoutMode>('ltr')
+  const [layoutMode, setLayoutMode] = useState<MapLayoutMode>(() =>
+    window.sessionStorage.getItem(MAP_LAYOUT_MODE_KEY) === 'radial'
+      ? 'radial'
+      : 'ltr',
+  )
   const [pivotFlash, setPivotFlash] = useState(false)
   const [pivotMorphing, setPivotMorphing] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
@@ -1422,6 +1431,14 @@ export function ImpactMap({
     for (const n of filteredGraph.nodes) m = Math.max(m, n.hop)
     return m
   }, [filteredGraph.nodes])
+
+  useEffect(() => {
+    if (!forceLtrSignal) return
+    setLayoutMode('ltr')
+    window.sessionStorage.setItem(MAP_LAYOUT_MODE_KEY, 'ltr')
+    layoutDirtyRef.current = false
+    setTidyNonce((n) => n + 1)
+  }, [forceLtrSignal])
 
   useEffect(() => {
     trail?.syncView({
@@ -2128,6 +2145,8 @@ export function ImpactMap({
       }
       onMouseLeave={clearHoverFocus}
     >
+      <div className="map-canvas-row">
+      <div className="map-canvas">
       <div className="path-layer-bar">
         <div className="path-layer-left">
           <button
@@ -2149,37 +2168,6 @@ export function ImpactMap({
             İleri →
           </button>
         </div>
-        <div className="path-layer-actions">
-          <button
-            type="button"
-            className="btn ghost path-layer-btn"
-            aria-pressed={showLinkedMethods}
-            onClick={() => setShowLinkedMethods((v) => !v)}
-            title="Servis düğümlerinde method listesini aç / kapat"
-          >
-            {methodsLoading
-              ? 'Methods…'
-              : showLinkedMethods
-                ? 'Bağlı methodları kapat'
-                : 'Bağlı methodları göster'}
-          </button>
-          <label className="path-filter">
-            <span className="path-filter-label">Proje</span>
-            <select
-              className="path-filter-select"
-              value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
-              title="Etkilenen servisleri projeye göre filtrele"
-            >
-              <option value="">Tüm projeler</option>
-              {projectOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
       </div>
       {projectFilter && (
         <ProjectFilterHint
@@ -2193,8 +2181,6 @@ export function ImpactMap({
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
-      <div className="map-canvas-row">
-      <div className="map-canvas">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -2231,7 +2217,7 @@ export function ImpactMap({
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}-${infoPanelOpen}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}`}
           layout={layout}
           drawerOpen={infoPanelOpen}
           navDirection={navDirection}
@@ -2307,13 +2293,23 @@ export function ImpactMap({
               layoutMode === 'ltr' ? 'Layout LTR → Radial' : 'Layout Radial → LTR',
             )
             layoutDirtyRef.current = false
-            setLayoutMode((m) => (m === 'ltr' ? 'radial' : 'ltr'))
+            setLayoutMode((mode) => {
+              const next = mode === 'ltr' ? 'radial' : 'ltr'
+              window.sessionStorage.setItem(MAP_LAYOUT_MODE_KEY, next)
+              return next
+            })
             setTidyNonce((n) => n + 1)
           }}
           onSaveSnapshot={
             sessionUserId && trail ? () => void handleSaveSnapshot() : undefined
           }
           snapshotSaving={snapshotSaving}
+          showLinkedMethods={showLinkedMethods}
+          methodsLoading={methodsLoading}
+          onToggleLinkedMethods={() => setShowLinkedMethods((value) => !value)}
+          projectFilter={projectFilter}
+          projectOptions={projectOptions}
+          onProjectFilterChange={setProjectFilter}
         />
       </ReactFlow>
       </div>

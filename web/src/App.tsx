@@ -89,6 +89,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map')
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
+  const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
   const [navOpen, setNavOpen] = useState(true)
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
     null,
@@ -345,6 +346,8 @@ export default function App() {
         setHistoryIndex(0)
         setPivotId(id)
         setMapExpanded(false)
+        window.sessionStorage.setItem('sd-impact-map-layout-mode', 'ltr')
+        setMapForceLtrSignal((n) => n + 1)
         return
       }
       setNavDirection('forward')
@@ -474,32 +477,17 @@ export default function App() {
         {liveStatus}
       </div>
 
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">SD</span>
-          <div>
-            <strong>Service Dependency</strong>
-            <span className="brand-tagline">
-              Servis bağımlılıkları ve değişiklik etkisi
-            </span>
-          </div>
-        </div>
-        {session && (
-          <div className="topbar-actions">
-            <button
-              type="button"
-              className="btn ghost"
-              onClick={() => setInboxOpen(true)}
-            >
-              Gelen kutusu
-              {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
-            </button>
-          </div>
-        )}
-      </header>
-
-      <div className={`shell${navOpen ? '' : ' is-nav-collapsed'}`}>
+      <div className={`app-frame${navOpen ? '' : ' is-nav-collapsed'}`}>
         <aside className="module-sidebar">
+          <div className="sidebar-brand">
+            <span className="brand-mark">SD</span>
+            <div>
+              <strong>Service Dependency</strong>
+              <span className="brand-tagline">
+                Servis bağımlılıkları ve değişiklik etkisi
+              </span>
+            </div>
+          </div>
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
             <button
@@ -593,22 +581,22 @@ export default function App() {
               </>
             )}
           </label>
-          <div className="module-kind-legend" aria-label="Tür renkleri">
+          <div className="module-kind-legend" aria-label="Ağaç türleri">
             <span className="module-kind-key">
-              <span className="module-kind-dot is-project" aria-hidden />
+              <span className="module-kind-badge is-project" aria-hidden>P</span>
               Proje
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-dot is-package" aria-hidden />
-              Paket
+              <span className="module-kind-badge is-package" aria-hidden>J</span>
+              Jar
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-dot is-service" aria-hidden />
+              <span className="module-kind-badge is-service" aria-hidden>S</span>
               Servis
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-dot is-method" aria-hidden />
-              Metod
+              <span className="module-kind-badge is-method" aria-hidden>M</span>
+              Method
             </span>
           </div>
           <div className="module-sidebar-body">
@@ -624,7 +612,20 @@ export default function App() {
           </div>
         </aside>
 
-        <div className="workspace" ref={workspaceRef}>
+        <div className="workspace-column">
+          {session && (
+            <header className="workspace-topbar">
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setInboxOpen(true)}
+              >
+                Gelen kutusu
+                {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
+              </button>
+            </header>
+          )}
+          <div className="workspace" ref={workspaceRef}>
           <main
           className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
@@ -768,6 +769,7 @@ export default function App() {
                     key={`adv-${mapExpanded}`}
                     graph={impact}
                     mapExpanded={mapExpanded}
+                    forceLtrSignal={mapForceLtrSignal}
                     projectOptions={impactProjectOptions}
                     onPivot={(id) => selectPivot(id, { source: 'map' })}
                     onSelectMethod={selectMethod}
@@ -841,44 +843,6 @@ export default function App() {
               {tab === 'affected' && (
                 <>
                   <div className="relations-nav">
-                    {breadcrumb.length > 0 && (
-                      <nav
-                        className="relations-breadcrumb"
-                        aria-label="Ziyaret yolu"
-                      >
-                        {breadcrumb.map((e, i) => {
-                          const name = serviceNameById.get(e.id) ?? e.id
-                          const isCurrent = i === historyIndex
-                          return (
-                            <span key={`${e.id}-${i}`} className="relations-bc-item">
-                              {i > 0 && (
-                                <span className="sep" aria-hidden>
-                                  /
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                className={isCurrent ? 'current' : undefined}
-                                disabled={isCurrent}
-                                title={name}
-                                onClick={() => {
-                                  if (i === historyIndex) return
-                                  setNavDirection(
-                                    i < historyIndex ? 'back' : 'forward',
-                                  )
-                                  setHistoryIndex(i)
-                                  setSelectedMethodId(undefined)
-                                  setMethodImpact(undefined)
-                                  setPivotId(history[i]!.id)
-                                }}
-                              >
-                                {name}
-                              </button>
-                            </span>
-                          )
-                        })}
-                      </nav>
-                    )}
                     <div
                       className="list-scope-nav"
                       role="group"
@@ -920,6 +884,7 @@ export default function App() {
             </>
           )}
         </main>
+          </div>
         </div>
       </div>
 

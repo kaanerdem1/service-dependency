@@ -169,30 +169,6 @@ export function ServiceOverview({
 
   return (
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
-      <header className="service-overview-toolbar">
-        {editing ? (
-          <div className="service-overview-edit-actions">
-            <button type="button" className="btn ghost compact" onClick={cancel}>
-              İptal
-            </button>
-            <button type="button" className="btn primary compact" onClick={save}>
-              Kaydet
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="btn ghost compact"
-            onClick={() => {
-              setDraft(saved ?? baseline)
-              setEditing(true)
-            }}
-          >
-            Düzenle
-          </button>
-        )}
-      </header>
-
       {editing ? (
         <form
           className="service-overview-form"
@@ -313,6 +289,29 @@ export function ServiceOverview({
           )}
         </>
       )}
+      <footer className="service-overview-toolbar">
+        {editing ? (
+          <div className="service-overview-edit-actions">
+            <button type="button" className="btn ghost compact" onClick={cancel}>
+              İptal
+            </button>
+            <button type="button" className="btn primary compact" onClick={save}>
+              Kaydet
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn ghost compact"
+            onClick={() => {
+              setDraft(saved ?? baseline)
+              setEditing(true)
+            }}
+          >
+            Düzenle
+          </button>
+        )}
+      </footer>
     </article>
   )
 }

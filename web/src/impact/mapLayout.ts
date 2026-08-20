@@ -96,7 +96,7 @@ export function mapLayoutForRadial(): MapLayout {
     tipChars: 28,
     minZoom: 0.45,
     maxZoom: 1.4,
-    fitPadding: 0.18,
+    fitPadding: 0.22,
   }
 }
 
@@ -477,7 +477,7 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   }
 
   const cx = originX + maxCenterDist + 24
-  const cy = maxCenterDist + 160
+  const cy = maxCenterDist + 95
 
   const next: T[] = nodes
     .filter((n) => !n.id.startsWith('__ring-'))

@@ -13,9 +13,16 @@ import type { MethodRef, ModuleNode } from '../types'
 
 const KIND_LABEL: Record<ModuleNode['kind'], string> = {
   project: 'proje',
-  package: 'paket',
+  package: 'jar',
   service: 'servis',
-  method: 'metod',
+  method: 'method',
+}
+
+const KIND_INITIAL: Record<ModuleNode['kind'], string> = {
+  project: 'P',
+  package: 'J',
+  service: 'S',
+  method: 'M',
 }
 
 type Props = {
@@ -125,11 +132,13 @@ function MethodLeaves({
               onClick={() => onSelectMethod(serviceId, m.id)}
             >
               <span className="chev spacer" />
+              <span className="tree-kind" title={KIND_LABEL.method}>
+                {KIND_INITIAL.method}
+              </span>
               <span className="tree-label" title={`${m.className}.${m.name}`}>
                 <span className="tree-method-class">{m.className}.</span>
                 {m.name}
               </span>
-              <span className="tree-kind">{KIND_LABEL.method}</span>
             </button>
           </div>
         )
@@ -197,6 +206,9 @@ function TreeItem({
         ) : (
           <span className="chev spacer" />
         )}
+        <span className="tree-kind" title={KIND_LABEL[node.kind]}>
+          {KIND_INITIAL[node.kind]}
+        </span>
         <button
           type="button"
           className="tree-label-btn"
@@ -212,7 +224,6 @@ function TreeItem({
             {node.name}
           </span>
         </button>
-          <span className="tree-kind">{KIND_LABEL[node.kind]}</span>
       </div>
       {open &&
         hasStaticChildren &&

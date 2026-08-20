@@ -1,4 +1,4 @@
-# Audit sonrası yapılacaklar
+# Audit / layout notları
 
 > Tamamlananlar silinir.
 
@@ -6,14 +6,14 @@
 
 ## Tamamlandı
 
-- Service 360 sekmeleri + Servis İşlevi sekmesi
-- Batch A: meta/og, sidebar toggle hizası, yan bağ sayısı + tooltip
-- Batch B: IDE tarzı ağaç, lejant renkleri
-- Batch C: boş durum / yükleme metinleri (EmptyState)
-- P0: drawer açılınca asimetrik fitView; alt dock margin artırıldı
+- Audit backlog (meta, empty states, fitView, vb.)
+- **Port tarzı layout:** koyu sol sidebar, birleşik beyaz çalışma alanı
+- Etki özeti varsayılan açık
+- Ok eğrileri yumuşatıldı
+- IDE ağaç geri alındı (kutulu ağaç)
 
 ---
 
 ## Ertelenen
 
-SSR / indexlenebilir servis URL’leri — iç araç için şimdilik gerek yok.
+SSR / indexlenebilir servis URL’leri

@@ -39,6 +39,8 @@ export function MapViewportSync({
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
   const prevHop = useRef(visibleMaxHop)
+  const drawerOpenRef = useRef(drawerOpen)
+  drawerOpenRef.current = drawerOpen
   const navDirRef = useRef(navDirection)
   navDirRef.current = navDirection
   const consumedRef = useRef(onNavDirectionConsumed)
@@ -54,7 +56,9 @@ export function MapViewportSync({
 
     const id = window.setTimeout(() => {
       void (async () => {
-        const padding = fitViewPaddingForChrome(layout, { drawerOpen })
+        const padding = fitViewPaddingForChrome(layout, {
+          drawerOpen: drawerOpenRef.current,
+        })
         const fitOpts = {
           padding,
           minZoom: layout.minZoom,
@@ -75,7 +79,7 @@ export function MapViewportSync({
           return
         }
 
-        // Katman / drawer / boyut: fitView
+        // Katman / layout / boyut: fitView (drawer aç-kapa zoom'u değiştirmez)
         await rf.fitView({
           ...fitOpts,
           duration: centerChanged ? 320 : hopChanged ? 360 : 280,
@@ -83,7 +87,7 @@ export function MapViewportSync({
       })()
     }, 50)
     return () => window.clearTimeout(id)
-  }, [centerId, visibleMaxHop, layoutKey, layout, drawerOpen, rf])
+  }, [centerId, visibleMaxHop, layoutKey, layout, rf])
 
   const paneW = useStore((s) => s.width)
   const paneH = useStore((s) => s.height)
@@ -96,7 +100,9 @@ export function MapViewportSync({
     const [pw, ph] = prev.split('x').map(Number)
     prevPane.current = next
     if (!pw || (Math.abs(pw - paneW) < 20 && Math.abs(ph - paneH) < 20)) return
-    const padding = fitViewPaddingForChrome(layout, { drawerOpen })
+    const padding = fitViewPaddingForChrome(layout, {
+      drawerOpen: drawerOpenRef.current,
+    })
     const id = window.setTimeout(() => {
       void rf.fitView({
         padding,
@@ -106,7 +112,7 @@ export function MapViewportSync({
       })
     }, 100)
     return () => window.clearTimeout(id)
-  }, [paneW, paneH, layout, drawerOpen, rf])
+  }, [paneW, paneH, layout, rf])
 
   return null
 }
@@ -688,6 +694,12 @@ type LayerControlsProps = {
   truncated?: boolean
   onSaveSnapshot?: () => void
   snapshotSaving?: boolean
+  showLinkedMethods?: boolean
+  methodsLoading?: boolean
+  onToggleLinkedMethods?: () => void
+  projectFilter?: string
+  projectOptions?: Array<{ id: string; label: string }>
+  onProjectFilterChange?: (projectId: string) => void
 }
 
 function DockBtn({
@@ -913,6 +925,42 @@ function IconRadial() {
   )
 }
 
+/** Ağaçtaki Method tür işaretiyle aynı renkli M ikonu. */
+function IconLinkedMethods() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <circle cx="8" cy="8" r="7" fill="#d56a35" />
+      <text
+        x="8"
+        y="10.7"
+        textAnchor="middle"
+        fill="#fff"
+        fontSize="8"
+        fontWeight="750"
+        fontFamily="system-ui, sans-serif"
+      >
+        M
+      </text>
+    </svg>
+  )
+}
+
+/** Standart filtre hunisi; aktif proje varsa basılı görünür. */
+function IconProjectFilter() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path
+        d="M2.2 3h11.6L9.4 8.1v4.1l-2.8 1.3V8.1L2.2 3Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function IconSave() {
   return (
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
@@ -922,6 +970,27 @@ function IconSave() {
       />
     </svg>
   )
+}
+
+function clampDockPosition(
+  rootW: number,
+  rootH: number,
+  dockW: number,
+  dockH: number,
+  x: number,
+  y: number,
+  vertical: boolean,
+) {
+  const margin = 8
+  const maxX = Math.max(margin, rootW - dockW - margin)
+  let maxY = Math.max(margin, rootH - dockH - margin)
+  if (vertical && dockH > rootH - margin * 2) {
+    maxY = margin
+  }
+  return {
+    x: Math.max(margin, Math.min(x, maxX)),
+    y: Math.max(margin, Math.min(y, maxY)),
+  }
 }
 
 /**
@@ -945,6 +1014,12 @@ export function MapCanvasBar({
   onToggleCascadeEdges,
   onSaveSnapshot,
   snapshotSaving = false,
+  showLinkedMethods = false,
+  methodsLoading = false,
+  onToggleLinkedMethods,
+  projectFilter = '',
+  projectOptions = [],
+  onProjectFilterChange,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -970,12 +1045,16 @@ export function MapCanvasBar({
     if (!placed || !rootRef.current || !dockRef.current) return
     const rootBox = rootRef.current.getBoundingClientRect()
     const dockBox = dockRef.current.getBoundingClientRect()
-    const x = Math.max(8, Math.min(placed.x, rootBox.width - dockBox.width - 8))
-    const y = Math.max(
-      8,
-      Math.min(placed.y, rootBox.height - dockBox.height - 8),
+    const next = clampDockPosition(
+      rootBox.width,
+      rootBox.height,
+      dockBox.width,
+      dockBox.height,
+      placed.x,
+      placed.y,
+      orient === 'v',
     )
-    if (x !== placed.x || y !== placed.y) setPlaced({ x, y })
+    if (next.x !== placed.x || next.y !== placed.y) setPlaced(next)
   }, [orient, placed])
 
   const onGripPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -998,11 +1077,19 @@ export function MapCanvasBar({
     if (!drag.current || !rootRef.current || !dockRef.current) return
     const rootBox = rootRef.current.getBoundingClientRect()
     const dockBox = dockRef.current.getBoundingClientRect()
-    let nx = drag.current.ox + (e.clientX - drag.current.sx)
-    let ny = drag.current.oy + (e.clientY - drag.current.sy)
-    nx = Math.max(8, Math.min(nx, rootBox.width - dockBox.width - 8))
-    ny = Math.max(8, Math.min(ny, rootBox.height - dockBox.height - 8))
-    setPlaced({ x: nx, y: ny })
+    const nx = drag.current.ox + (e.clientX - drag.current.sx)
+    const ny = drag.current.oy + (e.clientY - drag.current.sy)
+    setPlaced(
+      clampDockPosition(
+        rootBox.width,
+        rootBox.height,
+        dockBox.width,
+        dockBox.height,
+        nx,
+        ny,
+        orient === 'v',
+      ),
+    )
   }
 
   const onGripPointerUp = (e: ReactPointerEvent<HTMLButtonElement>) => {
@@ -1027,15 +1114,32 @@ export function MapCanvasBar({
 
     if (nearLeft) {
       setOrient('v')
-      setPlaced({ x: 12, y: Math.max(8, Math.min(y, rootBox.height - dockBox.height - 8)) })
+      setPlaced(
+        clampDockPosition(
+          rootBox.width,
+          rootBox.height,
+          dockBox.width,
+          dockBox.height,
+          12,
+          y,
+          true,
+        ),
+      )
       return
     }
     if (nearRight) {
       setOrient('v')
-      setPlaced({
-        x: Math.max(8, rootBox.width - Math.min(dockBox.width, 56) - 12),
-        y: Math.max(8, Math.min(y, rootBox.height - dockBox.height - 8)),
-      })
+      setPlaced(
+        clampDockPosition(
+          rootBox.width,
+          rootBox.height,
+          dockBox.width,
+          dockBox.height,
+          Math.max(8, rootBox.width - Math.min(dockBox.width, 56) - 12),
+          y,
+          true,
+        ),
+      )
       return
     }
     if (nearBottom) {
@@ -1190,6 +1294,72 @@ export function MapCanvasBar({
               </DockBtn>
             </div>
           </div>
+
+          {(onToggleLinkedMethods || onProjectFilterChange) && (
+            <>
+              <span className="map-dock-sep" aria-hidden />
+              <div className="map-dock-group">
+                <span className="map-dock-group-kicker">İçerik</span>
+                <div className="map-dock-group-row">
+                  {onToggleLinkedMethods && (
+                    <DockBtn
+                      label={
+                        methodsLoading
+                          ? 'Bağlı metodlar yükleniyor'
+                          : showLinkedMethods
+                            ? 'Bağlı metodları gizle'
+                            : 'Bağlı metodları göster'
+                      }
+                      pressed={showLinkedMethods}
+                      onClick={onToggleLinkedMethods}
+                    >
+                      <IconLinkedMethods />
+                    </DockBtn>
+                  )}
+                  {onProjectFilterChange && (
+                    <span className="map-dock-wrap map-dock-project-wrap">
+                      <details
+                        className={`map-dock-project${projectFilter ? ' is-active' : ''}`}
+                      >
+                        <summary
+                          className={`map-dock-btn${projectFilter ? ' is-pressed' : ''}`}
+                          title="Projeye göre filtrele"
+                          aria-label={
+                            projectFilter
+                              ? 'Proje filtresini değiştir'
+                              : 'Projeye göre filtrele'
+                          }
+                        >
+                          <IconProjectFilter />
+                        </summary>
+                        <label className="map-dock-project-pop">
+                          <span>Proje filtresi</span>
+                          <select
+                            value={projectFilter}
+                            onChange={(event) =>
+                              onProjectFilterChange(event.target.value)
+                            }
+                          >
+                            <option value="">Tüm projeler</option>
+                            {projectOptions.map((project) => (
+                              <option key={project.id} value={project.id}>
+                                {project.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </details>
+                      <span className="map-dock-tip" role="tooltip">
+                        {projectFilter
+                          ? 'Proje filtresi etkin'
+                          : 'Projeye göre filtrele'}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {onToggleCascadeEdges && (cascadeCount ?? 0) > 0 && (
             <>
