@@ -6,7 +6,7 @@
  * Seçim modeli:
  * - pivotId          → odak servis (geri/ileri geçmişi ile)
  * - selectedMethodId → odak metod (method haritası)
- * - tab              → 'map' | 'affected'
+ * - tab              → 'map' | 'affected' | 'overview'
  * Harita: gelişmiş React Flow (basit etki yolu kaldırıldı).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -21,6 +21,7 @@ import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
+import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import {
@@ -51,7 +52,7 @@ import type {
 } from './types'
 import './App.css'
 
-type Tab = 'affected' | 'map'
+type Tab = 'affected' | 'map' | 'overview'
 
 /** Pivot geçmişi + o ziyarette açık bırakılan katman görünümü */
 type VisitEntry = {
@@ -625,51 +626,98 @@ export default function App() {
           {hasSelection && (
             <>
               <div ref={stageTopRef} className="stage-top">
-                <h1 className="main-heading" title={service?.name}>
-                  {service?.name}
-                </h1>
-                <nav className="tabs" aria-label="Görünüm">
+                <div className="stage-head">
+                  <div className="main-heading-wrap">
+                    <span className="service-status-dot" aria-hidden />
+                    <h1 className="main-heading" title={service?.name}>
+                      {service?.name}
+                    </h1>
+                  </div>
+                  <div className="stage-actions">
+                    <button
+                      type="button"
+                      className="btn ghost clear-sel"
+                      onClick={clearSelection}
+                    >
+                      Seçimi bırak
+                    </button>
+                    {canChange && affected.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn primary compact"
+                        onClick={() => setCrOpen(true)}
+                      >
+                        Değişiklik talebi
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <nav className="stage-tabs" aria-label="Görünüm">
                   <button
                     type="button"
                     role="tab"
                     aria-selected={tab === 'map'}
-                    className={tab === 'map' ? 'on' : ''}
+                    className={`stage-tab${tab === 'map' ? ' on' : ''}`}
                     onClick={() => {
                       trail.record('tab_change', undefined, 'Harita sekmesine geçildi')
                       setTab('map')
                     }}
                   >
+                    <span className="stage-tab-icon" aria-hidden>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
+                        <circle cx="3.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+                        <circle cx="12.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+                        <circle cx="8" cy="13.5" r="1.5" stroke="currentColor" strokeWidth="1.1" />
+                        <path
+                          d="M6.2 6.6 4.4 5M9.8 6.6l1.8-1.6M8 10v1.8"
+                          stroke="currentColor"
+                          strokeWidth="1.1"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </span>
                     Harita
                   </button>
                   <button
                     type="button"
                     role="tab"
                     aria-selected={tab === 'affected'}
-                    className={tab === 'affected' ? 'on' : ''}
+                    className={`stage-tab${tab === 'affected' ? ' on' : ''}`}
                     onClick={() => {
                       trail.record('tab_change', undefined, 'İlişkiler sekmesine geçildi')
                       setMapExpanded(false)
                       setTab('affected')
                     }}
                   >
+                    <span className="stage-tab-icon" aria-hidden>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <circle cx="4" cy="4" r="2.25" stroke="currentColor" strokeWidth="1.25" />
+                        <circle cx="12" cy="12" r="2.25" stroke="currentColor" strokeWidth="1.25" />
+                        <path d="M5.8 5.5 10.2 10.5" stroke="currentColor" strokeWidth="1.25" />
+                      </svg>
+                    </span>
                     İlişkiler
                   </button>
                   <button
                     type="button"
-                    className="btn ghost clear-sel"
-                    onClick={clearSelection}
+                    role="tab"
+                    aria-selected={tab === 'overview'}
+                    className={`stage-tab${tab === 'overview' ? ' on' : ''}`}
+                    onClick={() => {
+                      trail.record('tab_change', undefined, 'Servis işlevi sekmesine geçildi')
+                      setMapExpanded(false)
+                      setTab('overview')
+                    }}
                   >
-                    Seçimi bırak
+                    <span className="stage-tab-icon" aria-hidden>
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
+                        <path d="M5 5.5h6M5 8h6M5 10.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+                      </svg>
+                    </span>
+                    Servis İşlevi
                   </button>
-                  {canChange && affected.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn primary compact"
-                      onClick={() => setCrOpen(true)}
-                    >
-                      Değişiklik talebi
-                    </button>
-                  )}
                 </nav>
               </div>
 
@@ -766,6 +814,17 @@ export default function App() {
 
               {tab === 'map' && selectedMethodId && !methodImpact && (
                 <p className="empty-hint">Method etki grafı yükleniyor…</p>
+              )}
+
+              {tab === 'overview' && service && (
+                <ServiceOverview
+                  service={service}
+                  projectLabel={projectLabels.get(service.projectId)}
+                  packageLabel={service.packageId}
+                  callerCount={affected.length}
+                  calleeCount={callees.length}
+                  loading={loading}
+                />
               )}
 
               {tab === 'affected' && (

@@ -15,9 +15,15 @@ const ACTION_FALLBACK: Partial<Record<TrailAction, string>> = {
   tab_change: 'Sekme değiştirildi',
 }
 
+function tabLabel(tab: UiChromeState['activeTab']): string {
+  if (tab === 'affected') return 'İlişkiler sekmesi'
+  if (tab === 'overview') return 'Servis işlevi sekmesi'
+  return 'Harita sekmesi'
+}
+
 function uiSnippet(ui: UiChromeState): string {
   const parts = [
-    ui.activeTab === 'affected' ? 'İlişkiler sekmesi' : 'Harita sekmesi',
+    tabLabel(ui.activeTab),
     ui.drawerOpen ? 'etki özeti açık' : 'etki özeti kapalı',
     ui.sidebarOpen ? 'sol modül paneli açık' : 'sol modül paneli kapalı',
   ]
@@ -51,7 +57,12 @@ export function formatViewStateSummary(snap: Snapshot): string {
   const v = snap.viewState
   const layout = v.layout === 'radial' ? 'Radial' : 'LTR'
   const cascade = v.showCascadeEdges ? 'yan bağ açık' : 'yan bağ kapalı'
-  const tab = snap.uiChrome.activeTab === 'affected' ? 'İlişkiler' : 'Harita'
+  const tab =
+    snap.uiChrome.activeTab === 'affected'
+      ? 'İlişkiler'
+      : snap.uiChrome.activeTab === 'overview'
+        ? 'Servis işlevi'
+        : 'Harita'
   const drawer = snap.uiChrome.drawerOpen ? 'etki özeti açık' : 'etki özeti kapalı'
   const sidebar = snap.uiChrome.sidebarOpen
     ? 'sol modül paneli açık'

@@ -275,7 +275,7 @@ export type SnapshotType =
   | 'incident'
 
 export type UiChromeState = {
-  activeTab: 'map' | 'affected'
+  activeTab: 'map' | 'affected' | 'overview'
   drawerOpen: boolean
   sidebarOpen: boolean
   searchOpen?: boolean

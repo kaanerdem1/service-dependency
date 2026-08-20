@@ -77,7 +77,11 @@ export function SnapshotList({ requestId }: Props) {
             <p className="snapshot-item-meta">
               {snap.focus.label} · Katman {snap.viewState.visibleMaxHop}/
               {snap.viewState.maxHopAvailable}
-              {snap.uiChrome.activeTab === 'affected' ? ' · İlişkiler' : ' · Harita'}
+              {snap.uiChrome.activeTab === 'affected'
+                ? ' · İlişkiler'
+                : snap.uiChrome.activeTab === 'overview'
+                  ? ' · Servis işlevi'
+                  : ' · Harita'}
               {snap.uiChrome.drawerOpen ? ' · özet açık' : ' · özet kapalı'}
             </p>
             <p className="snapshot-item-meta">
