@@ -69,7 +69,9 @@ import {
   radialAnchorOffset,
   radialEdgeGeometry,
   radialHandlePair,
+  radialLabelDomStyle,
   radialLabelSide,
+  radialNodeHitStyle,
   radialMaxZoom,
   radialSpokeEnds,
   wrapRadialName,
@@ -222,6 +224,20 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
       {data.label}
     </span>
   )
+  const radialHit = radial
+    ? { ...radialNodeHitStyle(isCenter), position: 'relative' as const, overflow: 'visible' as const }
+    : undefined
+  const hopLine = radial ? radialHopLine(data, isCenter, isCollapsed) : null
+  const radialLabelStyle =
+    radial && labelSide
+      ? radialLabelDomStyle(
+          labelSide,
+          data.fullLabel || data.label,
+          isCenter,
+          hopLine,
+        )
+      : undefined
+
   return (
     <div
       className={[
@@ -236,6 +252,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
       ]
         .filter(Boolean)
         .join(' ')}
+      style={radial ? { width: 'auto', height: 'auto', overflow: 'visible' } : undefined}
     >
       <Handle
         type="target"
@@ -301,45 +318,51 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
           </>
         )}
       </div>
-      {radial && isCenter && (
-        <>
-          <span className="dd-radial-core is-center" aria-hidden />
-          <span className="dd-radial-label is-below is-center-label">
-            <span className="dd-radial-kicker is-center-badge">Merkez</span>
-            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
-              <span key={`${i}-${line}`} className="dd-radial-label-line">
-                {line}
-              </span>
-            ))}
-          </span>
-        </>
-      )}
-      {radial && !isCenter && (
-        <>
-          <span className="dd-radial-core" aria-hidden />
+      {radial && (
+        <div className="dd-radial-shell" style={radialHit}>
           <span
-            className={[
-              'dd-radial-label',
-              labelSide && `is-${labelSide}`,
-              data.showTip && 'name-tip is-short',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            data-tip={data.showTip ? data.fullLabel : undefined}
-          >
-            {(() => {
-              const hopLine = radialHopLine(data, isCenter, isCollapsed)
-              return hopLine ? (
+            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
+            aria-hidden
+          />
+          {isCenter ? (
+            <span
+              className="dd-radial-label is-center-label"
+              style={radialLabelDomStyle(
+                'below',
+                data.fullLabel || data.label,
+                true,
+                'Merkez',
+              )}
+            >
+              <span className="dd-radial-kicker is-center-badge">Merkez</span>
+              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+                <span key={`${i}-${line}`} className="dd-radial-label-line">
+                  {line}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span
+              className={[
+                'dd-radial-label',
+                data.showTip && 'name-tip is-short',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={radialLabelStyle}
+              data-tip={data.showTip ? data.fullLabel : undefined}
+            >
+              {hopLine ? (
                 <span className="dd-radial-hop">{hopLine}</span>
-              ) : null
-            })()}
-            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
-              <span key={`${i}-${line}`} className="dd-radial-label-line">
-                {line}
-              </span>
-            ))}
-          </span>
-        </>
+              ) : null}
+              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+                <span key={`${i}-${line}`} className="dd-radial-label-line">
+                  {line}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
       )}
       <Handle
         type="source"

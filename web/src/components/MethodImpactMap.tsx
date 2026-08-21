@@ -30,7 +30,9 @@ import {
   mapLayoutForDepth,
   mapLayoutForRadial,
   radialAnchorOffset,
+  radialLabelDomStyle,
   radialLabelSide,
+  radialNodeHitStyle,
   wrapRadialName,
   type MapLayout,
   type MapLayoutMode,
@@ -108,6 +110,25 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
       {data.label}
     </span>
   )
+  const radialHit = radial
+    ? { ...radialNodeHitStyle(isCenter), position: 'relative' as const, overflow: 'visible' as const }
+    : undefined
+  const hopLine =
+    radial && !isCenter && !isCollapsed
+      ? `${data.hop}. katman`
+      : radial && isCollapsed
+        ? `Aç · ${data.count ?? 0} öğe daha`
+        : null
+  const radialLabelStyle =
+    radial && labelSide
+      ? radialLabelDomStyle(
+          labelSide,
+          data.fullLabel || data.label,
+          isCenter,
+          hopLine,
+        )
+      : undefined
+
   return (
     <div
       className={[
@@ -120,6 +141,7 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
       ]
         .filter(Boolean)
         .join(' ')}
+      style={radial ? { width: 'auto', height: 'auto', overflow: 'visible' } : undefined}
     >
       <Handle type="target" position={Position.Left} id="in" className="dd-handle" />
       <div className="dd-node-ring" />
@@ -139,45 +161,51 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
           </>
         )}
       </div>
-      {radial && isCenter && (
-        <>
-          <span className="dd-radial-core is-center" aria-hidden />
-          <span className="dd-radial-label is-below is-center-label">
-            <span className="dd-radial-kicker is-center-badge">Merkez</span>
-            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
-              <span key={`${i}-${line}`} className="dd-radial-label-line">
-                {line}
-              </span>
-            ))}
-          </span>
-        </>
-      )}
-      {radial && !isCenter && (
-        <>
-          <span className="dd-radial-core" aria-hidden />
+      {radial && (
+        <div className="dd-radial-shell" style={radialHit}>
           <span
-            className={[
-              'dd-radial-label',
-              labelSide && `is-${labelSide}`,
-              data.showTip && 'name-tip is-short',
-            ]
-              .filter(Boolean)
-              .join(' ')}
-            data-tip={data.showTip ? data.fullLabel : undefined}
-          >
-            {data.hop > 0 && !isCollapsed && (
-              <span className="dd-radial-hop">{data.hop}. katman</span>
-            )}
-            {isCollapsed && (
-              <span className="dd-radial-hop">Aç · {data.count ?? 0} öğe daha</span>
-            )}
-            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
-              <span key={`${i}-${line}`} className="dd-radial-label-line">
-                {line}
-              </span>
-            ))}
-          </span>
-        </>
+            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
+            aria-hidden
+          />
+          {isCenter ? (
+            <span
+              className="dd-radial-label is-center-label"
+              style={radialLabelDomStyle(
+                'below',
+                data.fullLabel || data.label,
+                true,
+                'Merkez',
+              )}
+            >
+              <span className="dd-radial-kicker is-center-badge">Merkez</span>
+              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+                <span key={`${i}-${line}`} className="dd-radial-label-line">
+                  {line}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span
+              className={[
+                'dd-radial-label',
+                data.showTip && 'name-tip is-short',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              style={radialLabelStyle}
+              data-tip={data.showTip ? data.fullLabel : undefined}
+            >
+              {hopLine ? (
+                <span className="dd-radial-hop">{hopLine}</span>
+              ) : null}
+              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+                <span key={`${i}-${line}`} className="dd-radial-label-line">
+                  {line}
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
       )}
       <Handle type="source" position={Position.Right} id="out" className="dd-handle" />
     </div>

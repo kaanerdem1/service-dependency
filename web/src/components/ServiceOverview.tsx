@@ -171,17 +171,20 @@ export function ServiceOverview({
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
       {editing ? (
         <form
-          className="service-overview-form"
+          className="service-overview-layout service-overview-form"
           aria-label="Servis işlevi düzenle"
           onSubmit={(e) => {
             e.preventDefault()
             save()
           }}
         >
-          <section className="service-form-section">
-            <h3 className="service-doc-heading">Kimlik</h3>
-            <FormField label="Servis adı" value={service.name} readOnly />
-            <FormField label="Servis kimliği" value={service.id} readOnly mono />
+          <div className="service-overview-main">
+            <section className="service-form-section service-form-section--compact">
+              <h3 className="service-doc-heading">Kimlik</h3>
+            <div className="service-form-row">
+              <FormField label="Servis adı" value={service.name} readOnly />
+              <FormField label="Servis kimliği" value={service.id} readOnly mono />
+            </div>
             <FormField
               label="İşlev özeti"
               value={draft}
@@ -189,105 +192,114 @@ export function ServiceOverview({
               onChange={setDraft}
             />
           </section>
+          </div>
 
-          <section className="service-form-section">
-            <h3 className="service-doc-heading">Konum</h3>
-            <div className="service-form-row">
-              <FormField
-                label="Proje"
-                value={projectLabel ?? service.projectId}
-                readOnly
-              />
-              <FormField
-                label="Paket"
-                value={packageLabel ?? service.packageId}
-                readOnly
-                mono
-              />
-            </div>
-          </section>
-
-          <section className="service-form-section">
-            <h3 className="service-doc-heading">Bağımlılık</h3>
-            <div className="service-form-row">
-              <FormField
-                label="Bu servisi çağıran"
-                value={`${callerCount} servis`}
-                readOnly
-              />
-              <FormField
-                label="Çağırdığı servis"
-                value={`${calleeCount} servis`}
-                readOnly
-              />
-            </div>
-          </section>
-
-          {service.owner && (
-            <section className="service-form-section">
-              <h3 className="service-doc-heading">Sahiplik</h3>
+          <aside className="service-overview-aside">
+            <section className="service-form-section service-form-section--compact">
+              <h3 className="service-doc-heading">Konum</h3>
               <div className="service-form-row">
-                <FormField label="Sorumlu" value={service.owner.name} readOnly />
                 <FormField
-                  label="Ekip"
-                  value={service.owner.team ?? '—'}
+                  label="Proje"
+                  value={projectLabel ?? service.projectId}
+                  readOnly
+                />
+                <FormField
+                  label="Paket"
+                  value={packageLabel ?? service.packageId}
+                  readOnly
+                  mono
+                />
+              </div>
+            </section>
+
+            <section className="service-form-section service-form-section--compact">
+              <h3 className="service-doc-heading">Bağımlılık</h3>
+              <div className="service-form-row">
+                <FormField
+                  label="Bu servisi çağıran"
+                  value={`${callerCount} servis`}
+                  readOnly
+                />
+                <FormField
+                  label="Çağırdığı servis"
+                  value={`${calleeCount} servis`}
                   readOnly
                 />
               </div>
             </section>
-          )}
+
+            {service.owner && (
+              <section className="service-form-section service-form-section--compact">
+                <h3 className="service-doc-heading">Sahiplik</h3>
+                <div className="service-form-row">
+                  <FormField label="Sorumlu" value={service.owner.name} readOnly />
+                  <FormField
+                    label="Ekip"
+                    value={service.owner.team ?? '—'}
+                    readOnly
+                  />
+                </div>
+              </section>
+            )}
+          </aside>
         </form>
       ) : (
-        <>
-          <section className="service-doc-section">
-            <h3 className="service-doc-heading">Kimlik</h3>
+        <div className="service-overview-layout">
+          <div className="service-overview-main">
+            <section className="service-doc-section service-doc-section--compact">
+              <h3 className="service-doc-heading">Kimlik</h3>
             <div className="service-doc-body">
-              <DocItem label="Servis adı">{service.name}</DocItem>
-              <DocItem label="Servis kimliği" mono>
-                {service.id}
-              </DocItem>
+              <div className="service-doc-columns service-doc-columns--meta">
+                <DocItem label="Servis adı">{service.name}</DocItem>
+                <DocItem label="Servis kimliği" mono>
+                  {service.id}
+                </DocItem>
+              </div>
               <DocItem label="İşlev özeti">{renderSummaryText(summary)}</DocItem>
             </div>
           </section>
+          </div>
 
-          <section className="service-doc-section">
-            <h3 className="service-doc-heading">Konum</h3>
-            <div className="service-doc-body service-doc-columns">
-              <DocItem label="Proje">{projectLabel ?? service.projectId}</DocItem>
-              <DocItem label="Paket" mono>
-                {packageLabel ?? service.packageId}
-              </DocItem>
-            </div>
-          </section>
-
-          <section className="service-doc-section">
-            <h3 className="service-doc-heading">Bağımlılık</h3>
-            <div className="service-doc-body service-doc-columns">
-              <DocItem label="Bu servisi çağıran">{callerCount} servis</DocItem>
-              <DocItem label="Çağırdığı servis">{calleeCount} servis</DocItem>
-            </div>
-            <p className="service-doc-hint">
-              Detaylı listeler için İlişkiler sekmesine geçin.
-            </p>
-          </section>
-
-          {service.owner && (
-            <section className="service-doc-section">
-              <h3 className="service-doc-heading">Sahiplik</h3>
+          <aside className="service-overview-aside">
+            <section className="service-doc-section service-doc-section--compact">
+              <h3 className="service-doc-heading">Konum</h3>
               <div className="service-doc-body service-doc-columns">
-                <DocItem label="Sorumlu">{service.owner.name}</DocItem>
-                <DocItem label="Ekip">{service.owner.team ?? '—'}</DocItem>
+                <DocItem label="Proje">{projectLabel ?? service.projectId}</DocItem>
+                <DocItem label="Paket" mono>
+                  {packageLabel ?? service.packageId}
+                </DocItem>
               </div>
-              {service.owner.role && (
-                <div className="service-doc-body">
-                  <DocItem label="Rol">
-                    {service.owner.role === 'lead' ? 'Ekip lideri' : 'Ekip üyesi'}
-                  </DocItem>
-                </div>
-              )}
             </section>
-          )}
-        </>
+
+            <section className="service-doc-section service-doc-section--compact">
+              <h3 className="service-doc-heading">Bağımlılık</h3>
+              <div className="service-doc-body service-doc-columns">
+                <DocItem label="Bu servisi çağıran">{callerCount} servis</DocItem>
+                <DocItem label="Çağırdığı servis">{calleeCount} servis</DocItem>
+              </div>
+              <p className="service-doc-hint">
+                Detaylı listeler için İlişkiler sekmesine geçin.
+              </p>
+            </section>
+
+            {service.owner && (
+              <section className="service-doc-section service-doc-section--compact">
+                <h3 className="service-doc-heading">Sahiplik</h3>
+                <div className="service-doc-body service-doc-columns">
+                  <DocItem label="Sorumlu">{service.owner.name}</DocItem>
+                  <DocItem label="Ekip">{service.owner.team ?? '—'}</DocItem>
+                </div>
+                {service.owner.role && (
+                  <div className="service-doc-body">
+                    <DocItem label="Rol">
+                      {service.owner.role === 'lead' ? 'Ekip lideri' : 'Ekip üyesi'}
+                    </DocItem>
+                  </div>
+                )}
+              </section>
+            )}
+          </aside>
+        </div>
       )}
       <footer className="service-overview-toolbar">
         {editing ? (
