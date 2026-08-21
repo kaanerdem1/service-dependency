@@ -1540,11 +1540,13 @@
   transition: margin-right 0.34s cubic-bezier(0.25, 0.8, 0.2, 1);
 }
 
-.main.main-map:has(.impact-map.dd-map:not(.is-drawer-collapsed)) .stage-actions {
+.main.main-map:has(.impact-map.dd-map:not(.is-drawer-collapsed)) .stage-actions,
+html.sd-map-drawer-open .main.main-map .stage-actions {
   margin-right: 268px;
 }
 
-.main.main-map:has(.impact-map.dd-map.is-drawer-collapsed) .stage-actions {
+.main.main-map:has(.impact-map.dd-map.is-drawer-collapsed) .stage-actions,
+html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   margin-right: 40px;
 }
 
@@ -2223,6 +2225,23 @@
   background: #fff;
 }
 
+.map-stage.is-docked {
+  flex: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.map-stage.is-docked .map-stage-body,
+.map-stage.is-docked .impact-map,
+.map-stage.is-docked .map-canvas-dock-host {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: visible;
+}
+
 .map-stage.is-expanded {
   position: fixed;
   z-index: 80;
@@ -2377,8 +2396,7 @@
 
 .map-stage:not(.is-expanded) .map-stage-body {
   flex: 1;
-  height: auto;
-  min-height: min(420px, calc(100vh - 220px));
+  min-height: 0;
 }
 
 .map-stage.is-expanded .map-stage-body {
@@ -2416,7 +2434,7 @@
 }
 
 .map-stage:not(.is-expanded) .impact-map {
-  overflow: hidden;
+  overflow: visible;
 }
 
 .main.main-map .impact-map.dd-map {
@@ -2542,44 +2560,53 @@
 
 /** Halka: daire + ışın etiketi (LTR kartları aynı kalır) */
 .dd-map.is-radial .react-flow__node,
-.dd-map.is-radial .react-flow__nodes {
+.dd-map.is-radial .react-flow__nodes,
+.dd-map.is-radial .dd-node.radial-dot {
   overflow: visible !important;
 }
 
 .dd-map.is-radial .dd-node.radial-dot,
 .dd-map.is-radial .dd-node.radial-dot.size-lg,
 .dd-map.is-radial .dd-node.radial-dot.size-md,
-.dd-map.is-radial .dd-node.radial-dot.size-sm,
+.dd-map.is-radial .dd-node.radial-dot.size-sm {
+  --radial-dot-r: 9px;
+  --radial-label-gap: 14px;
+  width: 22px;
+  height: 22px;
+  overflow: visible;
+  background: transparent;
+  box-shadow: none;
+}
+
 .dd-map.is-radial .dd-node.radial-dot.center,
 .dd-map.is-radial .dd-node.radial-dot.center.size-lg,
 .dd-map.is-radial .dd-node.radial-dot.center.size-md,
 .dd-map.is-radial .dd-node.radial-dot.center.size-sm {
-  --radial-dot-r: 4.5px;
-  --radial-label-gap: 12px;
-  width: 22px;
-  height: 22px;
+  --radial-dot-r: 24px;
+  --radial-label-gap: 18px;
+  width: 48px;
+  height: 48px;
   overflow: visible;
-}
-
-.dd-map.is-radial .dd-node.radial-dot.center {
-  --radial-dot-r: 10.5px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dd-map.is-radial .dd-node.radial-dot .dd-node-body,
 .dd-map.is-radial .dd-node.radial-dot .dd-node-ring {
-  display: none;
+  display: none !important;
 }
 
 .dd-radial-core {
   position: absolute;
   left: 50%;
   top: 50%;
-  z-index: 2;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
+  z-index: 8;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
   border-radius: 50%;
-  background: var(--map-radial-dot);
+  background: #6a645a;
+  box-shadow: 0 0 0 2px #fff;
   pointer-events: none;
   transition:
     transform 0.14s ease,
@@ -2588,18 +2615,45 @@
 }
 
 .dd-radial-core.is-center {
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
-  background: var(--map-path, #2f6f55);
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  background: #1f7a5c;
+  box-shadow: 0 0 0 3px #fff;
+}
+
+.dd-radial-core.is-center::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.4px solid #1f7a5c;
+  opacity: 0.35;
+  animation: dd-radial-center-pulse 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+.dd-map.is-radial .dd-node.radial-dot.collapsed .dd-radial-core {
+  background: #faf8f4;
   box-shadow:
-    0 0 0 2px var(--surface),
-    0 0 0 3.5px color-mix(in srgb, var(--map-path, #2f6f55) 22%, transparent);
+    inset 0 0 0 1.6px #6a645a,
+    0 0 0 2px #fff;
+}
+
+@keyframes dd-radial-center-pulse {
+  0% {
+    transform: scale(0.92);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
 }
 
 .dd-radial-label {
   position: absolute;
-  z-index: 6;
+  z-index: 4;
   box-sizing: border-box;
   width: max-content;
   max-width: 176px;
@@ -2613,10 +2667,11 @@
   display: flex;
   flex-direction: column;
   align-items: inherit;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 500;
+  font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace;
   line-height: 1.28;
-  color: #2a2926;
+  color: #1c1e1b;
   cursor: grab;
   text-shadow: none;
   pointer-events: auto;
@@ -2629,27 +2684,36 @@
 }
 
 .dd-radial-label.is-center-label {
-  max-width: 210px;
+  max-width: 220px;
   padding: 0;
-  border-radius: 0;
   background: none;
   border: none;
   box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  z-index: 5;
+}
+
+.dd-radial-label.is-center-label .dd-radial-label-line {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1c1e1b;
+}
+
+.dd-radial-label-line {
+  display: block;
+  white-space: nowrap;
 }
 
 .dd-radial-kicker.is-center-badge {
   display: block;
   align-self: center;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
   padding: 0;
   border-radius: 0;
   background: none;
-  color: color-mix(in srgb, var(--map-path, #2f6f55) 72%, var(--muted));
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  color: #1f7a5c;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -2672,20 +2736,9 @@
 }
 
 .dd-radial-label-text {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  display: block;
   width: 100%;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
-  hyphens: none;
-  text-shadow:
-    0 0 4px #fff,
-    0 0 8px #fff,
-    0 1px 0 #fff;
+  text-shadow: none;
 }
 
 .dd-radial-kicker {
@@ -2707,25 +2760,25 @@
 }
 
 .dd-radial-label.is-east {
-  left: 50%;
+  left: calc(100% + 12px);
   top: 50%;
-  transform: translate(calc(var(--radial-dot-r) + var(--radial-label-gap)), -50%);
+  transform: translateY(-50%);
   text-align: left;
   align-items: flex-start;
 }
 
 .dd-radial-label.is-west {
-  right: 50%;
+  right: calc(100% + 12px);
   left: auto;
   top: 50%;
-  transform: translate(calc(-1 * (var(--radial-dot-r) + var(--radial-label-gap))), -50%);
+  transform: translateY(-50%);
   text-align: right;
   align-items: flex-end;
 }
 
 .dd-radial-label.is-above {
   left: 50%;
-  bottom: calc(50% + var(--radial-dot-r) + var(--radial-label-gap));
+  bottom: calc(100% + 12px);
   top: auto;
   transform: translateX(-50%);
   text-align: center;
@@ -2735,7 +2788,7 @@
 .dd-radial-label.is-below,
 .dd-radial-label.is-south {
   left: 50%;
-  top: calc(50% + var(--radial-dot-r) + var(--radial-label-gap));
+  top: calc(100% + 12px);
   transform: translateX(-50%);
   text-align: center;
   align-items: center;
@@ -2782,8 +2835,7 @@
 }
 
 .dd-map.is-radial .react-flow__node.radial-label-occluded .dd-radial-label {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
 }
 
 .dd-map.is-radial .react-flow__node.radial-label-occluded:hover .dd-radial-label,
@@ -3783,8 +3835,8 @@
 
 .map-stage:not(.is-expanded) .map-info-drawer {
   position: absolute;
-  z-index: 10;
-  top: -96px;
+  z-index: 12;
+  top: calc(-1 * var(--sd-stage-top-h, 96px));
   right: 0;
   bottom: 0;
   width: 268px;
@@ -3975,6 +4027,7 @@
   left: 50%;
   bottom: 14px;
   transform: translateX(-50%);
+  max-width: calc(100% - 16px);
 }
 
 .map-dock-float.is-placed {

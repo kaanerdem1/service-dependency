@@ -29,8 +29,9 @@ import {
   mapLabelNeedsTip,
   mapLayoutForDepth,
   mapLayoutForRadial,
-  RADIAL_HIT,
+  radialAnchorOffset,
   radialLabelSide,
+  wrapRadialName,
   type MapLayout,
   type MapLayoutMode,
   type RadialLabelSide,
@@ -54,6 +55,7 @@ type ViewMode = 'services' | 'methods'
 
 const LEFT_X = 40
 const MAX_VISIBLE_PER_LAYER = 4
+const RADIAL_HOP1_CAP = 8
 const MIN_COLLAPSE_COUNT = 3
 
 const EDGE_COLOR = '#2f6f55'
@@ -90,8 +92,8 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
   const liveAngle = (() => {
     if (!radial || isCenter) return data.radialAngle ?? 0
     if (typeof data.radialCx === 'number' && typeof data.radialCy === 'number') {
-      const mid = RADIAL_HIT / 2
-      return Math.atan2(yPos + mid - data.radialCy, xPos + mid - data.radialCx)
+      const mid = radialAnchorOffset(false)
+      return Math.atan2(yPos + mid.y - data.radialCy, xPos + mid.x - data.radialCx)
     }
     return data.radialAngle ?? 0
   })()
@@ -137,39 +139,43 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
           </>
         )}
       </div>
-      {radial && (
+      {radial && isCenter && (
         <>
-          <span
-            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
-            aria-hidden
-          />
+          <span className="dd-radial-core is-center" aria-hidden />
+          <span className="dd-radial-label is-below is-center-label">
+            <span className="dd-radial-kicker is-center-badge">Merkez</span>
+            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              <span key={`${i}-${line}`} className="dd-radial-label-line">
+                {line}
+              </span>
+            ))}
+          </span>
+        </>
+      )}
+      {radial && !isCenter && (
+        <>
+          <span className="dd-radial-core" aria-hidden />
           <span
             className={[
               'dd-radial-label',
               labelSide && `is-${labelSide}`,
-              isCenter && 'is-center-label',
               data.showTip && 'name-tip is-short',
             ]
               .filter(Boolean)
               .join(' ')}
             data-tip={data.showTip ? data.fullLabel : undefined}
           >
-            {isCenter ? (
-              <>
-                <span className="dd-radial-kicker is-center-badge">Merkez</span>
-                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
-              </>
-            ) : (
-              <>
-                {data.hop > 0 && !isCollapsed && (
-                  <span className="dd-radial-hop">{data.hop}. katman</span>
-                )}
-                {isCollapsed && (
-                  <span className="dd-radial-hop">Aç · {data.count ?? 0} öğe daha</span>
-                )}
-                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
-              </>
+            {data.hop > 0 && !isCollapsed && (
+              <span className="dd-radial-hop">{data.hop}. katman</span>
             )}
+            {isCollapsed && (
+              <span className="dd-radial-hop">Aç · {data.count ?? 0} öğe daha</span>
+            )}
+            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              <span key={`${i}-${line}`} className="dd-radial-label-line">
+                {line}
+              </span>
+            ))}
           </span>
         </>
       )}
@@ -324,11 +330,14 @@ function buildLayeredMap(
     const expanded = expandedLayers.has(hop)
     let visible = all
     let hidden: LayerItem[] = []
-    if (!expanded && all.length > MAX_VISIBLE_PER_LAYER) {
-      const rest = all.length - MAX_VISIBLE_PER_LAYER
-      if (rest >= MIN_COLLAPSE_COUNT) {
-        visible = all.slice(0, MAX_VISIBLE_PER_LAYER)
-        hidden = all.slice(MAX_VISIBLE_PER_LAYER)
+    const cap =
+      layoutMode === 'radial' ? RADIAL_HOP1_CAP : MAX_VISIBLE_PER_LAYER
+    const minRest = layoutMode === 'radial' ? 1 : MIN_COLLAPSE_COUNT
+    if (!expanded && all.length > cap) {
+      const rest = all.length - cap
+      if (rest >= minRest) {
+        visible = all.slice(0, cap)
+        hidden = all.slice(cap)
       }
     }
 

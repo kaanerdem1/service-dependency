@@ -2,14 +2,20 @@
  * Harita çerçevesi.
  * Yeşil macOS tarzı büyüt: aynı sayfada tam ekran overlay (yeni sekme değil).
  * Escape veya yeşil düğme ile kapanır. Sayfa karartılmaz — harita kaplar.
+ *
+ * Stage her zaman document.body’de portal’dadır (overflow:hidden ebeveyn
+ * position:fixed’i kırpmasın). Slot yalnızca yer tutar; expanded değişince
+ * React ağacı aynı kalır — layout / katman state’i sıfırlanmaz.
  */
-import { useEffect, useId, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type Props = {
   title: string
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
+  /** Harita sekmesi dışındayken gizle — portal body’de kalır, sekmeleri örtmesin */
+  active?: boolean
   children: ReactNode
 }
 
@@ -17,9 +23,18 @@ export function MapStage({
   title,
   expanded,
   onExpandedChange,
+  active = true,
   children,
 }: Props) {
   const titleId = useId()
+  const slotRef = useRef<HTMLDivElement>(null)
+  const [frame, setFrame] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    height: 0,
+    stageTopH: 96,
+  })
 
   useEffect(() => {
     if (!expanded) return
@@ -35,12 +50,58 @@ export function MapStage({
     }
   }, [expanded, onExpandedChange])
 
+  useLayoutEffect(() => {
+    const slot = slotRef.current
+    if (!slot) return
+    const measure = () => {
+      const r = slot.getBoundingClientRect()
+      const stageTop = document.querySelector('.stage-top')
+      const lift = stageTop
+        ? Math.max(0, Math.round(r.top - stageTop.getBoundingClientRect().top))
+        : 96
+      setFrame({
+        top: r.top,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+        stageTopH: lift || 96,
+      })
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(slot)
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [expanded])
+
+  const dockedStyle: CSSProperties | undefined = !active
+    ? { display: 'none' }
+    : expanded
+      ? undefined
+      : {
+          position: 'fixed',
+          top: frame.top,
+          left: frame.left,
+          width: frame.width,
+          height: frame.height,
+          zIndex: 5,
+          overflow: 'visible',
+          ['--sd-stage-top-h' as string]: `${frame.stageTopH}px`,
+        }
+
   const stage = (
     <div
-      className={`map-stage ${expanded ? 'is-expanded' : ''}`}
-      role={expanded ? 'dialog' : undefined}
-      aria-modal={expanded || undefined}
-      aria-labelledby={expanded ? titleId : undefined}
+      className={`map-stage ${expanded ? 'is-expanded' : 'is-docked'}${active ? '' : ' is-inactive'}`}
+      style={dockedStyle}
+      hidden={!active}
+      role={expanded && active ? 'dialog' : undefined}
+      aria-modal={expanded && active ? true : undefined}
+      aria-labelledby={expanded && active ? titleId : undefined}
     >
       <div className={`map-stage-chrome${expanded ? '' : ' is-compact'}`}>
         <div className="tl-zoom-wrap">
@@ -107,8 +168,8 @@ export function MapStage({
 
   return (
     <>
-      {expanded && <div className="map-stage-slot" aria-hidden />}
-      {expanded ? createPortal(stage, document.body) : stage}
+      <div ref={slotRef} className="map-stage-slot" aria-hidden={expanded || undefined} />
+      {createPortal(stage, document.body)}
     </>
   )
 }

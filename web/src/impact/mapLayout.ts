@@ -48,15 +48,29 @@ type RadialLayoutNode = {
 /** Halka daire çapı — kart değil; ok 2. adımda çevreye oturur */
 /** Halka daire (görsel); RF kutusu etiket için büyük */
 export const RADIAL_DOT_W = 8
-export const RADIAL_CENTER_W = 10
+export const RADIAL_CENTER_W = 48
 export const RADIAL_HIT = 22
+export const RADIAL_CENTER_HIT = 48
 
-/** Görsel daire yarıçapı (CSS .dd-radial-core ile uyumlu) */
-export const RADIAL_DOT_R = 4.5
-export const RADIAL_CENTER_DOT_R = 10.5
+/** Görsel daire yarıçapı — HTML prototip: merkez 24, 1. katman 9 */
+export const RADIAL_DOT_R = 9
+export const RADIAL_CENTER_DOT_R = 24
+/** Ok, nokta kenarından bu kadar önce biter */
+export const RADIAL_EDGE_END_GAP = 6
 
 function radialDotRadius(isCenter: boolean): number {
   return isCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R
+}
+
+/** RF kutusunun geometrik merkezi (etiket/ok bu noktaya göre) */
+export function radialAnchorOffset(isCenter: boolean): { x: number; y: number } {
+  const box = isCenter ? RADIAL_CENTER_HIT : RADIAL_HIT
+  return { x: box / 2, y: box / 2 }
+}
+
+/** Merkez daire kenarı + 2px (ok buradan çıkar) */
+export function radialCenterSpokeR(_angle?: number): number {
+  return RADIAL_CENTER_DOT_R + 2
 }
 
 /** CSS ile uyumlu daire çapı (kare RF kutusu) */
@@ -64,7 +78,7 @@ export function radialNodeHeight(
   kind: string,
   _size?: MapNodeSize,
 ): number {
-  if (kind === 'center') return RADIAL_CENTER_W
+  if (kind === 'center') return RADIAL_CENTER_HIT
   return RADIAL_DOT_W
 }
 
@@ -104,19 +118,42 @@ export function mapLayoutForRadial(): MapLayout {
 const RADIAL_LABEL_MAX_W = 168
 const RADIAL_LABEL_CHAR_W = 6.7
 const RADIAL_LABEL_LINE_H = 15
-export const RADIAL_LABEL_GAP = 12
+export const RADIAL_LABEL_GAP = 14
+
+export function wrapRadialName(name: string, maxLen = 17): string[] {
+  const parts = name.trim().split('_')
+  if (parts.length <= 1) {
+    const t = name.trim() || '·'
+    if (t.length <= maxLen) return [t]
+    const lines: string[] = []
+    for (let i = 0; i < t.length && lines.length < 4; i += maxLen) {
+      lines.push(t.slice(i, i + maxLen))
+    }
+    return lines
+  }
+  const lines: string[] = []
+  let cur = ''
+  for (const p of parts) {
+    const candidate = cur ? `${cur}_${p}` : p
+    if (candidate.length > maxLen && cur) {
+      lines.push(`${cur}_`)
+      cur = p
+    } else cur = candidate
+  }
+  if (cur) lines.push(cur)
+  return lines.slice(0, 4)
+}
 
 export function radialLabelMetrics(name: string, isCenter: boolean): {
   w: number
   h: number
 } {
-  const text = name.trim() || '·'
-  const extra = isCenter ? 14 : 16
-  const maxW = isCenter ? 200 : RADIAL_LABEL_MAX_W
-  const raw = text.length * RADIAL_LABEL_CHAR_W
-  const lines = Math.min(3, Math.max(1, Math.ceil(raw / maxW)))
-  const w = Math.min(maxW, Math.max(28, raw / lines))
-  const h = lines * RADIAL_LABEL_LINE_H + extra
+  const lines = wrapRadialName(name)
+  const w = Math.min(
+    RADIAL_LABEL_MAX_W,
+    Math.max(28, ...lines.map((l) => l.length * RADIAL_LABEL_CHAR_W)),
+  )
+  const h = (isCenter ? 12 : 14) + lines.length * RADIAL_LABEL_LINE_H
   return { w, h }
 }
 
@@ -161,10 +198,20 @@ export function radialGraphBounds(items: RadialBoundsItem[]): {
   for (const it of items) {
     const isCenter = it.kind === 'center'
     const side = it.side ?? radialLabelSide(it.angle, isCenter)
-    const boxes = [
-      { x: it.cx - half, y: it.cy - half, w: RADIAL_HIT, h: RADIAL_HIT },
-      radialLabelBox(it.cx, it.cy, side, it.name, isCenter),
-    ]
+    const boxes = isCenter
+      ? [
+          {
+            x: it.cx - RADIAL_CENTER_HIT / 2,
+            y: it.cy - RADIAL_CENTER_HIT / 2,
+            w: RADIAL_CENTER_HIT,
+            h: RADIAL_CENTER_HIT,
+          },
+          radialLabelBox(it.cx, it.cy, 'below', it.name, true),
+        ]
+      : [
+          { x: it.cx - half, y: it.cy - half, w: RADIAL_HIT, h: RADIAL_HIT },
+          radialLabelBox(it.cx, it.cy, side, it.name, isCenter),
+        ]
     for (const b of boxes) {
       minX = Math.min(minX, b.x)
       minY = Math.min(minY, b.y)
@@ -408,7 +455,7 @@ function assignRadialAngles(
     })
   }
 
-  place(centerId, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2, 0)
+  place(centerId, Math.PI / 2 + 0.42, Math.PI / 2 + Math.PI * 2 - 0.42, 0)
   return angles
 }
 
@@ -460,7 +507,7 @@ function packRadialRingRadii(
         const d = Math.max(angDist(a.angle, b.angle), 0.1)
         const ta = radialSlotSize(a.name, a.angle, false).tangent
         const tb = radialSlotSize(b.name, b.angle, false).tangent
-        const half = (ta + tb) / 2 + 18
+        const half = (ta + tb) / 2 + 28
         rNeed = Math.max(rNeed, half / Math.sin(Math.min(Math.PI / 2, d / 2)))
       }
     } else if (items.length === 1) {
@@ -470,8 +517,10 @@ function packRadialRingRadii(
       ...items.map((n) => radialSlotSize(n.name, n.angle, false).radial),
       48,
     )
-    const fromPrev = prevR + prevRadial + thisRadial + 28
-    const R = Math.max(rNeed, fromPrev, hop === hops[0] ? 200 * radiusScale : 0)
+    const fromPrev = prevR + prevRadial + thisRadial + 36
+    const hop1Floor =
+      hop === hops[0] ? Math.max(240 * radiusScale, 36 * Math.max(items.length, 1)) : 0
+    const R = Math.max(rNeed, fromPrev, hop1Floor)
     radiusByHop.set(hop, R)
     prevR = R
     prevRadial = thisRadial
@@ -500,31 +549,17 @@ export function radialHandlePair(
     : { sourceHandle: 'out-top', targetHandle: 'in-bottom' }
 }
 
-function vectorToLabelSide(dx: number, dy: number): RadialLabelSide {
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'east' : 'west'
-  return dy >= 0 ? 'below' : 'above'
-}
-
-/** Ok ışınına dik yönler önce — yazı okun üstüne binmesin */
+/** Ok ışınına göre sağ / sol / üst / alt — referans radial.md */
 export function radialLabelSidePrefs(
   angle: number,
   isCenter: boolean,
 ): RadialLabelSide[] {
   if (isCenter) return ['below', 'above', 'east', 'west']
-  const raw: RadialLabelSide[] = [
-    vectorToLabelSide(Math.cos(angle + Math.PI / 2), Math.sin(angle + Math.PI / 2)),
-    vectorToLabelSide(Math.cos(angle - Math.PI / 2), Math.sin(angle - Math.PI / 2)),
-    vectorToLabelSide(Math.cos(angle), Math.sin(angle)),
-    vectorToLabelSide(-Math.cos(angle), -Math.sin(angle)),
-  ]
-  const seen = new Set<RadialLabelSide>()
-  const out: RadialLabelSide[] = []
-  for (const s of raw) {
-    if (seen.has(s)) continue
-    seen.add(s)
-    out.push(s)
-  }
-  return out
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  const preferred: RadialLabelSide =
+    c > 0.35 ? 'east' : c < -0.35 ? 'west' : s >= 0 ? 'below' : 'above'
+  return [preferred]
 }
 
 export function radialLabelSide(
@@ -602,7 +637,6 @@ function placeRadialLabels<T extends RadialLayoutNode>(
     treeParent?: Map<string, string>
   },
 ): T[] {
-  const mid = RADIAL_HIT / 2
   type Item = {
     id: string
     hop: number
@@ -619,10 +653,11 @@ function placeRadialLabels<T extends RadialLayoutNode>(
     if (n.id === opts.leftPadId || n.id.startsWith('__')) continue
     const d = n.data
     if (!d.radialDot) continue
-    const cx = n.position.x + mid
-    const cy = n.position.y + mid
-    pos.set(n.id, { x: cx, y: cy })
     const isCenter = n.id === opts.centerId || d.kind === 'center'
+    const mid = radialAnchorOffset(isCenter)
+    const cx = n.position.x + mid.x
+    const cy = n.position.y + mid.y
+    pos.set(n.id, { x: cx, y: cy })
     items.push({
       id: n.id,
       hop: isCenter ? 0 : Math.max(1, d.hop || 1),
@@ -642,20 +677,44 @@ function placeRadialLabels<T extends RadialLayoutNode>(
     if (pos.has(parent)) edges.push({ a: parent, b: it.id })
   }
 
-  const dots = items.map((it) => ({
-    id: it.id,
-    x: it.cx - 8,
-    y: it.cy - 8,
-    w: 16,
-    h: 16,
-  }))
+  const dots = items.map((it) =>
+    it.isCenter
+      ? {
+          id: it.id,
+          x: it.cx - RADIAL_CENTER_HIT / 2,
+          y: it.cy - RADIAL_CENTER_HIT / 2,
+          w: RADIAL_CENTER_HIT,
+          h: RADIAL_CENTER_HIT,
+        }
+      : {
+          id: it.id,
+          x: it.cx - 8,
+          y: it.cy - 8,
+          w: 16,
+          h: 16,
+        },
+  )
 
   items.sort((a, b) => a.hop - b.hop || a.angle - b.angle)
   const chosen = new Map<string, RadialLabelSide>()
+  const centerIt = items.find((it) => it.isCenter)
   const labelBoxes: { id: string; box: { x: number; y: number; w: number; h: number } }[] =
-    []
+    centerIt
+      ? [
+          {
+            id: centerIt.id,
+            box: {
+              x: centerIt.cx - RADIAL_CENTER_HIT / 2,
+              y: centerIt.cy - RADIAL_CENTER_HIT / 2,
+              w: RADIAL_CENTER_HIT,
+              h: RADIAL_CENTER_HIT,
+            },
+          },
+        ]
+      : []
 
   for (const it of items) {
+    if (it.isCenter) continue
     const prefs = radialLabelSidePrefs(it.angle, it.isCenter)
     let side = prefs[0] ?? 'east'
     for (const cand of prefs) {
@@ -703,17 +762,16 @@ export function radialSpokeEnds(
   source: { x: number; y: number; r: number },
   target: { x: number; y: number; r: number },
 ): { sx: number; sy: number; tx: number; ty: number } {
-  const aT = Math.atan2(target.y - cy, target.x - cx)
-  const rS = Math.hypot(source.x - cx, source.y - cy)
-  const rT = Math.hypot(target.x - cx, target.y - cy)
-  const aS = rS < 12 ? aT : Math.atan2(source.y - cy, source.x - cx)
-  const srcR = rS < 12 ? source.r : rS + source.r
-  const tgtR = Math.max(source.r + 8, rT - target.r)
+  const dx = target.x - source.x
+  const dy = target.y - source.y
+  const dist = Math.hypot(dx, dy) || 1
+  const ux = dx / dist
+  const uy = dy / dist
   return {
-    sx: cx + srcR * Math.cos(aS),
-    sy: cy + srcR * Math.sin(aS),
-    tx: cx + tgtR * Math.cos(aT),
-    ty: cy + tgtR * Math.sin(aT),
+    sx: source.x + ux * (source.r + 2),
+    sy: source.y + uy * (source.r + 2),
+    tx: target.x - ux * (target.r + RADIAL_EDGE_END_GAP),
+    ty: target.y - uy * (target.r + RADIAL_EDGE_END_GAP),
   }
 }
 
@@ -726,41 +784,32 @@ export function radialEdgeGeometry(
   sourceY: number,
   targetX: number,
   targetY: number,
-  cx: number,
-  cy: number,
+  _cx: number,
+  _cy: number,
 ): { path: string; mx: number; my: number; angle: number } {
-  const a2 = Math.atan2(targetY - cy, targetX - cx)
-  const r1 = Math.hypot(sourceX - cx, sourceY - cy)
-  const r2 = Math.hypot(targetX - cx, targetY - cy)
-  const polar = (a: number, r: number) =>
-    [cx + r * Math.cos(a), cy + r * Math.sin(a)] as const
-
-  let sa = Math.atan2(sourceY - cy, sourceX - cx)
-  let sr = r1
-  if (r1 < 24) {
-    sr = 0
-    sa = a2 - 0.16
-  }
-  const mid = (sr + r2) / 2
-  const [x0, y0] = polar(sa, sr)
-  const [c1x, c1y] = polar(sa, mid)
-  const [c2x, c2y] = polar(a2, mid)
-  const [x3, y3] = polar(a2, r2)
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const dist = Math.hypot(dx, dy) || 1
+  const ux = dx / dist
+  const uy = dy / dist
+  const x0 = sourceX
+  const y0 = sourceY
+  const x3 = targetX
+  const y3 = targetY
+  const mxq = (x0 + x3) / 2
+  const myq = (y0 + y3) / 2
+  const bow = dist * 0.09
+  const c1x = mxq + -uy * bow
+  const c1y = myq + ux * bow
   const t = 0.5
   const u = 1 - t
-  const mx =
-    u * u * u * x0 + 3 * u * u * t * c1x + 3 * u * t * t * c2x + t * t * t * x3
-  const my =
-    u * u * u * y0 + 3 * u * u * t * c1y + 3 * u * t * t * c2y + t * t * t * y3
-  const dx =
-    3 * u * u * (c1x - x0) + 6 * u * t * (c2x - c1x) + 3 * t * t * (x3 - c2x)
-  const dy =
-    3 * u * u * (c1y - y0) + 6 * u * t * (c2y - c1y) + 3 * t * t * (y3 - c2y)
+  const mx = u * u * x0 + 2 * u * t * c1x + t * t * x3
+  const my = u * u * y0 + 2 * u * t * c1y + t * t * y3
   return {
-    path: `M ${x0},${y0} C ${c1x},${c1y} ${c2x},${c2y} ${x3},${y3}`,
+    path: `M ${x0},${y0} Q ${c1x},${c1y} ${x3},${y3}`,
     mx,
     my,
-    angle: Math.atan2(dy, dx),
+    angle: Math.atan2(y3 - y0, x3 - x0),
   }
 }
 
@@ -876,12 +925,13 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
         return { ...n, position: { x: 0, y: cy - 12 } }
       }
       if (n.id === centerId) {
-        const box = RADIAL_HIT
+        const w = RADIAL_CENTER_HIT
+        const h = RADIAL_CENTER_HIT
         return {
           ...n,
-          position: { x: cx - box / 2, y: cy - box / 2 },
+          position: { x: cx - w / 2, y: cy - h / 2 },
           data: { ...n.data, radialDot: true, radialAngle: 0, radialCx: cx, radialCy: cy },
-          style: { ...n.style, width: box, height: box },
+          style: { ...n.style, width: w, height: h },
         }
       }
       return n
@@ -914,7 +964,6 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   }
 
   const bumpUntilClear = () => {
-    const mid = RADIAL_HIT / 2
     type Box = {
       id: string
       hop: number
@@ -925,15 +974,23 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
       if (n.id === leftPadId || n.id.startsWith('__')) continue
       const d = n.data
       if (!d.radialDot) continue
-      const px = n.position.x + mid
-      const py = n.position.y + mid
+      const isCenter = n.id === centerId
+      const mid = radialAnchorOffset(isCenter)
+      const px = n.position.x + mid.x
+      const py = n.position.y + mid.y
       const ang = d.radialAngle ?? 0
       const name = String(d.fullLabel ?? d.label ?? n.id)
-      const isCenter = n.id === centerId
       boxes.push({
         id: n.id,
         hop: isCenter ? 0 : Math.max(1, d.hop || 1),
-        box: radialLabelBox(px, py, radialLabelSide(ang, isCenter), name, isCenter),
+        box: isCenter
+          ? {
+              x: px - RADIAL_CENTER_HIT / 2,
+              y: py - RADIAL_CENTER_HIT / 2,
+              w: RADIAL_CENTER_HIT,
+              h: RADIAL_CENTER_HIT,
+            }
+          : radialLabelBox(px, py, radialLabelSide(ang, isCenter), name, isCenter),
       })
     }
     let hitHop = 0
@@ -969,7 +1026,7 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   for (let iter = 0; iter < 8; iter++) {
     const hop = bumpUntilClear()
     if (!hop) break
-    placeHop(hop, (radiusByHop.get(hop) ?? 0) + 36)
+    placeHop(hop, (radiusByHop.get(hop) ?? 0) + 52)
     let prev = 0
     for (const h of hops) {
       const need = h === hops[0] ? 0 : prev + 88

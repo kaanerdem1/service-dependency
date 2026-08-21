@@ -802,7 +802,7 @@ export default function App() {
               </div>
 
               <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
-                <StageTabPanels tab={tab} mapOnly={tab === 'map'}>
+                <StageTabPanels tab={tab}>
                   <section
                     className="stage-panel stage-panel-map"
                     aria-hidden={tab !== 'map'}
@@ -813,9 +813,10 @@ export default function App() {
                         title="Method haritası"
                         expanded={mapExpanded}
                         onExpandedChange={setMapExpanded}
+                        active={tab === 'map'}
                       >
                         <MethodImpactMap
-                          key={`method-${selectedMethodId}-${mapExpanded}`}
+                          key={`method-${selectedMethodId}`}
                           graph={methodImpact}
                           onSelectMethod={selectMethod}
                           onSelectService={(id) => {
@@ -842,9 +843,9 @@ export default function App() {
                         title={service?.name ?? 'Harita'}
                         expanded={mapExpanded}
                         onExpandedChange={setMapExpanded}
+                        active={tab === 'map'}
                       >
                         <ImpactMap
-                          key={`adv-${mapExpanded}`}
                           graph={impact}
                           mapExpanded={mapExpanded}
                           forceLtrSignal={mapForceLtrSignal}

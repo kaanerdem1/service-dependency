@@ -56,7 +56,8 @@ import {
   listServiceNotes,
 } from '../api/client'
 import {
-  RADIAL_CENTER_W,
+  RADIAL_CENTER_HIT,
+  RADIAL_DOT_R,
   RADIAL_HIT,
   applyRadialLayout,
   mapLabelNeedsTip,
@@ -65,11 +66,13 @@ import {
   mapLeftX,
   mapNodeSizeFor,
   mapNodeWidth,
+  radialAnchorOffset,
   radialEdgeGeometry,
   radialHandlePair,
   radialLabelSide,
   radialMaxZoom,
   radialSpokeEnds,
+  wrapRadialName,
   type MapLayout,
   type MapLayoutMode,
   type RadialLabelSide,
@@ -132,8 +135,9 @@ type Props = {
 const MAP_LAYOUT_MODE_KEY = 'sd-impact-map-layout-mode'
 
 const LEFT_X = mapLeftX()
-/** İlk N görünür; kalan 1–2 ise hepsini göster, kalan ≥3 ise +N collapsed */
+/** LTR: ilk 4; radial 1. katman: 8, fazlası +N */
 const MAX_VISIBLE_PER_LAYER = 4
+const RADIAL_HOP1_CAP = 8
 const MIN_COLLAPSE_COUNT = 3
 type ServiceNodeData = {
   label: string
@@ -197,8 +201,8 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
   const liveAngle = (() => {
     if (!radial || isCenter) return data.radialAngle ?? 0
     if (typeof data.radialCx === 'number' && typeof data.radialCy === 'number') {
-      const mid = RADIAL_HIT / 2
-      return Math.atan2(yPos + mid - data.radialCy, xPos + mid - data.radialCx)
+      const mid = radialAnchorOffset(false)
+      return Math.atan2(yPos + mid.y - data.radialCy, xPos + mid.x - data.radialCx)
     }
     return data.radialAngle ?? 0
   })()
@@ -297,39 +301,43 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
           </>
         )}
       </div>
-      {radial && (
+      {radial && isCenter && (
         <>
-          <span
-            className={`dd-radial-core${isCenter ? ' is-center' : ''}`}
-            aria-hidden
-          />
+          <span className="dd-radial-core is-center" aria-hidden />
+          <span className="dd-radial-label is-below is-center-label">
+            <span className="dd-radial-kicker is-center-badge">Merkez</span>
+            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              <span key={`${i}-${line}`} className="dd-radial-label-line">
+                {line}
+              </span>
+            ))}
+          </span>
+        </>
+      )}
+      {radial && !isCenter && (
+        <>
+          <span className="dd-radial-core" aria-hidden />
           <span
             className={[
               'dd-radial-label',
               labelSide && `is-${labelSide}`,
-              isCenter && 'is-center-label',
               data.showTip && 'name-tip is-short',
             ]
               .filter(Boolean)
               .join(' ')}
             data-tip={data.showTip ? data.fullLabel : undefined}
           >
-            {isCenter ? (
-              <>
-                <span className="dd-radial-kicker is-center-badge">Merkez</span>
-                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
-              </>
-            ) : (
-              <>
-                {(() => {
-                  const hopLine = radialHopLine(data, isCenter, isCollapsed)
-                  return hopLine ? (
-                    <span className="dd-radial-hop">{hopLine}</span>
-                  ) : null
-                })()}
-                <span className="dd-radial-label-text">{data.fullLabel || data.label}</span>
-              </>
-            )}
+            {(() => {
+              const hopLine = radialHopLine(data, isCenter, isCollapsed)
+              return hopLine ? (
+                <span className="dd-radial-hop">{hopLine}</span>
+              ) : null
+            })()}
+            {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              <span key={`${i}-${line}`} className="dd-radial-label-line">
+                {line}
+              </span>
+            ))}
           </span>
         </>
       )}
@@ -909,8 +917,16 @@ function RadialEdge({
     const ends = radialSpokeEnds(
       cx,
       cy,
-      { x: sourceX, y: sourceY, r: data?.sr ?? 5 },
-      { x: targetX, y: targetY, r: data?.tr ?? 5 },
+      {
+        x: data?.sx ?? sourceX,
+        y: data?.sy ?? sourceY,
+        r: data?.sr ?? 9,
+      },
+      {
+        x: data?.tx ?? targetX,
+        y: data?.ty ?? targetY,
+        r: data?.tr ?? 9,
+      },
     )
     return radialEdgeGeometry(ends.sx, ends.sy, ends.tx, ends.ty, cx, cy)
   })()
@@ -976,18 +992,32 @@ function assignFanIndices(
   })
 }
 
-function splitLayer(all: ImpactNode[], expanded: boolean) {
-  if (expanded || all.length <= MAX_VISIBLE_PER_LAYER) {
+function splitLayer(
+  all: ImpactNode[],
+  expanded: boolean,
+  hop: number,
+  layoutMode: MapLayoutMode,
+) {
+  if (expanded) {
     return { visible: all, hidden: [] as ImpactNode[] }
   }
-  const hiddenCount = all.length - MAX_VISIBLE_PER_LAYER
-  // +1 / +2 mantıksız → direkt göster
-  if (hiddenCount < MIN_COLLAPSE_COUNT) {
+  const cap =
+    layoutMode === 'radial' && hop === 1
+      ? RADIAL_HOP1_CAP
+      : layoutMode === 'radial'
+        ? RADIAL_HOP1_CAP
+        : MAX_VISIBLE_PER_LAYER
+  const minRest = layoutMode === 'radial' ? 1 : MIN_COLLAPSE_COUNT
+  if (all.length <= cap) {
+    return { visible: all, hidden: [] as ImpactNode[] }
+  }
+  const hidden = all.slice(cap)
+  if (hidden.length < minRest) {
     return { visible: all, hidden: [] as ImpactNode[] }
   }
   return {
-    visible: all.slice(0, MAX_VISIBLE_PER_LAYER),
-    hidden: all.slice(MAX_VISIBLE_PER_LAYER),
+    visible: all.slice(0, cap),
+    hidden,
   }
 }
 
@@ -1024,6 +1054,8 @@ function buildGraph(
     const { visible, hidden } = splitLayer(
       byHop.get(hop)!,
       forceExpandCollapsed || expandedLayers.has(hop),
+      hop,
+      layoutMode,
     )
     visibleByHop.set(hop, visible)
     if (hidden.length) collapsedMeta.set(hop, hidden)
@@ -1039,7 +1071,7 @@ function buildGraph(
   const colPitch = nodeW + colGap
   const centerSize =
     layoutMode === 'radial' ? 'md' : mapNodeSizeFor('center', 0, visibleMaxHop)
-  const centerW = layoutMode === 'radial' ? RADIAL_CENTER_W : 372
+  const centerW = layoutMode === 'radial' ? RADIAL_CENTER_HIT : 372
 
   /** Sol pad yok — harita origin mapLeftX() */
   const nodes: Node<ServiceNodeData>[] = [
@@ -1273,14 +1305,19 @@ function buildGraph(
       const s = posOf.get(e.source)
       const t = posOf.get(e.target)
       if (!s || !t) return e
-      const box = RADIAL_HIT
-      const visualR =
-        (s.data as ServiceNodeData).kind === 'center' ? 14 : 5
-      const visualRt =
-        (t.data as ServiceNodeData).kind === 'center' ? 14 : 5
+      const sCenter = (s.data as ServiceNodeData).kind === 'center'
+      const tCenter = (t.data as ServiceNodeData).kind === 'center'
+      const sw = sCenter ? RADIAL_CENTER_HIT : RADIAL_HIT
+      const sh = sCenter ? RADIAL_CENTER_HIT : RADIAL_HIT
+      const tw = tCenter ? RADIAL_CENTER_HIT : RADIAL_HIT
+      const th = tCenter ? RADIAL_CENTER_HIT : RADIAL_HIT
+      const smid = radialAnchorOffset(sCenter)
+      const tmid = radialAnchorOffset(tCenter)
+      const visualR = sCenter ? 24 : RADIAL_DOT_R
+      const visualRt = tCenter ? 24 : RADIAL_DOT_R
       const handles = radialHandlePair(
-        { x: s.position.x, y: s.position.y, w: box, h: box },
-        { x: t.position.x, y: t.position.y, w: box, h: box },
+        { x: s.position.x, y: s.position.y, w: sw, h: sh },
+        { x: t.position.x, y: t.position.y, w: tw, h: th },
       )
       const prev = (e.data ?? {}) as FanEdgeData
       return {
@@ -1291,6 +1328,10 @@ function buildGraph(
           ...prev,
           cx,
           cy,
+          sx: s.position.x + smid.x,
+          sy: s.position.y + smid.y,
+          tx: t.position.x + tmid.x,
+          ty: t.position.y + tmid.y,
           sr: visualR,
           tr: visualRt,
         },
@@ -1363,6 +1404,15 @@ export function ImpactMap({
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
   const trail = useSnapshotTrailOptional()
+
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.toggle('sd-map-drawer-open', infoPanelOpen)
+    root.classList.toggle('sd-map-drawer-collapsed', !infoPanelOpen)
+    return () => {
+      root.classList.remove('sd-map-drawer-open', 'sd-map-drawer-collapsed')
+    }
+  }, [infoPanelOpen])
 
   const restoredViewRef = useRef(restoredView)
   restoredViewRef.current = restoredView
@@ -1444,8 +1494,10 @@ export function ImpactMap({
     return m
   }, [filteredGraph.nodes])
 
+  const lastForceLtr = useRef(forceLtrSignal)
   useEffect(() => {
-    if (!forceLtrSignal) return
+    if (!forceLtrSignal || forceLtrSignal === lastForceLtr.current) return
+    lastForceLtr.current = forceLtrSignal
     setLayoutMode('ltr')
     window.sessionStorage.setItem(MAP_LAYOUT_MODE_KEY, 'ltr')
     layoutDirtyRef.current = false
@@ -1610,11 +1662,11 @@ export function ImpactMap({
       )
       const cx =
         centerMove && centerMove.type === 'position' && centerMove.position
-          ? centerMove.position.x + RADIAL_HIT / 2
+          ? centerMove.position.x + radialAnchorOffset(true).x
           : null
       const cy =
         centerMove && centerMove.type === 'position' && centerMove.position
-          ? centerMove.position.y + RADIAL_HIT / 2
+          ? centerMove.position.y + radialAnchorOffset(true).y
           : null
       setNodes((nds) => {
         const next = applyNodeChanges(changes, nds)

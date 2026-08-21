@@ -5,9 +5,9 @@ import type { MapLayout, MapLayoutMode, RadialLabelSide } from '../impact/mapLay
 import {
   fitViewPaddingForChrome,
   occludedRadialLabelIds,
+  radialAnchorOffset,
   radialGraphBounds,
   radialViewportForCenter,
-  RADIAL_HIT,
 } from '../impact/mapLayout'
 import {
   animateViewport,
@@ -74,7 +74,6 @@ export function MapViewportSync({
   const paneH = useStore((s) => s.height)
 
   const collectRadialItems = () => {
-    const mid = RADIAL_HIT / 2
     return rf.getNodes().flatMap((n) => {
       const d = n.data as {
         radialDot?: boolean
@@ -88,8 +87,9 @@ export function MapViewportSync({
         label?: string
       }
       if (!d?.radialDot) return []
-      const cx = n.position.x + mid
-      const cy = n.position.y + mid
+      const mid = radialAnchorOffset(d.kind === 'center')
+      const cx = n.position.x + mid.x
+      const cy = n.position.y + mid.y
       const angle =
         typeof d.radialCx === 'number' && typeof d.radialCy === 'number'
           ? Math.atan2(cy - d.radialCy, cx - d.radialCx)
@@ -134,11 +134,11 @@ export function MapViewportSync({
           const cx =
             typeof d.radialCx === 'number'
               ? d.radialCx
-              : centerNode.position.x + RADIAL_HIT / 2
+              : centerNode.position.x + radialAnchorOffset(true).x
           const cy =
             typeof d.radialCy === 'number'
               ? d.radialCy
-              : centerNode.position.y + RADIAL_HIT / 2
+              : centerNode.position.y + radialAnchorOffset(true).y
           const vp = radialViewportForCenter(
             bounds,
             { cx, cy },
@@ -263,9 +263,9 @@ export function RadialLabelZoomSync({ layoutTick }: { layoutTick?: string | numb
         label?: string
       }
       if (!d?.radialDot) return []
-      const mid = RADIAL_HIT / 2
-      const cx = n.position.x + mid
-      const cy = n.position.y + mid
+      const mid = radialAnchorOffset(d.kind === 'center')
+      const cx = n.position.x + mid.x
+      const cy = n.position.y + mid.y
       const angle =
         typeof d.radialCx === 'number' && typeof d.radialCy === 'number'
           ? Math.atan2(cy - d.radialCy, cx - d.radialCx)
@@ -1281,60 +1281,6 @@ export function MapCanvasBar({
       placed.y,
     )
     if (next.x !== placed.x || next.y !== placed.y) setPlaced(next)
-  }, [placed, dockCollapsed])
-
-  /** Varsayılan ortada — sağ/sol taşmayı placed ile düzelt */
-  useLayoutEffect(() => {
-    if (placed != null || !rootRef.current || !dockRef.current) return
-    const rootBox = rootRef.current.getBoundingClientRect()
-    const dockBox = dockRef.current.getBoundingClientRect()
-    const margin = 8
-    let x = dockBox.left - rootBox.left
-    const y = dockBox.top - rootBox.top
-    if (dockBox.right > rootBox.right - margin) {
-      x -= dockBox.right - (rootBox.right - margin)
-    }
-    if (dockBox.left < rootBox.left + margin) {
-      x += rootBox.left + margin - dockBox.left
-    }
-    const clamped = clampDockPosition(
-      rootBox.width,
-      rootBox.height,
-      dockBox.width,
-      dockBox.height,
-      x,
-      y,
-    )
-    if (Math.abs(clamped.x - x) > 0.5 || dockBox.right > rootBox.right - margin) {
-      setPlaced(clamped)
-    }
-  }, [placed, dockCollapsed])
-
-  /** Varsayılan ortada — sağ/sol taşmayı placed ile düzelt */
-  useLayoutEffect(() => {
-    if (placed != null || !rootRef.current || !dockRef.current) return
-    const rootBox = rootRef.current.getBoundingClientRect()
-    const dockBox = dockRef.current.getBoundingClientRect()
-    const margin = 8
-    let x = dockBox.left - rootBox.left
-    const y = dockBox.top - rootBox.top
-    if (dockBox.right > rootBox.right - margin) {
-      x -= dockBox.right - (rootBox.right - margin)
-    }
-    if (dockBox.left < rootBox.left + margin) {
-      x += rootBox.left + margin - dockBox.left
-    }
-    const clamped = clampDockPosition(
-      rootBox.width,
-      rootBox.height,
-      dockBox.width,
-      dockBox.height,
-      x,
-      y,
-    )
-    if (Math.abs(clamped.x - x) > 0.5 || dockBox.right > rootBox.right - margin) {
-      setPlaced(clamped)
-    }
   }, [placed, dockCollapsed])
 
   const onGripPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
