@@ -485,18 +485,27 @@ export function MapInfoPanel({
         <h4 className="map-info-drawer-title">Etki özeti</h4>
         <button
           type="button"
-          className="nav-toggle"
-          title={open ? 'Özeti gizle' : 'Etki özetini göster'}
-          aria-label={open ? 'Etki özetini gizle' : 'Etki özetini göster'}
+          className={`nav-toggle map-info-toggle${open ? ' is-open' : ''}`}
+          title={open ? 'Özeti daralt' : 'Etki özetini göster'}
+          aria-label={open ? 'Etki özetini daralt' : 'Etki özetini göster'}
           aria-expanded={open}
           onClick={() => onOpenChange(!open)}
         >
-          {open ? '›' : '‹'}
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden className={`map-info-chevron${open ? '' : ' is-collapsed'}`}>
+            <path
+              d="M6 3.5 10.5 8 6 12.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {open ? <span className="map-info-toggle-label">Daralt</span> : null}
         </button>
       </div>
-      {open && (
-        <div className="map-info-drawer-body">
-          <section className="map-info-section map-info-impact is-open">
+      <div className={`map-info-drawer-body${open ? '' : ' is-collapsed'}`}>
+        <section className="map-info-section map-info-impact is-open">
             <div className="map-info-focus">
               <span className="map-info-focus-label">Seçilen Servis</span>
               <strong
@@ -577,7 +586,6 @@ export function MapInfoPanel({
             />
           </section>
         </div>
-      )}
     </aside>
   )
 }
@@ -997,6 +1005,27 @@ function clampDockPosition(
  * Orta-alt (veya serbest) harita dock’u: sürükle, dikey/kenar.
  * React Flow çocuğu olmalı (useReactFlow).
  */
+function IconCascadeArrow() {
+  return (
+    <svg width="24" height="10" viewBox="0 0 24 10" fill="none" aria-hidden>
+      <path
+        d="M1 5h14"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeDasharray="2.5 2.2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15 5h4M17.5 3.2 20 5l-2.5 1.8"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function MapCanvasBar({
   visibleMaxHop,
   maxHopAvailable,
@@ -1183,7 +1212,16 @@ export function MapCanvasBar({
                 setOrient((o) => (o === 'h' ? 'v' : 'h'))
               }}
             >
-              <span aria-hidden>⋮⋮</span>
+              <span className="map-dock-grip-mark" aria-hidden>
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+                  <circle cx="2.5" cy="2.5" r="1.35" />
+                  <circle cx="7.5" cy="2.5" r="1.35" />
+                  <circle cx="2.5" cy="8" r="1.35" />
+                  <circle cx="7.5" cy="8" r="1.35" />
+                  <circle cx="2.5" cy="13.5" r="1.35" />
+                  <circle cx="7.5" cy="13.5" r="1.35" />
+                </svg>
+              </span>
             </button>
             <span className="map-dock-tip" role="tooltip">
               Sürükle · çift tık yatay/dikey
@@ -1322,7 +1360,7 @@ export function MapCanvasBar({
                         className={`map-dock-project${projectFilter ? ' is-active' : ''}`}
                       >
                         <summary
-                          className={`map-dock-btn${projectFilter ? ' is-pressed' : ''}`}
+                          className={`map-dock-btn map-dock-project-trigger${projectFilter ? ' is-pressed' : ''}`}
                           title="Projeye göre filtrele"
                           aria-label={
                             projectFilter
@@ -1331,27 +1369,47 @@ export function MapCanvasBar({
                           }
                         >
                           <IconProjectFilter />
+                          {projectFilter ? (
+                            <span className="map-dock-project-dot" aria-hidden />
+                          ) : null}
                         </summary>
-                        <label className="map-dock-project-pop">
-                          <span>Proje filtresi</span>
-                          <select
-                            value={projectFilter}
-                            onChange={(event) =>
-                              onProjectFilterChange(event.target.value)
-                            }
-                          >
-                            <option value="">Tüm projeler</option>
+                        <div className="map-dock-project-pop">
+                          <div className="map-dock-project-pop-head">
+                            <strong>Proje filtresi</strong>
+                            <span>Etki haritasında yalnız seçili projeyi vurgular</span>
+                          </div>
+                          <div className="map-dock-project-list" role="listbox" aria-label="Proje filtresi">
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={!projectFilter}
+                              className={`map-dock-project-opt${!projectFilter ? ' is-on' : ''}`}
+                              onClick={() => onProjectFilterChange('')}
+                            >
+                              <span>Tüm projeler</span>
+                              {!projectFilter ? <span className="map-dock-project-check">✓</span> : null}
+                            </button>
                             {projectOptions.map((project) => (
-                              <option key={project.id} value={project.id}>
-                                {project.label}
-                              </option>
+                              <button
+                                key={project.id}
+                                type="button"
+                                role="option"
+                                aria-selected={projectFilter === project.id}
+                                className={`map-dock-project-opt${projectFilter === project.id ? ' is-on' : ''}`}
+                                onClick={() => onProjectFilterChange(project.id)}
+                              >
+                                <span>{project.label}</span>
+                                {projectFilter === project.id ? (
+                                  <span className="map-dock-project-check">✓</span>
+                                ) : null}
+                              </button>
                             ))}
-                          </select>
-                        </label>
+                          </div>
+                        </div>
                       </details>
                       <span className="map-dock-tip" role="tooltip">
                         {projectFilter
-                          ? 'Proje filtresi etkin'
+                          ? `Filtre: ${projectOptions.find((p) => p.id === projectFilter)?.label ?? projectFilter}`
                           : 'Projeye göre filtrele'}
                       </span>
                     </span>
@@ -1380,6 +1438,9 @@ export function MapCanvasBar({
                       title={`${cascadeCount} alternatif rota (BFS ana yol dışı)`}
                       onClick={onToggleCascadeEdges}
                     >
+                      <span className="map-dock-cascade-icon" aria-hidden>
+                        <IconCascadeArrow />
+                      </span>
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
                     <span className="map-dock-tip" role="tooltip">

@@ -1,19 +1,13 @@
-# Audit / layout notları
 
-> Tamamlananlar silinir.
 
----
+*1-* [https://21st.dev/@manuarora700/components/sidebar](https://21st.dev/@manuarora700/components/sidebar) -- sidebar icin denenebilir, kapalı oldugu durumda sekmelere ayrılan alan buyur orantılı olarak kayarak açılır, 
 
-## Tamamlandı
 
-- Audit backlog (meta, empty states, fitView, vb.)
-- **Port tarzı layout:** koyu sol sidebar, birleşik beyaz çalışma alanı
-- Etki özeti varsayılan açık
-- Ok eğrileri yumuşatıldı
-- IDE ağaç geri alındı (kutulu ağaç)
 
----
+2- Açık temada sol ve üst taraf için krem rengi yerine beyaz kullanılabilir içerideki harita iliskiler panelinin rengiyle aynı olması adına, 
 
-## Ertelenen
 
-SSR / indexlenebilir servis URL’leri
+
+3- Dock için modern ürünler araştırılıp daha iyi bir dock tasarımı/goruntusu elde edilebilir
+
+4- Geri/İleri butonları ve Sekme butonları-kutusu için daha modern ve iyi bir tasarım bulunabilir.

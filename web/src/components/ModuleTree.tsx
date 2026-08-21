@@ -7,9 +7,21 @@
  * - Metod satırı → method odak + method haritası
  * - Arama / dış seçim → ataların açılması + satırın görünmesi
  */
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
+
+const TIP_DELAY_MS = 1000
 
 const KIND_LABEL: Record<ModuleNode['kind'], string> = {
   project: 'proje',
@@ -23,6 +35,45 @@ const KIND_INITIAL: Record<ModuleNode['kind'], string> = {
   package: 'J',
   service: 'S',
   method: 'M',
+}
+
+type TipState = { text: string; top: number; left: number }
+
+type TreeTipContextValue = {
+  showTip: (text: string, anchor: HTMLElement) => void
+  hideTip: () => void
+}
+
+const TreeTipContext = createContext<TreeTipContextValue | null>(null)
+
+function useTreeTipHandlers(text: string) {
+  const ctx = useContext(TreeTipContext)
+  return {
+    onMouseEnter: (e: ReactMouseEvent<HTMLElement>) => {
+      if (!ctx) return
+      const label = e.currentTarget.querySelector('.tree-label') as HTMLElement | null
+      const anchor = label ?? e.currentTarget
+      const truncated =
+        Boolean(label && label.scrollWidth > label.clientWidth + 1)
+      if (text.length <= 22 && !truncated) return
+      ctx.showTip(text, anchor)
+    },
+    onMouseLeave: () => ctx?.hideTip(),
+  }
+}
+
+function TreeHoverTipPortal({ tip }: { tip: TipState | null }) {
+  if (!tip) return null
+  return createPortal(
+    <div
+      className="tree-hover-tip"
+      style={{ top: tip.top, left: tip.left }}
+      role="tooltip"
+    >
+      {tip.text}
+    </div>,
+    document.body,
+  )
 }
 
 type Props = {
@@ -122,28 +173,62 @@ function MethodLeaves({
     <>
       {methods.map((m) => {
         const selected = m.id === selectedMethodId
+        const fullName = `${m.className}.${m.name}`
         return (
-          <div key={m.id} className="tree-item">
-            <button
-              type="button"
-              className={`tree-row ${selected ? 'selected' : ''} kind-method`}
-              style={{ paddingLeft: 8 + depth * 12 }}
-              data-tree-method={m.id}
-              onClick={() => onSelectMethod(serviceId, m.id)}
-            >
-              <span className="chev spacer" />
-              <span className="tree-kind" title={KIND_LABEL.method}>
-                {KIND_INITIAL.method}
-              </span>
-              <span className="tree-label" title={`${m.className}.${m.name}`}>
-                <span className="tree-method-class">{m.className}.</span>
-                {m.name}
-              </span>
-            </button>
-          </div>
+          <MethodTreeRow
+            key={m.id}
+            fullName={fullName}
+            className={selected ? 'selected' : ''}
+            depth={depth}
+            methodId={m.id}
+            classNamePart={m.className}
+            methodName={m.name}
+            onSelect={() => onSelectMethod(serviceId, m.id)}
+          />
         )
       })}
     </>
+  )
+}
+
+function MethodTreeRow({
+  fullName,
+  className,
+  depth,
+  methodId,
+  classNamePart,
+  methodName,
+  onSelect,
+}: {
+  fullName: string
+  className: string
+  depth: number
+  methodId: string
+  classNamePart: string
+  methodName: string
+  onSelect: () => void
+}) {
+  const tipHandlers = useTreeTipHandlers(fullName)
+  return (
+    <div className="tree-item">
+      <button
+        type="button"
+        className={`tree-row ${className} kind-method`}
+        style={{ paddingLeft: 8 + depth * 12 }}
+        data-tree-method={methodId}
+        onClick={onSelect}
+        {...tipHandlers}
+      >
+        <span className="chev spacer" />
+        <span className="tree-kind" title={KIND_LABEL.method}>
+          {KIND_INITIAL.method}
+        </span>
+        <span className="tree-label">
+          <span className="tree-method-class">{classNamePart}.</span>
+          {methodName}
+        </span>
+      </button>
+    </div>
   )
 }
 
@@ -175,6 +260,7 @@ function TreeItem({
     node.serviceId === selectedServiceId &&
     !selectedMethodId
   const rowRef = useRef<HTMLDivElement>(null)
+  const tipHandlers = useTreeTipHandlers(node.name)
 
   useEffect(() => {
     if (revealIds.has(node.id)) setOpen(true)
@@ -192,6 +278,7 @@ function TreeItem({
         className={`tree-row ${selected ? 'selected' : ''} kind-${node.kind}`}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-tree-service={isService ? node.serviceId : undefined}
+        {...tipHandlers}
       >
         {canExpand ? (
           <button
@@ -220,9 +307,7 @@ function TreeItem({
             if (canExpand) setOpen((v) => !v)
           }}
         >
-          <span className="tree-label" title={node.name}>
-            {node.name}
-          </span>
+          <span className="tree-label">{node.name}</span>
         </button>
       </div>
       {open &&
@@ -260,6 +345,30 @@ export function ModuleTree({
   onSelectService,
   onSelectMethod,
 }: Props) {
+  const [tip, setTip] = useState<TipState | null>(null)
+  const timerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
+
+  const tipContext = useMemo<TreeTipContextValue>(
+    () => ({
+      showTip: (text, anchor) => {
+        window.clearTimeout(timerRef.current)
+        timerRef.current = window.setTimeout(() => {
+          const r = anchor.getBoundingClientRect()
+          setTip({
+            text,
+            top: r.top + r.height / 2,
+            left: Math.min(r.right + 10, window.innerWidth - 320),
+          })
+        }, TIP_DELAY_MS)
+      },
+      hideTip: () => {
+        window.clearTimeout(timerRef.current)
+        setTip(null)
+      },
+    }),
+    [],
+  )
+
   const revealIds = useMemo(
     () => revealAncestorIds(nodes, selectedServiceId, selectedMethodId),
     [nodes, selectedServiceId, selectedMethodId],
@@ -276,20 +385,25 @@ export function ModuleTree({
     return () => window.clearTimeout(t)
   }, [selectedServiceId, selectedMethodId, revealIds])
 
+  useEffect(() => () => window.clearTimeout(timerRef.current), [])
+
   return (
-    <nav className="module-tree" aria-label="Modül ağacı">
-      {nodes.map((n) => (
-        <TreeItem
-          key={n.id}
-          node={n}
-          depth={0}
-          revealIds={revealIds}
-          selectedServiceId={selectedServiceId}
-          selectedMethodId={selectedMethodId}
-          onSelectService={onSelectService}
-          onSelectMethod={onSelectMethod}
-        />
-      ))}
-    </nav>
+    <TreeTipContext.Provider value={tipContext}>
+      <nav className="module-tree" aria-label="Modül ağacı">
+        {nodes.map((n) => (
+          <TreeItem
+            key={n.id}
+            node={n}
+            depth={0}
+            revealIds={revealIds}
+            selectedServiceId={selectedServiceId}
+            selectedMethodId={selectedMethodId}
+            onSelectService={onSelectService}
+            onSelectMethod={onSelectMethod}
+          />
+        ))}
+      </nav>
+      <TreeHoverTipPortal tip={tip} />
+    </TreeTipContext.Provider>
   )
 }

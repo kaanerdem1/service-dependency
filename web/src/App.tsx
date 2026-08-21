@@ -60,6 +60,44 @@ import type {
 } from './types'
 import './App.css'
 
+function SidebarLockIcon({ locked }: { locked: boolean }) {
+  if (locked) {
+    return (
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+        <rect x="4.25" y="7" width="7.5" height="5.75" rx="1.2" fill="currentColor" />
+        <path
+          d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.35"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <rect
+        x="4.25"
+        y="7"
+        width="7.5"
+        height="5.75"
+        rx="1.2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+      />
+      <path
+        d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
 type Tab = 'affected' | 'map' | 'overview'
 
 /** Pivot geçmişi + o ziyarette açık bırakılan katman görünümü */
@@ -98,7 +136,10 @@ export default function App() {
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
-  const [navOpen, setNavOpen] = useState(true)
+  const [navHover, setNavHover] = useState(true)
+  const [navPinned, setNavPinned] = useState(false)
+  const [allowNavCollapse, setAllowNavCollapse] = useState(false)
+  const navExpanded = navPinned || navHover || !allowNavCollapse
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
     null,
   )
@@ -255,11 +296,11 @@ export default function App() {
   useEffect(() => {
     trail.syncUi({
       activeTab: tab,
-      sidebarOpen: navOpen,
+      sidebarOpen: navExpanded,
       searchOpen: Boolean(query.trim()),
       selectedMethodId: selectedMethodId ?? null,
     })
-  }, [trail, tab, navOpen, query, selectedMethodId])
+  }, [trail, tab, navExpanded, query, selectedMethodId])
 
   useEffect(() => {
     if (!service) return
@@ -337,6 +378,8 @@ export default function App() {
     setCallees([])
     setImpact(undefined)
     setMapExpanded(false)
+    setAllowNavCollapse(false)
+    setNavHover(true)
   }, [])
 
   const selectPivot = useCallback(
@@ -353,6 +396,7 @@ export default function App() {
       })
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
+      setAllowNavCollapse(true)
       if (opts?.resetHistory) {
         setNavDirection(null)
         setHistory([visitEntry(id)])
@@ -374,6 +418,7 @@ export default function App() {
 
   const selectMethod = useCallback(
     (serviceId: string, methodId: string) => {
+      setAllowNavCollapse(true)
       setSelectedMethodId(methodId)
       setTab('map')
       if (serviceId !== pivotId) {
@@ -490,11 +535,29 @@ export default function App() {
         {liveStatus}
       </div>
 
-      <div className={`app-frame${navOpen ? '' : ' is-nav-collapsed'}`}>
-        <aside className="module-sidebar">
+      <div className={`app-frame${navExpanded ? '' : ' is-nav-collapsed'}`}>
+        <aside
+          className="module-sidebar"
+          onMouseEnter={() => setNavHover(true)}
+          onMouseLeave={() => {
+            if (allowNavCollapse && !navPinned) setNavHover(false)
+          }}
+        >
+          <div className="module-sidebar-rail" aria-hidden={navExpanded}>
+            <span className="brand-mark sidebar-rail-logo">SD</span>
+            <span className="sidebar-rail-label">Modüller</span>
+            <div className="sidebar-rail-kinds" aria-hidden>
+              <span className="module-kind-badge is-project">P</span>
+              <span className="module-kind-badge is-package">J</span>
+              <span className="module-kind-badge is-service">S</span>
+              <span className="module-kind-badge is-method">M</span>
+            </div>
+            <span className="sidebar-rail-hint">Üzerine gel</span>
+          </div>
+          <div className="module-sidebar-inner">
           <div className="sidebar-brand">
             <span className="brand-mark">SD</span>
-            <div>
+            <div className="sidebar-brand-copy">
               <strong>Service Dependency</strong>
               <span className="brand-tagline">
                 Servis bağımlılıkları ve değişiklik etkisi
@@ -505,24 +568,30 @@ export default function App() {
             <h3>Modüller</h3>
             <button
               type="button"
-              className="nav-toggle"
-              title={navOpen ? 'Paneli gizle' : 'Modül panelini aç'}
-              aria-label={navOpen ? 'Modül panelini gizle' : 'Modül panelini aç'}
-              aria-expanded={navOpen}
+              className={`sidebar-lock-btn${navPinned ? ' is-locked' : ''}`}
+              title={navPinned ? 'Kilidi aç (fare dışına çıkınca kapanır)' : 'Paneli kilitle (açık kalsın)'}
+              aria-label={navPinned ? 'Modül paneli kilitli — kilidi aç' : 'Modül panelini kilitle — açık kalsın'}
+              aria-expanded={navExpanded}
+              aria-pressed={navPinned}
               onClick={() => {
-                trail.record(
-                  'sidebar_toggle',
-                  undefined,
-                  navOpen ? 'Sol modül paneli kapatıldı' : 'Sol modül paneli açıldı',
-                )
-                setNavOpen((v) => !v)
+                setNavPinned((pinned) => {
+                  const next = !pinned
+                  trail.record(
+                    'sidebar_toggle',
+                    undefined,
+                    next
+                      ? 'Sol modül paneli kilitlendi'
+                      : 'Sol modül paneli kilidi açıldı',
+                  )
+                  return next
+                })
               }}
             >
-              {navOpen ? '‹' : '›'}
+              <SidebarLockIcon locked={navPinned} />
+              <span className="sidebar-lock-label">
+                {navPinned ? 'Kilidi Bırak' : 'Kilitle'}
+              </span>
             </button>
-            {!navOpen && (
-              <span className="module-rail-hint">Aç</span>
-            )}
           </div>
           <label className="search">
             <span className="sr-only">Servis veya metod ara</span>
@@ -622,6 +691,7 @@ export default function App() {
               }
               onSelectMethod={selectMethod}
             />
+          </div>
           </div>
         </aside>
 
@@ -754,157 +824,175 @@ export default function App() {
                 </nav>
               </div>
 
-              {tab === 'map' && selectedMethodId && methodImpact && (
-                <MapStage
-                  title="Method haritası"
-                  expanded={mapExpanded}
-                  onExpandedChange={setMapExpanded}
-                >
-                  <MethodImpactMap
-                    key={`method-${selectedMethodId}-${mapExpanded}`}
-                    graph={methodImpact}
-                    onSelectMethod={selectMethod}
-                    onSelectService={(id) => {
-                      clearMethodKeepService()
-                      if (id !== pivotId)
-                        selectPivot(id, { resetHistory: true })
-                    }}
-                    onClearMethod={clearMethodKeepService}
-                    onPivotBack={goBack}
-                    onPivotForward={goForward}
-                    canPivotBack={
-                      historyIndex > 0 || Boolean(selectedMethodId)
-                    }
-                    canPivotForward={
-                      historyIndex >= 0 &&
-                      historyIndex < history.length - 1
-                    }
-                  />
-                </MapStage>
-              )}
-
-              {tab === 'map' && !selectedMethodId && impact && (
-                <MapStage
-                  title={service?.name ?? 'Harita'}
-                  expanded={mapExpanded}
-                  onExpandedChange={setMapExpanded}
-                >
-                  <ImpactMap
-                    key={`adv-${mapExpanded}`}
-                    graph={impact}
-                    mapExpanded={mapExpanded}
-                    forceLtrSignal={mapForceLtrSignal}
-                    projectOptions={impactProjectOptions}
-                    onPivot={(id) => selectPivot(id, { source: 'map' })}
-                    onSelectMethod={selectMethod}
-                    onBrowseMethods={browseServiceMethods}
-                    onClearCenter={clearSelection}
-                    onPivotBack={goBack}
-                    onPivotForward={goForward}
-                    canPivotBack={historyIndex > 0}
-                    canPivotForward={
-                      historyIndex >= 0 &&
-                      historyIndex < history.length - 1
-                    }
-                    visitPath={breadcrumb.map((e) => ({
-                      id: e.id,
-                      name: serviceNameById.get(e.id) ?? e.id,
-                    }))}
-                    visitPathIndex={historyIndex}
-                    restoredView={
-                      currentVisit
-                        ? {
-                            visibleMaxHop: currentVisit.visibleMaxHop,
-                            expandedLayers: currentVisit.expandedLayers,
+              <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
+                <div className={`stage-panels is-tab-${tab}`}>
+                  <section
+                    className="stage-panel stage-panel-map"
+                    aria-hidden={tab !== 'map'}
+                    aria-label="Harita"
+                  >
+                    {selectedMethodId && methodImpact && (
+                      <MapStage
+                        title="Method haritası"
+                        expanded={mapExpanded}
+                        onExpandedChange={setMapExpanded}
+                      >
+                        <MethodImpactMap
+                          key={`method-${selectedMethodId}-${mapExpanded}`}
+                          graph={methodImpact}
+                          onSelectMethod={selectMethod}
+                          onSelectService={(id) => {
+                            clearMethodKeepService()
+                            if (id !== pivotId)
+                              selectPivot(id, { resetHistory: true })
+                          }}
+                          onClearMethod={clearMethodKeepService}
+                          onPivotBack={goBack}
+                          onPivotForward={goForward}
+                          canPivotBack={
+                            historyIndex > 0 || Boolean(selectedMethodId)
                           }
-                        : undefined
-                    }
-                    onViewStateChange={saveMapViewState}
-                    navDirection={navDirection}
-                    onNavDirectionConsumed={() => setNavDirection(null)}
-                    sessionUserId={session?.id}
-                    sessionUserName={session?.name}
-                    onMapRoot={(el) => {
-                      mapRootRef.current = el
-                    }}
-                    onSnapshotSaved={(snap: Snapshot) => {
-                      setSnapshotToast(
-                        snap.imageUrl
-                          ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
-                          : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
-                      )
-                    }}
-                    onVisitSelect={(i) => {
-                      if (i === historyIndex) return
-                      setNavDirection(i < historyIndex ? 'back' : 'forward')
-                      setHistoryIndex(i)
-                      setSelectedMethodId(undefined)
-                      setMethodImpact(undefined)
-                      setPivotId(history[i].id)
-                    }}
-                  />
-                </MapStage>
-              )}
+                          canPivotForward={
+                            historyIndex >= 0 &&
+                            historyIndex < history.length - 1
+                          }
+                        />
+                      </MapStage>
+                    )}
 
-              {tab === 'map' && selectedMethodId && !methodImpact && (
-                <EmptyState
-                  what="Metod etki grafiği yükleniyor."
-                  action="Harita sekmesinde kalın; yükleme bitince method zinciri görünür."
-                />
-              )}
-
-              {tab === 'overview' && service && (
-                <ServiceOverview
-                  service={service}
-                  projectLabel={projectLabels.get(service.projectId)}
-                  packageLabel={service.packageId}
-                  callerCount={affected.length}
-                  calleeCount={callees.length}
-                  loading={loading}
-                />
-              )}
-
-              {tab === 'affected' && (
-                <>
-                  <div className="relations-nav">
-                    <div
-                      className="list-scope-nav"
-                      role="group"
-                      aria-label="Gezinme geçmişi — Harita ile aynı"
-                    >
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        onClick={goBack}
-                        disabled={historyIndex <= 0}
-                        title="Önceki servis (Harita ile aynı geçmiş)"
+                    {!selectedMethodId && impact && (
+                      <MapStage
+                        title={service?.name ?? 'Harita'}
+                        expanded={mapExpanded}
+                        onExpandedChange={setMapExpanded}
                       >
-                        ← Geri
-                      </button>
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        onClick={goForward}
-                        disabled={
-                          historyIndex < 0 ||
-                          historyIndex >= history.length - 1
-                        }
-                        title="Sonraki servis (Harita ile aynı geçmiş)"
+                        <ImpactMap
+                          key={`adv-${mapExpanded}`}
+                          graph={impact}
+                          mapExpanded={mapExpanded}
+                          forceLtrSignal={mapForceLtrSignal}
+                          projectOptions={impactProjectOptions}
+                          onPivot={(id) => selectPivot(id, { source: 'map' })}
+                          onSelectMethod={selectMethod}
+                          onBrowseMethods={browseServiceMethods}
+                          onClearCenter={clearSelection}
+                          onPivotBack={goBack}
+                          onPivotForward={goForward}
+                          canPivotBack={historyIndex > 0}
+                          canPivotForward={
+                            historyIndex >= 0 &&
+                            historyIndex < history.length - 1
+                          }
+                          visitPath={breadcrumb.map((e) => ({
+                            id: e.id,
+                            name: serviceNameById.get(e.id) ?? e.id,
+                          }))}
+                          visitPathIndex={historyIndex}
+                          restoredView={
+                            currentVisit
+                              ? {
+                                  visibleMaxHop: currentVisit.visibleMaxHop,
+                                  expandedLayers: currentVisit.expandedLayers,
+                                }
+                              : undefined
+                          }
+                          onViewStateChange={saveMapViewState}
+                          navDirection={navDirection}
+                          onNavDirectionConsumed={() => setNavDirection(null)}
+                          sessionUserId={session?.id}
+                          sessionUserName={session?.name}
+                          onMapRoot={(el) => {
+                            mapRootRef.current = el
+                          }}
+                          onSnapshotSaved={(snap: Snapshot) => {
+                            setSnapshotToast(
+                              snap.imageUrl
+                                ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
+                                : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
+                            )
+                          }}
+                          onVisitSelect={(i) => {
+                            if (i === historyIndex) return
+                            setNavDirection(i < historyIndex ? 'back' : 'forward')
+                            setHistoryIndex(i)
+                            setSelectedMethodId(undefined)
+                            setMethodImpact(undefined)
+                            setPivotId(history[i].id)
+                          }}
+                        />
+                      </MapStage>
+                    )}
+
+                    {selectedMethodId && !methodImpact && (
+                      <EmptyState
+                        what="Metod etki grafiği yükleniyor."
+                        action="Harita sekmesinde kalın; yükleme bitince method zinciri görünür."
+                      />
+                    )}
+                  </section>
+
+                  <section
+                    className="stage-panel stage-panel-affected"
+                    aria-hidden={tab !== 'affected'}
+                    aria-label="İlişkiler"
+                  >
+                    <div className="relations-nav">
+                      <div
+                        className="list-scope-nav"
+                        role="group"
+                        aria-label="Gezinme geçmişi — Harita ile aynı"
                       >
-                        İleri →
-                      </button>
+                        <button
+                          type="button"
+                          className="map-nav-btn"
+                          onClick={goBack}
+                          disabled={historyIndex <= 0}
+                          title="Önceki servis (Harita ile aynı geçmiş)"
+                        >
+                          ← Geri
+                        </button>
+                        <button
+                          type="button"
+                          className="map-nav-btn"
+                          onClick={goForward}
+                          disabled={
+                            historyIndex < 0 ||
+                            historyIndex >= history.length - 1
+                          }
+                          title="Sonraki servis (Harita ile aynı geçmiş)"
+                        >
+                          İleri →
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <AffectedList
-                    callers={affected}
-                    callees={callees}
-                    loading={loading}
-                    onPivot={(id) => selectPivot(id)}
-                    projectLabels={projectLabels}
-                    projectOrder={projectOrder}
-                  />
-                </>
-              )}
+                    <AffectedList
+                      callers={affected}
+                      callees={callees}
+                      loading={loading}
+                      onPivot={(id) => selectPivot(id)}
+                      projectLabels={projectLabels}
+                      projectOrder={projectOrder}
+                    />
+                  </section>
+
+                  <section
+                    className="stage-panel stage-panel-overview"
+                    aria-hidden={tab !== 'overview'}
+                    aria-label="Servis işlevi"
+                  >
+                    {service && (
+                      <ServiceOverview
+                        service={service}
+                        projectLabel={projectLabels.get(service.projectId)}
+                        packageLabel={service.packageId}
+                        callerCount={affected.length}
+                        calleeCount={callees.length}
+                        loading={loading}
+                      />
+                    )}
+                  </section>
+                </div>
+              </div>
             </>
           )}
         </main>
