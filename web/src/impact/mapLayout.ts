@@ -131,9 +131,9 @@ function radialLabelGap(
   let gap = RADIAL_LABEL_GAP + boost
   if (lineCount >= 3) gap += 6
   if (side === 'west') {
-    gap += 10
-    if (hop >= 2) gap += 10
-    if (hop >= 3) gap += 16
+    gap += 8
+    if (hop >= 2) gap += 5
+    if (hop >= 3) gap += 14
   } else if (side === 'east') {
     gap += 3
     if (hop >= 3) gap += 4
@@ -681,10 +681,9 @@ export function radialLabelSidePrefs(
   const s = Math.sin(angle)
   if (c > 0.35) return ['east', 'below', 'above', 'west']
   if (c < -0.35) {
-    // Sol yarım: east etiketi merkeze doğru biner — asla kullanma
     return s < 0
-      ? ['west', 'above', 'below']
-      : ['west', 'below', 'above']
+      ? ['west', 'above', 'below', 'east']
+      : ['west', 'below', 'above', 'east']
   }
   if (s >= 0) return ['below', 'east', 'west', 'above']
   return ['above', 'east', 'west', 'below']
@@ -922,23 +921,18 @@ function placeRadialLabels<T extends RadialLayoutNode>(
     if (it.isCenter) continue
     const hop = it.hop
     const hopLine = `${hop}. katman`
-    const isLeft = Math.cos(it.angle) < -0.35
     let prefs = radialLabelSidePrefs(it.angle, it.isCenter)
-    if (hop >= 2 && Math.cos(it.angle) < -0.3) {
+    if (hop >= 3 && Math.cos(it.angle) < -0.25) {
       prefs = [
         'west',
-        ...prefs.filter((p) => p !== 'west' && p !== 'east'),
+        ...prefs.filter((p) => p !== 'west'),
       ] as RadialLabelSide[]
     }
-    let side = prefs[0] ?? 'west'
+    let side = prefs[0] ?? 'east'
     let gapBoost = 0
-    outer: for (let pass = 0; pass < 3; pass++) {
-      gapBoost = pass === 0 ? 0 : pass === 1 ? 10 : 18
-      const tryPrefs =
-        pass === 2 && isLeft
-          ? (['west', ...prefs.filter((p) => p !== 'west')] as RadialLabelSide[])
-          : prefs
-      for (const cand of tryPrefs) {
+    outer: for (let pass = 0; pass < 2; pass++) {
+      gapBoost = pass === 1 ? 10 : 0
+      for (const cand of prefs) {
         const box = radialLabelBox(
           it.cx,
           it.cy,
@@ -960,7 +954,7 @@ function placeRadialLabels<T extends RadialLayoutNode>(
         const hitEdge = edges.some((e) => radialEdgeHitsLabelBox(e, box, 5))
         if (hitEdge) continue
         side = cand
-        gapBoost = pass === 0 ? 0 : pass === 1 ? 10 : 18
+        gapBoost = pass === 1 ? 10 : 0
         labelBoxes.push({
           id: it.id,
           box: radialLabelBox(
