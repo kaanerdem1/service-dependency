@@ -85,6 +85,7 @@ type MapNodeData = {
   radialCx?: number
   radialCy?: number
   radialLabelSide?: RadialLabelSide
+  radialLabelGapBoost?: number
 }
 
 function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
@@ -126,6 +127,8 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
           data.fullLabel || data.label,
           isCenter,
           hopLine,
+          data.radialLabelGapBoost ?? 0,
+          data.hop ?? 1,
         )
       : undefined
 

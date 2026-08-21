@@ -41,6 +41,7 @@ type RadialLayoutNode = {
     radialCx?: number
     radialCy?: number
     radialLabelSide?: RadialLabelSide
+    radialLabelGapBoost?: number
   }
   style?: { width?: number | string; height?: number | string } | null
 }
@@ -118,7 +119,27 @@ export function mapLayoutForRadial(): MapLayout {
 const RADIAL_LABEL_MAX_W = 168
 const RADIAL_LABEL_CHAR_W = 6.7
 const RADIAL_LABEL_LINE_H = 15
-export const RADIAL_LABEL_GAP = 14
+export const RADIAL_LABEL_GAP = 18
+
+function radialLabelGap(
+  side: RadialLabelSide,
+  isCenter: boolean,
+  lineCount: number,
+  boost = 0,
+  hop = 1,
+): number {
+  let gap = RADIAL_LABEL_GAP + boost
+  if (lineCount >= 3) gap += 6
+  if (side === 'west') {
+    gap += 10
+    if (hop >= 2) gap += 10
+    if (hop >= 3) gap += 16
+  } else if (side === 'east') {
+    gap += 3
+    if (hop >= 3) gap += 4
+  }
+  return radialDotRadius(isCenter) + gap
+}
 
 export function wrapRadialName(name: string, maxLen = 24): string[] {
   const parts = name.trim().split('_').filter(Boolean)
@@ -169,10 +190,13 @@ export function radialLabelBox(
   name: string,
   isCenter: boolean,
   hopLine?: string | null,
+  gapBoost = 0,
+  hop = 1,
 ): { x: number; y: number; w: number; h: number } {
   const hopH = hopLine ? 13 : 0
+  const lines = wrapRadialName(name)
   const { w, h } = radialLabelMetrics(name, isCenter, hopLine)
-  const g = radialLabelOffset(isCenter)
+  const g = radialLabelGap(side, isCenter, lines.length, gapBoost, hop)
   if (side === 'east') {
     return { x: cx + g, y: cy - hopH, w, h }
   }
@@ -206,11 +230,12 @@ export function radialLabelDomStyle(
   name: string,
   isCenter: boolean,
   hopLine?: string | null,
+  gapBoost = 0,
+  hop = 1,
 ): RadialLabelPlacementStyle {
   const half = (isCenter ? RADIAL_CENTER_HIT : RADIAL_HIT) / 2
   const lines = wrapRadialName(name)
-  const extraGap = lines.length >= 3 ? 6 : 0
-  const g = radialLabelOffset(isCenter) + extraGap
+  const g = radialLabelGap(side, isCenter, lines.length, gapBoost, hop)
   const hopH = hopLine ? 13 : 0
   const textH = Math.max(RADIAL_LABEL_LINE_H, lines.length * RADIAL_LABEL_LINE_H)
   const blockH = hopH + textH
@@ -655,7 +680,12 @@ export function radialLabelSidePrefs(
   const c = Math.cos(angle)
   const s = Math.sin(angle)
   if (c > 0.35) return ['east', 'below', 'above', 'west']
-  if (c < -0.35) return ['west', 'below', 'above', 'east']
+  if (c < -0.35) {
+    // Sol yarım: east etiketi merkeze doğru biner — asla kullanma
+    return s < 0
+      ? ['west', 'above', 'below']
+      : ['west', 'below', 'above']
+  }
   if (s >= 0) return ['below', 'east', 'west', 'above']
   return ['above', 'east', 'west', 'below']
 }
@@ -851,6 +881,7 @@ function placeRadialLabels<T extends RadialLayoutNode>(
 
   items.sort((a, b) => a.hop - b.hop || a.angle - b.angle)
   const chosen = new Map<string, RadialLabelSide>()
+  const chosenBoost = new Map<string, number>()
   const centerIt = items.find((it) => it.isCenter)
   const isCenterById = new Map(items.map((it) => [it.id, it.isCenter]))
   const labelBoxes: { id: string; box: { x: number; y: number; w: number; h: number } }[] =
@@ -889,35 +920,86 @@ function placeRadialLabels<T extends RadialLayoutNode>(
 
   for (const it of items) {
     if (it.isCenter) continue
-    const prefs = radialLabelSidePrefs(it.angle, it.isCenter)
-    const hopLine = `${it.hop}. katman`
-    let side = prefs[0] ?? 'east'
-    for (const cand of prefs) {
-      const box = radialLabelBox(it.cx, it.cy, cand, it.name, it.isCenter, hopLine)
-      const hitLabel = labelBoxes.some(
-        (k) => k.id !== it.id && rectsHit(box, k.box, 6),
-      )
-      if (hitLabel) continue
-      const hitDot = dots.some(
-        (dot) => dot.id !== it.id && rectsHit(box, dot, 4),
-      )
-      if (hitDot) continue
-      const hitEdge = edges.some((e) => radialEdgeHitsLabelBox(e, box, 4))
-      if (hitEdge) continue
-      side = cand
-      break
+    const hop = it.hop
+    const hopLine = `${hop}. katman`
+    const isLeft = Math.cos(it.angle) < -0.35
+    let prefs = radialLabelSidePrefs(it.angle, it.isCenter)
+    if (hop >= 2 && Math.cos(it.angle) < -0.3) {
+      prefs = [
+        'west',
+        ...prefs.filter((p) => p !== 'west' && p !== 'east'),
+      ] as RadialLabelSide[]
     }
-    chosen.set(it.id, side)
-    labelBoxes.push({
-      id: it.id,
-      box: radialLabelBox(it.cx, it.cy, side, it.name, it.isCenter, hopLine),
-    })
+    let side = prefs[0] ?? 'west'
+    let gapBoost = 0
+    outer: for (let pass = 0; pass < 3; pass++) {
+      gapBoost = pass === 0 ? 0 : pass === 1 ? 10 : 18
+      const tryPrefs =
+        pass === 2 && isLeft
+          ? (['west', ...prefs.filter((p) => p !== 'west')] as RadialLabelSide[])
+          : prefs
+      for (const cand of tryPrefs) {
+        const box = radialLabelBox(
+          it.cx,
+          it.cy,
+          cand,
+          it.name,
+          it.isCenter,
+          hopLine,
+          gapBoost,
+          hop,
+        )
+        const hitLabel = labelBoxes.some(
+          (k) => k.id !== it.id && rectsHit(box, k.box, 6),
+        )
+        if (hitLabel) continue
+        const hitDot = dots.some(
+          (dot) => dot.id !== it.id && rectsHit(box, dot, 4),
+        )
+        if (hitDot) continue
+        const hitEdge = edges.some((e) => radialEdgeHitsLabelBox(e, box, 5))
+        if (hitEdge) continue
+        side = cand
+        gapBoost = pass === 0 ? 0 : pass === 1 ? 10 : 18
+        labelBoxes.push({
+          id: it.id,
+          box: radialLabelBox(
+            it.cx,
+            it.cy,
+            side,
+            it.name,
+            it.isCenter,
+            hopLine,
+            gapBoost,
+            hop,
+          ),
+        })
+        chosen.set(it.id, side)
+        chosenBoost.set(it.id, gapBoost)
+        break outer
+      }
+    }
+    if (!chosen.has(it.id)) {
+      chosen.set(it.id, side)
+      chosenBoost.set(it.id, 0)
+      labelBoxes.push({
+        id: it.id,
+        box: radialLabelBox(it.cx, it.cy, side, it.name, it.isCenter, hopLine, 0, hop),
+      })
+    }
   }
 
   return nodes.map((n) => {
     const side = chosen.get(n.id)
     if (!side) return n
-    return { ...n, data: { ...n.data, radialLabelSide: side } }
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        radialLabelSide: side,
+        radialLabelGapBoost: chosenBoost.get(n.id) ?? 0,
+      },
+    }
   })
 }
 
@@ -1072,7 +1154,7 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   let maxCenterDist = 0
   for (const r of rings) maxCenterDist = Math.max(maxCenterDist, r.radius)
 
-  const labelPad = compactOrigin ? 72 : 48
+  const labelPad = compactOrigin ? 96 : 56
   const maxRx = maxCenterDist * stretchX
   const maxRy = maxCenterDist * stretchY
   const cx = compactOrigin ? maxRx + labelPad : originX + maxRx + 24

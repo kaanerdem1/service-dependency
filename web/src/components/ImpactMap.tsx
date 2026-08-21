@@ -161,6 +161,7 @@ type ServiceNodeData = {
   radialCx?: number
   radialCy?: number
   radialLabelSide?: RadialLabelSide
+  radialLabelGapBoost?: number
 }
 
 type MethodBadgeData = {
@@ -235,6 +236,8 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
           data.fullLabel || data.label,
           isCenter,
           hopLine,
+          data.radialLabelGapBoost ?? 0,
+          data.hop ?? 1,
         )
       : undefined
 
