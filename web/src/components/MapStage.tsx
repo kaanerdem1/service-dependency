@@ -114,7 +114,7 @@ export function MapStage({
           >
             <span className="tl-zoom-glyph" aria-hidden>
               {expanded ? (
-                <svg viewBox="0 0 12 12" width="8" height="8">
+                <svg viewBox="0 0 12 12" width="10" height="10">
                   <path
                     d="M4.5 1.5H1.5v3M7.5 1.5h3v3M1.5 7.5v3h3M10.5 7.5v3h-3"
                     fill="none"
@@ -132,7 +132,7 @@ export function MapStage({
                   />
                 </svg>
               ) : (
-                <svg viewBox="0 0 12 12" width="8" height="8">
+                <svg viewBox="0 0 12 12" width="10" height="10">
                   <path
                     d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3"
                     fill="none"

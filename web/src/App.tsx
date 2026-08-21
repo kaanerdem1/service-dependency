@@ -141,7 +141,7 @@ export default function App() {
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
   const [navHover, setNavHover] = useState(true)
-  const [navPinned, setNavPinned] = useState(false)
+  const [navPinned, setNavPinned] = useState(true)
   const [allowNavCollapse, setAllowNavCollapse] = useState(false)
   const navExpanded = navPinned || navHover || !allowNavCollapse
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
@@ -177,8 +177,8 @@ export default function App() {
         'sidebar_toggle',
         undefined,
         next
-          ? 'Sol modül paneli kilitlendi'
-          : 'Sol modül paneli kilidi açıldı',
+          ? 'Modül paneli sabitlendi'
+          : 'Modül paneli sabitlemesi kaldırıldı',
       )
       return next
     })
@@ -556,6 +556,44 @@ export default function App() {
       <div
         className={`app-frame${navExpanded ? ' sidebar-panel-open' : ' is-nav-collapsed'}`}
       >
+        <header className="app-masthead">
+          <div className="app-masthead-brand-wrap">
+            <div className="app-brand">
+              <span className="brand-mark">SD</span>
+              <div className="app-brand-copy">
+                <strong>Service Dependency</strong>
+                <span className="brand-tagline">
+                  Servis bağımlılıkları ve değişiklik etkisi
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="app-masthead-actions">
+            <ThemeSwitch
+              theme={appTheme}
+              onChange={(next) => {
+                trail.record(
+                  'theme_toggle',
+                  undefined,
+                  `${themeLabel(appTheme)} → ${themeLabel(next)}`,
+                )
+                setAppTheme(next)
+              }}
+            />
+            {session ? (
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => setInboxOpen(true)}
+              >
+                Gelen kutusu
+                {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
+              </button>
+            ) : null}
+          </div>
+        </header>
+
+        <div className="app-frame-body">
         <aside
           className={`module-sidebar${navExpanded ? ' is-expanded' : ''}${navPinned ? ' is-pinned' : ''}`}
           data-motion="sidebar-overlay"
@@ -567,7 +605,6 @@ export default function App() {
           }}
         >
           <div className="module-sidebar-rail" aria-hidden={navExpanded}>
-            <span className="brand-mark sidebar-rail-logo">SD</span>
             <span className="sidebar-rail-label">Modüller</span>
             <div className="sidebar-rail-kinds" aria-hidden>
               <span className="module-kind-badge is-project">P</span>
@@ -575,32 +612,31 @@ export default function App() {
               <span className="module-kind-badge is-service">S</span>
               <span className="module-kind-badge is-method">M</span>
             </div>
-            <span className="sidebar-rail-hint">Üzerine gel</span>
+            <span className="sidebar-rail-hint">Paneli Aç</span>
           </div>
           <div className="module-sidebar-inner">
-          <div className="sidebar-brand">
-            <span className="brand-mark">SD</span>
-            <div className="sidebar-brand-copy">
-              <strong>Service Dependency</strong>
-              <span className="brand-tagline">
-                Servis bağımlılıkları ve değişiklik etkisi
-              </span>
-            </div>
-          </div>
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
             <button
               type="button"
-              className={`sidebar-lock-btn${navPinned ? ' is-locked' : ''}`}
-              title={navPinned ? 'Kilidi aç (fare dışına çıkınca kapanır)' : 'Paneli kilitle (açık kalsın)'}
-              aria-label={navPinned ? 'Modül paneli kilitli — kilidi aç' : 'Modül panelini kilitle — açık kalsın'}
+              className={`sidebar-pin-btn${navPinned ? ' is-pinned' : ''}`}
+              title={
+                navPinned
+                  ? 'Sabitlemeyi bırak (fare dışına çıkınca panel kapanır)'
+                  : 'Paneli sabitle (açık kalsın)'
+              }
+              aria-label={
+                navPinned
+                  ? 'Modül paneli sabitli — sabitlemeyi bırak'
+                  : 'Modül panelini sabitle — açık kalsın'
+              }
               aria-expanded={navExpanded}
               aria-pressed={navPinned}
               onClick={toggleNavPinned}
             >
               <SidebarLockIcon locked={navPinned} />
-              <span className="sidebar-lock-label">
-                {navPinned ? 'Kilidi Bırak' : 'Kilitle'}
+              <span className="sidebar-pin-label">
+                {navPinned ? 'Sabitlemeyi Bırak' : 'Paneli Sabitle'}
               </span>
             </button>
           </div>
@@ -721,29 +757,6 @@ export default function App() {
         </aside>
 
         <div className="workspace-column">
-          {session && (
-            <header className="workspace-topbar">
-              <ThemeSwitch
-                theme={appTheme}
-                onChange={(next) => {
-                  trail.record(
-                    'theme_toggle',
-                    undefined,
-                    `${themeLabel(appTheme)} → ${themeLabel(next)}`,
-                  )
-                  setAppTheme(next)
-                }}
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={() => setInboxOpen(true)}
-              >
-                Gelen kutusu
-                {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
-              </button>
-            </header>
-          )}
           <div className="workspace" ref={workspaceRef}>
           <main
           className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${!hasSelection ? ' is-empty' : ''}`}
@@ -976,6 +989,7 @@ export default function App() {
           )}
         </main>
           </div>
+        </div>
         </div>
       </div>
 

@@ -1768,7 +1768,7 @@ export function ImpactMap({
 
   useEffect(() => {
     if (mapExpanded) return
-    setInfoPanelOpen(false)
+    setInfoPanelOpen(true)
   }, [graph.center.id, mapExpanded])
 
   useEffect(() => {
