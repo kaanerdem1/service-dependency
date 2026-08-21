@@ -3,6 +3,7 @@
  */
 import { useMemo, useState } from 'react'
 import { EmptyState } from './EmptyState'
+import { MotionModalBackdrop, MotionModalPanel } from '../motion/MotionModal'
 import {
   FLAG_LABEL,
   type ChangeRequest,
@@ -110,8 +111,8 @@ export function InboxPanel({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal wide" role="dialog" onClick={(e) => e.stopPropagation()}>
+    <MotionModalBackdrop onClose={onClose}>
+      <MotionModalPanel className="modal wide" onClick={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>Gelen kutusu</h2>
           <div className="modal-head-actions">
@@ -180,7 +181,7 @@ export function InboxPanel({
             <ul className="inbox-list">{updatesFiltered.map(renderUpdate)}</ul>
           )}
         </section>
-      </div>
-    </div>
+      </MotionModalPanel>
+    </MotionModalBackdrop>
   )
 }

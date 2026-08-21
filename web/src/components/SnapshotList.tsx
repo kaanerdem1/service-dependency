@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence } from 'motion/react'
 import {
   SNAPSHOT_TYPE_LABEL,
   type Snapshot,
@@ -12,6 +13,8 @@ import {
   formatViewStateSummary,
 } from '../snapshot/formatTrail'
 import { listSnapshotsForRequest } from '../api/client'
+import { MotionListItem } from '../motion/MotionList'
+import { SkeletonShimmer } from '../motion/SkeletonShimmer'
 
 type Props = {
   requestId: string
@@ -43,7 +46,7 @@ export function SnapshotList({ requestId }: Props) {
     }
   }, [requestId])
 
-  if (loading) return <p className="hint-sm">Snapshot’lar yükleniyor…</p>
+  if (loading) return <SkeletonShimmer lines={3} />
   if (error) return <p className="form-error">{error}</p>
   if (items.length === 0) {
     return (
@@ -59,14 +62,15 @@ export function SnapshotList({ requestId }: Props) {
         Talep ve onay anında otomatik kaydedilir. Küçük resme tıklayın veya PNG
         ile indirin.
       </p>
-      <ul className="snapshot-list">
-      {items.map((snap) => {
+      <ul className="snapshot-list" data-motion="snapshot-list">
+      <AnimatePresence initial={false}>
+      {items.map((snap, i) => {
         const when = new Date(snap.createdAt).toLocaleString('tr-TR')
         const hop1 = snap.impact.hop1.map((h) => h.label).join(', ') || '—'
         const trailLines = formatTrailSummary(snap.navigationTrail)
         const viewSummary = formatViewStateSummary(snap)
         return (
-          <li key={snap.id} className="snapshot-item">
+          <MotionListItem key={snap.id} id={snap.id} index={i} className="snapshot-item">
             <div className="snapshot-item-head">
               <strong>{snap.id}</strong>
               <span className="snapshot-type">
@@ -125,9 +129,10 @@ export function SnapshotList({ requestId }: Props) {
                 </button>
               )}
             </div>
-          </li>
+          </MotionListItem>
         )
       })}
+      </AnimatePresence>
       </ul>
     </>
   )

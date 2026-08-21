@@ -10,6 +10,12 @@
  * Harita: gelişmiş React Flow (basit etki yolu kaldırıldı).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
+import { layoutSpring } from './motion/config'
+import { MotionListItem } from './motion/MotionList'
+import { StageTabs } from './motion/StageTabs'
+import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
 import {
   projectLabelsFromTree,
   projectsInImpact,
@@ -18,12 +24,12 @@ import { AffectedList } from './components/AffectedList'
 import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
-import { EmptyState } from './components/EmptyState'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
 import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
+import { SearchHitsPortal } from './components/SearchHitsPortal'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import {
   APP_THEME_KEY,
@@ -147,6 +153,7 @@ export default function App() {
   const mainRef = useRef<HTMLElement>(null)
   const mapRootRef = useRef<HTMLDivElement | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLLabelElement>(null)
 
   const { trail, buildClientPayload } = useSnapshotPack()
 
@@ -536,8 +543,11 @@ export default function App() {
       </div>
 
       <div className={`app-frame${navExpanded ? '' : ' is-nav-collapsed'}`}>
-        <aside
+        <motion.aside
           className="module-sidebar"
+          layout
+          transition={layoutSpring}
+          data-motion="sidebar-layout"
           onMouseEnter={() => setNavHover(true)}
           onMouseLeave={() => {
             if (allowNavCollapse && !navPinned) setNavHover(false)
@@ -593,13 +603,25 @@ export default function App() {
               </span>
             </button>
           </div>
-          <label className="search">
+          <label className="search" ref={searchRef}>
             <span className="sr-only">Servis veya metod ara</span>
             <input
+              className={query ? 'has-clear' : undefined}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Servis veya metod ara…"
             />
+            {query ? (
+              <button
+                type="button"
+                className="search-clear-btn"
+                aria-label="Aramayı temizle"
+                title="Aramayı temizle"
+                onClick={() => setQuery('')}
+              >
+                ×
+              </button>
+            ) : null}
             {query && (hits.length > 0 || methodHits.length > 0) && (
               <>
                 <button
@@ -608,9 +630,10 @@ export default function App() {
                   aria-label="Aramayı kapat"
                   onClick={() => setQuery('')}
                 />
-                <ul className="search-hits">
-                {hits.map((s) => (
-                  <li key={s.id}>
+                <SearchHitsPortal open anchorRef={searchRef}>
+                <AnimatePresence initial={false}>
+                {hits.map((s, i) => (
+                  <MotionListItem key={s.id} id={s.id} index={i}>
                     <button
                       type="button"
                       onClick={() => {
@@ -628,10 +651,10 @@ export default function App() {
                         <span className="hit-tag hit-tag-service">Servis</span>
                       </span>
                     </button>
-                  </li>
+                  </MotionListItem>
                 ))}
-                {methodHits.map((m) => (
-                  <li key={m.id}>
+                {methodHits.map((m, i) => (
+                  <MotionListItem key={m.id} id={m.id} index={hits.length + i}>
                     <button
                       type="button"
                       onClick={() => {
@@ -657,9 +680,10 @@ export default function App() {
                         {m.serviceName}
                       </span>
                     </button>
-                  </li>
+                  </MotionListItem>
                 ))}
-              </ul>
+                </AnimatePresence>
+                </SearchHitsPortal>
               </>
             )}
           </label>
@@ -693,7 +717,7 @@ export default function App() {
             />
           </div>
           </div>
-        </aside>
+        </motion.aside>
 
         <div className="workspace-column">
           {session && (
@@ -755,73 +779,25 @@ export default function App() {
                     )}
                   </div>
                 </div>
-                <nav className="stage-tabs" aria-label="Görünüm">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'map'}
-                    className={`stage-tab${tab === 'map' ? ' on' : ''}`}
-                    onClick={() => {
+                <StageTabs
+                  tab={tab}
+                  onSelect={(next) => {
+                    if (next === 'map') {
                       trail.record('tab_change', undefined, 'Harita sekmesine geçildi')
                       setTab('map')
-                    }}
-                  >
-                    <span className="stage-tab-icon" aria-hidden>
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
-                        <circle cx="3.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
-                        <circle cx="12.5" cy="4" r="1.5" stroke="currentColor" strokeWidth="1.1" />
-                        <circle cx="8" cy="13.5" r="1.5" stroke="currentColor" strokeWidth="1.1" />
-                        <path
-                          d="M6.2 6.6 4.4 5M9.8 6.6l1.8-1.6M8 10v1.8"
-                          stroke="currentColor"
-                          strokeWidth="1.1"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </span>
-                    Harita
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'affected'}
-                    className={`stage-tab${tab === 'affected' ? ' on' : ''}`}
-                    onClick={() => {
+                      return
+                    }
+                    if (next === 'affected') {
                       trail.record('tab_change', undefined, 'İlişkiler sekmesine geçildi')
                       setMapExpanded(false)
                       setTab('affected')
-                    }}
-                  >
-                    <span className="stage-tab-icon" aria-hidden>
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                        <circle cx="4" cy="4" r="2.25" stroke="currentColor" strokeWidth="1.25" />
-                        <circle cx="12" cy="12" r="2.25" stroke="currentColor" strokeWidth="1.25" />
-                        <path d="M5.8 5.5 10.2 10.5" stroke="currentColor" strokeWidth="1.25" />
-                      </svg>
-                    </span>
-                    İlişkiler
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={tab === 'overview'}
-                    className={`stage-tab${tab === 'overview' ? ' on' : ''}`}
-                    onClick={() => {
-                      trail.record('tab_change', undefined, 'Servis işlevi sekmesine geçildi')
-                      setMapExpanded(false)
-                      setTab('overview')
-                    }}
-                  >
-                    <span className="stage-tab-icon" aria-hidden>
-                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                        <rect x="2" y="2" width="12" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
-                        <path d="M5 5.5h6M5 8h6M5 10.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-                      </svg>
-                    </span>
-                    Servis İşlevi
-                  </button>
-                </nav>
+                      return
+                    }
+                    trail.record('tab_change', undefined, 'Servis işlevi sekmesine geçildi')
+                    setMapExpanded(false)
+                    setTab('overview')
+                  }}
+                />
               </div>
 
               <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
@@ -924,10 +900,11 @@ export default function App() {
                     )}
 
                     {selectedMethodId && !methodImpact && (
-                      <EmptyState
-                        what="Metod etki grafiği yükleniyor."
-                        action="Harita sekmesinde kalın; yükleme bitince method zinciri görünür."
-                      />
+                      <MapLoadingSkeleton />
+                    )}
+
+                    {loading && pivotId && !impact && !selectedMethodId && (
+                      <MapLoadingSkeleton />
                     )}
                   </section>
 
@@ -1009,8 +986,10 @@ export default function App() {
         </div>
       )}
 
+      <AnimatePresence>
       {crOpen && service && session && (
         <ChangeRequestModal
+          key="cr-modal"
           service={service}
           affected={affected}
           session={session}
@@ -1025,9 +1004,12 @@ export default function App() {
           }}
         />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {inboxOpen && session && inbox && (
         <InboxPanel
+          key="inbox-panel"
           actions={inbox.actions}
           updates={inbox.updates}
           onOpen={(id) => void openRequestDetail(id, true)}
@@ -1038,9 +1020,12 @@ export default function App() {
           }}
         />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {requestDetail && session && (
         <RequestDetailModal
+          key={`request-${requestDetail.id}`}
           request={requestDetail}
           session={session}
           buildSnapshotContext={makeSnapshotContext}
@@ -1056,6 +1041,7 @@ export default function App() {
           }}
         />
       )}
+      </AnimatePresence>
     </div>
   )
 }

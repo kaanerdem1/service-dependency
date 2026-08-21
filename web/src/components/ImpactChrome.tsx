@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
 import { fitViewPaddingForChrome, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
@@ -13,6 +14,10 @@ import {
   type BlastRadiusStats,
 } from '../impact/projectFilter'
 import type { ImpactNode, Service } from '../types'
+import { AnimatedNumber, AnimatedNumberPair } from '../motion/AnimatedNumber'
+import { layoutSpring } from '../motion/config'
+import { MotionListItem } from '../motion/MotionList'
+import { MotionTooltip } from '../motion/MotionTooltip'
 
 export type VisitStep = { id: string; name: string }
 
@@ -379,14 +384,17 @@ function VisitPathTree({
   }
 
   return (
-    <nav className="visit-path-tree" aria-label="Ziyaret yolu">
+    <nav className="visit-path-tree" aria-label="Ziyaret yolu" data-motion="visit-path-list">
       <ol className="visit-path-list">
+        <AnimatePresence initial={false}>
         {steps.map((step, i) => {
           const isCurrent = i === currentIndex
           const isStart = i === 0
           return (
-            <li
+            <MotionListItem
               key={`${step.id}-${i}`}
+              id={`${step.id}-${i}`}
+              index={i}
               className={[
                 'visit-path-item',
                 isCurrent && 'is-current',
@@ -411,9 +419,10 @@ function VisitPathTree({
               {isCurrent && !isStart && (
                 <span className="visit-path-tag">şu an</span>
               )}
-            </li>
+            </MotionListItem>
           )
         })}
+        </AnimatePresence>
       </ol>
     </nav>
   )
@@ -477,9 +486,12 @@ export function MapInfoPanel({
   const indirect = Math.max(0, stats.serviceCount - stats.hop1Count)
 
   return (
-    <aside
+    <motion.aside
       className={`map-info-drawer${open ? '' : ' is-collapsed'}`}
       aria-label="Etki özeti"
+      layout
+      transition={layoutSpring}
+      data-motion="drawer-layout"
     >
       <div className="map-info-drawer-head">
         <h4 className="map-info-drawer-title">Etki özeti</h4>
@@ -518,7 +530,7 @@ export function MapInfoPanel({
             </div>
 
             <div className="map-info-hero">
-              <span className="map-info-hero-num">{stats.serviceCount}</span>
+              <AnimatedNumber value={stats.serviceCount} className="map-info-hero-num" />
               <span className="map-info-hero-copy">
                 <strong>
                   {filtered ? 'eşleşen servis' : 'etkilenen servis'}
@@ -529,13 +541,13 @@ export function MapInfoPanel({
             <dl className="map-info-metrics">
               <div className="map-info-metric">
                 <dt>{filtered ? '1. katman' : 'Doğrudan'}</dt>
-                <dd>{stats.hop1Count}</dd>
+                <dd><AnimatedNumber value={stats.hop1Count} /></dd>
               </div>
               <div className="map-info-metric">
                 <dt title="Hop 2 ve sonrası — doğrudan bağlıların dışındaki etkilenenler">
                   Dolaylı
                 </dt>
-                <dd>{indirect}</dd>
+                <dd><AnimatedNumber value={indirect} /></dd>
               </div>
             </dl>
 
@@ -546,13 +558,13 @@ export function MapInfoPanel({
                 {stats.maxHop > 0 && (
                   <div className="map-info-stat">
                     <dt>Derinlik</dt>
-                    <dd>{stats.maxHop} katman</dd>
+                    <dd><AnimatedNumber value={stats.maxHop} /> katman</dd>
                   </div>
                 )}
                 {filtered && bridgeCount > 0 && (
                   <div className="map-info-stat">
                     <dt>Ara yol</dt>
-                    <dd>{bridgeCount}</dd>
+                    <dd><AnimatedNumber value={bridgeCount} /></dd>
                   </div>
                 )}
                 {truncated && (
@@ -586,7 +598,7 @@ export function MapInfoPanel({
             />
           </section>
         </div>
-    </aside>
+    </motion.aside>
   )
 }
 
@@ -724,6 +736,7 @@ function DockBtn({
   children: ReactNode
 }) {
   const [flash, setFlash] = useState(false)
+  const [hover, setHover] = useState(false)
   const flashTimer = useRef(0)
 
   useEffect(() => {
@@ -733,6 +746,8 @@ function DockBtn({
   return (
     <span
       className={`map-dock-wrap${disabled ? ' is-off' : ''}${flash ? ' is-tip-flash' : ''}`}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
     >
       <button
         type="button"
@@ -751,9 +766,13 @@ function DockBtn({
       >
         {children}
       </button>
-      <span className="map-dock-tip" role="tooltip">
+      <MotionTooltip
+        open={hover || flash}
+        className="map-dock-tip map-dock-tip-motion"
+        role="tooltip"
+      >
         {label}
-      </span>
+      </MotionTooltip>
     </span>
   )
 }
@@ -1305,7 +1324,10 @@ export function MapCanvasBar({
                   aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
                 >
                   <span className="map-dock-hop-count">
-                    {visibleMaxHop}/{maxHopAvailable}
+                    <AnimatedNumberPair
+                      left={visibleMaxHop}
+                      right={maxHopAvailable}
+                    />
                   </span>
                 </span>
                 <span className="map-dock-tip" role="tooltip">

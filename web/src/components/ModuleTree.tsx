@@ -20,6 +20,8 @@ import {
 import { createPortal } from 'react-dom'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
+import { MotionTooltip } from '../motion/MotionTooltip'
+import { TreeAccordion } from '../motion/TreeAccordion'
 
 const TIP_DELAY_MS = 1000
 
@@ -63,15 +65,14 @@ function useTreeTipHandlers(text: string) {
 }
 
 function TreeHoverTipPortal({ tip }: { tip: TipState | null }) {
-  if (!tip) return null
   return createPortal(
-    <div
+    <MotionTooltip
+      open={Boolean(tip)}
       className="tree-hover-tip"
-      style={{ top: tip.top, left: tip.left }}
-      role="tooltip"
+      style={tip ? { top: tip.top, left: tip.left } : undefined}
     >
-      {tip.text}
-    </div>,
+      {tip?.text}
+    </MotionTooltip>,
     document.body,
   )
 }
@@ -278,7 +279,6 @@ function TreeItem({
         className={`tree-row ${selected ? 'selected' : ''} kind-${node.kind}`}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-tree-service={isService ? node.serviceId : undefined}
-        {...tipHandlers}
       >
         {canExpand ? (
           <button
@@ -287,6 +287,8 @@ function TreeItem({
             aria-expanded={open}
             aria-label={open ? 'Kapat' : 'Aç'}
             onClick={() => setOpen((v) => !v)}
+            onMouseEnter={(e) => e.stopPropagation()}
+            onMouseLeave={(e) => e.stopPropagation()}
           >
             {open ? '▾' : '▸'}
           </button>
@@ -299,6 +301,7 @@ function TreeItem({
         <button
           type="button"
           className="tree-label-btn"
+          {...tipHandlers}
           onClick={() => {
             if (isService && node.serviceId) {
               onSelectService(node.serviceId)
@@ -310,30 +313,34 @@ function TreeItem({
           <span className="tree-label">{node.name}</span>
         </button>
       </div>
-      {open &&
-        hasStaticChildren &&
-        node.children!.map((child) => (
-          <TreeItem
-            key={child.id}
-            node={child}
+      <TreeAccordion open={open && hasStaticChildren}>
+        {hasStaticChildren
+          ? node.children!.map((child) => (
+              <TreeItem
+                key={child.id}
+                node={child}
+                depth={depth + 1}
+                revealIds={revealIds}
+                selectedServiceId={selectedServiceId}
+                selectedMethodId={selectedMethodId}
+                onSelectService={onSelectService}
+                onSelectMethod={onSelectMethod}
+              />
+            ))
+          : null}
+      </TreeAccordion>
+      <TreeAccordion open={open && isService && Boolean(node.serviceId)}>
+        {node.serviceId ? (
+          <MethodLeaves
+            serviceId={node.serviceId}
+            selectedMethodId={
+              selectedServiceId === node.serviceId ? selectedMethodId : undefined
+            }
             depth={depth + 1}
-            revealIds={revealIds}
-            selectedServiceId={selectedServiceId}
-            selectedMethodId={selectedMethodId}
-            onSelectService={onSelectService}
             onSelectMethod={onSelectMethod}
           />
-        ))}
-      {open && isService && node.serviceId && (
-        <MethodLeaves
-          serviceId={node.serviceId}
-          selectedMethodId={
-            selectedServiceId === node.serviceId ? selectedMethodId : undefined
-          }
-          depth={depth + 1}
-          onSelectMethod={onSelectMethod}
-        />
-      )}
+        ) : null}
+      </TreeAccordion>
     </div>
   )
 }

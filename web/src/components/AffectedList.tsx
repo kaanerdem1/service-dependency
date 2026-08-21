@@ -4,6 +4,7 @@
  */
 import { useMemo, useState } from 'react'
 import { EmptyState } from './EmptyState'
+import { SkeletonShimmer } from '../motion/SkeletonShimmer'
 import type { AffectedService, Service } from '../types'
 
 type Props = {
@@ -263,14 +264,9 @@ export function AffectedList({
 }: Props) {
   if (loading) {
     return (
-      <div className="neighbor-grid">
-        {[0, 1].map((col) => (
-          <ul key={col} className="affected-list">
-            {[1, 2, 3].map((i) => (
-              <li key={i} className="affected-row skeleton" />
-            ))}
-          </ul>
-        ))}
+      <div className="neighbor-grid" data-motion="affected-skeleton">
+        <SkeletonShimmer lines={4} />
+        <SkeletonShimmer lines={4} />
       </div>
     )
   }

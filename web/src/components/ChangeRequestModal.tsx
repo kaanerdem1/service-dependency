@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react'
 import type { AffectedService, Service } from '../types'
 import type { SessionUser } from '../mock/session'
 import { createChangeRequest } from '../api/client'
+import { MotionModalBackdrop, MotionModalPanel } from '../motion/MotionModal'
 
 type Props = {
   service: Service
@@ -95,11 +96,10 @@ export function ChangeRequestModal({
   const tabIndex = TABS.findIndex((t) => t.id === tab)
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div
+    <MotionModalBackdrop onClose={onClose}>
+      <MotionModalPanel
         className="modal wide cr-modal"
-        role="dialog"
-        aria-labelledby="cr-title"
+        labelledBy="cr-title"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="modal-head">
@@ -285,7 +285,7 @@ export function ChangeRequestModal({
             </div>
           </footer>
         </form>
-      </div>
-    </div>
+      </MotionModalPanel>
+    </MotionModalBackdrop>
   )
 }

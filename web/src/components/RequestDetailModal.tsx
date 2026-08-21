@@ -10,6 +10,7 @@ import {
 import { setFlag } from '../api/client'
 import type { SessionUser } from '../mock/session'
 import { SnapshotList } from './SnapshotList'
+import { MotionModalBackdrop, MotionModalPanel } from '../motion/MotionModal'
 
 type Props = {
   request: ChangeRequest
@@ -68,8 +69,8 @@ export function RequestDetailModal({
   }
 
   return (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
-      <div className="modal wide task-detail" role="dialog" onClick={(e) => e.stopPropagation()}>
+    <MotionModalBackdrop onClose={onClose}>
+      <MotionModalPanel className="modal wide task-detail" onClick={(e) => e.stopPropagation()}>
         <header className="task-head">
           <div className="task-head-toolbar">
             {onBackToInbox ? (
@@ -225,7 +226,7 @@ export function RequestDetailModal({
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </MotionModalPanel>
+    </MotionModalBackdrop>
   )
 }
