@@ -1,8 +1,14 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReactFlow, useStore } from 'reactflow'
-import type { MapLayout, MapLayoutMode } from '../impact/mapLayout'
-import { fitViewPaddingForChrome, occludedRadialLabelIds, RADIAL_HIT } from '../impact/mapLayout'
+import type { MapLayout, MapLayoutMode, RadialLabelSide } from '../impact/mapLayout'
+import {
+  fitViewPaddingForChrome,
+  occludedRadialLabelIds,
+  radialGraphBounds,
+  radialViewportForCenter,
+  RADIAL_HIT,
+} from '../impact/mapLayout'
 import {
   animateViewport,
   easeInOutCubic,
@@ -15,9 +21,11 @@ import {
 } from '../impact/projectFilter'
 import type { ImpactNode, Service } from '../types'
 import { AnimatedNumber, AnimatedNumberPair } from '../motion/AnimatedNumber'
+import { MotionSheetBody } from '../motion/MotionSheet'
+import { MotionPopover } from '../motion/MotionPopover'
 import { layoutSpring } from '../motion/config'
 import { MotionListItem } from '../motion/MotionList'
-import { MotionTooltip } from '../motion/MotionTooltip'
+import { DockTooltipPortal } from './DockTooltipPortal'
 
 export type VisitStep = { id: string; name: string }
 
@@ -29,27 +37,132 @@ export function MapViewportSync({
   visibleMaxHop,
   layoutKey,
   layout,
+  layoutMode = 'ltr',
   drawerOpen = false,
+  mapExpanded = false,
   navDirection = null,
   onNavDirectionConsumed,
+  userInteracting = false,
 }: {
   centerId: string
   visibleMaxHop: number
   layoutKey: string | number | boolean
   layout: MapLayout
+  layoutMode?: MapLayoutMode
   drawerOpen?: boolean
+  mapExpanded?: boolean
   navDirection?: 'back' | 'forward' | null
   onNavDirectionConsumed?: () => void
+  userInteracting?: boolean
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
   const prevHop = useRef(visibleMaxHop)
   const drawerOpenRef = useRef(drawerOpen)
   drawerOpenRef.current = drawerOpen
+  const mapExpandedRef = useRef(mapExpanded)
+  mapExpandedRef.current = mapExpanded
   const navDirRef = useRef(navDirection)
   navDirRef.current = navDirection
   const consumedRef = useRef(onNavDirectionConsumed)
   consumedRef.current = onNavDirectionConsumed
+  const interactingRef = useRef(userInteracting)
+  interactingRef.current = userInteracting
+  const syncingRef = useRef(false)
+  const lastSyncAt = useRef(0)
+  const paneW = useStore((s) => s.width)
+  const paneH = useStore((s) => s.height)
+
+  const collectRadialItems = () => {
+    const mid = RADIAL_HIT / 2
+    return rf.getNodes().flatMap((n) => {
+      const d = n.data as {
+        radialDot?: boolean
+        hop?: number
+        kind?: string
+        radialAngle?: number
+        radialCx?: number
+        radialCy?: number
+        radialLabelSide?: RadialLabelSide
+        fullLabel?: string
+        label?: string
+      }
+      if (!d?.radialDot) return []
+      const cx = n.position.x + mid
+      const cy = n.position.y + mid
+      const angle =
+        typeof d.radialCx === 'number' && typeof d.radialCy === 'number'
+          ? Math.atan2(cy - d.radialCy, cx - d.radialCx)
+          : (d.radialAngle ?? 0)
+      return [
+        {
+          cx,
+          cy,
+          angle,
+          name: String(d.fullLabel || d.label || ''),
+          kind: String(d.kind ?? 'service'),
+          side: d.radialLabelSide,
+        },
+      ]
+    })
+  }
+
+  const focusViewport = async (
+    duration: number,
+    mode: MapLayoutMode,
+  ) => {
+    if (syncingRef.current || interactingRef.current) return
+    syncingRef.current = true
+    try {
+      const padding = fitViewPaddingForChrome(layout, {
+        drawerOpen: drawerOpenRef.current,
+        radial: mode === 'radial',
+        fullscreen: mapExpandedRef.current,
+      })
+      const fitOpts = {
+        padding,
+        minZoom: layout.minZoom,
+        maxZoom: layout.maxZoom,
+      }
+
+      if (mode === 'radial') {
+        const items = collectRadialItems()
+        const bounds = radialGraphBounds(items)
+        const centerNode = rf.getNode(centerId)
+        if (bounds && centerNode && paneW > 0 && paneH > 0) {
+          const d = centerNode.data as { radialCx?: number; radialCy?: number }
+          const cx =
+            typeof d.radialCx === 'number'
+              ? d.radialCx
+              : centerNode.position.x + RADIAL_HIT / 2
+          const cy =
+            typeof d.radialCy === 'number'
+              ? d.radialCy
+              : centerNode.position.y + RADIAL_HIT / 2
+          const vp = radialViewportForCenter(
+            bounds,
+            { cx, cy },
+            paneW,
+            paneH,
+            {
+              minZoom: layout.minZoom,
+              maxZoom: layout.maxZoom,
+              padding,
+              fullscreen: mapExpandedRef.current,
+            },
+          )
+          await rf.setViewport(vp, { duration })
+          lastSyncAt.current = Date.now()
+          return
+        }
+      }
+
+      await rf.fitView({ ...fitOpts, duration })
+      lastSyncAt.current = Date.now()
+    } finally {
+      syncingRef.current = false
+    }
+  }
 
   useEffect(() => {
     const centerChanged =
@@ -60,9 +173,13 @@ export function MapViewportSync({
     const dir = navDirRef.current
 
     const id = window.setTimeout(() => {
+      if (interactingRef.current) return
       void (async () => {
+        if (interactingRef.current) return
         const padding = fitViewPaddingForChrome(layout, {
           drawerOpen: drawerOpenRef.current,
+          radial: layoutMode === 'radial',
+          fullscreen: mapExpandedRef.current,
         })
         const fitOpts = {
           padding,
@@ -84,18 +201,15 @@ export function MapViewportSync({
           return
         }
 
-        // Katman / layout / boyut: fitView (drawer aç-kapa zoom'u değiştirmez)
-        await rf.fitView({
-          ...fitOpts,
-          duration: centerChanged ? 320 : hopChanged ? 360 : 280,
-        })
+        await focusViewport(
+          centerChanged ? 320 : hopChanged ? 360 : 280,
+          layoutMode,
+        )
       })()
-    }, 50)
+    }, layoutMode === 'radial' && hopChanged ? 120 : 50)
     return () => window.clearTimeout(id)
-  }, [centerId, visibleMaxHop, layoutKey, layout, rf])
+  }, [centerId, visibleMaxHop, layoutKey, layout, layoutMode, mapExpanded, rf])
 
-  const paneW = useStore((s) => s.width)
-  const paneH = useStore((s) => s.height)
   const prevPane = useRef(`${Math.round(paneW)}x${Math.round(paneH)}`)
 
   useEffect(() => {
@@ -105,45 +219,35 @@ export function MapViewportSync({
     const [pw, ph] = prev.split('x').map(Number)
     prevPane.current = next
     if (!pw || (Math.abs(pw - paneW) < 20 && Math.abs(ph - paneH) < 20)) return
-    const padding = fitViewPaddingForChrome(layout, {
-      drawerOpen: drawerOpenRef.current,
-    })
+    if (Date.now() - lastSyncAt.current < 480) return
+    if (interactingRef.current) return
+    // Sidebar overlay aç/kapa — workspace padding ile kayar; fitView sıçratmasın
+    const widthDelta = Math.abs(paneW - pw)
+    if (widthDelta >= 140 && widthDelta <= 260 && Math.abs(ph - paneH) < 24) return
     const id = window.setTimeout(() => {
-      void rf.fitView({
-        padding,
-        minZoom: layout.minZoom,
-        maxZoom: layout.maxZoom,
-        duration: 240,
-      })
+      void (layoutMode === 'radial'
+        ? focusViewport(240, 'radial')
+        : rf.fitView({
+            padding: fitViewPaddingForChrome(layout, {
+              drawerOpen: drawerOpenRef.current,
+              radial: false,
+              fullscreen: mapExpandedRef.current,
+            }),
+            minZoom: layout.minZoom,
+            maxZoom: layout.maxZoom,
+            duration: 240,
+          }))
     }, 100)
     return () => window.clearTimeout(id)
-  }, [paneW, paneH, layout, rf])
+  }, [paneW, paneH, layout, layoutMode, rf])
 
   return null
 }
 
-/** Halka: çakışan isimleri gizle; hover / odakta geri getir. */
-export function RadialLabelZoomSync() {
+/** Halka: çakışan isimleri gizle; hover / odakta geri getir. Pan/zoom’da store’a abone olma. */
+export function RadialLabelZoomSync({ layoutTick }: { layoutTick?: string | number }) {
   const rf = useReactFlow()
   const probe = useRef<HTMLSpanElement>(null)
-  const sig = useStore((s) => {
-    const internals = (
-      s as unknown as {
-        nodeInternals?: Map<
-          string,
-          { id: string; position: { x: number; y: number }; data?: Record<string, unknown> }
-        >
-      }
-    ).nodeInternals
-    if (!internals) return `z${s.transform[2]}`
-    let out = `${internals.size}:${s.transform[2].toFixed(2)}`
-    internals.forEach((n) => {
-      const d = n.data
-      if (!d || d.radialDot !== true) return
-      out += `|${n.id}:${n.position.x | 0}:${n.position.y | 0}`
-    })
-    return out
-  })
   useLayoutEffect(() => {
     const nodes = rf.getNodes()
     const items = nodes.flatMap((n) => {
@@ -154,6 +258,7 @@ export function RadialLabelZoomSync() {
         radialAngle?: number
         radialCx?: number
         radialCy?: number
+        radialLabelSide?: RadialLabelSide
         fullLabel?: string
         label?: string
       }
@@ -174,6 +279,7 @@ export function RadialLabelZoomSync() {
           cy,
           angle,
           name: String(d.fullLabel || d.label || ''),
+          side: d.radialLabelSide,
         },
       ]
     })
@@ -183,7 +289,7 @@ export function RadialLabelZoomSync() {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.toggle('radial-label-occluded', hidden.has(id))
     })
-  }, [sig, rf])
+  }, [layoutTick, rf])
   return <span ref={probe} className="dd-radial-zoom-probe" hidden aria-hidden />
 }
 
@@ -516,7 +622,7 @@ export function MapInfoPanel({
           {open ? <span className="map-info-toggle-label">Daralt</span> : null}
         </button>
       </div>
-      <div className={`map-info-drawer-body${open ? '' : ' is-collapsed'}`}>
+      <MotionSheetBody open={open} className="map-info-drawer-body">
         <section className="map-info-section map-info-impact is-open">
             <div className="map-info-focus">
               <span className="map-info-focus-label">Seçilen Servis</span>
@@ -597,7 +703,7 @@ export function MapInfoPanel({
               onSelect={onHoverPathSelect}
             />
           </section>
-        </div>
+      </MotionSheetBody>
     </motion.aside>
   )
 }
@@ -738,6 +844,7 @@ function DockBtn({
   const [flash, setFlash] = useState(false)
   const [hover, setHover] = useState(false)
   const flashTimer = useRef(0)
+  const btnRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     return () => window.clearTimeout(flashTimer.current)
@@ -745,15 +852,15 @@ function DockBtn({
 
   return (
     <span
-      className={`map-dock-wrap${disabled ? ' is-off' : ''}${flash ? ' is-tip-flash' : ''}`}
+      className={`map-dock-wrap map-dock-wrap-morph${disabled ? ' is-off' : ''}${flash ? ' is-tip-flash' : ''}${hover ? ' is-hover' : ''}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
       <button
+        ref={btnRef}
         type="button"
         className={`map-dock-btn${pressed ? ' is-pressed' : ''}`}
         disabled={disabled}
-        title={label}
         aria-label={label}
         aria-pressed={pressed}
         onClick={(e) => {
@@ -766,14 +873,83 @@ function DockBtn({
       >
         {children}
       </button>
-      <MotionTooltip
-        open={hover || flash}
-        className="map-dock-tip map-dock-tip-motion"
-        role="tooltip"
-      >
+      <DockTooltipPortal open={hover || flash} anchorRef={btnRef}>
         {label}
-      </MotionTooltip>
+      </DockTooltipPortal>
     </span>
+  )
+}
+
+function DockHoverTip({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className?: string
+  children: (props: {
+    ref: RefObject<HTMLSpanElement | null>
+    onMouseEnter: () => void
+    onMouseLeave: () => void
+  }) => ReactNode
+}) {
+  const ref = useRef<HTMLSpanElement>(null)
+  const [hover, setHover] = useState(false)
+  return (
+    <span className={className}>
+      {children({
+        ref,
+        onMouseEnter: () => setHover(true),
+        onMouseLeave: () => setHover(false),
+      })}
+      <DockTooltipPortal open={hover} anchorRef={ref}>
+        {label}
+      </DockTooltipPortal>
+    </span>
+  )
+}
+
+function IconDockCollapse() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="10.5" y="3.5" width="2" height="9" rx="1" fill="currentColor" opacity="0.55" />
+      <path
+        d="M8.5 4.5 6 8l2.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.55"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.5 4.5 2 8l2.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.55"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconDockExpand() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+      <rect x="3.5" y="3.5" width="2" height="9" rx="1" fill="currentColor" opacity="0.55" />
+      <path
+        d="M7.5 4.5 10 8 7.5 11.5"
+        stroke="currentColor"
+        strokeWidth="1.55"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.5 4.5 14 8l-2.5 3.5"
+        stroke="currentColor"
+        strokeWidth="1.55"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 
@@ -1006,14 +1182,10 @@ function clampDockPosition(
   dockH: number,
   x: number,
   y: number,
-  vertical: boolean,
 ) {
   const margin = 8
   const maxX = Math.max(margin, rootW - dockW - margin)
-  let maxY = Math.max(margin, rootH - dockH - margin)
-  if (vertical && dockH > rootH - margin * 2) {
-    maxY = margin
-  }
+  const maxY = Math.max(margin, rootH - dockH - margin)
   return {
     x: Math.max(margin, Math.min(x, maxX)),
     y: Math.max(margin, Math.min(y, maxY)),
@@ -1021,7 +1193,7 @@ function clampDockPosition(
 }
 
 /**
- * Orta-alt (veya serbest) harita dock’u: sürükle, dikey/kenar.
+ * Orta-alt (veya serbest) harita dock’u: sürükle, daralt/genişlet.
  * React Flow çocuğu olmalı (useReactFlow).
  */
 function IconCascadeArrow() {
@@ -1081,7 +1253,14 @@ export function MapCanvasBar({
   const rootRef = useRef<HTMLDivElement>(null)
   const dockRef = useRef<HTMLDivElement>(null)
   const [placed, setPlaced] = useState<{ x: number; y: number } | null>(null)
-  const [orient, setOrient] = useState<'h' | 'v'>('h')
+  const [dockCollapsed, setDockCollapsed] = useState(false)
+  const [projectPopOpen, setProjectPopOpen] = useState(false)
+  const gripRef = useRef<HTMLButtonElement>(null)
+  const collapseRef = useRef<HTMLButtonElement>(null)
+  const [gripHover, setGripHover] = useState(false)
+  const [collapseHover, setCollapseHover] = useState(false)
+  const cascadeRef = useRef<HTMLButtonElement>(null)
+  const [cascadeHover, setCascadeHover] = useState(false)
   const drag = useRef<{
     ox: number
     oy: number
@@ -1100,10 +1279,63 @@ export function MapCanvasBar({
       dockBox.height,
       placed.x,
       placed.y,
-      orient === 'v',
     )
     if (next.x !== placed.x || next.y !== placed.y) setPlaced(next)
-  }, [orient, placed])
+  }, [placed, dockCollapsed])
+
+  /** Varsayılan ortada — sağ/sol taşmayı placed ile düzelt */
+  useLayoutEffect(() => {
+    if (placed != null || !rootRef.current || !dockRef.current) return
+    const rootBox = rootRef.current.getBoundingClientRect()
+    const dockBox = dockRef.current.getBoundingClientRect()
+    const margin = 8
+    let x = dockBox.left - rootBox.left
+    const y = dockBox.top - rootBox.top
+    if (dockBox.right > rootBox.right - margin) {
+      x -= dockBox.right - (rootBox.right - margin)
+    }
+    if (dockBox.left < rootBox.left + margin) {
+      x += rootBox.left + margin - dockBox.left
+    }
+    const clamped = clampDockPosition(
+      rootBox.width,
+      rootBox.height,
+      dockBox.width,
+      dockBox.height,
+      x,
+      y,
+    )
+    if (Math.abs(clamped.x - x) > 0.5 || dockBox.right > rootBox.right - margin) {
+      setPlaced(clamped)
+    }
+  }, [placed, dockCollapsed])
+
+  /** Varsayılan ortada — sağ/sol taşmayı placed ile düzelt */
+  useLayoutEffect(() => {
+    if (placed != null || !rootRef.current || !dockRef.current) return
+    const rootBox = rootRef.current.getBoundingClientRect()
+    const dockBox = dockRef.current.getBoundingClientRect()
+    const margin = 8
+    let x = dockBox.left - rootBox.left
+    const y = dockBox.top - rootBox.top
+    if (dockBox.right > rootBox.right - margin) {
+      x -= dockBox.right - (rootBox.right - margin)
+    }
+    if (dockBox.left < rootBox.left + margin) {
+      x += rootBox.left + margin - dockBox.left
+    }
+    const clamped = clampDockPosition(
+      rootBox.width,
+      rootBox.height,
+      dockBox.width,
+      dockBox.height,
+      x,
+      y,
+    )
+    if (Math.abs(clamped.x - x) > 0.5 || dockBox.right > rootBox.right - margin) {
+      setPlaced(clamped)
+    }
+  }, [placed, dockCollapsed])
 
   const onGripPointerDown = (e: ReactPointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return
@@ -1135,7 +1367,6 @@ export function MapCanvasBar({
         dockBox.height,
         nx,
         ny,
-        orient === 'v',
       ),
     )
   }
@@ -1156,42 +1387,9 @@ export function MapCanvasBar({
     const x = dockBox.left - rootBox.left
     const y = dockBox.top - rootBox.top
     const snap = 56
-    const nearLeft = x < snap
-    const nearRight = x + dockBox.width > rootBox.width - snap
     const nearBottom = y + dockBox.height > rootBox.height - snap
 
-    if (nearLeft) {
-      setOrient('v')
-      setPlaced(
-        clampDockPosition(
-          rootBox.width,
-          rootBox.height,
-          dockBox.width,
-          dockBox.height,
-          12,
-          y,
-          true,
-        ),
-      )
-      return
-    }
-    if (nearRight) {
-      setOrient('v')
-      setPlaced(
-        clampDockPosition(
-          rootBox.width,
-          rootBox.height,
-          dockBox.width,
-          dockBox.height,
-          Math.max(8, rootBox.width - Math.min(dockBox.width, 56) - 12),
-          y,
-          true,
-        ),
-      )
-      return
-    }
     if (nearBottom) {
-      setOrient('h')
       setPlaced({
         x: Math.max(8, Math.min(x, rootBox.width - dockBox.width - 8)),
         y: rootBox.height - dockBox.height - 14,
@@ -1208,28 +1406,26 @@ export function MapCanvasBar({
     <div className="map-dock-float-root" ref={rootRef} aria-hidden={false}>
       <div
         ref={dockRef}
-        className={`map-dock-float${placed ? ' is-placed' : ' is-default'}${orient === 'v' ? ' is-vertical' : ''}`}
+        className={`map-dock-float${placed ? ' is-placed' : ' is-default'}${dockCollapsed ? ' is-collapsed' : ''}`}
         style={floatStyle}
       >
         <div
-          className={`map-dock${orient === 'v' ? ' is-vertical' : ''}`}
+          className={`map-dock${dockCollapsed ? ' is-collapsed' : ''}`}
           role="toolbar"
           aria-label="Harita araçları"
         >
-          <span className="map-dock-wrap">
+          <span className="map-dock-lead">
             <button
+              ref={gripRef}
               type="button"
               className="map-dock-grip"
-              aria-label="Araç çubuğunu sürükle. Kenara çekince dikey; çift tık yön değiştir"
-              title="Sürükle · çift tık: yatay / dikey"
+              aria-label="Taşı — araç çubuğunu sürükle"
+              onMouseEnter={() => setGripHover(true)}
+              onMouseLeave={() => setGripHover(false)}
               onPointerDown={onGripPointerDown}
               onPointerMove={onGripPointerMove}
               onPointerUp={onGripPointerUp}
               onPointerCancel={onGripPointerUp}
-              onDoubleClick={(e) => {
-                e.preventDefault()
-                setOrient((o) => (o === 'h' ? 'v' : 'h'))
-              }}
             >
               <span className="map-dock-grip-mark" aria-hidden>
                 <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
@@ -1242,11 +1438,45 @@ export function MapCanvasBar({
                 </svg>
               </span>
             </button>
-            <span className="map-dock-tip" role="tooltip">
-              Sürükle · çift tık yatay/dikey
-            </span>
+            <DockTooltipPortal open={gripHover} anchorRef={gripRef}>
+              Taşı
+            </DockTooltipPortal>
+            <button
+              ref={collapseRef}
+              type="button"
+              className="map-dock-collapse-btn"
+              aria-expanded={!dockCollapsed}
+              aria-label={dockCollapsed ? 'Araç çubuğunu genişlet' : 'Araç çubuğunu daralt'}
+              onMouseEnter={() => setCollapseHover(true)}
+              onMouseLeave={() => setCollapseHover(false)}
+              onClick={() => {
+                setDockCollapsed((c) => {
+                  if (!c) setProjectPopOpen(false)
+                  return !c
+                })
+              }}
+            >
+              <span className="map-dock-collapse-icon">
+                {dockCollapsed ? <IconDockExpand /> : <IconDockCollapse />}
+              </span>
+            </button>
+            <DockTooltipPortal open={collapseHover} anchorRef={collapseRef}>
+              {dockCollapsed ? 'Genişlet' : 'Daralt'}
+            </DockTooltipPortal>
           </span>
 
+          <motion.div
+            className={`map-dock-expand${dockCollapsed ? '' : ' is-open'}`}
+            initial={false}
+            animate={{
+              gridTemplateColumns: dockCollapsed ? '0fr' : '1fr',
+              opacity: dockCollapsed ? 0 : 1,
+            }}
+            transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+            style={{ pointerEvents: dockCollapsed ? 'none' : 'auto' }}
+          >
+            <div className="map-dock-expand-inner">
+              <div className="map-dock-expand-track">
           <span className="map-dock-sep" aria-hidden />
 
           <div className="map-dock-group">
@@ -1317,11 +1547,17 @@ export function MapCanvasBar({
               >
                 <IconLayerBack />
               </DockBtn>
-              <span className="map-dock-wrap">
+              <DockHoverTip
+                label={`Katman ${visibleMaxHop} / ${maxHopAvailable} görünür`}
+                className="map-dock-wrap"
+              >
+                {({ ref, onMouseEnter, onMouseLeave }) => (
                 <span
+                  ref={ref}
                   className="map-dock-hop is-compact"
-                  title={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
                   aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+                  onMouseEnter={onMouseEnter}
+                  onMouseLeave={onMouseLeave}
                 >
                   <span className="map-dock-hop-count">
                     <AnimatedNumberPair
@@ -1330,10 +1566,8 @@ export function MapCanvasBar({
                     />
                   </span>
                 </span>
-                <span className="map-dock-tip" role="tooltip">
-                  Katman {visibleMaxHop} / {maxHopAvailable} görünür
-                </span>
-              </span>
+                )}
+              </DockHoverTip>
               <DockBtn
                 label={
                   nextHop
@@ -1377,64 +1611,72 @@ export function MapCanvasBar({
                     </DockBtn>
                   )}
                   {onProjectFilterChange && (
-                    <span className="map-dock-wrap map-dock-project-wrap">
-                      <details
-                        className={`map-dock-project${projectFilter ? ' is-active' : ''}`}
-                      >
-                        <summary
-                          className={`map-dock-btn map-dock-project-trigger${projectFilter ? ' is-pressed' : ''}`}
+                    <MotionPopover
+                      open={projectPopOpen}
+                      onOpenChange={setProjectPopOpen}
+                      className="map-dock-wrap map-dock-project-wrap motion-popover-dock"
+                      panelClassName="map-dock-project-pop"
+                      placement="top"
+                      label="Proje filtresi"
+                      trigger={
+                        <button
+                          type="button"
+                          className={`map-dock-btn map-dock-project-trigger${projectFilter ? ' is-pressed' : ''}${projectPopOpen ? ' is-open' : ''}`}
                           title="Projeye göre filtrele"
                           aria-label={
                             projectFilter
                               ? 'Proje filtresini değiştir'
                               : 'Projeye göre filtrele'
                           }
+                          aria-expanded={projectPopOpen}
+                          aria-haspopup="dialog"
+                          onClick={() => setProjectPopOpen((open) => !open)}
                         >
                           <IconProjectFilter />
                           {projectFilter ? (
                             <span className="map-dock-project-dot" aria-hidden />
                           ) : null}
-                        </summary>
-                        <div className="map-dock-project-pop">
-                          <div className="map-dock-project-pop-head">
-                            <strong>Proje filtresi</strong>
-                            <span>Etki haritasında yalnız seçili projeyi vurgular</span>
-                          </div>
-                          <div className="map-dock-project-list" role="listbox" aria-label="Proje filtresi">
-                            <button
-                              type="button"
-                              role="option"
-                              aria-selected={!projectFilter}
-                              className={`map-dock-project-opt${!projectFilter ? ' is-on' : ''}`}
-                              onClick={() => onProjectFilterChange('')}
-                            >
-                              <span>Tüm projeler</span>
-                              {!projectFilter ? <span className="map-dock-project-check">✓</span> : null}
-                            </button>
-                            {projectOptions.map((project) => (
-                              <button
-                                key={project.id}
-                                type="button"
-                                role="option"
-                                aria-selected={projectFilter === project.id}
-                                className={`map-dock-project-opt${projectFilter === project.id ? ' is-on' : ''}`}
-                                onClick={() => onProjectFilterChange(project.id)}
-                              >
-                                <span>{project.label}</span>
-                                {projectFilter === project.id ? (
-                                  <span className="map-dock-project-check">✓</span>
-                                ) : null}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      </details>
-                      <span className="map-dock-tip" role="tooltip">
-                        {projectFilter
-                          ? `Filtre: ${projectOptions.find((p) => p.id === projectFilter)?.label ?? projectFilter}`
-                          : 'Projeye göre filtrele'}
-                      </span>
-                    </span>
+                        </button>
+                      }
+                    >
+                      <div className="map-dock-project-pop-head">
+                        <strong>Proje filtresi</strong>
+                        <span>Etki haritasında yalnız seçili projeyi vurgular</span>
+                      </div>
+                      <div className="map-dock-project-list" role="listbox" aria-label="Proje filtresi">
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={!projectFilter}
+                          className={`map-dock-project-opt${!projectFilter ? ' is-on' : ''}`}
+                          onClick={() => {
+                            onProjectFilterChange('')
+                            setProjectPopOpen(false)
+                          }}
+                        >
+                          <span>Tüm projeler</span>
+                          {!projectFilter ? <span className="map-dock-project-check">✓</span> : null}
+                        </button>
+                        {projectOptions.map((project) => (
+                          <button
+                            key={project.id}
+                            type="button"
+                            role="option"
+                            aria-selected={projectFilter === project.id}
+                            className={`map-dock-project-opt${projectFilter === project.id ? ' is-on' : ''}`}
+                            onClick={() => {
+                              onProjectFilterChange(project.id)
+                              setProjectPopOpen(false)
+                            }}
+                          >
+                            <span>{project.label}</span>
+                            {projectFilter === project.id ? (
+                              <span className="map-dock-project-check">✓</span>
+                            ) : null}
+                          </button>
+                        ))}
+                      </div>
+                    </MotionPopover>
                   )}
                 </div>
               </div>
@@ -1447,8 +1689,13 @@ export function MapCanvasBar({
               <div className="map-dock-group">
                 <span className="map-dock-group-kicker">Yan bağ</span>
                 <div className="map-dock-group-row">
-                  <span className="map-dock-wrap">
+                  <span
+                    className="map-dock-wrap"
+                    onMouseEnter={() => setCascadeHover(true)}
+                    onMouseLeave={() => setCascadeHover(false)}
+                  >
                     <button
+                      ref={cascadeRef}
                       type="button"
                       className={`map-dock-cascade${showCascadeEdges ? ' is-on' : ''}`}
                       aria-pressed={showCascadeEdges}
@@ -1457,7 +1704,6 @@ export function MapCanvasBar({
                           ? `Yan bağları gizle — ${cascadeCount} alternatif rota`
                           : `Yan bağları göster — ${cascadeCount} alternatif rota`
                       }
-                      title={`${cascadeCount} alternatif rota (BFS ana yol dışı)`}
                       onClick={onToggleCascadeEdges}
                     >
                       <span className="map-dock-cascade-icon" aria-hidden>
@@ -1465,13 +1711,13 @@ export function MapCanvasBar({
                       </span>
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
-                    <span className="map-dock-tip" role="tooltip">
+                    <DockTooltipPortal open={cascadeHover} anchorRef={cascadeRef}>
                       <strong>{cascadeCount} alternatif rota</strong> — ana etki yoluna
                       girmeyen bağlantılar. Turuncu kesikli oklarla gösterilir.
                       {showCascadeEdges
                         ? ' Haritada görünür — gizlemek için tıkla.'
                         : ' Şu an gizli — göstermek için tıkla.'}
-                    </span>
+                    </DockTooltipPortal>
                   </span>
                 </div>
               </div>
@@ -1517,6 +1763,9 @@ export function MapCanvasBar({
               </span>
             </div>
           </div>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </div>
     </div>

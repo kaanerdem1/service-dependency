@@ -3,6 +3,7 @@
  */
 import { useMemo, useState } from 'react'
 import { EmptyState } from './EmptyState'
+import { StatusBadge } from '../motion/StatusBadge'
 import { MotionModalBackdrop, MotionModalPanel } from '../motion/MotionModal'
 import {
   FLAG_LABEL,
@@ -66,7 +67,7 @@ export function InboxPanel({
             className={`inbox-item update ${n.read ? 'read' : 'unread'} kind-${n.kind}`}
             onClick={() => toggleGroup(n.id)}
           >
-            {!n.read && <span className="inbox-kind">YENİ</span>}
+            {!n.read && <StatusBadge tone="new" pulse>YENİ</StatusBadge>}
             <span className="inbox-id">{n.batchId ?? n.requestId}</span>
             <span className="inbox-title">{n.title}</span>
             <span className="svc-meta">
@@ -98,7 +99,7 @@ export function InboxPanel({
           className={`inbox-item update ${n.read ? 'read' : 'unread'} kind-${n.kind}`}
           onClick={() => onOpen(openId)}
         >
-          {!n.read && <span className="inbox-kind">YENİ</span>}
+            {!n.read && <StatusBadge tone="new" pulse>YENİ</StatusBadge>}
           <span className="inbox-id">{n.requestId}</span>
           <span className="inbox-title">{n.title}</span>
           {n.flag && (
@@ -150,7 +151,7 @@ export function InboxPanel({
                     className="inbox-item action"
                     onClick={() => onOpen(request.id)}
                   >
-                    <span className="inbox-kind">YANIT BEKLENİYOR</span>
+                    <StatusBadge tone="pending" pulse>YANIT BEKLENİYOR</StatusBadge>
                     <span className="inbox-id">{request.id}</span>
                     <span className="inbox-title">
                       <strong>{row.serviceName}</strong>

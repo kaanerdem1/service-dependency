@@ -11,10 +11,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
-import { motion } from 'motion/react'
-import { layoutSpring } from './motion/config'
 import { MotionListItem } from './motion/MotionList'
 import { StageTabs } from './motion/StageTabs'
+import { StageTabPanels } from './motion/StageTabPanels'
 import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
 import {
   projectLabelsFromTree,
@@ -51,7 +50,6 @@ import {
   searchMethods,
   searchServices,
 } from './api/client'
-import { canOpenChangeRequest } from './auth/permissions'
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
 import type { SessionUser } from './mock/session'
 import type {
@@ -170,6 +168,21 @@ export default function App() {
   const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
+
+  const toggleNavPinned = useCallback(() => {
+    setNavPinned((pinned) => {
+      const next = !pinned
+      if (next) setNavHover(true)
+      trail.record(
+        'sidebar_toggle',
+        undefined,
+        next
+          ? 'Sol modül paneli kilitlendi'
+          : 'Sol modül paneli kilidi açıldı',
+      )
+      return next
+    })
+  }, [trail])
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme
@@ -513,8 +526,6 @@ export default function App() {
       ? history[historyIndex]
       : undefined
   const hasSelection = !!pivotId
-  const canChange =
-    session && service ? canOpenChangeRequest(session, service) : false
 
   const serviceNameById = (() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
@@ -542,12 +553,14 @@ export default function App() {
         {liveStatus}
       </div>
 
-      <div className={`app-frame${navExpanded ? '' : ' is-nav-collapsed'}`}>
-        <motion.aside
-          className="module-sidebar"
-          layout
-          transition={layoutSpring}
-          data-motion="sidebar-layout"
+      <div
+        className={`app-frame${navExpanded ? ' sidebar-panel-open' : ' is-nav-collapsed'}`}
+      >
+        <aside
+          className={`module-sidebar${navExpanded ? ' is-expanded' : ''}${navPinned ? ' is-pinned' : ''}`}
+          data-motion="sidebar-overlay"
+          data-expanded={navExpanded ? 'true' : 'false'}
+          data-pinned={navPinned ? 'true' : 'false'}
           onMouseEnter={() => setNavHover(true)}
           onMouseLeave={() => {
             if (allowNavCollapse && !navPinned) setNavHover(false)
@@ -583,19 +596,7 @@ export default function App() {
               aria-label={navPinned ? 'Modül paneli kilitli — kilidi aç' : 'Modül panelini kilitle — açık kalsın'}
               aria-expanded={navExpanded}
               aria-pressed={navPinned}
-              onClick={() => {
-                setNavPinned((pinned) => {
-                  const next = !pinned
-                  trail.record(
-                    'sidebar_toggle',
-                    undefined,
-                    next
-                      ? 'Sol modül paneli kilitlendi'
-                      : 'Sol modül paneli kilidi açıldı',
-                  )
-                  return next
-                })
-              }}
+              onClick={toggleNavPinned}
             >
               <SidebarLockIcon locked={navPinned} />
               <span className="sidebar-lock-label">
@@ -717,7 +718,7 @@ export default function App() {
             />
           </div>
           </div>
-        </motion.aside>
+        </aside>
 
         <div className="workspace-column">
           {session && (
@@ -768,7 +769,7 @@ export default function App() {
                     >
                       Seçimi bırak
                     </button>
-                    {canChange && affected.length > 0 && (
+                    {session && service && (
                       <button
                         type="button"
                         className="btn primary compact"
@@ -801,7 +802,7 @@ export default function App() {
               </div>
 
               <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
-                <div className={`stage-panels is-tab-${tab}`}>
+                <StageTabPanels tab={tab} mapOnly={tab === 'map'}>
                   <section
                     className="stage-panel stage-panel-map"
                     aria-hidden={tab !== 'map'}
@@ -968,7 +969,7 @@ export default function App() {
                       />
                     )}
                   </section>
-                </div>
+                </StageTabPanels>
               </div>
             </>
           )}

@@ -10,11 +10,9 @@ export function findUser(personId: string): Owner | undefined {
   return SESSION_USERS.find((u) => u.id === personId)
 }
 
-/** Mevcut servis için değişiklik talebi. */
-export function canOpenChangeRequest(user: Owner, service: Service): boolean {
-  const domain = service.owner?.team
-  if (!user.team || !domain || user.team !== domain) return false
-  return user.role === 'lead' || user.role === 'member'
+/** Mevcut servis için değişiklik talebi — oturum açıksa her serviste. */
+export function canOpenChangeRequest(user: Owner, _service: Service): boolean {
+  return Boolean(user?.id)
 }
 
 /** Katalogda olmayan yeni servis talebi — yalnız lider. */

@@ -28,6 +28,22 @@ export const accordionSpring: Transition = {
   mass: 0.9,
 }
 
+/** Animate UI AutoHeight — içerik yüksekliği spring */
+export const autoHeightSpring: Transition = {
+  type: 'spring',
+  stiffness: 300,
+  damping: 30,
+  mass: 0.88,
+  bounce: 0,
+}
+
+export const popoverSpring: Transition = {
+  type: 'spring',
+  stiffness: 380,
+  damping: 32,
+  mass: 0.82,
+}
+
 export const tooltipSpring: Transition = {
   type: 'spring',
   stiffness: 380,

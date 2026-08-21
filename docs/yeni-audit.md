@@ -12,7 +12,7 @@
 
 ## Animasyon taraması (ürün: servis katalog + etki haritası)
 
-Projede şu an **Motion / Framer Motion yok**; animasyonlar CSS. Aşağıdaki öneriler ya `motion` ekleyerek ya da aynı pattern’i CSS/layoutId denkliğiyle kopyalayarak alınabilir. Hedef: katalog/etki analizi okunabilirliği — pazarlama hero / shader / custom cursor değil.
+Projede `motion` kurulu (`web/src/motion/*`). Animate UI’nin çoğu maddesi Motion.dev ile **aynı primitive** — ayrı “Animate UI paketi” görsel fark yaratmaz.
 
 ### Özet (ne alınır, ne alınmaz)
 
@@ -27,13 +27,11 @@ Projede şu an **Motion / Framer Motion yok**; animasyonlar CSS. Aşağıdaki ö
 
 ---
 
-
-
 ### 1. [Motion.dev](http://Motion.dev) — ✅ uygulandı (2026-08-21)
 
 Kaynak: [Motion examples](https://motion.dev/examples)
 
-**Tamamlanan:** tab pill (`layoutId`), layout (sidebar/drawer/katman), AnimatedNumber, liste enter/exit, tooltip spring, skeleton, ağaç accordion, dialog animasyonları. Paket: `motion` (`web/src/motion/*`).
+**Tamamlanan:** tab pill (`layoutId`), layout (sidebar/drawer/katman), AnimatedNumber, liste enter/exit, tooltip spring, skeleton, ağaç accordion, dialog animasyonları. Paket: `motion` (`web/src/motion/`*).
 
 **Hâlâ alınmamalı (cursor + dekoratif):**
 
@@ -50,72 +48,30 @@ Kaynak: [Motion examples](https://motion.dev/examples)
 
 ---
 
+### 2. Animate UI — ⚠️ Motion.dev ile örtüşüyor
 
-
-### 2. Animate UI
-
-Kaynak: [Introduction](https://animate-ui.com/docs) · [Components](https://animate-ui.com/docs/components)  
-shadcn registry + Tailwind + Motion. NPM paketi değil: **kopyala, stillerimizi uygula**. Tailwind yoksa primitive’lerin motion kısmını alıp CSS token’lara bağlamak gerekir.
-
-**Alınabilir:**
-
-1. **Tabs (kaydırılan içerik + spring)** — Harita ↔ İlişkiler (şu an CSS `translateX`)
-  - [Tabs component](https://animate-ui.com/docs/components/animate/tabs)
-2. **Tooltip (layout morph, delay)** — ağaç + dock tooltipleri tek sistem
-  - [Tooltip](https://animate-ui.com/docs/components/animate/tooltip)  
-  - [Tooltip primitive](https://animate-ui.com/docs/primitives/animate/tooltip)
-3. **Accordion / Collapsible** — Proje → Jar → Servis ağacı
-  - [Radix Accordion](https://animate-ui.com/docs/components/radix/accordion)
-4. **Sidebar + SidebarRail** — hover-expand + kilitle (şu anki rail’e en yakın hazır parça)
-  - [Animated Sidebar (shadcn + Animate UI)](https://animate-ui.com/docs/components/radix/sidebar)  
-  - Tüm sidebar’ı rewrite etme; **rail + width spring** fikirlerini al.
-5. **Sheet** — Etki Özeti sağ panel (aç/kapa, daralt)
-  - Changelog’da Radix Sheet primitive: [Changelog](https://animate-ui.com/docs/changelog)
-6. **Counter** — blast radius sayıları
-  - [Changelog — Counter primitive](https://animate-ui.com/docs/changelog)
-7. **AutoHeight** — arama dropdown, proje filtresi popover, özet gövde
-  - [AutoHeight](https://animate-ui.com/docs/primitives/effects/auto-height)
-8. **Dialog / Popover / Progress** — talep modal, proje filtresi, katman yükleme
-  - [Changelog](https://animate-ui.com/docs/changelog)
-
-**Alınmamalı:**
-
-- Backgrounds (gravity stars vb.) — harita canvas’ı zaten dolu  
-- Animated Lucide icon set’in tamamı — her satırda icon bounce okumayı bozar  
-- Cursor primitive — Motion cursor ile aynı sebep
+**Fark yok sayılır:** Tabs pill, Tooltip, Accordion, Counter, Dialog → zaten §1’de var.  
+**Gerçekten farklı olan:** AutoHeight (arama listesi), Popover (proje filtresi) — bunlar wrapper; görsel etki sınırlı.
 
 ---
 
+### 3. Morphin.dev — ✅ denendi (2026-08-21)
 
+**Uygulanan (§1’den farklı, test edilebilir):**
 
-### 3. [Morphin.dev](http://Morphin.dev)
+1. **Dock magnification** — harita dock ikonları hover’da scale + yukarı kalkma (`DockBtn`)
+2. **Animated Status Badge** — inbox’ta pulse rozetler (`StatusBadge`)
+3. **Navbar morph hover** — sekme üzerinde kayarak morph arka plan (`MorphHoverIndicator`)
 
-Kaynak: [morphin.dev](https://morphin.dev/)  
-Çoğu kart **“Pro users only”**. Doğrudan kopya değil; görsel referans.
+**Ayrıca (audit notu + kullanıcı geri bildirimi):**
 
-**Alınabilir (ilham / gerekirse Pro):**
+- ~~Pivot settle~~ — geri alındı (daha kötü hissettirdi); orijinal morph + snap
+- **Sidebar overlay** — hover’da panel workspace’i itmeden `translate3d` ile kayar (76px sabit layout)
+- **Değişiklik talebi** — oturum açıksa her serviste (tek kullanıcı)
 
-1. **Motion System Dock Navigation** — dock’a en yakın örnek (tab transition, height, scrollable panel)
-  - [Dock navigation](https://morphin.dev/components/motion-system-dock-navigation-component-for-react-and-framer-motion)  
-  - Bizim dock: zoom/katman/yan bağ. MacOS “app dock magnification” değil; **ikon scale-on-hover + panel height** bakılabilir.
-2. **Animated Status Badge with Table** — İlişkiler listesi / talep inbox satır durumu
-  - [Ana sayfa listesinde](https://morphin.dev/)
-3. **Animated Navbar Menu with Morphing Hover** — üst Geri/İleri + sekme pill
-  - [Ana sayfa listesinde](https://morphin.dev/)
-
-**Alınmamalı (ürün özü değil):**
-
-- [Animated Dashboard Chart UI](https://morphin.dev/components/animated-dashboard-chart-ui) — line/progress SaaS dashboard; lineage haritası chart değil  
-- [Animated Expandable Card Stack](https://morphin.dev/components/animated-expandable-card-stack) — galeri/stack; servis ağacı değil  
-- 3D Work Showcase, Scroll Text Reveal, Team Cards, Currency Converter, File Upload — başka ürün
-
-**Kısmi:**
-
-- Customer Support Agent Dashboard / AI Workspace — inbox + metrik kart layout ilhamı; animasyon öncelikli değil
+**Alınmamalı:** Dashboard chart, card stack, 3D showcase.
 
 ---
-
-
 
 ### 4. 21st.dev community
 
@@ -144,22 +100,14 @@ Kaynak: [Community components](https://21st.dev/community/components)
 
 ---
 
-
-
 ### 5. Uygulama önceliği (bu repo)
 
-**Motion.dev maddeleri tamamlandı.** Sırada:
-
-1. **Dock hover scale (hafif)** — 21st Dock Tabs / Morphin dock; magnification abartma
-2. **Animate UI** maddeleri (§2) — gerekirse Tabs/Tooltip/Sheet kaynaklarından ince ayar
-3. **21st / Morphin** (§3–4) — dock, drawer, sidebar ilhamları
-
-Bağımlılık: `motion` paketi kurulu. `prefers-reduced-motion`: sayı tick ve liste stagger sadeleşir.
-
-
-
-
+1. **Pivot settle ince ayar** — radial mod, fitView padding
+2. **21st drawer** (§4)
+3. **Status badge** — İlişkiler listesine genişlet
 
 FARKLI NOKTAYA ÖNERİ: 
 
-harita görünümünde yeni bir node'a tıklayınca onu merkeze alırken kayan animasyonun ardından keskin bir geçiş oluyor onu yumuşatmak laızm, 
+
+
+Sol üstteki ikon ve ürün adı üst ortaya alınıp soldaki modüller kısmı biraz daha yukarı taşınabilir ? 

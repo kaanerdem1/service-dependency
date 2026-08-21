@@ -17,13 +17,10 @@ export function sameDomain(user: SessionActor, service: Service): boolean {
 }
 
 /**
- * Değişiklik talebi: domain ekibindeki lead + member.
- * Servis seçiliyken geçerli.
+ * Değişiklik talebi: tek kullanıcı / demo modunda oturum açıksa her serviste açılabilir.
  */
-export function canOpenChangeRequest(user: SessionActor, service: Service): boolean {
-  if (!sameDomain(user, service)) return false
-  const role: TeamRole | undefined = user.role
-  return role === 'lead' || role === 'member'
+export function canOpenChangeRequest(user: SessionActor, _service: Service): boolean {
+  return Boolean(user?.id)
 }
 
 /**

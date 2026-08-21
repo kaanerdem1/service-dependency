@@ -26,6 +26,7 @@ import ReactFlow, {
   Handle,
   MarkerType,
   Position,
+  ReactFlowProvider,
   applyNodeChanges,
   getBezierPath,
   getStraightPath,
@@ -67,9 +68,12 @@ import {
   radialEdgeGeometry,
   radialHandlePair,
   radialLabelSide,
+  radialMaxZoom,
   radialSpokeEnds,
   type MapLayout,
   type MapLayoutMode,
+  type RadialLabelSide,
+  type RadialViewportHint,
 } from '../impact/mapLayout'
 import type {
   ImpactGraph,
@@ -150,6 +154,7 @@ type ServiceNodeData = {
   radialAngle?: number
   radialCx?: number
   radialCy?: number
+  radialLabelSide?: RadialLabelSide
 }
 
 type MethodBadgeData = {
@@ -197,7 +202,9 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
     }
     return data.radialAngle ?? 0
   })()
-  const labelSide = radial ? radialLabelSide(liveAngle, isCenter) : null
+  const labelSide = radial
+    ? data.radialLabelSide ?? radialLabelSide(liveAngle, isCenter)
+    : null
   const noteCount = data.noteCount ?? 0
   const showNoteBadge =
     !radial &&
@@ -994,6 +1001,7 @@ function buildGraph(
   filterActive = false,
   layout: MapLayout = mapLayoutForDepth(1),
   layoutMode: MapLayoutMode = 'ltr',
+  radialViewport?: RadialViewportHint,
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
   const { nodeW, colGap, rowGap, tipChars } = layout
@@ -1027,11 +1035,11 @@ function buildGraph(
     const extra = collapsedMeta.has(hop) ? 1 : 0
     rowCount = Math.max(rowCount, vis + extra)
   }
-  const centerY = 40 + ((rowCount - 1) * rowGap) / 2
+  const centerY = 22 + ((rowCount - 1) * rowGap) / 2
   const colPitch = nodeW + colGap
   const centerSize =
     layoutMode === 'radial' ? 'md' : mapNodeSizeFor('center', 0, visibleMaxHop)
-  const centerW = layoutMode === 'radial' ? RADIAL_CENTER_W : 348
+  const centerW = layoutMode === 'radial' ? RADIAL_CENTER_W : 372
 
   /** Sol pad yok — harita origin mapLeftX() */
   const nodes: Node<ServiceNodeData>[] = [
@@ -1243,6 +1251,7 @@ function buildGraph(
               centerId: center.id,
               centerWidth: centerW,
               treeParent,
+              viewport: radialViewport,
             },
           )
           radialCenter = { cx, cy }
@@ -1390,6 +1399,9 @@ export function ImpactMap({
   const [pivotFlash, setPivotFlash] = useState(false)
   const [pivotMorphing, setPivotMorphing] = useState(false)
   const mapRef = useRef<HTMLDivElement>(null)
+  const [mapPane, setMapPane] = useState({ w: 0, h: 0 })
+  const [userInteracting, setUserInteracting] = useState(false)
+  const interactEndTimer = useRef(0)
   const nodeDragged = useRef(false)
   const lastTidyRef = useRef(0)
   const layoutEpochRef = useRef('')
@@ -1501,13 +1513,50 @@ export function ImpactMap({
     }
   }, [sessionUserId, sessionUserName, trail, graph.center.name, onSnapshotSaved])
 
-  const layout = useMemo(
-    () =>
+  useEffect(() => {
+    const el = mapRef.current
+    if (!el) return
+    let t = 0
+    const measure = () => {
+      const r = el.getBoundingClientRect()
+      const w = Math.round(r.width)
+      const h = Math.round(r.height)
+      setMapPane((prev) =>
+        Math.abs(prev.w - w) < 24 && Math.abs(prev.h - h) < 24 ? prev : { w, h },
+      )
+    }
+    measure()
+    const ro = new ResizeObserver(() => {
+      window.clearTimeout(t)
+      t = window.setTimeout(measure, 160)
+    })
+    ro.observe(el)
+    return () => {
+      window.clearTimeout(t)
+      ro.disconnect()
+    }
+  }, [mapExpanded])
+
+  useEffect(() => {
+    return () => window.clearTimeout(interactEndTimer.current)
+  }, [])
+
+  const radialViewport = useMemo((): RadialViewportHint | undefined => {
+    if (layoutMode !== 'radial') return undefined
+    const w = mapPane.w || (typeof window !== 'undefined' ? window.innerWidth : 960)
+    const h = mapPane.h || (typeof window !== 'undefined' ? window.innerHeight : 640)
+    return { width: w, height: h, fullscreen: mapExpanded }
+  }, [layoutMode, mapPane.w, mapPane.h, mapExpanded])
+
+  const layout = useMemo(() => {
+    const base =
       layoutMode === 'radial'
         ? mapLayoutForRadial()
-        : mapLayoutForDepth(visibleMaxHop),
-    [visibleMaxHop, layoutMode],
-  )
+        : mapLayoutForDepth(visibleMaxHop)
+    if (layoutMode !== 'radial' || !mapExpanded || mapPane.w <= 0) return base
+    const aspect = mapPane.w / Math.max(mapPane.h, 1)
+    return { ...base, maxZoom: radialMaxZoom(base, true, aspect) }
+  }, [visibleMaxHop, layoutMode, mapExpanded, mapPane.w, mapPane.h])
 
   const built = useMemo(
     () =>
@@ -1521,6 +1570,7 @@ export function ImpactMap({
         Boolean(projectFilter),
         layout,
         layoutMode,
+        radialViewport,
       ),
     [
       filteredGraph,
@@ -1531,6 +1581,7 @@ export function ImpactMap({
       visibleMaxHop,
       layout,
       layoutMode,
+      radialViewport,
     ],
   )
 
@@ -1724,7 +1775,7 @@ export function ImpactMap({
 
     const centerChanged = prevCenterLayoutRef.current !== graph.center.id
     prevCenterLayoutRef.current = graph.center.id
-    const layoutEpoch = `${layoutMode}:${visibleMaxHop}:${layout.size}`
+    const layoutEpoch = `${layoutMode}:${visibleMaxHop}:${layout.size}:${mapExpanded}`
     const epochChanged = layoutEpochRef.current !== layoutEpoch
     layoutEpochRef.current = layoutEpoch
     const resetLayout =
@@ -1840,7 +1891,7 @@ export function ImpactMap({
 
   // Hover: yalnız oğuna değen kenarlar · tree yeşil / cascade kahverengi
   useEffect(() => {
-    const focusing = Boolean(focusId || focusEdgeId)
+    const focusing = !userInteracting && Boolean(focusId || focusEdgeId)
     const sourceEdges = showCascadeEdges
       ? built.edges
       : built.edges.filter(
@@ -1911,7 +1962,7 @@ export function ImpactMap({
         }
       }),
     )
-  }, [built.edges, focusId, focusEdgeId, setEdges, showCascadeEdges])
+  }, [built.edges, focusId, focusEdgeId, setEdges, showCascadeEdges, userInteracting])
 
   const pivotToNode = useCallback(
     async (node: Node) => {
@@ -2074,26 +2125,48 @@ export function ImpactMap({
     setFocusEdgeId(null)
   }, [])
 
-  const onNodeMouseEnter = useCallback((_: React.MouseEvent, node: Node) => {
+  const onMoveStart = useCallback(() => {
+    window.clearTimeout(interactEndTimer.current)
+    setUserInteracting(true)
+    setFocusId(null)
     setFocusEdgeId(null)
-    setFocusId((prev) => (prev === node.id ? prev : node.id))
   }, [])
+
+  const onMoveEnd = useCallback(() => {
+    window.clearTimeout(interactEndTimer.current)
+    interactEndTimer.current = window.setTimeout(() => {
+      setUserInteracting(false)
+    }, 120)
+  }, [])
+
+  const onNodeMouseEnter = useCallback(
+    (e: React.MouseEvent, node: Node) => {
+      if (e.buttons || userInteracting) return
+      setFocusEdgeId(null)
+      setFocusId((prev) => (prev === node.id ? prev : node.id))
+    },
+    [userInteracting],
+  )
 
   const onNodeMouseLeave = useCallback(() => {
     setFocusId(null)
   }, [])
 
-  const onEdgeMouseEnter = useCallback((_: React.MouseEvent, edge: Edge) => {
-    setFocusId(null)
-    setFocusEdgeId(edge.id)
-  }, [])
+  const onEdgeMouseEnter = useCallback(
+    (e: React.MouseEvent, edge: Edge) => {
+      if (e.buttons || userInteracting) return
+      setFocusId(null)
+      setFocusEdgeId(edge.id)
+    },
+    [userInteracting],
+  )
 
   const onEdgeMouseLeave = useCallback(() => {
     setFocusEdgeId(null)
   }, [])
 
   const focusing = Boolean(
-    focusId || focusEdgeId || expandedMethodServiceId,
+    !userInteracting && (focusId || focusEdgeId || expandedMethodServiceId),
   )
 
   const slideExitThen = useCallback(
@@ -2181,6 +2254,8 @@ export function ImpactMap({
       {graph.truncated && graph.reason && (
         <p className="map-budget-hint">{graph.reason}</p>
       )}
+      <div className="map-canvas-dock-host">
+      <ReactFlowProvider>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -2196,8 +2271,11 @@ export function ImpactMap({
         selectNodesOnDrag={false}
         nodesConnectable={false}
         panOnDrag
+        onlyRenderVisibleElements={false}
         minZoom={layout.minZoom}
         maxZoom={layout.maxZoom}
+        onMoveStart={onMoveStart}
+        onMoveEnd={onMoveEnd}
         onNodeClick={onNodeClick}
         onNodeDrag={() => {
           nodeDragged.current = true
@@ -2213,15 +2291,20 @@ export function ImpactMap({
         }}
         proOptions={{ hideAttribution: true }}
       >
-        <RadialLabelZoomSync />
+        <RadialLabelZoomSync
+          layoutTick={`${layoutMode}-${visibleMaxHop}-${tidyNonce}-${graph.center.id}-${mapExpanded}`}
+        />
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${tidyNonce}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${mapExpanded}-${tidyNonce}`}
           layout={layout}
+          layoutMode={layoutMode}
           drawerOpen={infoPanelOpen}
+          mapExpanded={mapExpanded}
           navDirection={navDirection}
           onNavDirectionConsumed={onNavDirectionConsumed}
+          userInteracting={userInteracting}
         />
         <Background
           variant={BackgroundVariant.Dots}
@@ -2229,6 +2312,7 @@ export function ImpactMap({
           size={1.55}
           color="var(--map-dot)"
         />
+      </ReactFlow>
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
@@ -2311,7 +2395,8 @@ export function ImpactMap({
           projectOptions={projectOptions}
           onProjectFilterChange={setProjectFilter}
         />
-      </ReactFlow>
+      </ReactFlowProvider>
+      </div>
       </div>
       <MapInfoPanel
         center={graph.center}

@@ -1,5 +1,7 @@
 import { motion } from 'motion/react'
+import { useRef, useState } from 'react'
 import { layoutSpring } from './config'
+import { MorphHoverIndicator } from './MorphHover'
 
 export type StageTabId = 'map' | 'affected' | 'overview'
 
@@ -56,12 +58,16 @@ type Props = {
   onSelect: (tab: StageTabId) => void
 }
 
-/** Motion tab-select — shared layoutId pill */
+/** Motion + Morphin morph hover — sekme pill + hover arka plan */
 export function StageTabs({ tab, onSelect }: Props) {
+  const hoverRef = useRef<StageTabId | null>(null)
+  const [hover, setHover] = useState<StageTabId | null>(null)
+
   return (
-    <nav className="stage-tabs" aria-label="Görünüm" data-motion="tab-pill">
+    <nav className="stage-tabs" aria-label="Görünüm" data-motion="morphin-tab-nav">
       {TABS.map((t) => {
         const on = tab === t.id
+        const showMorph = hover === t.id && !on
         return (
           <button
             key={t.id}
@@ -69,6 +75,16 @@ export function StageTabs({ tab, onSelect }: Props) {
             role="tab"
             aria-selected={on}
             className={`stage-tab${on ? ' on' : ''}`}
+            onMouseEnter={() => {
+              hoverRef.current = t.id
+              setHover(t.id)
+            }}
+            onMouseLeave={() => {
+              if (hoverRef.current === t.id) {
+                hoverRef.current = null
+                setHover(null)
+              }
+            }}
             onClick={() => onSelect(t.id)}
           >
             {on ? (
@@ -78,6 +94,11 @@ export function StageTabs({ tab, onSelect }: Props) {
                 transition={layoutSpring}
               />
             ) : null}
+            <MorphHoverIndicator
+              active={showMorph}
+              layoutId="stage-tab-hover"
+              className="stage-tab-hover-morph"
+            />
             <span className="stage-tab-icon" aria-hidden>
               {t.icon}
             </span>

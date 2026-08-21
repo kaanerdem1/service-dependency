@@ -1,4 +1,5 @@
 import { motion } from 'motion/react'
+import { MotionProgress } from './MotionProgress'
 
 type Props = {
   className?: string
@@ -29,6 +30,7 @@ export function SkeletonShimmer({ className = 'skeleton block', lines = 1 }: Pro
 export function MapLoadingSkeleton() {
   return (
     <div className="map-loading-skeleton" data-motion="map-skeleton" aria-hidden>
+      <MotionProgress active />
       <SkeletonShimmer className="map-skeleton-node" lines={5} />
       <p className="map-loading-skeleton-label">Harita yükleniyor…</p>
     </div>

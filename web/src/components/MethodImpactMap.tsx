@@ -14,6 +14,7 @@ import ReactFlow, {
   Handle,
   MarkerType,
   Position,
+  ReactFlowProvider,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -32,6 +33,7 @@ import {
   radialLabelSide,
   type MapLayout,
   type MapLayoutMode,
+  type RadialLabelSide,
 } from '../impact/mapLayout'
 import type { MethodImpactGraph, MethodRef } from '../types'
 import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from './ImpactChrome'
@@ -78,6 +80,7 @@ type MapNodeData = {
   radialAngle?: number
   radialCx?: number
   radialCy?: number
+  radialLabelSide?: RadialLabelSide
 }
 
 function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
@@ -92,7 +95,9 @@ function MapNodeView({ data, xPos, yPos }: NodeProps<MapNodeData>) {
     }
     return data.radialAngle ?? 0
   })()
-  const labelSide = radial ? radialLabelSide(liveAngle, isCenter) : null
+  const labelSide = radial
+    ? data.radialLabelSide ?? radialLabelSide(liveAngle, isCenter)
+    : null
   const label = (
     <span
       className={`dd-node-label${data.showTip ? ' name-tip is-short' : ''}`}
@@ -707,7 +712,8 @@ export function MethodImpactMap({
           : `çağıran blast · ${graph.nodes.length} method`}
         {graph.truncated ? ` · ${graph.reason ?? 'kesildi'}` : ''}
       </p>
-      <div className="map-canvas">
+      <div className="map-canvas map-canvas-dock-host">
+      <ReactFlowProvider>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -728,6 +734,7 @@ export function MethodImpactMap({
         selectNodesOnDrag={false}
         nodesConnectable={false}
         panOnDrag
+        onlyRenderVisibleElements={false}
         minZoom={layout.minZoom}
         maxZoom={layout.maxZoom}
         onNodeClick={onNodeClick}
@@ -746,12 +753,15 @@ export function MethodImpactMap({
         }}
         proOptions={{ hideAttribution: true }}
       >
-        <RadialLabelZoomSync />
+        <RadialLabelZoomSync
+          layoutTick={`${layoutMode}-${visibleMaxHop}-${tidyNonce}-${graph.center.id}`}
+        />
         <MapViewportSync
           centerId={centerNodeId}
           visibleMaxHop={visibleMaxHop}
           layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}-${layoutMode}-${tidyNonce}`}
           layout={layout}
+          layoutMode={layoutMode}
         />
         <Background
           variant={BackgroundVariant.Dots}
@@ -759,6 +769,7 @@ export function MethodImpactMap({
           size={1.55}
           color="var(--map-dot)"
         />
+      </ReactFlow>
         <MapCanvasBar
           visibleMaxHop={visibleMaxHop}
           maxHopAvailable={maxHopAvailable}
@@ -787,7 +798,7 @@ export function MethodImpactMap({
             setTidyNonce((n) => n + 1)
           }}
         />
-      </ReactFlow>
+      </ReactFlowProvider>
       </div>
     </div>
   )

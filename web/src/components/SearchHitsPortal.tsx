@@ -1,6 +1,8 @@
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { AutoHeight } from '../motion/AutoHeight'
+import { popoverSpring } from '../motion/config'
 
 type Props = {
   open: boolean
@@ -8,10 +10,10 @@ type Props = {
   children: ReactNode
 }
 
-/** Sidebar arama sonuçları — body portal, sidebar overflow'un üstünde */
+/** Sidebar arama sonuçları — body portal, AutoHeight + spring açılış */
 export function SearchHitsPortal({ open, anchorRef, children }: Props) {
   const [style, setStyle] = useState<React.CSSProperties>({})
-  const listRef = useRef<HTMLUListElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
     if (!open || !anchorRef.current) return
@@ -19,7 +21,7 @@ export function SearchHitsPortal({ open, anchorRef, children }: Props) {
       const anchor = anchorRef.current
       if (!anchor) return
       const r = anchor.getBoundingClientRect()
-      const listH = listRef.current?.offsetHeight ?? 280
+      const listH = shellRef.current?.offsetHeight ?? 280
       const gap = 6
       const spaceBelow = window.innerHeight - r.bottom - gap
       const spaceAbove = r.top - gap
@@ -52,14 +54,20 @@ export function SearchHitsPortal({ open, anchorRef, children }: Props) {
   return createPortal(
     <AnimatePresence>
       {open ? (
-        <ul
-          ref={listRef}
-          className="search-hits search-hits-portal"
-          data-motion="search-list"
+        <motion.div
+          ref={shellRef}
+          className="search-hits-shell search-hits-portal"
+          data-motion="search-auto-height"
           style={style}
+          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -4, scale: 0.99 }}
+          transition={popoverSpring}
         >
-          {children}
-        </ul>
+          <AutoHeight deps={[children]} className="search-hits-auto">
+            <ul className="search-hits">{children}</ul>
+          </AutoHeight>
+        </motion.div>
       ) : null}
     </AnimatePresence>,
     document.body,
