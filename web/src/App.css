@@ -32,8 +32,8 @@
   align-items: center;
   justify-content: flex-end;
   flex-shrink: 0;
-  min-height: 58px;
-  padding: 6px 16px 8px;
+  min-height: 46px;
+  padding: 4px 16px 6px;
   background: var(--shell-bg);
   box-sizing: border-box;
 }
@@ -524,10 +524,6 @@
   flex-direction: column;
 }
 
-.app-frame.is-nav-collapsed .module-sidebar {
-  box-shadow: inset -2px 0 0 color-mix(in srgb, var(--shell-tree-selected-accent) 55%, transparent);
-}
-
 .module-sidebar.is-layout-instant,
 .module-sidebar.is-layout-instant .module-sidebar-inner,
 .module-sidebar.is-layout-instant .module-sidebar-rail {
@@ -546,7 +542,7 @@
   z-index: 14;
   display: flex;
   flex-direction: column;
-  padding: 4px 10px 16px 12px;
+  padding: 2px 10px 16px 12px;
   box-sizing: border-box;
   background: var(--shell-sidebar-bg);
   box-shadow: none;
@@ -717,8 +713,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 0 4px;
-  padding: 0 4px 6px 2px;
+  margin: 0 0 2px;
+  padding: 0 4px 4px 2px;
   border-bottom: 0;
   flex-shrink: 0;
 }
@@ -1033,6 +1029,12 @@
   gap: 1px;
 }
 
+.module-sidebar .module-tree,
+.module-sidebar .tree-row {
+  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-synthesis: none;
+}
+
 .module-sidebar .tree-row {
   position: relative;
   grid-template-columns: 20px 18px minmax(0, 1fr);
@@ -1326,6 +1328,13 @@
 [data-theme='white'] .module-sidebar .tree-row.kind-method .tree-method-class,
 [data-theme='white'] .module-sidebar .tree-row.kind-method.selected .tree-method-class {
   color: #3d3832;
+}
+
+.module-sidebar .tree-label-btn {
+  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  font-variant-numeric: tabular-nums;
 }
 
 .main {
