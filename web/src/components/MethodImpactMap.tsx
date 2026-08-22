@@ -7,7 +7,7 @@
  *
  * Kaynak: GET /api/methods/:id/impact-graph
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -549,6 +549,33 @@ export function MethodImpactMap({
     [graph.center, viewMode, layered, expandedLayers, visibleMaxHop, layout, layoutMode],
   )
 
+  const builtNodeSig = useMemo(
+    () =>
+      built.nodes
+        .filter((n) => n.type === 'serviceNode')
+        .map(
+          (n) =>
+            `${n.id}:${Math.round(n.position.x)}:${Math.round(n.position.y)}`,
+        )
+        .join('|'),
+    [built.nodes],
+  )
+
+  const [viewportSyncKey, setViewportSyncKey] = useState(0)
+  useLayoutEffect(() => {
+    let raf1 = 0
+    let raf2 = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setViewportSyncKey((k) => k + 1)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [builtNodeSig, visibleMaxHop, layout.size, graph.center.id, tidyNonce])
+
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
 
@@ -799,9 +826,10 @@ export function MethodImpactMap({
         <MapViewportSync
           centerId={centerNodeId}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}-${layoutMode}-${tidyNonce}`}
+          layoutKey={`${viewMode}-${expandedLayers.size}-${graph.center.id}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleMaxHop}`}
           layout={layout}
           layoutMode={layoutMode}
+          viewportSyncKey={viewportSyncKey}
         />
         <Background
           variant={BackgroundVariant.Dots}

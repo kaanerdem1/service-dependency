@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode, RadialLabelSide } from '../impact/mapLayout'
 import {
+  autoFitMinZoom,
   fitViewPaddingForChrome,
   occludedRadialLabelIds,
   radialAnchorOffset,
@@ -44,6 +45,7 @@ export function MapViewportSync({
   navDirection = null,
   onNavDirectionConsumed,
   userInteracting = false,
+  viewportSyncKey = 0,
 }: {
   centerId: string
   visibleMaxHop: number
@@ -55,10 +57,13 @@ export function MapViewportSync({
   navDirection?: 'back' | 'forward' | null
   onNavDirectionConsumed?: () => void
   userInteracting?: boolean
+  viewportSyncKey?: number
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
   const prevHop = useRef(visibleMaxHop)
+  const prevSyncKey = useRef(viewportSyncKey)
+  const pendingHopFit = useRef(false)
   const drawerOpenRef = useRef(drawerOpen)
   drawerOpenRef.current = drawerOpen
   const mapExpandedRef = useRef(mapExpanded)
@@ -73,6 +78,16 @@ export function MapViewportSync({
   const lastSyncAt = useRef(0)
   const paneW = useStore((s) => s.width)
   const paneH = useStore((s) => s.height)
+
+  const fitZoomBounds = () => ({
+    minZoom: autoFitMinZoom(layout, visibleMaxHop),
+    maxZoom: layout.maxZoom,
+  })
+
+  const fitTargetNodes = () =>
+    rf
+      .getNodes()
+      .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge')
 
   const collectRadialItems = () => {
     return rf.getNodes().flatMap((n) => {
@@ -122,8 +137,8 @@ export function MapViewportSync({
       })
       const fitOpts = {
         padding,
-        minZoom: layout.minZoom,
-        maxZoom: layout.maxZoom,
+        ...fitZoomBounds(),
+        nodes: fitTargetNodes(),
       }
 
       if (mode === 'radial') {
@@ -146,8 +161,7 @@ export function MapViewportSync({
             paneW,
             paneH,
             {
-              minZoom: layout.minZoom,
-              maxZoom: layout.maxZoom,
+              ...fitZoomBounds(),
               padding,
               fullscreen: mapExpandedRef.current,
             },
@@ -158,7 +172,11 @@ export function MapViewportSync({
         }
       }
 
-      await rf.fitView({ ...fitOpts, duration })
+      if (fitOpts.nodes.length > 0) {
+        await rf.fitView({ ...fitOpts, duration })
+      } else {
+        await rf.fitView({ padding, ...fitZoomBounds(), duration })
+      }
       lastSyncAt.current = Date.now()
     } finally {
       syncingRef.current = false
@@ -169,9 +187,28 @@ export function MapViewportSync({
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
     const hopChanged = prevHop.current !== visibleMaxHop
+    const syncKeyChanged = prevSyncKey.current !== viewportSyncKey
     prevCenter.current = centerId
-    prevHop.current = visibleMaxHop
+    prevSyncKey.current = viewportSyncKey
+    if (hopChanged) {
+      prevHop.current = visibleMaxHop
+      pendingHopFit.current = true
+      if (!centerChanged) return
+    } else {
+      prevHop.current = visibleMaxHop
+    }
     const dir = navDirRef.current
+    const deferHop = pendingHopFit.current && !syncKeyChanged && !centerChanged
+    if (deferHop) return
+
+    const shouldRetryHopFit = pendingHopFit.current && syncKeyChanged
+
+    const delay =
+      syncKeyChanged && pendingHopFit.current
+        ? 16
+        : layoutMode === 'radial' && hopChanged
+          ? 120
+          : 72
 
     const id = window.setTimeout(() => {
       if (interactingRef.current) return
@@ -184,8 +221,8 @@ export function MapViewportSync({
         })
         const fitOpts = {
           padding,
-          minZoom: layout.minZoom,
-          maxZoom: layout.maxZoom,
+          ...fitZoomBounds(),
+          nodes: fitTargetNodes(),
         }
 
         if (centerChanged && (dir === 'back' || dir === 'forward')) {
@@ -199,17 +236,53 @@ export function MapViewportSync({
           await waitMs(16)
           await animateViewport(rf, target, 520, easeInOutCubic)
           consumedRef.current?.()
+          pendingHopFit.current = false
           return
         }
 
         await focusViewport(
-          centerChanged ? 320 : hopChanged ? 360 : 280,
+          centerChanged ? 320 : pendingHopFit.current ? 360 : 280,
           layoutMode,
         )
+        pendingHopFit.current = false
       })()
-    }, layoutMode === 'radial' && hopChanged ? 120 : 50)
+    }, delay)
+
+    let retryId = 0
+    if (shouldRetryHopFit) {
+      retryId = window.setTimeout(() => {
+        if (interactingRef.current) return
+        void focusViewport(280, layoutMode)
+      }, 340)
+    }
+
+    return () => {
+      window.clearTimeout(id)
+      window.clearTimeout(retryId)
+    }
+  }, [
+    centerId,
+    visibleMaxHop,
+    viewportSyncKey,
+    layoutKey,
+    layout,
+    layoutMode,
+    mapExpanded,
+    drawerOpen,
+    rf,
+  ])
+
+  const prevDrawer = useRef(drawerOpen)
+  useEffect(() => {
+    if (prevDrawer.current === drawerOpen) return
+    prevDrawer.current = drawerOpen
+    if (Date.now() - lastSyncAt.current < 180) return
+    const id = window.setTimeout(() => {
+      if (interactingRef.current) return
+      void focusViewport(240, layoutMode)
+    }, 100)
     return () => window.clearTimeout(id)
-  }, [centerId, visibleMaxHop, layoutKey, layout, layoutMode, mapExpanded, rf])
+  }, [drawerOpen, layout, layoutMode, rf, visibleMaxHop])
 
   const prevPane = useRef(`${Math.round(paneW)}x${Math.round(paneH)}`)
 
@@ -234,8 +307,8 @@ export function MapViewportSync({
               radial: false,
               fullscreen: mapExpandedRef.current,
             }),
-            minZoom: layout.minZoom,
-            maxZoom: layout.maxZoom,
+            ...fitZoomBounds(),
+            nodes: fitTargetNodes(),
             duration: 240,
           }))
     }, 100)

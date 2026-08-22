@@ -1386,6 +1386,16 @@ export function mapLabelNeedsTip(
   return name.trim().length > tipChars
 }
 
+/** Otomatik fitView — minZoom tabanı grafı kesmesin (manuel zoom sınırı ayrı) */
+export function autoFitMinZoom(
+  layout: MapLayout,
+  visibleMaxHop: number,
+): number {
+  const hopFloor =
+    visibleMaxHop <= 1 ? 0.42 : visibleMaxHop === 2 ? 0.34 : 0.28
+  return Math.min(layout.minZoom, hopFloor)
+}
+
 /** Breadcrumb / dar yerler için sondan kısaltma (ortadan … değil) */
 export function compactMapLabel(name: string, maxChars: number): string {
   const raw = name.trim()

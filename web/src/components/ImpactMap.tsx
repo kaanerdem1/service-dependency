@@ -13,6 +13,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -1687,6 +1688,33 @@ export function ImpactMap({
     ],
   )
 
+  const builtNodeSig = useMemo(
+    () =>
+      built.nodes
+        .filter((n) => n.type === 'serviceNode')
+        .map(
+          (n) =>
+            `${n.id}:${Math.round(n.position.x)}:${Math.round(n.position.y)}`,
+        )
+        .join('|'),
+    [built.nodes],
+  )
+
+  const [viewportSyncKey, setViewportSyncKey] = useState(0)
+  useLayoutEffect(() => {
+    let raf1 = 0
+    let raf2 = 0
+    raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        setViewportSyncKey((k) => k + 1)
+      })
+    })
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+    }
+  }, [builtNodeSig, visibleMaxHop, layout.size, graph.center.id, tidyNonce])
+
   const cascadeCount = useMemo(
     () =>
       built.edges.filter(
@@ -2442,7 +2470,7 @@ export function ImpactMap({
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${mapExpanded}-${tidyNonce}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${mapExpanded}-${tidyNonce}-${visibleMaxHop}`}
           layout={layout}
           layoutMode={layoutMode}
           drawerOpen={infoPanelOpen}
@@ -2450,6 +2478,7 @@ export function ImpactMap({
           navDirection={navDirection}
           onNavDirectionConsumed={onNavDirectionConsumed}
           userInteracting={userInteracting}
+          viewportSyncKey={viewportSyncKey}
         />
         <Background
           variant={BackgroundVariant.Dots}
