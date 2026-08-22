@@ -19,6 +19,8 @@ import {
   type MouseEvent as ReactMouseEvent,
   type RefObject,
 } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
+import { layoutSpring, listItemTransition } from '../motion/config'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -162,6 +164,8 @@ type ServiceNodeData = {
   radialCy?: number
   radialLabelSide?: RadialLabelSide
   radialLabelGapBoost?: number
+  /** Katman açılışında sıralı giriş (0-based) */
+  revealIndex?: number
 }
 
 type MethodBadgeData = {
@@ -198,6 +202,7 @@ function RingGuideView({ data }: NodeProps<RingGuideData>) {
 }
 
 function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
+  const reduced = useReducedMotion()
   const isCenter = data.kind === 'center'
   const isCollapsed = data.kind === 'collapsed'
   const radial = Boolean(data.radialDot)
@@ -241,21 +246,29 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
         )
       : undefined
 
+  const reveal =
+    data.revealIndex !== undefined && !reduced
+  const nodeClass = [
+    'dd-node',
+    `size-${data.size}`,
+    isCenter && 'center',
+    isCollapsed && 'collapsed',
+    data.bridge && 'bridge',
+    data.match && 'match',
+    !data.bridge && !data.match && data.hop > 1 && 'indirect',
+    radial && 'radial-dot',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div
-      className={[
-        'dd-node',
-        `size-${data.size}`,
-        isCenter && 'center',
-        isCollapsed && 'collapsed',
-        data.bridge && 'bridge',
-        data.match && 'match',
-        !data.bridge && !data.match && data.hop > 1 && 'indirect',
-        radial && 'radial-dot',
-      ]
-        .filter(Boolean)
-        .join(' ')}
+    <motion.div
+      className={nodeClass}
       style={radial ? { width: 'auto', height: 'auto', overflow: 'visible' } : undefined}
+      data-motion={reveal ? 'node-layer-reveal' : undefined}
+      initial={reveal ? { opacity: 0, y: 14, scale: 0.94 } : false}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={reveal ? listItemTransition(data.revealIndex!) : undefined}
     >
       <Handle
         type="target"
@@ -281,7 +294,15 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
         id="in-bottom"
         className="dd-handle dir"
       />
-      <div className="dd-node-ring" />
+      {isCenter ? (
+        <motion.div
+          className="dd-node-ring"
+          layoutId="impact-pivot-ring"
+          transition={layoutSpring}
+        />
+      ) : (
+        <div className="dd-node-ring" />
+      )}
       {showNoteBadge && (
         <button
           type="button"
@@ -403,7 +424,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
         id="side-in"
         className="dd-handle side"
       />
-    </div>
+    </motion.div>
   )
 }
 
@@ -1486,6 +1507,9 @@ export function ImpactMap({
   const layoutDirtyRef = useRef(false)
   const pivotAnimRef = useRef(0)
   const prevCenterLayoutRef = useRef(graph.center.id)
+  const prevBuiltIdsRef = useRef<Set<string>>(new Set())
+  const prevVisibleHopRef = useRef(visibleMaxHop)
+  const revealClearTimerRef = useRef(0)
 
   const filter = useMemo(
     () => applyProjectFilter(graph, projectFilter || null),
@@ -1862,6 +1886,30 @@ export function ImpactMap({
       epochChanged
     lastTidyRef.current = tidyNonce
 
+    const hopExpanded =
+      visibleMaxHop > prevVisibleHopRef.current && !centerChanged
+    const revealById = new Map<string, number>()
+    if (hopExpanded) {
+      const newcomers = built.nodes.filter(
+        (n) =>
+          n.type === 'serviceNode' &&
+          !prevBuiltIdsRef.current.has(n.id) &&
+          n.id !== graph.center.id,
+      )
+      newcomers.sort((a, b) => {
+        const da = a.data as ServiceNodeData
+        const db = b.data as ServiceNodeData
+        if (da.hop !== db.hop) return da.hop - db.hop
+        if (a.position.y !== b.position.y) return a.position.y - b.position.y
+        return a.position.x - b.position.x
+      })
+      newcomers.forEach((n, i) => revealById.set(n.id, i))
+    }
+    prevVisibleHopRef.current = visibleMaxHop
+    prevBuiltIdsRef.current = new Set(
+      built.nodes.filter((n) => n.type === 'serviceNode').map((n) => n.id),
+    )
+
     type AnyNode = Node<ServiceNodeData | MethodBadgeData | RingGuideData>
     setNodes((current) => {
       const posById = new Map(current.map((n) => [n.id, n.position]))
@@ -1871,6 +1919,7 @@ export function ImpactMap({
           'kind' in n.data
             ? {
                 ...n.data,
+                revealIndex: revealById.get(n.id),
                 noteCount:
                   n.data.kind === 'center' || n.data.kind === 'service'
                     ? (noteCounts[n.id] ?? 0)
@@ -1910,6 +1959,24 @@ export function ImpactMap({
 
       return out as Node<ServiceNodeData>[]
     })
+
+    if (revealById.size > 0) {
+      window.clearTimeout(revealClearTimerRef.current)
+      const revealedIds = [...revealById.keys()]
+      revealClearTimerRef.current = window.setTimeout(() => {
+        setNodes((current) =>
+          current.map((node) => {
+            if (!revealedIds.includes(node.id) || !('kind' in node.data)) {
+              return node
+            }
+            const d = node.data as ServiceNodeData
+            if (d.revealIndex === undefined) return node
+            const { revealIndex: _r, ...rest } = d
+            return { ...node, data: rest }
+          }),
+        )
+      }, 520)
+    }
   }, [
     built,
     layout.nodeW,

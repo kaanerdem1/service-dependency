@@ -143,6 +143,12 @@
   width: 30px;
   height: 30px;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.theme-switch-mark-icon {
+  display: grid;
+  place-items: center;
 }
 
 .theme-switch-wrap:not(.is-light) .theme-switch-mark {
@@ -2064,6 +2070,12 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   color: var(--muted);
   padding-top: 2px;
   padding-bottom: 2px;
+}
+
+.tree-method-skeleton {
+  padding-top: 2px;
+  padding-bottom: 4px;
+  max-width: 220px;
 }
 
 .tree-kind {
@@ -5942,6 +5954,31 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   opacity: 0.12 !important;
 }
 
+.dd-map.is-focusing .react-flow__edge.dd-edge-on path {
+  stroke: var(--map-path, #2f6f55) !important;
+  stroke-dasharray: 8 6;
+  animation: dd-edge-flow 1.2s linear infinite;
+}
+
+.dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
+  stroke: #a85f24 !important;
+  stroke-dasharray: 6 5;
+  animation: dd-edge-flow 1.2s linear infinite;
+}
+
+@keyframes dd-edge-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dd-map.is-focusing .react-flow__edge.dd-edge-on path,
+  .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
+    animation: none;
+  }
+}
+
 .dd-map .react-flow__edge.dd-edge-on path {
   stroke: var(--map-path, #2f6f55) !important;
 }
@@ -5952,6 +5989,59 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .dd-map .react-flow__edge.dd-edge-on.cascade path {
   stroke: #a85f24 !important;
+}
+
+.blast-segment-track {
+  display: flex;
+  width: min(220px, 42vw);
+  height: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #e8e4dc;
+  flex-shrink: 0;
+}
+
+.blast-segment {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+.blast-segment.is-direct {
+  background: #2f6f55;
+}
+
+.blast-segment.is-indirect {
+  background: #9a958c;
+}
+
+.blast-segment-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #6f6a62;
+}
+
+.blast-segment-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.blast-segment-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  font-style: normal;
+}
+
+.blast-segment-legend i.is-direct {
+  background: #2f6f55;
+}
+
+.blast-segment-legend i.is-indirect {
+  background: #9a958c;
 }
 
 .relations-nav {

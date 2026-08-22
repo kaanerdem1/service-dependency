@@ -1,4 +1,5 @@
 import type { AppTheme } from '../theme'
+import { AnimatePresence, motion } from 'motion/react'
 import { MorphHoverButton } from '../motion/MorphHoverButton'
 
 type Props = {
@@ -44,7 +45,18 @@ export function ThemeSwitch({ theme, onChange }: Props) {
       title={label}
     >
       <span className="theme-switch-mark" aria-hidden title={label}>
-        {isLight ? <SunIcon /> : <MoonIcon />}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.span
+            key={isLight ? 'sun' : 'moon'}
+            className="theme-switch-mark-icon"
+            initial={{ rotate: -90, opacity: 0 }}
+            animate={{ rotate: 0, opacity: 1 }}
+            exit={{ rotate: 90, opacity: 0 }}
+            transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+          >
+            {isLight ? <SunIcon /> : <MoonIcon />}
+          </motion.span>
+        </AnimatePresence>
       </span>
       <MorphHoverButton
         className={`theme-switch${isLight ? ' is-light' : ''}`}

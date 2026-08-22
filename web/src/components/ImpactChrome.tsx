@@ -745,6 +745,16 @@ export function BlastRadiusSummary({
   )
 
   const filtered = Boolean(matchIds && filterLabel)
+  const directCount = stats.hop1Count
+  const indirectCount = useMemo(
+    () =>
+      nodes.filter(
+        (n) =>
+          n.hop >= 2 && (!matchIds || matchIds.has(n.service.id)),
+      ).length,
+    [nodes, matchIds],
+  )
+  const segmentTotal = Math.max(1, directCount + indirectCount)
   const titleParts = [
     `${stats.serviceCount} servis`,
     stats.projectLabels.length
@@ -759,6 +769,38 @@ export function BlastRadiusSummary({
       aria-label="Etki yarıçapı özeti"
     >
       <span className="blast-label">Etki</span>
+      {!filtered && directCount + indirectCount > 0 ? (
+        <>
+          <div className="blast-segment-track" aria-hidden>
+            {directCount > 0 ? (
+              <motion.span
+                className="blast-segment is-direct"
+                initial={{ width: 0 }}
+                animate={{ width: `${(directCount / segmentTotal) * 100}%` }}
+                transition={layoutSpring}
+              />
+            ) : null}
+            {indirectCount > 0 ? (
+              <motion.span
+                className="blast-segment is-indirect"
+                initial={{ width: 0 }}
+                animate={{ width: `${(indirectCount / segmentTotal) * 100}%` }}
+                transition={layoutSpring}
+              />
+            ) : null}
+          </div>
+          <span className="blast-segment-legend">
+            <span>
+              <i className="is-direct" aria-hidden />
+              <strong>{directCount}</strong> doğrudan
+            </span>
+            <span>
+              <i className="is-indirect" aria-hidden />
+              <strong>{indirectCount}</strong> dolaylı
+            </span>
+          </span>
+        </>
+      ) : null}
       <span className="blast-stats">
         <strong>{stats.serviceCount}</strong>
         {filtered ? ' eşleşen' : ' servis'}

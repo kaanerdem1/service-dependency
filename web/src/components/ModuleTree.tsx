@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom'
 import { listMethodsForService } from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
 import { MotionTooltip } from '../motion/MotionTooltip'
+import { SkeletonShimmer } from '../motion/SkeletonShimmer'
 import { TreeAccordion } from '../motion/TreeAccordion'
 
 const TIP_DELAY_MS = 1000
@@ -157,9 +158,13 @@ function MethodLeaves({
   }
   if (!methods) {
     return (
-      <p className="tree-method-status" style={{ paddingLeft: 8 + depth * 12 }}>
-        Methods…
-      </p>
+      <div
+        className="tree-method-skeleton"
+        style={{ paddingLeft: 8 + depth * 12 }}
+        data-motion="method-skeleton"
+      >
+        <SkeletonShimmer lines={2} />
+      </div>
     )
   }
   if (methods.length === 0) {
