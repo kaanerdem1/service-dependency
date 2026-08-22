@@ -22,6 +22,7 @@ import {
 import type { ImpactNode, Service } from '../types'
 import { AnimatedNumber, AnimatedNumberPair } from '../motion/AnimatedNumber'
 import { MotionSheetBody } from '../motion/MotionSheet'
+import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
 import { layoutSpring } from '../motion/config'
 import { MotionListItem } from '../motion/MotionList'
@@ -1427,7 +1428,7 @@ export function MapCanvasBar({
 
           <div className="map-dock-group">
             <span className="map-dock-group-kicker">Görünüm</span>
-            <div className="map-dock-group-row">
+            <DockMagnifyRow>
               <DockBtn label="Uzaklaştır" onClick={() => zoomOut({ duration: 180 })}>
                 <IconZoomOut />
               </DockBtn>
@@ -1471,14 +1472,14 @@ export function MapCanvasBar({
                   <IconRadial />
                 </DockBtn>
               )}
-            </div>
+            </DockMagnifyRow>
           </div>
 
           <span className="map-dock-sep" aria-hidden />
 
           <div className="map-dock-group">
             <span className="map-dock-group-kicker">Katman</span>
-            <div className="map-dock-group-row">
+            <DockMagnifyRow>
               <DockBtn
                 label="Sadece 1. katman — doğrudan komşular"
                 disabled={!canCollapse}
@@ -1532,7 +1533,7 @@ export function MapCanvasBar({
               >
                 <IconFullChain />
               </DockBtn>
-            </div>
+            </DockMagnifyRow>
           </div>
 
           {(onToggleLinkedMethods || onProjectFilterChange) && (
@@ -1540,7 +1541,7 @@ export function MapCanvasBar({
               <span className="map-dock-sep" aria-hidden />
               <div className="map-dock-group">
                 <span className="map-dock-group-kicker">İçerik</span>
-                <div className="map-dock-group-row">
+                <DockMagnifyRow>
                   {onToggleLinkedMethods && (
                     <DockBtn
                       label={
@@ -1624,7 +1625,7 @@ export function MapCanvasBar({
                       </div>
                     </MotionPopover>
                   )}
-                </div>
+                </DockMagnifyRow>
               </div>
             </>
           )}
@@ -1634,7 +1635,7 @@ export function MapCanvasBar({
               <span className="map-dock-sep" aria-hidden />
               <div className="map-dock-group">
                 <span className="map-dock-group-kicker">Yan bağ</span>
-                <div className="map-dock-group-row">
+                <DockMagnifyRow>
                   <span
                     className="map-dock-wrap"
                     onMouseEnter={() => setCascadeHover(true)}
@@ -1665,7 +1666,7 @@ export function MapCanvasBar({
                         : ' Şu an gizli — göstermek için tıkla.'}
                     </DockTooltipPortal>
                   </span>
-                </div>
+                </DockMagnifyRow>
               </div>
             </>
           )}
@@ -1675,7 +1676,7 @@ export function MapCanvasBar({
               <span className="map-dock-sep" aria-hidden />
               <div className="map-dock-group">
                 <span className="map-dock-group-kicker">Kayıt</span>
-                <div className="map-dock-group-row">
+                <DockMagnifyRow>
                   <DockBtn
                     label="Snapshot kaydet"
                     disabled={snapshotSaving}
@@ -1683,7 +1684,7 @@ export function MapCanvasBar({
                   >
                     <IconSave />
                   </DockBtn>
-                </div>
+                </DockMagnifyRow>
               </div>
             </>
           )}
@@ -1692,7 +1693,7 @@ export function MapCanvasBar({
 
           <div className="map-dock-group">
             <span className="map-dock-group-kicker">Bilgi</span>
-            <div className="map-dock-group-row">
+            <DockMagnifyRow>
               <span className="map-dock-wrap map-dock-legend">
                 <button
                   type="button"
@@ -1707,7 +1708,7 @@ export function MapCanvasBar({
                   <MapLegendContent cascadeCount={cascadeCount} />
                 </div>
               </span>
-            </div>
+            </DockMagnifyRow>
           </div>
               </div>
             </div>

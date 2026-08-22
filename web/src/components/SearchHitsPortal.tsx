@@ -13,6 +13,7 @@ type Props = {
 /** Sidebar arama sonuçları — body portal, AutoHeight + spring açılış */
 export function SearchHitsPortal({ open, anchorRef, children }: Props) {
   const [style, setStyle] = useState<React.CSSProperties>({})
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const shellRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -26,6 +27,7 @@ export function SearchHitsPortal({ open, anchorRef, children }: Props) {
       const spaceBelow = window.innerHeight - r.bottom - gap
       const spaceAbove = r.top - gap
       const openUp = spaceBelow < Math.min(listH, 320) && spaceAbove > spaceBelow
+      setPlacement(openUp ? 'top' : 'bottom')
       const maxH = Math.min(
         360,
         openUp ? Math.max(120, spaceAbove - 8) : Math.max(120, spaceBelow - 8),
@@ -58,10 +60,19 @@ export function SearchHitsPortal({ open, anchorRef, children }: Props) {
           ref={shellRef}
           className="search-hits-shell search-hits-portal"
           data-motion="search-auto-height"
+          data-placement={placement}
           style={style}
-          initial={{ opacity: 0, y: -6, scale: 0.98 }}
+          initial={{
+            opacity: 0,
+            y: placement === 'top' ? 10 : -10,
+            scale: 0.96,
+          }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -4, scale: 0.99 }}
+          exit={{
+            opacity: 0,
+            y: placement === 'top' ? 8 : -8,
+            scale: 0.98,
+          }}
           transition={popoverSpring}
         >
           <AutoHeight deps={[children]} className="search-hits-auto">

@@ -55,21 +55,29 @@ Kaynak: [Motion examples](https://motion.dev/examples)
 
 ---
 
-### 3. Morphin.dev — ✅ denendi (2026-08-21)
+### 3. Morphin.dev — ✅ genişletildi (2026-08-23)
 
-**Uygulanan (§1’den farklı, test edilebilir):**
+**Uygulanan:**
 
-1. **Dock magnification** — harita dock ikonları hover’da scale + yukarı kalkma (`DockBtn`)
-2. **Animated Status Badge** — inbox’ta pulse rozetler (`StatusBadge`)
-3. **Navbar morph hover** — sekme üzerinde kayarak morph arka plan (`MorphHoverIndicator`)
-
-**Ayrıca (audit notu + kullanıcı geri bildirimi):**
-
-- ~~Pivot settle~~ — geri alındı (daha kötü hissettirdi); orijinal morph + snap
-- **Sidebar overlay** — hover’da panel workspace’i itmeden `translate3d` ile kayar (76px sabit layout)
-- **Değişiklik talebi** — oturum açıksa her serviste (tek kullanıcı)
+1. **Dock magnification eğrisi** — `DockMagnifyRow`: mesafe tabanlı komşu büyütme (Mac dock)
+2. **Animated Status Badge** — inbox + İlişkiler satırları (`StatusBadge`)
+3. **Navbar morph hover** — sekmeler + **Paneli Sabitle** + tema switch (`MorphHoverButton`)
+4. **Directional popover** — arama portalı + proje filtresi yönüne göre spring (`SearchHitsPortal`, `MotionPopover`)
+5. **Toast / banner motion** — snapshot toast + API hata şeridi (`MotionToast`, `MotionBanner`)
 
 **Alınmamalı:** Dashboard chart, card stack, 3D showcase.
+
+#### Test senaryoları
+
+| Özellik | Nasıl test edilir | Beklenen |
+|--------|-------------------|----------|
+| Dock magnification | Harita sekmesi → dock açık → fareyi Görünüm/Katman ikonları üzerinde yatay kaydır | Hover edilen ikon en büyük; komşular kademeli küçülür; harita pan tetiklenmez |
+| Directional popover | Sidebar arama: altta yer varken / pencere altına yakınken sonuç listesi | Aşağı açılış yukarıdan spring; yukarı açılış aşağıdan spring. Dock proje filtresi yukarı açılır |
+| StatusBadge İlişkiler | Çok çağıranlı servis seç → İlişkiler | ≥8: kırmızımsı YÜKSEK ETKİ pulse; ≥4: turuncu ETKİ VAR |
+| Toast motion | Değişiklik talebi oluştur veya snapshot kaydet | Toast alttan spring ile gelir; × ile yumuşak çıkar |
+| API banner | Backend kapalıyken sayfa aç | Üst şerit yukarıdan spring ile belirir |
+| Header morph | Paneli Sabitle + tema switch üzerinde hover | Morph arka plan kayarak belirir; tıklama normal çalışır |
+| Reduced motion | OS “Reduce motion” açık → tekrarla | Rozet/badge animasyonları statik kalır |
 
 ---
 
@@ -104,7 +112,7 @@ Kaynak: [Community components](https://21st.dev/community/components)
 
 1. **Pivot settle ince ayar** — radial mod, fitView padding
 2. **21st drawer** (§4)
-3. **Status badge** — İlişkiler listesine genişlet
+3. ~~Status badge — İlişkiler listesine genişlet~~ ✅ (2026-08-23)
 
 FARKLI NOKTAYA ÖNERİ: 
 

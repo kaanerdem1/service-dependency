@@ -1,4 +1,5 @@
 import type { AppTheme } from '../theme'
+import { MorphHoverButton } from '../motion/MorphHoverButton'
 
 type Props = {
   theme: AppTheme
@@ -45,9 +46,10 @@ export function ThemeSwitch({ theme, onChange }: Props) {
       <span className="theme-switch-mark" aria-hidden title={label}>
         {isLight ? <SunIcon /> : <MoonIcon />}
       </span>
-      <button
-        type="button"
+      <MorphHoverButton
         className={`theme-switch${isLight ? ' is-light' : ''}`}
+        layoutId="theme-switch-hover"
+        morphClassName="theme-switch-hover-morph"
         role="switch"
         aria-checked={isLight}
         aria-label={`${label}. ${switchLabel}`}
@@ -57,7 +59,7 @@ export function ThemeSwitch({ theme, onChange }: Props) {
         <span className="theme-switch-track" aria-hidden>
           <span className="theme-switch-thumb" />
         </span>
-      </button>
+      </MorphHoverButton>
     </div>
   )
 }

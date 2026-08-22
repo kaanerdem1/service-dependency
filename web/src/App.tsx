@@ -12,6 +12,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { MotionListItem } from './motion/MotionList'
+import { MorphHoverButton } from './motion/MorphHoverButton'
+import { MotionBanner, MotionToast } from './motion/MotionToast'
 import { StageTabs } from './motion/StageTabs'
 import { StageTabPanels } from './motion/StageTabPanels'
 import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
@@ -535,15 +537,15 @@ export default function App() {
 
   return (
     <div className="app" data-theme={appTheme}>
-      {apiError && (
-        <div className="api-banner" role="alert" aria-live="assertive">
+      <MotionBanner open={!!apiError}>
+        <div className="api-banner-inner">
           {apiError}
           <span className="api-banner-hint">
             {' '}
             Sunucunun çalıştığından emin olun (<code>npm run dev</code>) ve sayfayı yenileyin.
           </span>
         </div>
-      )}
+      </MotionBanner>
       <div
         role="status"
         aria-live="polite"
@@ -617,9 +619,10 @@ export default function App() {
           <div className="module-sidebar-inner">
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
-            <button
+            <MorphHoverButton
               type="button"
               className={`sidebar-pin-btn${navPinned ? ' is-pinned' : ''}`}
+              layoutId="sidebar-pin-hover"
               title={
                 navPinned
                   ? 'Sabitlemeyi bırak (fare dışına çıkınca panel kapanır)'
@@ -638,7 +641,7 @@ export default function App() {
               <span className="sidebar-pin-label">
                 {navPinned ? 'Sabitlemeyi Bırak' : 'Paneli Sabitle'}
               </span>
-            </button>
+            </MorphHoverButton>
           </div>
           <label className="search" ref={searchRef}>
             <span className="sr-only">Servis veya metod ara</span>
@@ -993,14 +996,12 @@ export default function App() {
         </div>
       </div>
 
-      {snapshotToast && (
-        <div className="snapshot-toast" role="status">
-          {snapshotToast}
-          <button type="button" onClick={() => setSnapshotToast(undefined)}>
-            ×
-          </button>
-        </div>
-      )}
+      <MotionToast open={!!snapshotToast}>
+        {snapshotToast}
+        <button type="button" onClick={() => setSnapshotToast(undefined)}>
+          ×
+        </button>
+      </MotionToast>
 
       <AnimatePresence>
       {crOpen && service && session && (

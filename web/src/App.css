@@ -173,6 +173,12 @@
   cursor: pointer;
 }
 
+.theme-switch.morph-hover-btn .morph-hover-btn-inner {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .theme-switch-track {
   position: relative;
   display: block;
@@ -1489,6 +1495,70 @@
 .status-badge-morph.is-pending {
   background: color-mix(in srgb, #a56b38 16%, #fff);
   color: #6b451f;
+}
+
+.status-badge-morph.is-warn {
+  background: color-mix(in srgb, #b44a3a 14%, #fff);
+  color: #7a2e24;
+}
+
+.map-dock-magnify-row .map-dock-wrap-morph.is-hover .map-dock-btn:not(:disabled) {
+  transform: none;
+}
+
+.map-dock-magnify-row .map-dock-btn,
+.map-dock-magnify-row .map-dock-hop,
+.map-dock-magnify-row .map-dock-cascade,
+.map-dock-magnify-row .map-dock-project-trigger {
+  will-change: transform;
+}
+
+.morph-hover-btn {
+  position: relative;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.morph-hover-btn-inner {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: inherit;
+}
+
+.morph-hover-btn-bg {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent-soft) 48%, transparent);
+  z-index: 0;
+}
+
+.sidebar-pin-btn .morph-hover-btn-bg {
+  inset: 1px;
+  border-radius: 7px;
+  background: color-mix(in srgb, #fff 22%, transparent);
+}
+
+[data-theme='mixed'] .sidebar-pin-btn .morph-hover-btn-bg {
+  background: color-mix(in srgb, #fff 10%, transparent);
+}
+
+.sidebar-pin-btn.is-pinned .morph-hover-btn-bg {
+  background: color-mix(in srgb, #fff 16%, transparent);
+}
+
+.theme-switch-hover-morph {
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 14%, transparent);
+  z-index: 0;
+}
+
+.theme-switch-wrap.is-light .theme-switch-hover-morph {
+  background: color-mix(in srgb, #2f5d4a 10%, transparent);
 }
 
 .map-dock-wrap-morph.is-hover {
@@ -6814,12 +6884,17 @@ button.linkish {
 
 .api-banner {
   margin: 0;
-  padding: 10px 20px;
+  padding: 0;
   background: var(--warn-bg);
   color: var(--warn-ink);
   font-size: 13px;
   border-bottom: 1px solid var(--line);
   line-height: 1.45;
+  overflow: hidden;
+}
+
+.api-banner-inner {
+  padding: 10px 20px;
 }
 
 .api-banner-hint {
@@ -7825,11 +7900,10 @@ button.linkish {
   gap: 8px;
 }
 
-.snapshot-toast {
+.snapshot-toast,
+.motion-toast-shell.snapshot-toast {
   position: fixed;
   bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 80;
   display: flex;
   align-items: center;
