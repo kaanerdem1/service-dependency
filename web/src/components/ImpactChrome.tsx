@@ -23,6 +23,7 @@ import {
 import type { ImpactNode, Service } from '../types'
 import { AnimatedNumber, AnimatedNumberPair } from '../motion/AnimatedNumber'
 import { MotionSheetBody } from '../motion/MotionSheet'
+import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
 import { layoutSpring } from '../motion/config'
@@ -698,6 +699,7 @@ export function MapInfoPanel({
       </div>
       <MotionSheetBody open={open} className="map-info-drawer-body">
         <section className="map-info-section map-info-impact is-open">
+            <MotionSpotlight className="map-info-spotlight-block">
             <div className="map-info-focus">
               <span className="map-info-focus-label">Seçilen Servis</span>
               <strong
@@ -755,6 +757,7 @@ export function MapInfoPanel({
                 )}
               </dl>
             )}
+            </MotionSpotlight>
           </section>
 
           <section className="map-info-section" aria-label="Ziyaret yolu">
@@ -959,18 +962,36 @@ function DockBtn({
 }) {
   const [flash, setFlash] = useState(false)
   const [hover, setHover] = useState(false)
+  const [ripples, setRipples] = useState<
+    Array<{ id: number; x: number; y: number }>
+  >([])
   const flashTimer = useRef(0)
   const btnRef = useRef<HTMLButtonElement>(null)
+  const rippleId = useRef(0)
 
   useEffect(() => {
     return () => window.clearTimeout(flashTimer.current)
   }, [])
+
+  const spawnRipple = (clientX: number, clientY: number) => {
+    const btn = btnRef.current
+    if (!btn || disabled) return
+    const r = btn.getBoundingClientRect()
+    const id = ++rippleId.current
+    const x = clientX - r.left
+    const y = clientY - r.top
+    setRipples((prev) => [...prev, { id, x, y }])
+    window.setTimeout(() => {
+      setRipples((prev) => prev.filter((ripple) => ripple.id !== id))
+    }, 520)
+  }
 
   return (
     <span
       className={`map-dock-wrap map-dock-wrap-morph${disabled ? ' is-off' : ''}${flash ? ' is-tip-flash' : ''}${hover ? ' is-hover' : ''}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      data-motion="dock-ripple"
     >
       <button
         ref={btnRef}
@@ -980,6 +1001,7 @@ function DockBtn({
         aria-label={label}
         aria-pressed={pressed}
         onClick={(e) => {
+          spawnRipple(e.clientX, e.clientY)
           onClick?.()
           e.currentTarget.blur()
           setFlash(true)
@@ -987,6 +1009,14 @@ function DockBtn({
           flashTimer.current = window.setTimeout(() => setFlash(false), 1000)
         }}
       >
+        {ripples.map((ripple) => (
+          <span
+            key={ripple.id}
+            className="map-dock-ripple"
+            style={{ left: ripple.x, top: ripple.y }}
+            aria-hidden
+          />
+        ))}
         {children}
       </button>
       <DockTooltipPortal open={hover || flash} anchorRef={btnRef}>

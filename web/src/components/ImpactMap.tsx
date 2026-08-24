@@ -2161,12 +2161,21 @@ export function ImpactMap({
 
       const nodeFocusX = (n: Node) => n.position.x + layout.nodeW / 2
       const nodeFocusY = (n: Node) => n.position.y + 48
+      const startVp = inst.getViewport()
+
+      await animateViewport(
+        inst,
+        { ...startVp, zoom: Math.max(layout.minZoom, startVp.zoom * 0.86) },
+        240,
+        easeOutCubic,
+      )
+      if (pivotAnimRef.current !== animId) return
 
       inst.setCenter(nodeFocusX(targetNode), nodeFocusY(targetNode), {
         zoom: inst.getZoom(),
-        duration: 320,
+        duration: 280,
       })
-      await waitMs(320)
+      await waitMs(280)
       if (pivotAnimRef.current !== animId) return
 
       const centerStart = { ...centerNode.position }
@@ -2254,12 +2263,24 @@ export function ImpactMap({
 
       if (pivotAnimRef.current !== animId) return
 
+      const settledVp = inst.getViewport()
+      await animateViewport(
+        inst,
+        {
+          ...settledVp,
+          zoom: Math.min(layout.maxZoom, Math.max(layout.minZoom, settledVp.zoom * 1.06)),
+        },
+        300,
+        easeInOutCubic,
+      )
+      if (pivotAnimRef.current !== animId) return
+
       pivotMorphingRef.current = false
       setPivotMorphing(false)
       layoutDirtyRef.current = false
       onPivot(targetId)
     },
-    [graph.center.id, layout.colGap, layout.nodeW, onPivot, setNodes],
+    [graph.center.id, layout.colGap, layout.maxZoom, layout.minZoom, layout.nodeW, onPivot, setNodes],
   )
 
   const onNodeClick = useCallback(

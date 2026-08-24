@@ -4583,6 +4583,44 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   margin-bottom: 8px;
 }
 
+.map-info-spotlight-block {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  padding: 10px 10px 8px;
+  margin: -4px -6px 6px;
+}
+
+.motion-spotlight {
+  position: relative;
+  isolation: isolate;
+}
+
+.motion-spotlight-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    280px circle at var(--spot-x) var(--spot-y),
+    rgba(47, 111, 85, 0.14),
+    rgba(47, 111, 85, 0.04) 38%,
+    transparent 62%
+  );
+  transition: opacity 0.2s ease;
+}
+
+.motion-spotlight > :not(.motion-spotlight-glow) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-spotlight-glow {
+    display: none;
+  }
+}
+
 .map-info-focus-label {
   font-size: 10px;
   font-weight: 650;
@@ -5120,6 +5158,8 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .map-dock-btn {
+  position: relative;
+  overflow: hidden;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -5132,7 +5172,34 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   cursor: pointer;
   transition:
     background 0.16s ease,
-    color 0.16s ease;
+    color 0.16s ease,
+    transform 0.14s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.map-dock-btn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+
+.map-dock-ripple {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 999px;
+  background: rgba(47, 111, 85, 0.34);
+  pointer-events: none;
+  animation: map-dock-ripple 0.52s ease-out forwards;
+}
+
+@keyframes map-dock-ripple {
+  from {
+    opacity: 0.75;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(8);
+  }
 }
 
 .map-dock-btn:hover:not(:disabled) {
@@ -5957,13 +6024,22 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 .dd-map.is-focusing .react-flow__edge.dd-edge-on path {
   stroke: var(--map-path, #2f6f55) !important;
   stroke-dasharray: 8 6;
-  animation: dd-edge-flow 1.2s linear infinite;
+  animation: dd-edge-flow 0.95s linear infinite;
+  filter: drop-shadow(0 0 2px rgba(47, 111, 85, 0.35));
 }
 
 .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
   stroke: #a85f24 !important;
   stroke-dasharray: 6 5;
-  animation: dd-edge-flow 1.2s linear infinite;
+  animation: dd-edge-flow-cascade 1.05s linear infinite;
+  filter: drop-shadow(0 0 2px rgba(168, 95, 36, 0.28));
+}
+
+.dd-map.is-focusing .react-flow__edge.dd-edge-on:not(.cascade) path {
+  animation-name: dd-edge-flow, dd-edge-flow-pulse;
+  animation-duration: 0.95s, 1.8s;
+  animation-timing-function: linear, ease-in-out;
+  animation-iteration-count: infinite, infinite;
 }
 
 @keyframes dd-edge-flow {
@@ -5972,10 +6048,31 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   }
 }
 
+@keyframes dd-edge-flow-cascade {
+  to {
+    stroke-dashoffset: -22;
+  }
+}
+
+@keyframes dd-edge-flow-pulse {
+  0%,
+  100% {
+    stroke-width: 2.2;
+  }
+  50% {
+    stroke-width: 2.75;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dd-map.is-focusing .react-flow__edge.dd-edge-on path,
   .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
     animation: none;
+    filter: none;
+  }
+
+  .map-dock-ripple {
+    display: none;
   }
 }
 
