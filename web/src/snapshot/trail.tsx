@@ -32,6 +32,7 @@ const defaultUi: UiChromeState = {
   activeTab: 'map',
   drawerOpen: true,
   sidebarOpen: true,
+  sidebarPinned: true,
   searchOpen: false,
   selectedMethodId: null,
 }

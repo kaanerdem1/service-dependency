@@ -1,5 +1,6 @@
 /**
  * Snapshot store — karar anının dondurulmuş kanıt paketi (bellekte mock).
+ * PNG'ler JSON dışında ayrı bellekte; GET /api/snapshots/:id/image ile servis edilir.
  */
 import { createHash } from 'node:crypto'
 import { getDownstreamIds, getUpstreamIds, services } from './data.js'
@@ -7,6 +8,7 @@ import { IMPACT_VIEW, buildImpactGraph } from './impact.js'
 import type {
   Snapshot,
   SnapshotClientPayload,
+  SnapshotScreenshot,
   SnapshotType,
   ImpactRow,
 } from './snapshotTypes.js'
@@ -16,8 +18,25 @@ export const CATALOG_REVISION = 'mock-catalog-v1'
 let seq = 1
 const store: Snapshot[] = []
 
-function sha256(text: string) {
-  return createHash('sha256').update(text).digest('hex')
+type StoredImage = { buffer: Buffer; sha256: string; contentType: string }
+const imageStore = new Map<string, StoredImage>()
+
+function imageKey(snapshotId: string, surface: string) {
+  return `${snapshotId}:${surface}`
+}
+
+function sha256(data: string | Buffer) {
+  return createHash('sha256').update(data).digest('hex')
+}
+
+function decodeDataUrl(dataUrl: string): Buffer {
+  const match = /^data:image\/([a-z+]+);base64,(.+)$/i.exec(dataUrl)
+  if (!match) throw new Error('invalid_screenshot_data_url')
+  return Buffer.from(match[2]!, 'base64')
+}
+
+function screenshotUrl(snapshotId: string, surface: SnapshotScreenshot['surface']) {
+  return `/api/snapshots/${encodeURIComponent(snapshotId)}/image?surface=${encodeURIComponent(surface)}`
 }
 
 function buildImpact(centerServiceId: string, visibleMaxHop: number) {
@@ -65,7 +84,8 @@ function buildImpact(centerServiceId: string, visibleMaxHop: number) {
 
   return {
     hop1,
-    deeper: [...deeper, ...upstream.filter((u) => !deeper.some((d) => d.id === u.id))],
+    deeper,
+    upstream,
     cascadeEdges: [] as Snapshot['impact']['cascadeEdges'],
   }
 }
@@ -77,16 +97,43 @@ function attachManifest(snapshot: Snapshot): Snapshot {
     { name: 'snapshot.json', sha256: jsonSha, role: 'json' },
   ]
   for (const shot of snapshot.screenshots ?? []) {
-    const hash = shot.sha256 ?? sha256(shot.dataUrl)
-    shot.sha256 = hash
     files.push({
       name: `${shot.surface}.png`,
-      sha256: hash,
+      sha256: shot.sha256,
       role: 'png',
     })
   }
   const packSha256 = sha256(files.map((f) => f.sha256).join(':'))
   return { ...snapshot, manifest: { files, packSha256 } }
+}
+
+function ingestScreenshots(
+  snapshotId: string,
+  uploads: SnapshotClientPayload['screenshots'],
+): SnapshotScreenshot[] | undefined {
+  if (!uploads?.length) return undefined
+
+  const refs: SnapshotScreenshot[] = []
+  for (const upload of uploads) {
+    const buffer = decodeDataUrl(upload.dataUrl)
+    const hash = upload.sha256 ?? sha256(buffer)
+    const contentType =
+      /^data:image\/([a-z+]+);base64,/i.exec(upload.dataUrl)?.[1] === 'png'
+        ? 'image/png'
+        : 'image/png'
+    imageStore.set(imageKey(snapshotId, upload.surface), {
+      buffer,
+      sha256: hash,
+      contentType,
+    })
+    refs.push({
+      surface: upload.surface,
+      capturedAt: upload.capturedAt,
+      sha256: hash,
+      url: screenshotUrl(snapshotId, upload.surface),
+    })
+  }
+  return refs.length ? refs : undefined
 }
 
 export function createSnapshot(input: {
@@ -103,15 +150,11 @@ export function createSnapshot(input: {
     throw new Error('focus_service_not_found')
   }
 
-  const screenshots = (input.client.screenshots ?? []).map((s) => ({
-    ...s,
-    sha256: s.sha256 ?? sha256(s.dataUrl),
-  }))
-
-  const mapShot = screenshots.find((s) => s.surface === 'map')
+  const id = `SN-${String(seq++).padStart(4, '0')}`
+  const screenshots = ingestScreenshots(id, input.client.screenshots)
 
   const draft: Snapshot = {
-    id: `SN-${String(seq++).padStart(4, '0')}`,
+    id,
     type: input.type,
     createdAt: new Date().toISOString(),
     actor: input.actor,
@@ -125,8 +168,7 @@ export function createSnapshot(input: {
     viewState: input.client.viewState,
     impact: buildImpact(centerId, input.client.viewState.visibleMaxHop),
     changeSummary: input.client.changeSummary,
-    imageUrl: mapShot?.dataUrl,
-    screenshots: screenshots.length ? screenshots : undefined,
+    screenshots,
     approvals: input.approvals,
   }
 
@@ -137,6 +179,10 @@ export function createSnapshot(input: {
 
 export function getSnapshot(id: string) {
   return store.find((s) => s.id === id)
+}
+
+export function getSnapshotImage(id: string, surface: string) {
+  return imageStore.get(imageKey(id, surface))
 }
 
 export function listSnapshotsForRequest(changeRequestId: string) {

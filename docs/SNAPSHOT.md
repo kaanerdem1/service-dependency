@@ -139,8 +139,9 @@ type Snapshot = {
 
   /** Donmuş etki — yeniden hesaplanmış JSON; PNG’den güvenilir */
   impact: {
-    hop1: ImpactRow[]
-    deeper?: ImpactRow[] // visibleMaxHop kadar
+    hop1: ImpactRow[]       // downstream, 1. katman — onay kümesi (Model A)
+    deeper?: ImpactRow[]    // hop 2+ — keşif; onay kümesine girmez
+    upstream?: ImpactRow[] // merkezin çağırdıkları; onay kümesine girmez
     cascadeEdges?: CascadeEdge[]
   }
 
@@ -157,12 +158,11 @@ type Snapshot = {
   changeSummary?: { title?: string; reason?: string }
 
   /** İnsan okuması için — yapısal verinin eki; tek başına kanıt değil */
-  imageUrl?: string // birincil harita PNG (P0: cr_open / approval)
   screenshots?: Array<{
     surface: 'map' | 'affected' | 'drawer' | 'full_app'
     capturedAt: string
+    sha256: string
     url: string
-    sha256?: string
   }>
 
   /** Evidence pack bütünlüğü (CMMC / SOC2 tarzı) */
@@ -413,4 +413,62 @@ Araştırma özeti (NIST SP 800-171 / CMMC 3.4.3–3.4.5, SOC2 CC8.1, ITIL chang
 
 - Trail’i istemci mi sunucu mu birleştirir? → **Öneri:** istemci olayları stream eder, snapshot oluşturulurken sunucu `impact`’i hesaplar ve pack’i mühürler.
 - `explore` snapshot’ları retention — audit mi keşif mi? → §8 #3 (MVP sınırsız mock).
+
+---
+
+## 11. Yapılabilecek öneriler (implementasyon backlog)
+
+### Hemen değer katan (küçük diff)
+
+1. **Trail sınırı** — Snapshot anında trail’i kes/sıfırla veya “CR modali açılışından beri” filtrele; oturum başından beri biriken gürültüyü önler.
+2. **`viewState.viewport`** — `syncView`’a React Flow `getViewport()` ekle (snapshot anında veya debounced pan/zoom sonrası).
+3. **`focus` sync** — `ImpactMap` focus sync’ini metod seçimine saygılı yap (`App.tsx` ile çakışmayı kaldır).
+4. **Proje filtresi** — `viewState`’e `projectFilterId`, eşleşen servis sayısı.
+5. ~~**PNG duplikasyonu**~~ — ✅ `imageUrl` kaldırıldı; PNG ayrı endpoint (§12).
+
+### Orta vadeli
+
+6. **`gate_open` / `approval`** için `full_app` PNG (tüm chrome görünür).
+7. **Watermark’a snapshot id** — sunucu tarafında PNG işleme veya ikinci pass (id capture sonrası üretildiği için).
+8. **Web ↔ server tipleri** — `snapshotTypes` tek kaynak; `overview` sekmesi, `theme_toggle` trail uyumu.
+
+### Büyük iş (P1)
+
+9. Read-only **yeniden oynatma** (kayıtlı `viewState` + `impact` subset).
+10. **`incident`** + canlı katalog diff (`liveCatalogDiff`).
+11. **Kalıcı storage** (mock bellek store yerine dosya/DB).
+
+### Uygulandı (2026-08-26)
+
+- **`impact.upstream`** — upstream (çağırdıklarım) artık `deeper` ile karışmıyor; üç kova: `hop1` / `deeper` / `upstream`.
+- **Batch `cr_open`** — aynı batch’te açılan her CR için ayrı snapshot (`changeRequestId` = ilgili task).
+- **JSON/PNG ayrımı** — base64 JSON’dan kaldırıldı; PNG `GET /api/snapshots/:id/image`; `imageUrl` kaldırıldı.
+
+---
+
+## 12. JSON ve PNG ayrımı
+
+**Hedef:** JSON yalnızca yapısal kanıt (`impact`, `trail`, `viewState`, `manifest` hash referansları); PNG ayrı artifact.
+
+MVP mock’ta PNG artık JSON **içinde değil** — sunucuda ayrı bellekte; JSON yalnızca `{ surface, url, sha256 }` referansı taşır. İndirme: `GET /api/snapshots/:id/image?surface=map`.
+
+### JSON içinde base64 olmasa, PNG inbox’tan indirilebilir olsa — olur mu?
+
+**Evet, doğru model bu.** Prod olmasa bile mimari olarak şöyle çalışır:
+
+| Katman | İçerik |
+|--------|--------|
+| **JSON** | `id`, `type`, `impact`, `navigationTrail`, `viewState`, `uiChrome`, `approvals`, `manifest` — PNG **yok** veya yalnızca `{ surface, url, sha256 }` referansı |
+| **PNG** | Sunucuda dosya / object storage; `GET /api/snapshots/:id/image?surface=map` |
+| **UI** | Talep detayı / inbox → Snapshot sekmesi: JSON indir + PNG indir ayrı butonlar; liste thumbnail’i URL’den |
+
+Akış:
+
+1. Snapshot oluşturulur → sunucu PNG’yi kaydeder, JSON’a hash + URL yazar.
+2. Kullanıcı inbox’tan talebe girer → Snapshot listesinde PNG indir / önizleme URL ile.
+3. Denetim: JSON + ayrı PNG dosyası; `manifest.packSha256` bütünlük kontrolü.
+
+**MVP geçiş adımı:** API yanıtında base64’ü kaldır; istemci PNG’yi yalnızca indirme endpoint’inden alsın. Explore “Kaydet” zaten PNG’yi ayrıca indiriyor — aynı pattern CR/onay için de uygulanır.
+
+**Kaldırılan duplikasyon:** `imageUrl` kaldırıldı; harita PNG’si yalnızca `screenshots[]` içindeki `url` referansı ile erişilir.
 

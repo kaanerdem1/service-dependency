@@ -9,9 +9,12 @@ import {
   downloadSnapshotPng,
 } from '../snapshot/capture'
 import {
+  formatHop1Summary,
+  formatHop1Title,
   formatTrailSummary,
   formatViewStateSummary,
 } from '../snapshot/formatTrail'
+import { mapScreenshot, snapshotHasMapImage } from '../snapshot/imageUrl'
 import { listSnapshotsForRequest } from '../api/client'
 import { MotionListItem } from '../motion/MotionList'
 import { SkeletonShimmer } from '../motion/SkeletonShimmer'
@@ -66,9 +69,12 @@ export function SnapshotList({ requestId }: Props) {
       <AnimatePresence initial={false}>
       {items.map((snap, i) => {
         const when = new Date(snap.createdAt).toLocaleString('tr-TR')
-        const hop1 = snap.impact.hop1.map((h) => h.label).join(', ') || '—'
+        const hop1Summary = formatHop1Summary(snap)
+        const hop1Title = formatHop1Title(snap)
         const trailLines = formatTrailSummary(snap.navigationTrail)
         const viewSummary = formatViewStateSummary(snap)
+        const mapShot = mapScreenshot(snap)
+        const hasMap = snapshotHasMapImage(snap)
         return (
           <MotionListItem key={snap.id} id={snap.id} index={i} className="snapshot-item">
             <div className="snapshot-item-head">
@@ -88,8 +94,8 @@ export function SnapshotList({ requestId }: Props) {
                   : ' · Harita'}
               {snap.uiChrome.drawerOpen ? ' · özet açık' : ' · özet kapalı'}
             </p>
-            <p className="snapshot-item-meta">
-              Hop-1: {hop1} · Trail: {snap.navigationTrail.length} adım
+            <p className="snapshot-item-meta" title={hop1Title}>
+              {hop1Summary} · Gezinme: {snap.navigationTrail.length} adım
             </p>
             {trailLines.length > 0 && (
               <details className="snapshot-trail-details">
@@ -102,10 +108,10 @@ export function SnapshotList({ requestId }: Props) {
                 </ol>
               </details>
             )}
-            {snap.imageUrl && (
+            {hasMap && mapShot && (
               <img
                 className="snapshot-thumb"
-                src={snap.imageUrl}
+                src={mapShot.url}
                 alt={`${snap.id} harita görüntüsü`}
               />
             )}
@@ -117,12 +123,12 @@ export function SnapshotList({ requestId }: Props) {
               >
                 JSON
               </button>
-              {snap.imageUrl && (
+              {hasMap && mapShot && (
                 <button
                   type="button"
                   className="btn ghost compact"
                   onClick={() =>
-                    downloadSnapshotPng(snap.imageUrl!, `${snap.id}.png`)
+                    downloadSnapshotPng(mapShot.url, `${snap.id}.png`)
                   }
                 >
                   PNG

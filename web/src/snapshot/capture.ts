@@ -1,5 +1,5 @@
 import { toPng } from 'html-to-image'
-import type { SnapshotScreenshot } from '../types'
+import type { SnapshotScreenshotUpload } from '../types'
 
 function edgeStrokeColor(edge: Element | null): string {
   if (!edge?.classList.contains('dd-edge')) return '#2f6f55'
@@ -161,9 +161,9 @@ function watermarkCanvas(
 
 async function captureEl(
   el: HTMLElement,
-  surface: SnapshotScreenshot['surface'],
+  surface: SnapshotScreenshotUpload['surface'],
   watermark?: string[],
-): Promise<SnapshotScreenshot | undefined> {
+): Promise<SnapshotScreenshotUpload | undefined> {
   try {
     inlineReactFlowEdgeStyles(el)
     await waitForPaint()
@@ -196,8 +196,8 @@ export async function captureSnapshotScreenshots(opts: {
   mapRoot?: HTMLElement | null
   workspaceRoot?: HTMLElement | null
   watermark: string[]
-}): Promise<SnapshotScreenshot[]> {
-  const shots: SnapshotScreenshot[] = []
+}): Promise<SnapshotScreenshotUpload[]> {
+  const shots: SnapshotScreenshotUpload[] = []
   if (opts.mapRoot) {
     const map = await captureEl(opts.mapRoot, 'map', opts.watermark)
     if (map) shots.push(map)
@@ -209,11 +209,27 @@ export async function captureSnapshotScreenshots(opts: {
   return shots
 }
 
-export function downloadSnapshotPng(dataUrl: string, filename: string) {
+export function downloadSnapshotPng(dataUrlOrUrl: string, filename: string) {
+  if (dataUrlOrUrl.startsWith('data:')) {
+    const a = document.createElement('a')
+    a.href = dataUrlOrUrl
+    a.download = filename
+    a.click()
+    return
+  }
+  void downloadSnapshotPngFromUrl(dataUrlOrUrl, filename)
+}
+
+export async function downloadSnapshotPngFromUrl(url: string, filename: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('png_download_failed')
+  const blob = await res.blob()
+  const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = dataUrl
+  a.href = objectUrl
   a.download = filename
   a.click()
+  URL.revokeObjectURL(objectUrl)
 }
 
 export function downloadSnapshotJson(snapshot: unknown, filename: string) {

@@ -53,6 +53,8 @@ import {
   searchServices,
 } from './api/client'
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
+import { snapshotHasMapImage } from './snapshot/imageUrl'
+import { sidebarOpenAtSnapshot } from './snapshot/sidebarState'
 import type { SessionUser } from './mock/session'
 import type {
   AffectedService,
@@ -316,13 +318,26 @@ export default function App() {
   }, [refreshInbox])
 
   useEffect(() => {
+    if (!crOpen && !requestDetail && !inboxOpen) return
+    if (allowNavCollapse && !navPinned) setNavHover(false)
+  }, [crOpen, requestDetail, inboxOpen, allowNavCollapse, navPinned])
+
+  const flushSnapshotChrome = useCallback(() => {
+    trail.syncUi({
+      sidebarOpen: sidebarOpenAtSnapshot(navPinned, allowNavCollapse),
+      sidebarPinned: navPinned,
+    })
+  }, [trail, navPinned, allowNavCollapse])
+
+  useEffect(() => {
     trail.syncUi({
       activeTab: tab,
       sidebarOpen: navExpanded,
+      sidebarPinned: navPinned,
       searchOpen: Boolean(query.trim()),
       selectedMethodId: selectedMethodId ?? null,
     })
-  }, [trail, tab, navExpanded, query, selectedMethodId])
+  }, [trail, tab, navExpanded, navPinned, query, selectedMethodId])
 
   useEffect(() => {
     if (!service) return
@@ -337,12 +352,13 @@ export default function App() {
 
   const makeSnapshotContext = useCallback(async () => {
     if (!service) return undefined
+    flushSnapshotChrome()
     return buildClientPayload({
       mapEl: mapRootRef.current,
       workspaceEl: workspaceRef.current,
       watermarkLines: snapshotWatermarkLines([service.name]),
     })
-  }, [buildClientPayload, service])
+  }, [buildClientPayload, service, flushSnapshotChrome])
 
   const openRequestDetail = useCallback(async (requestId: string, fromInbox = false) => {
     try {
@@ -411,11 +427,19 @@ export default function App() {
         return
       }
       const label = catalogServices.find((s) => s.id === id)?.name ?? id
-      trail.record(opts?.source === 'map' ? 'map_select' : opts?.source === 'search' ? 'search_select' : 'tree_select', {
+      trail.record(
+        opts?.source === 'map' ? 'map_select' : opts?.source === 'search' ? 'search_select' : 'tree_select',
+        {
         level: 'service',
         id,
         label,
-      })
+      },
+        opts?.source === 'map'
+          ? 'Haritadan yeni servis seçildi'
+          : opts?.source === 'search'
+            ? 'Arama ile servis seçildi'
+            : 'Ağaçtan servis seçildi',
+      )
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
       setAllowNavCollapse(true)
@@ -898,9 +922,10 @@ export default function App() {
                           onMapRoot={(el) => {
                             mapRootRef.current = el
                           }}
+                          onBeforeSnapshot={flushSnapshotChrome}
                           onSnapshotSaved={(snap: Snapshot) => {
                             setSnapshotToast(
-                              snap.imageUrl
+                              snapshotHasMapImage(snap)
                                 ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
                                 : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
                             )

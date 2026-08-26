@@ -100,6 +100,7 @@ import {
 } from './ImpactChrome'
 import { saveExploreSnapshot } from '../api/client'
 import { captureSnapshotScreenshots, downloadSnapshotPng } from '../snapshot/capture'
+import { snapshotHasMapImage } from '../snapshot/imageUrl'
 import { useSnapshotTrailOptional } from '../snapshot/trail'
 import { snapshotWatermarkLines } from '../snapshot/useSnapshotPack'
 
@@ -132,6 +133,7 @@ type Props = {
   sessionUserId?: string
   sessionUserName?: string
   onMapRoot?: (el: HTMLDivElement | null) => void
+  onBeforeSnapshot?: () => void
   onSnapshotSaved?: (snapshot: import('../types').Snapshot) => void
   /** Ağaç / arama ile yeni merkez → LTR'ye dön */
   forceLtrSignal?: number
@@ -1452,6 +1454,7 @@ export function ImpactMap({
   sessionUserId,
   sessionUserName,
   onMapRoot,
+  onBeforeSnapshot,
   onSnapshotSaved,
   forceLtrSignal = 0,
 }: Props) {
@@ -1600,6 +1603,7 @@ export function ImpactMap({
     if (!sessionUserId || !trail) return
     setSnapshotSaving(true)
     try {
+      onBeforeSnapshot?.()
       const base = trail.getClientPayload()
       const screenshots = await captureSnapshotScreenshots({
         mapRoot: mapRef.current,
@@ -1611,8 +1615,9 @@ export function ImpactMap({
         personName: sessionUserName,
         client: { ...base, screenshots },
       })
-      if (snap.imageUrl) {
-        downloadSnapshotPng(snap.imageUrl, `${snap.id}.png`)
+      if (snapshotHasMapImage(snap)) {
+        const mapShot = snap.screenshots!.find((s) => s.surface === 'map')!
+        void downloadSnapshotPng(mapShot.url, `${snap.id}.png`)
       }
       onSnapshotSaved?.(snap)
     } catch (e) {
@@ -1620,7 +1625,7 @@ export function ImpactMap({
     } finally {
       setSnapshotSaving(false)
     }
-  }, [sessionUserId, sessionUserName, trail, graph.center.name, onSnapshotSaved])
+  }, [sessionUserId, sessionUserName, trail, graph.center.name, onBeforeSnapshot, onSnapshotSaved])
 
   useEffect(() => {
     const el = mapRef.current

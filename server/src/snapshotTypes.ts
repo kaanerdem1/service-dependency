@@ -6,9 +6,12 @@ export type SnapshotType =
   | 'incident'
 
 export type UiChromeState = {
-  activeTab: 'map' | 'affected'
+  activeTab: 'map' | 'affected' | 'overview'
   drawerOpen: boolean
+  /** Panel geniş mi (pin, hover veya ilk yükleme) */
   sidebarOpen: boolean
+  /** Paneli Sabitle açık mı */
+  sidebarPinned?: boolean
   searchOpen?: boolean
   selectedMethodId?: string | null
 }
@@ -64,6 +67,15 @@ export type ImpactRow = {
 export type SnapshotScreenshot = {
   surface: 'map' | 'affected' | 'drawer' | 'full_app'
   capturedAt: string
+  sha256: string
+  /** PNG ayrı endpoint — JSON'da base64 yok */
+  url: string
+}
+
+/** İstemci → sunucu yükleme (createSnapshot sırasında tüketilir) */
+export type SnapshotScreenshotUpload = {
+  surface: SnapshotScreenshot['surface']
+  capturedAt: string
   dataUrl: string
   sha256?: string
 }
@@ -73,7 +85,7 @@ export type SnapshotClientPayload = {
   uiChrome: UiChromeState
   viewState: SnapshotViewState
   focus: SnapshotFocus
-  screenshots?: SnapshotScreenshot[]
+  screenshots?: SnapshotScreenshotUpload[]
   changeSummary?: { title?: string; reason?: string }
 }
 
@@ -93,6 +105,8 @@ export type Snapshot = {
   impact: {
     hop1: ImpactRow[]
     deeper?: ImpactRow[]
+    /** Merkezin çağırdığı servisler (upstream); hop1 onay kümesine girmez */
+    upstream?: ImpactRow[]
     cascadeEdges?: Array<{
       fromId: string
       toId: string
@@ -108,7 +122,6 @@ export type Snapshot = {
     at: string
   }>
   changeSummary?: { title?: string; reason?: string }
-  imageUrl?: string
   screenshots?: SnapshotScreenshot[]
   manifest?: {
     files: Array<{ name: string; sha256: string; role: 'json' | 'png' | 'other' }>

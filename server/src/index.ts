@@ -51,6 +51,7 @@ import {
 import {
   createSnapshot,
   getSnapshot,
+  getSnapshotImage,
   listSnapshotsForRequest,
 } from './snapshots.js'
 import type { SnapshotClientPayload } from './snapshotTypes.js'
@@ -290,28 +291,31 @@ app.post('/api/change-requests', (req, res) => {
     const snapshotContext = body.snapshotContext as SnapshotClientPayload | undefined
     let snapshots: ReturnType<typeof createSnapshot>[] = []
     if (snapshotContext && created.length > 0) {
-      try {
-        snapshots.push(
-          createSnapshot({
-            type: 'cr_open',
-            actor: {
-              userId: body.personId,
-              displayName: body.personName ?? body.personId,
-            },
-            changeRequestId: created[0]!.id,
-            relatedRequestIds: created.map((c) => c.id),
-            batchId: created[0]!.batchId,
-            client: {
-              ...snapshotContext,
-              changeSummary: {
-                title: body.summary,
-                reason: body.rationale,
+      const changeSummary = {
+        title: body.summary,
+        reason: body.rationale,
+      }
+      for (const cr of created) {
+        try {
+          snapshots.push(
+            createSnapshot({
+              type: 'cr_open',
+              actor: {
+                userId: body.personId,
+                displayName: body.personName ?? body.personId,
               },
-            },
-          }),
-        )
-      } catch (e) {
-        console.warn('[snapshot] cr_open failed', e)
+              changeRequestId: cr.id,
+              relatedRequestIds: created.map((c) => c.id),
+              batchId: cr.batchId,
+              client: {
+                ...snapshotContext,
+                changeSummary,
+              },
+            }),
+          )
+        } catch (e) {
+          console.warn('[snapshot] cr_open failed', cr.id, e)
+        }
       }
     }
     res.status(201).json({ requests: created, snapshots })
@@ -434,6 +438,15 @@ app.get('/api/snapshots/:id', (req, res) => {
   const snap = getSnapshot(req.params.id)
   if (!snap) return res.status(404).json({ error: 'not_found' })
   res.json(snap)
+})
+
+app.get('/api/snapshots/:id/image', (req, res) => {
+  const surface = String(req.query.surface ?? 'map')
+  const image = getSnapshotImage(req.params.id, surface)
+  if (!image) return res.status(404).json({ error: 'image_not_found' })
+  res.setHeader('Content-Type', image.contentType)
+  res.setHeader('Cache-Control', 'private, immutable')
+  res.send(image.buffer)
 })
 
 app.get('/api/change-requests/:id/snapshots', (req, res) => {

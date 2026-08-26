@@ -671,7 +671,7 @@ export function radialHandlePair(
     : { sourceHandle: 'out-top', targetHandle: 'in-bottom' }
 }
 
-/** Ok ışınına göre sağ / sol / üst / alt — referans radial.md */
+/** Ok ışınına göre sağ / sol / üst / alt — radial layout etiket yerleşimi */
 export function radialLabelSidePrefs(
   angle: number,
   isCenter: boolean,
