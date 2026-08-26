@@ -119,4 +119,4 @@ npm run dev
 
 UI: http://127.0.0.1:5173 · API: http://127.0.0.1:4000/api/health
 
-Dokümanlar: `docs/ServiceDependency.md`, `docs/UI_UX_GEREKSINIMLER.md`, `docs/ONAY_ZINCIRI_SENARYOLAR.md`, `docs/SNAPSHOT.md`, `docs/new.md`
+Dokümanlar: [PRODUCT.md](./PRODUCT.md) · [new.md](./new.md)
