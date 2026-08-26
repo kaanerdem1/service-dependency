@@ -1,6 +1,6 @@
-# Metod call-graph — test senaryoları (tutarlılık)
+# Metod call-graph — test senaryoları
 
-Amaç: mock metod kataloğu (`server/src/methods.ts`) ile servis `affectsEdges` aynı hikâyeyi anlatsın; UI lazy ağaç doğru davransın.
+Amaç: Metod kataloğu (`methods.ts`) ile servis bağımlılık grafiği (`affectsEdges`) aynı hikâyeyi anlatsın; arayüzde metod ağacı doğru davransın.
 
 Otomatik kontrol: `GET /api/meta/call-graph-consistency` → `{ ok: true }`.
 

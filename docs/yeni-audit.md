@@ -1,6 +1,8 @@
-# Yeni audit
+# Animasyon ve UI ilham taraması
 
-## Kaynaklar (kullanıcı)
+Harita, sidebar ve onay akışı için dış kaynaklardan neler alınabilir — neler alınmamalı.
+
+## Kaynaklar
 
 - [Motion examples — cursor kategorisi](https://motion.dev/examples?utm_source=chatgpt.com&category=cursor)
 - [Animate UI docs](https://animate-ui.com/docs)
@@ -10,9 +12,9 @@
 
 ---
 
-## Animasyon taraması (ürün: servis katalog + etki haritası)
+## Animasyon taraması (servis katalog + etki haritası)
 
-Projede `motion` kurulu (`web/src/motion/*`). Animate UI’nin çoğu maddesi Motion.dev ile **aynı primitive** — ayrı “Animate UI paketi” görsel fark yaratmaz.
+Projede `motion` kurulu. Animate UI’nin çoğu maddesi Motion.dev ile aynı temeli kullanıyor — ayrı paket görsel fark yaratmaz.
 
 ### Özet (ne alınır, ne alınmaz)
 

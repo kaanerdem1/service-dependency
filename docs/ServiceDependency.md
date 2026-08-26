@@ -21,27 +21,22 @@ cd /Users/kaanerdem/Desktop/service-dependency/server
 
 
 
-## 0. Hedef vizyon (kısa)
+## 0. Hedef (kısa)
 
-Bugün (veri katmanı):
+**Bugün (veri katmanı):** Tablo, kolon, prosedür, rapor — kim okur, kim yazar, etki yarıçapı.
 
-```
-Tablo / kolon / prosedür / rapor  →  kim okur, kim yazar, etki yarıçapı
-```
-
-Hedef genişleme (kod / servis katmanı):
+**Hedef (kod / servis katmanı):**
 
 ```
 Servis A
-  └─ Method X
-       └─ Method Y
-            └─ Method Z
-                 └─ (opsiyonel) Table T / API / Queue
+  └─ Metod X
+       └─ Metod Y
+            └─ (isteğe bağlı) Tablo / API / Kuyruk
 ```
 
-**Soru:** Büyük codebase’de bir servis veya metod değişince, ucu hangi servislere ve hangi metodlara dokunuyor?
+**Asıl soru:** Büyük bir codebase’de bir servis veya metod değişince, ucu hangi servislere ve metodlara dokunuyor?
 
-Ürün özeti: **statik katalog + etki analizi** (runtime APM zorunlu değil). UI dili Datadog / Backstage tarzı olabilir; kaynak = bizim katalog (CodeQL / OpenAPI / parser).
+Ürün özü: **statik katalog + etki analizi** (runtime APM şart değil). Arayüz dili Datadog / Backstage tarzı olabilir; veri bizim katalogdan gelir.
 
 ---
 

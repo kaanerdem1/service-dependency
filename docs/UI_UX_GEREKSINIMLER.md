@@ -1,24 +1,23 @@
-# Service Dependency — UI / UX Gereksinimleri
+# UI / UX gereksinimleri
 
-> Amaç: `ServiceDependency.md` içindeki ürün omurgası + referanslar yeterli değil; **iyi bir arayüz deneyimi** için somutlaştırılması gereken kararlar ve yüzeyler.
-> İlgili: [`ServiceDependency.md`](./ServiceDependency.md)
+> [ServiceDependency](./ServiceDependency.md) ürün omurgasını anlatıyor; bu doküman **ekranlar, roller ve akışlar** için somut kararları toplar.  
 > Tarih: 2026-08-12
 
 ---
 
 ## 0. Özet
 
-Ürün omurgası kilitli:
+Ürün akışı:
 
 ```
-Sol modül ağacı → etkilenen servisler (liste/grafik) → değişiklik talebi → owner flag → gate
+Sol modül ağacı → etkilenen servisler → değişiklik talebi → sorumlu onayı → kapı açılır
 ```
 
-**UI dili:** “etkilenen servisler” = seçili servis değişince ucu dokunan servisler (teknik: onu kullanan / bağımlı olan inbound consumers). “Caller” ürün metninde kullanılmaz.
+**Dil:** “Etkilenen servisler” = seçili servis değişince ucu dokunan servisler. Teknik terimler (caller, downstream vb.) arayüz metninde kullanılmaz.
 
-Bu doküman feature listesini tekrar etmez. Eksik olan: **ekran envanteri, roller, akış kenarları, bildirim yüzeyi, boş/yükleme halleri, UI contract, kopya, görsel brief, prototip**.
+Bu doküman özellik listesini tekrar etmez. Odak: **hangi ekranlar var, kim ne yapar, boş/hata durumları, metinler**.
 
-**Önerilen sıra:** rol matrisi → ekran envanteri → 3 kritik akış → mock API → boş/yükleme kuralları → prototip.
+**Önerilen sıra:** roller → ekran listesi → 3 kritik akış → mock API → boş ekran kuralları → prototip.
 
 ---
 

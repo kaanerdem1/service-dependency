@@ -1,15 +1,15 @@
 # Referans özellik adayları — sonraya bırakılanlar
 
-Yapılanlar bu listeden çıkarıldı. Aşağıdakiler bilinçli olarak **ertelendi**.
+Yapılanlar listeden çıkarıldı. Aşağıdakiler bilinçli olarak **ertelendi**.
 
-Kaynaklar: Datadog, Backstage, New Relic, Dynatrace, CodeQL, Sourcegraph, JetBrains, Manta/Atlan, OpsLevel/Cortex.
+Kaynak ilham: Datadog, Backstage, New Relic, Dynatrace, CodeQL, Sourcegraph, JetBrains, Manta/Atlan, OpsLevel/Cortex.
 
 ---
 
 ## Açık (sıradaki — ertelenmedi)
 
 17. [ ] **Metod seviyesi etki → onay listesi**  
-    Harita / blast var; değişiklik talebi ve gate henüz metod blast’ına bağlı değil.
+    Metod haritası ve etki özeti var; değişiklik talebi ve onay kapısı henüz metod etkisine bağlı değil.
 
 ---
 

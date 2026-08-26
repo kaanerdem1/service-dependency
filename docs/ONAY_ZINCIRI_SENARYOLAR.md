@@ -1,8 +1,8 @@
-# Onay zinciri senaryoları — hop, çift bildirim, kötü vakalar
+# Onay zinciri — örnek senaryolar
 
-> Bağlam: `BillingService` değişince hem `FinanceBatchJob` hem `ReportingService` etkilenir; `ReportingService` değişirse yine `FinanceBatchJob` etkilenir.  
-> Soru: Tek talepte FinanceBatch’e **2 onay mı** gider, yoksa **1 hop** bitince alt katman **yeni talep** mi açar?  
-> İlgili: [`ServiceDependency.md`](./ServiceDependency.md), [`UI_UX_GEREKSINIMLER.md`](./UI_UX_GEREKSINIMLER.md)  
+> Örnek: `BillingService` değişince hem `FinanceBatchJob` hem `ReportingService` etkilenir; `ReportingService` değişirse yine `FinanceBatchJob` etkilenir.  
+> Soru: Tek talepte FinanceBatch’e **iki kez mi** onay gider, yoksa **her değişiklik ayrı talep** mi açılır?  
+> İlgili: [ServiceDependency](./ServiceDependency.md), [UI/UX](./UI_UX_GEREKSINIMLER.md)  
 > Tarih: 2026-08-12
 
 ---
@@ -29,21 +29,20 @@ Owner’lar farklı varsayalım:
 
 ## 1. İki ürün modeli (seçim gerekir)
 
-### Model A — Tek talep, yalnız 1 hop (önerilen MVP)
+### Model A — Tek talep, yalnız 1. katman (MVP önerisi)
 
 - Billing değişikliği talebi açılınca **yalnızca doğrudan etkilenenler** onaylar: Reporting + FinanceBatch.
-- FinanceBatch’e **1** bildirim/flag satırı gider (Billing → FinanceBatch kenarı).
-- Reporting “ben de kodumu değiştirmem lazım” derse: **ayrı değişiklik talebi** açar (Reporting merkezli); o talepte FinanceBatch yine **1** kez (Reporting → FinanceBatch) onaylar.
-- Zincir **bilinçli olarak kırılır**: her talep kendi 1-hop kümesi.
+- FinanceBatch’e **bir** bildirim gider (Billing → FinanceBatch bağı).
+- Reporting “ben de kodumu güncellemem lazım” derse: **ayrı değişiklik talebi** açar; o talepte FinanceBatch yine **bir kez** onaylar.
+- Her talep kendi 1. katman listesiyle sınırlı kalır; zincir bilinçli olarak parçalanır.
 
-### Model B — Tek talep, çok hop / transitive blast
+### Model B — Tek talepte tüm katmanlar
 
-- Billing talebi açılınca sistem hop 1 + hop 2’yi (veya N) toplar.
-- FinanceBatch hem hop 1 hem hop 2’de görünür → **çift sayım riski**.
-- Tek talepte tüm transitive owner’lar flag’ler; Reporting’in kendi değişikliği bu talebin içinde mi yoksa yan etki mi belirsizleşir.
+- Billing talebi açılınca sistem 1. + 2. katmanı (veya daha fazlasını) toplar.
+- FinanceBatch hem 1. hem 2. katmanda görünür → **aynı servis iki kez sayılabilir**.
+- Tek talepte herkes onaylar; Reporting’in kendi değişikliği bu talebin içinde mi yoksa yan etki mi belirsizleşir.
 
-**Kısa cevap (senaryoya):**  
-MVP için **Model A** daha temiz: tek talepte FinanceBatch’e **1** istek; Reporting ayrıca değişecekse **yeni talep**. Model B’de “2 istek mi 1 mi?” bilinçli tekilleştirme (dedupe) şart.
+**Kısa cevap:** MVP için **Model A** daha sade: FinanceBatch’e talep başına **bir** istek. Reporting ayrıca değişecekse **yeni talep**. Model B’de çift sayımı önlemek için ek kurallar gerekir.
 
 ---
 

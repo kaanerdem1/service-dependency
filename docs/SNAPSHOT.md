@@ -1,22 +1,21 @@
-# Snapshot — karar anının dondurulmuş kanıt paketi
+# Snapshot — o anki durumun kaydı
 
-> Backlog: `docs/changes.md` · İlgili: `[README.md](./README.md)`, `[ONAY_ZINCIRI_SENARYOLAR.md](./ONAY_ZINCIRI_SENARYOLAR.md)`, `[UI_UX_GEREKSINIMLER.md](./UI_UX_GEREKSINIMLER.md)`  
+> Backlog: `docs/changes.md` · İlgili: [README](./README.md), [Onay senaryoları](./ONAY_ZINCIRI_SENARYOLAR.md), [UI/UX](./UI_UX_GEREKSINIMLER.md)  
 > Tarih: 2026-08-19
 
 ---
 
 ## 0. Özet
 
-Snapshot **ekran görüntüsü değil**; bir değişiklik veya onay anında *“sistem ve insan ne biliyordu, neyi gördü?”* sorusuna cevap veren **delil paketi**.
+Snapshot bir ekran görüntüsü değil. Talep açıldığında veya onay verildiğinde **o anda ne biliniyordu, ekranda ne vardı** sorusunun cevabını saklar — delil paketi gibi düşün.
 
-Ürün statik katalog + etki analizi + onay zinciri olduğu için snapshot:
+Bu ürün runtime log taşımaz; statik katalog ve onay akışına dayanır. Snapshot şunları kaydeder:
 
-- APM / runtime log taşımaz.
-- Onay anındaki **etki kümesini** (hop 1, isteğe bağlı hop 2+, yan bağlar) dondurur.
-- Harita **görünüm durumunu** ve kullanıcının **gezinme yolunu** kaydeder.
-- Post-mortem ve yönetici denetiminde *kapsam hatası mı, süreç hatası mı, katalog hatası mı* ayrımını mümkün kılar.
+- Onay anındaki **etki listesi** (1. katman, isteğe bağlı daha derin katmanlar, yan bağlar)
+- Haritanın **görünümü** (katman, layout, filtre)
+- Kullanıcının **gezinme yolu** (hangi sekmeler, hangi servisler)
 
-**Tek cümle (yönetici):** *Bu deploy onaylanırken sistem ve owner neyi görmüştü?*
+**Yöneticiye tek cümle:** *Bu deploy onaylanırken ekip neyi görmüştü?*
 
 ---
 
@@ -29,11 +28,11 @@ Snapshot **ekran görüntüsü değil**; bir değişiklik veya onay anında *“
 ### Servise bakan yazılımcı
 
 
-| Durum         | Snapshot neyi kanıtlar                                                             |
-| ------------- | ---------------------------------------------------------------------------------- |
-| Talep açarken | Merkez servis/metod, açık katman sayısı, yan bağ açık mı                           |
-| Onay verirken | “Ben hangi hop-1 kümesine onay verdim?” — revize sonrası liste değişse bile        |
-| Hata sonrası  | “FinanceBatch’i görmedim” iddiası — haritada tıklanmış mı, hop-1 listesinde var mı |
+| Durum         | Snapshot ne kanıtlar |
+| ------------- | -------------------- |
+| Talep açarken | Hangi servis/metod merkezde, kaç katman açık, yan bağlar görünür mü |
+| Onay verirken | Hangi 1. katman listesine onay verildi — liste sonra değişse bile |
+| Hata sonrası  | “X servisini görmedim” — listede ve haritada gerçekten var mıydı |
 
 
 
@@ -41,12 +40,12 @@ Snapshot **ekran görüntüsü değil**; bir değişiklik veya onay anında *“
 ### Yönetici / lider
 
 
-| Soru                     | Snapshot cevabı                                                                  |
-| ------------------------ | -------------------------------------------------------------------------------- |
-| Süreç ihlali var mı?     | Gate açılmadan deploy; hop-1 dışı etki bilinçli mi göz ardı                      |
-| Kapsam doğru mu?         | CR metni (“Billing API”) vs merkez düğüm uyumu                                   |
-| Zincir kopuk mu?         | Dolaylı etki hop-2’de görünüyordu; ara servis için ayrı talep açılmadı (Model A) |
-| Katalog güvenilir miydi? | `catalogRevision` + olay sonrası canlı diff                                      |
+| Soru                     | Snapshot ne söyler |
+| ------------------------ | ------------------- |
+| Süreç atlandı mı?        | Onay alınmadan deploy; 1. katman dışı etki bilinçli mi yok sayıldı |
+| Kapsam doğru muydu?      | Talep metni ile haritadaki merkez servis uyuşuyor mu |
+| Zincir koptu mu?         | Dolaylı etki 2. katmanda görünüyordu; ara servis için ayrı talep açılmadı mı |
+| Katalog güvenilir miydi? | Hangi katalog sürümü; olay sonrası fark var mı |
 
 
 
@@ -416,59 +415,47 @@ Araştırma özeti (NIST SP 800-171 / CMMC 3.4.3–3.4.5, SOC2 CC8.1, ITIL chang
 
 ---
 
-## 11. Yapılabilecek öneriler (implementasyon backlog)
+## 11. Yapılacak iyileştirmeler
 
-### Hemen değer katan (küçük diff)
+### Yakın vadede (küçük işler)
 
-1. **Trail sınırı** — Snapshot anında trail’i kes/sıfırla veya “CR modali açılışından beri” filtrele; oturum başından beri biriken gürültüyü önler.
-2. **`viewState.viewport`** — `syncView`’a React Flow `getViewport()` ekle (snapshot anında veya debounced pan/zoom sonrası).
-3. **`focus` sync** — `ImpactMap` focus sync’ini metod seçimine saygılı yap (`App.tsx` ile çakışmayı kaldır).
-4. **Proje filtresi** — `viewState`’e `projectFilterId`, eşleşen servis sayısı.
-5. ~~**PNG duplikasyonu**~~ — ✅ `imageUrl` kaldırıldı; PNG ayrı endpoint (§12).
+1. **Gezinme kaydı sınırı** — Snapshot alınırken sadece talep/modal açıldıktan sonraki adımlar kalsın; oturum başından beri biriken kayıt temizlensin.
+2. **Harita zoom/pan** — Snapshot anında haritanın zoom ve kaydırma değeri de kaydedilsin.
+3. **Odak (focus) düzeltmesi** — Metod seçiliyken snapshot merkezi yanlış servisi yazmasın.
+4. **Proje filtresi** — Hangi proje filtresi açıktı, kaç servis eşleşiyordu kayda geçsin.
+5. ~~**PNG JSON içinde~~** — ✅ PNG artık ayrı dosya; JSON şişmiyor.
 
-### Orta vadeli
+### Orta vadede
 
-6. **`gate_open` / `approval`** için `full_app` PNG (tüm chrome görünür).
-7. **Watermark’a snapshot id** — sunucu tarafında PNG işleme veya ikinci pass (id capture sonrası üretildiği için).
-8. **Web ↔ server tipleri** — `snapshotTypes` tek kaynak; `overview` sekmesi, `theme_toggle` trail uyumu.
+6. **Onay anında tam ekran görüntüsü** — Sadece harita değil, tüm arayüz (inbox, panel durumu).
+7. **Watermark’a snapshot numarası** — PNG üzerinde id + tarih (sunucuda işleme).
+8. **Tip tanımları tek yerde** — Web ve sunucu aynı şemayı kullansın.
 
-### Büyük iş (P1)
+### Uzun vadede
 
-9. Read-only **yeniden oynatma** (kayıtlı `viewState` + `impact` subset).
-10. **`incident`** + canlı katalog diff (`liveCatalogDiff`).
-11. **Kalıcı storage** (mock bellek store yerine dosya/DB).
+9. **Kayıttan haritayı tekrar açma** — O anki görünümü salt okunur modda göster.
+10. **Olay sonrası katalog karşılaştırması** — Prod olayı olunca “o zaman vs şimdi” farkı.
+11. **Kalıcı depolama** — Bellek yerine dosya/veritabanı.
 
-### Uygulandı (2026-08-26)
+### Tamamlananlar (2026-08-26)
 
-- **`impact.upstream`** — upstream (çağırdıklarım) artık `deeper` ile karışmıyor; üç kova: `hop1` / `deeper` / `upstream`.
-- **Batch `cr_open`** — aynı batch’te açılan her CR için ayrı snapshot (`changeRequestId` = ilgili task).
-- **JSON/PNG ayrımı** — base64 JSON’dan kaldırıldı; PNG `GET /api/snapshots/:id/image`; `imageUrl` kaldırıldı.
+- **Upstream ayrı liste** — Merkezin çağırdıkları artık `deeper` ile karışmıyor.
+- **Batch talepler** — Aynı anda açılan her talep için ayrı snapshot.
+- **JSON / PNG ayrımı** — PNG indirme ayrı endpoint’ten.
 
 ---
 
-## 12. JSON ve PNG ayrımı
+## 12. JSON ve PNG neden ayrı?
 
-**Hedef:** JSON yalnızca yapısal kanıt (`impact`, `trail`, `viewState`, `manifest` hash referansları); PNG ayrı artifact.
+**Kısa cevap:** JSON metin ve sayılar için; PNG görsel için. İkisini aynı dosyada tutmak JSON’u gereksiz şişirir.
 
-MVP mock’ta PNG artık JSON **içinde değil** — sunucuda ayrı bellekte; JSON yalnızca `{ surface, url, sha256 }` referansı taşır. İndirme: `GET /api/snapshots/:id/image?surface=map`.
+Şu an PNG sunucuda ayrı tutuluyor. JSON’da yalnızca “harita görüntüsü şu adreste” referansı var. İndirme: talep detayı → Snapshot sekmesi → JSON / PNG ayrı butonlar.
 
-### JSON içinde base64 olmasa, PNG inbox’tan indirilebilir olsa — olur mu?
+| Ne | Nerede |
+|----|--------|
+| Etki listesi, gezinme yolu, ekran durumu | JSON (küçük dosya) |
+| Harita ekran görüntüsü | PNG (ayrı indirme) |
+| Bütünlük kontrolü | Her ikisinin hash’i `manifest` içinde |
 
-**Evet, doğru model bu.** Prod olmasa bile mimari olarak şöyle çalışır:
-
-| Katman | İçerik |
-|--------|--------|
-| **JSON** | `id`, `type`, `impact`, `navigationTrail`, `viewState`, `uiChrome`, `approvals`, `manifest` — PNG **yok** veya yalnızca `{ surface, url, sha256 }` referansı |
-| **PNG** | Sunucuda dosya / object storage; `GET /api/snapshots/:id/image?surface=map` |
-| **UI** | Talep detayı / inbox → Snapshot sekmesi: JSON indir + PNG indir ayrı butonlar; liste thumbnail’i URL’den |
-
-Akış:
-
-1. Snapshot oluşturulur → sunucu PNG’yi kaydeder, JSON’a hash + URL yazar.
-2. Kullanıcı inbox’tan talebe girer → Snapshot listesinde PNG indir / önizleme URL ile.
-3. Denetim: JSON + ayrı PNG dosyası; `manifest.packSha256` bütünlük kontrolü.
-
-**MVP geçiş adımı:** API yanıtında base64’ü kaldır; istemci PNG’yi yalnızca indirme endpoint’inden alsın. Explore “Kaydet” zaten PNG’yi ayrıca indiriyor — aynı pattern CR/onay için de uygulanır.
-
-**Kaldırılan duplikasyon:** `imageUrl` kaldırıldı; harita PNG’si yalnızca `screenshots[]` içindeki `url` referansı ile erişilir.
+**Inbox’tan PNG indirilebilir mi?** Evet — bu doğru model. JSON ince kalır; görsel ihtiyaç olunca ayrı çekilir.
 

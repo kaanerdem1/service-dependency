@@ -1,8 +1,8 @@
 # Service Dependency
 
-Statik katalog + etki analizi + değişiklik onay ürünü.
+Servislerin birbirine nasıl bağlı olduğunu gösteren, değişiklik etkisini hesaplayan ve onay sürecini yöneten bir araç.
 
-Ürün özü: bir servis veya metod değişince **kime / hangi metoda** ucu dokunduğu görülsün; onay yalnız **doğrudan etkilenenler** üzerinden açılsın.
+**Kısaca:** Bir servis veya metod değişince **kime dokunur** görülsün; onay istekleri yalnızca **doğrudan etkilenen** servislere gitsin.
 
 ## Mimari (özet)
 
@@ -55,8 +55,8 @@ flowchart TB
 
 | Katman | Veri | Ne işe yarar |
 |--------|------|----------------|
-| **Servis** | `affectsEdges` | Harita, etki yolu, **onay listesi (hop 1)** |
-| **Method** | `callEdges` | Method haritası, callers/callees, blast özeti |
+| **Servis** | `affectsEdges` | Harita, etki yolu, **onay listesi (1. katman)** |
+| **Metod** | `callEdges` | Metod haritası, kim kimi çağırıyor, etki özeti |
 
 Kural: çapraz servis method çağrısı varsa, callee servisin `affectsEdges` listesinde caller servis de olmalı.
 
@@ -70,8 +70,8 @@ flowchart LR
   H23 --> Explore[Harita / etki yolu]
 ```
 
-- **Onay** → yalnız hop 1 (downstream / beni çağıranlar)
-- **Harita** → hop 2–3 ile dolaylı zinciri keşfet (pivot / geri-ileri)
+- **Onay** → yalnızca 1. katman (değişiklikten doğrudan etkilenenler)
+- **Harita** → 2–3. katmanlar keşif içindir; pivot ve geri/ileri ile gezilir
 
 ### Kodda nereye bakmalı?
 
@@ -119,4 +119,4 @@ npm run dev
 
 UI: http://127.0.0.1:5173 · API: http://127.0.0.1:4000/api/health
 
-Dokümanlar: `docs/ServiceDependency.md`, `docs/UI_UX_GEREKSINIMLER.md`, `docs/ONAY_ZINCIRI_SENARYOLAR.md`, `docs/SNAPSHOT.md`
+Dokümanlar: `docs/ServiceDependency.md`, `docs/UI_UX_GEREKSINIMLER.md`, `docs/ONAY_ZINCIRI_SENARYOLAR.md`, `docs/SNAPSHOT.md`, `docs/new.md`
