@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { AnimatedNumber } from '../motion/AnimatedNumber'
+import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { EmptyState } from './EmptyState'
 import type { Service } from '../types'
 
@@ -104,6 +106,59 @@ function FormField({
   )
 }
 
+function BentoTile({
+  area,
+  title,
+  children,
+  spotlight = false,
+  compactHeading = false,
+}: {
+  area: string
+  title: string
+  children: ReactNode
+  spotlight?: boolean
+  compactHeading?: boolean
+}) {
+  const body = (
+    <section
+      className={`service-doc-section service-doc-section--compact service-bento-tile service-bento-tile--${area}`}
+    >
+      <h3
+        className={`service-doc-heading${compactHeading ? ' service-doc-heading--tile' : ''}`}
+      >
+        {title}
+      </h3>
+      {children}
+    </section>
+  )
+
+  if (!spotlight) return body
+
+  return (
+    <MotionSpotlight className={`service-bento-spotlight service-bento-spotlight--${area}`}>
+      {body}
+    </MotionSpotlight>
+  )
+}
+
+function StatTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: number
+  hint?: string
+}) {
+  return (
+    <div className="service-bento-stat">
+      <AnimatedNumber value={value} className="service-bento-stat-num" />
+      <span className="service-bento-stat-label">{label}</span>
+      {hint ? <p className="service-bento-stat-hint">{hint}</p> : null}
+    </div>
+  )
+}
+
 export function ServiceOverview({
   service,
   projectLabel,
@@ -137,6 +192,7 @@ export function ServiceOverview({
   }
 
   const summary = saved ?? baseline
+  const hasOwner = Boolean(service.owner)
 
   const save = () => {
     const trimmed = draft.trim()
@@ -169,139 +225,7 @@ export function ServiceOverview({
 
   return (
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
-      {editing ? (
-        <form
-          className="service-overview-layout service-overview-form"
-          aria-label="Servis işlevi düzenle"
-          onSubmit={(e) => {
-            e.preventDefault()
-            save()
-          }}
-        >
-          <div className="service-overview-main">
-            <section className="service-form-section service-form-section--compact">
-              <h3 className="service-doc-heading">Kimlik</h3>
-            <div className="service-form-row">
-              <FormField label="Servis adı" value={service.name} readOnly />
-              <FormField label="Servis kimliği" value={service.id} readOnly mono />
-            </div>
-            <FormField
-              label="İşlev özeti"
-              value={draft}
-              multiline
-              onChange={setDraft}
-            />
-          </section>
-          </div>
-
-          <aside className="service-overview-aside">
-            <section className="service-form-section service-form-section--compact">
-              <h3 className="service-doc-heading">Konum</h3>
-              <div className="service-form-row">
-                <FormField
-                  label="Proje"
-                  value={projectLabel ?? service.projectId}
-                  readOnly
-                />
-                <FormField
-                  label="Paket"
-                  value={packageLabel ?? service.packageId}
-                  readOnly
-                  mono
-                />
-              </div>
-            </section>
-
-            <section className="service-form-section service-form-section--compact">
-              <h3 className="service-doc-heading">Bağımlılık</h3>
-              <div className="service-form-row">
-                <FormField
-                  label="Bu servisi çağıran"
-                  value={`${callerCount} servis`}
-                  readOnly
-                />
-                <FormField
-                  label="Çağırdığı servis"
-                  value={`${calleeCount} servis`}
-                  readOnly
-                />
-              </div>
-            </section>
-
-            {service.owner && (
-              <section className="service-form-section service-form-section--compact">
-                <h3 className="service-doc-heading">Sahiplik</h3>
-                <div className="service-form-row">
-                  <FormField label="Sorumlu" value={service.owner.name} readOnly />
-                  <FormField
-                    label="Ekip"
-                    value={service.owner.team ?? '—'}
-                    readOnly
-                  />
-                </div>
-              </section>
-            )}
-          </aside>
-        </form>
-      ) : (
-        <div className="service-overview-layout">
-          <div className="service-overview-main">
-            <section className="service-doc-section service-doc-section--compact">
-              <h3 className="service-doc-heading">Kimlik</h3>
-            <div className="service-doc-body">
-              <div className="service-doc-columns service-doc-columns--meta">
-                <DocItem label="Servis adı">{service.name}</DocItem>
-                <DocItem label="Servis kimliği" mono>
-                  {service.id}
-                </DocItem>
-              </div>
-              <DocItem label="İşlev özeti">{renderSummaryText(summary)}</DocItem>
-            </div>
-          </section>
-          </div>
-
-          <aside className="service-overview-aside">
-            <section className="service-doc-section service-doc-section--compact">
-              <h3 className="service-doc-heading">Konum</h3>
-              <div className="service-doc-body service-doc-columns">
-                <DocItem label="Proje">{projectLabel ?? service.projectId}</DocItem>
-                <DocItem label="Paket" mono>
-                  {packageLabel ?? service.packageId}
-                </DocItem>
-              </div>
-            </section>
-
-            <section className="service-doc-section service-doc-section--compact">
-              <h3 className="service-doc-heading">Bağımlılık</h3>
-              <div className="service-doc-body service-doc-columns">
-                <DocItem label="Bu servisi çağıran">{callerCount} servis</DocItem>
-                <DocItem label="Çağırdığı servis">{calleeCount} servis</DocItem>
-              </div>
-              <p className="service-doc-hint">
-                Detaylı listeler için İlişkiler sekmesine geçin.
-              </p>
-            </section>
-
-            {service.owner && (
-              <section className="service-doc-section service-doc-section--compact">
-                <h3 className="service-doc-heading">Sahiplik</h3>
-                <div className="service-doc-body service-doc-columns">
-                  <DocItem label="Sorumlu">{service.owner.name}</DocItem>
-                  <DocItem label="Ekip">{service.owner.team ?? '—'}</DocItem>
-                </div>
-                {service.owner.role && (
-                  <div className="service-doc-body">
-                    <DocItem label="Rol">
-                      {service.owner.role === 'lead' ? 'Ekip lideri' : 'Ekip üyesi'}
-                    </DocItem>
-                  </div>
-                )}
-              </section>
-            )}
-          </aside>
-        </div>
-      )}
-      <footer className="service-overview-toolbar">
+      <header className="service-overview-toolbar">
         {editing ? (
           <div className="service-overview-edit-actions">
             <button type="button" className="btn ghost compact" onClick={cancel}>
@@ -323,7 +247,138 @@ export function ServiceOverview({
             Düzenle
           </button>
         )}
-      </footer>
+      </header>
+      {editing ? (
+        <form
+          className={`service-bento service-bento-form${hasOwner ? ' has-owner' : ''}`}
+          aria-label="Servis işlevi düzenle"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save()
+          }}
+        >
+          <BentoTile area="identity" title="Kimlik">
+            <div className="service-doc-body">
+              <div className="service-doc-columns service-doc-columns--meta">
+                <FormField label="Servis adı" value={service.name} readOnly />
+                <FormField label="Servis kimliği" value={service.id} readOnly mono />
+              </div>
+            </div>
+          </BentoTile>
+
+          <BentoTile area="location" title="Konum">
+            <div className="service-doc-body service-doc-columns">
+              <FormField
+                label="Proje"
+                value={projectLabel ?? service.projectId}
+                readOnly
+              />
+              <FormField
+                label="Paket"
+                value={packageLabel ?? service.packageId}
+                readOnly
+                mono
+              />
+            </div>
+          </BentoTile>
+
+          <BentoTile area="summary" title="İşlev özeti">
+            <FormField label="İşlev özeti" value={draft} multiline onChange={setDraft} />
+          </BentoTile>
+
+          <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
+            <FormField
+              label="Bu servisi çağıran"
+              value={`${callerCount} servis`}
+              readOnly
+            />
+          </BentoTile>
+
+          <BentoTile area="callees" title="Giden çağrılar" compactHeading>
+            <FormField
+              label="Çağırdığı servis"
+              value={`${calleeCount} servis`}
+              readOnly
+            />
+          </BentoTile>
+
+          {hasOwner && service.owner ? (
+            <BentoTile area="ownership" title="Sahiplik">
+              <div className="service-doc-body service-doc-columns">
+                <FormField label="Sorumlu" value={service.owner.name} readOnly />
+                <FormField label="Ekip" value={service.owner.team ?? '—'} readOnly />
+              </div>
+            </BentoTile>
+          ) : (
+            <BentoTile area="hint" title="Etki analizi">
+              <p className="service-doc-hint service-bento-hint">
+                Harita ve İlişkiler sekmelerinden tam bağımlılık listesine geçin.
+              </p>
+            </BentoTile>
+          )}
+        </form>
+      ) : (
+        <div className={`service-bento${hasOwner ? ' has-owner' : ''}`}>
+          <BentoTile area="identity" title="Kimlik" spotlight>
+            <div className="service-doc-body">
+              <p className="service-bento-hero-name">{service.name}</p>
+              <DocItem label="Servis kimliği" mono>
+                {service.id}
+              </DocItem>
+            </div>
+          </BentoTile>
+
+          <BentoTile area="location" title="Konum">
+            <div className="service-doc-body service-doc-columns">
+              <DocItem label="Proje">{projectLabel ?? service.projectId}</DocItem>
+              <DocItem label="Paket" mono>
+                {packageLabel ?? service.packageId}
+              </DocItem>
+            </div>
+          </BentoTile>
+
+          <BentoTile area="summary" title="İşlev özeti">
+            <div className="service-doc-body service-doc-value">
+              {renderSummaryText(summary)}
+            </div>
+          </BentoTile>
+
+          <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
+            <StatTile
+              label="Bu servisi çağıran"
+              value={callerCount}
+              hint="İlişkiler sekmesinde liste"
+            />
+          </BentoTile>
+
+          <BentoTile area="callees" title="Giden çağrılar" compactHeading>
+            <StatTile label="Çağırdığı servis" value={calleeCount} />
+          </BentoTile>
+
+          {hasOwner && service.owner ? (
+            <BentoTile area="ownership" title="Sahiplik">
+              <div className="service-doc-body service-doc-columns">
+                <DocItem label="Sorumlu">{service.owner.name}</DocItem>
+                <DocItem label="Ekip">{service.owner.team ?? '—'}</DocItem>
+              </div>
+              {service.owner.role ? (
+                <div className="service-doc-body">
+                  <DocItem label="Rol">
+                    {service.owner.role === 'lead' ? 'Ekip lideri' : 'Ekip üyesi'}
+                  </DocItem>
+                </div>
+              ) : null}
+            </BentoTile>
+          ) : (
+            <BentoTile area="hint" title="Etki analizi">
+              <p className="service-doc-hint service-bento-hint">
+                Detaylı listeler ve etki zinciri için İlişkiler ve Harita sekmelerine
+                geçin.
+              </p>
+            </BentoTile>
+          )}
+        </div>
+      )}
     </article>
   )
 }
