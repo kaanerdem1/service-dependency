@@ -6021,25 +6021,30 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   opacity: 0.12 !important;
 }
 
-.dd-map.is-focusing .react-flow__edge.dd-edge-on path {
+.dd-map.is-focusing .react-flow__edge.dd-edge-on .react-flow__edge-path {
   stroke: var(--map-path, #2f6f55) !important;
+  stroke-width: 2.8px !important;
   stroke-dasharray: 8 6;
   animation: dd-edge-flow 0.95s linear infinite;
   filter: drop-shadow(0 0 2px rgba(47, 111, 85, 0.35));
 }
 
-.dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
+.dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade .react-flow__edge-path {
   stroke: #a85f24 !important;
+  stroke-width: 2.4px !important;
   stroke-dasharray: 6 5;
   animation: dd-edge-flow-cascade 1.05s linear infinite;
   filter: drop-shadow(0 0 2px rgba(168, 95, 36, 0.28));
 }
 
-.dd-map.is-focusing .react-flow__edge.dd-edge-on:not(.cascade) path {
-  animation-name: dd-edge-flow, dd-edge-flow-pulse;
-  animation-duration: 0.95s, 1.8s;
-  animation-timing-function: linear, ease-in-out;
-  animation-iteration-count: infinite, infinite;
+.dd-map.is-focusing .react-flow__edge.dd-edge-on marker path {
+  fill: var(--map-path, #2f6f55) !important;
+  stroke: var(--map-path, #2f6f55) !important;
+}
+
+.dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade marker path {
+  fill: #a85f24 !important;
+  stroke: #a85f24 !important;
 }
 
 @keyframes dd-edge-flow {
@@ -6054,19 +6059,9 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   }
 }
 
-@keyframes dd-edge-flow-pulse {
-  0%,
-  100% {
-    stroke-width: 2.2;
-  }
-  50% {
-    stroke-width: 2.75;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .dd-map.is-focusing .react-flow__edge.dd-edge-on path,
-  .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade path {
+  .dd-map.is-focusing .react-flow__edge.dd-edge-on .react-flow__edge-path,
+  .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade .react-flow__edge-path {
     animation: none;
     filter: none;
   }
@@ -6076,7 +6071,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   }
 }
 
-.dd-map .react-flow__edge.dd-edge-on path {
+.dd-map .react-flow__edge.dd-edge-on .react-flow__edge-path {
   stroke: var(--map-path, #2f6f55) !important;
 }
 
@@ -6084,7 +6079,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   stroke: var(--map-side, #a56b38) !important;
 }
 
-.dd-map .react-flow__edge.dd-edge-on.cascade path {
+.dd-map .react-flow__edge.dd-edge-on.cascade .react-flow__edge-path {
   stroke: #a85f24 !important;
 }
 

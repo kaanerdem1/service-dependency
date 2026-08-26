@@ -1424,6 +1424,12 @@ function edgeTouchesFocus(e: Edge, focusId: string | null) {
   )
 }
 
+function reactFlowEdgeId(el: HTMLElement): string {
+  const testId = el.getAttribute('data-testid')
+  if (testId?.startsWith('rf__edge-')) return testId.slice('rf__edge-'.length)
+  return el.getAttribute('data-id') ?? ''
+}
+
 export function ImpactMap({
   graph,
   projectOptions,
@@ -2026,6 +2032,7 @@ export function ImpactMap({
     if (!root) return
     const methodFocus = expandedMethodServiceId
     const active = Boolean(methodFocus || focusId || focusEdgeId)
+    const edgeFocusing = !userInteracting && Boolean(focusId || focusEdgeId)
     root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
@@ -2053,6 +2060,24 @@ export function ImpactMap({
       el.classList.add(on ? 'rf-path-on' : 'rf-path-off')
       if (id === focusId || id === methodFocus) el.classList.add('rf-path-focus')
     })
+    root.querySelectorAll<HTMLElement>('.react-flow__edge').forEach((el) => {
+      el.classList.remove('dd-edge-on', 'dd-edge-off')
+      if (!edgeFocusing) return
+      const eid = reactFlowEdgeId(el)
+      const edge = built.edges.find((e) => e.id === eid)
+      if (!edge) return
+      if (
+        !showCascadeEdges &&
+        (edge.data as { kind?: string } | undefined)?.kind === 'cascade'
+      ) {
+        el.classList.add('dd-edge-off')
+        return
+      }
+      const on = focusEdgeId
+        ? eid === focusEdgeId
+        : edgeTouchesFocus(edge, focusId)
+      el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
+    })
   }, [
     egoIds,
     focusId,
@@ -2060,82 +2085,19 @@ export function ImpactMap({
     nodes,
     built.edges,
     expandedMethodServiceId,
+    userInteracting,
+    showCascadeEdges,
   ])
 
-  // Hover: yalnız oğuna değen kenarlar · tree yeşil / cascade kahverengi
   useEffect(() => {
-    const focusing = !userInteracting && Boolean(focusId || focusEdgeId)
     const sourceEdges = showCascadeEdges
       ? built.edges
       : built.edges.filter(
           (e) =>
             (e.data as { kind?: string } | undefined)?.kind !== 'cascade',
         )
-    setEdges(
-      sourceEdges.map((e) => {
-        const isRadialLink = String(e.className ?? '').includes('radial-link')
-        const on = focusEdgeId
-          ? e.id === focusEdgeId
-          : edgeTouchesFocus(e, focusId)
-        const kind =
-          (e.data as { kind?: string } | undefined)?.kind === 'cascade'
-            ? 'cascade'
-            : 'tree'
-        const hot = focusing && on
-        const color = isRadialLink
-          ? !focusing || on
-            ? hot
-              ? '#333'
-              : '#555'
-            : '#d4d0c8'
-          : !focusing
-            ? kind === 'cascade'
-              ? '#a56b38'
-              : ((e.style?.stroke as string) ?? '#3d7a60')
-            : hot
-              ? kind === 'cascade'
-                ? '#8a572c'
-                : '#2f6f55'
-              : '#cfc8bc'
-        return {
-          ...e,
-          animated: false,
-          interactionWidth: 28,
-          className: [
-            String(e.className ?? '')
-              .replace(/\bdd-edge-(on|off)\b/g, '')
-              .trim(),
-            hot ? (kind === 'cascade' ? 'dd-edge-on cascade' : 'dd-edge-on') : '',
-            focusing && !on ? 'dd-edge-off' : '',
-          ]
-            .filter(Boolean)
-            .join(' '),
-          markerEnd: isRadialLink
-            ? undefined
-            : {
-                type: MarkerType.ArrowClosed,
-                width: hot ? 18 : 16,
-                height: hot ? 18 : 16,
-                color,
-              },
-          markerStart: undefined,
-          style: {
-            ...e.style,
-            opacity: !focusing || on ? 1 : 0.1,
-            strokeWidth:
-              hot ? (kind === 'cascade' ? 2.4 : 2.8) : e.style?.strokeWidth,
-            stroke: color,
-            strokeDasharray:
-              kind === 'cascade'
-                ? '5 4'
-                : hot
-                  ? undefined
-                  : e.style?.strokeDasharray,
-          },
-        }
-      }),
-    )
-  }, [built.edges, focusId, focusEdgeId, setEdges, showCascadeEdges, userInteracting])
+    setEdges(sourceEdges)
+  }, [built.edges, showCascadeEdges, setEdges])
 
   const pivotToNode = useCallback(
     async (node: Node) => {

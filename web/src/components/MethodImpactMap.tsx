@@ -647,7 +647,10 @@ export function MethodImpactMap({
     root.querySelectorAll<HTMLElement>('.react-flow__edge').forEach((el) => {
       el.classList.remove('dd-edge-on', 'dd-edge-off')
       if (!active) return
-      const eid = el.getAttribute('data-id') ?? ''
+      const eid =
+        el.getAttribute('data-testid')?.replace(/^rf__edge-/, '') ??
+        el.getAttribute('data-id') ??
+        ''
       const edge = edges.find((e) => e.id === eid)
       const on =
         edge &&
