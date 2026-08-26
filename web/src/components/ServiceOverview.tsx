@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { EmptyState } from './EmptyState'
+import { Button, Card, Field } from '../ui'
 import type { Service } from '../types'
 
 type Props = {
@@ -68,44 +69,6 @@ function DocItem({
   )
 }
 
-function FormField({
-  label,
-  value,
-  onChange,
-  readOnly,
-  mono,
-  multiline,
-}: {
-  label: string
-  value: string
-  onChange?: (v: string) => void
-  readOnly?: boolean
-  mono?: boolean
-  multiline?: boolean
-}) {
-  return (
-    <label className="service-form-field">
-      <span className="service-form-label">{label}</span>
-      {multiline ? (
-        <textarea
-          className={`service-form-input${mono ? ' is-mono' : ''}`}
-          rows={8}
-          value={value}
-          readOnly={readOnly}
-          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        />
-      ) : (
-        <input
-          className={`service-form-input${mono ? ' is-mono' : ''}`}
-          value={value}
-          readOnly={readOnly}
-          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-        />
-      )}
-    </label>
-  )
-}
-
 function BentoTile({
   area,
   title,
@@ -120,7 +83,8 @@ function BentoTile({
   compactHeading?: boolean
 }) {
   const body = (
-    <section
+    <Card
+      as="section"
       className={`service-doc-section service-doc-section--compact service-bento-tile service-bento-tile--${area}`}
     >
       <h3
@@ -129,7 +93,7 @@ function BentoTile({
         {title}
       </h3>
       {children}
-    </section>
+    </Card>
   )
 
   if (!spotlight) return body
@@ -228,24 +192,24 @@ export function ServiceOverview({
       <header className="service-overview-toolbar">
         {editing ? (
           <div className="service-overview-edit-actions">
-            <button type="button" className="btn ghost compact" onClick={cancel}>
+            <Button variant="ghost" compact onClick={cancel}>
               İptal
-            </button>
-            <button type="button" className="btn primary compact" onClick={save}>
+            </Button>
+            <Button variant="primary" compact onClick={save}>
               Kaydet
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
-            type="button"
-            className="btn ghost compact"
+          <Button
+            variant="ghost"
+            compact
             onClick={() => {
               setDraft(saved ?? baseline)
               setEditing(true)
             }}
           >
             Düzenle
-          </button>
+          </Button>
         )}
       </header>
       {editing ? (
@@ -260,34 +224,39 @@ export function ServiceOverview({
           <BentoTile area="identity" title="Kimlik">
             <div className="service-doc-body">
               <div className="service-doc-columns service-doc-columns--meta">
-                <FormField label="Servis adı" value={service.name} readOnly />
-                <FormField label="Servis kimliği" value={service.id} readOnly mono />
+                <Field label="Servis adı" value={service.name} readOnly />
+                <Field label="Servis kimliği" value={service.id} readOnly />
               </div>
             </div>
           </BentoTile>
 
           <BentoTile area="location" title="Konum">
             <div className="service-doc-body service-doc-columns">
-              <FormField
+              <Field
                 label="Proje"
                 value={projectLabel ?? service.projectId}
                 readOnly
               />
-              <FormField
+              <Field
                 label="Paket"
                 value={packageLabel ?? service.packageId}
                 readOnly
-                mono
               />
             </div>
           </BentoTile>
 
           <BentoTile area="summary" title="İşlev özeti">
-            <FormField label="İşlev özeti" value={draft} multiline onChange={setDraft} />
+            <Field
+              label="İşlev özeti"
+              multiline
+              rows={8}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
           </BentoTile>
 
           <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
-            <FormField
+            <Field
               label="Bu servisi çağıran"
               value={`${callerCount} servis`}
               readOnly
@@ -295,7 +264,7 @@ export function ServiceOverview({
           </BentoTile>
 
           <BentoTile area="callees" title="Giden çağrılar" compactHeading>
-            <FormField
+            <Field
               label="Çağırdığı servis"
               value={`${calleeCount} servis`}
               readOnly
@@ -305,8 +274,8 @@ export function ServiceOverview({
           {hasOwner && service.owner ? (
             <BentoTile area="ownership" title="Sahiplik">
               <div className="service-doc-body service-doc-columns">
-                <FormField label="Sorumlu" value={service.owner.name} readOnly />
-                <FormField label="Ekip" value={service.owner.team ?? '—'} readOnly />
+                <Field label="Sorumlu" value={service.owner.name} readOnly />
+                <Field label="Ekip" value={service.owner.team ?? '—'} readOnly />
               </div>
             </BentoTile>
           ) : (
