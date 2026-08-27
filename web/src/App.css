@@ -1373,6 +1373,10 @@
   border-radius: 0;
 }
 
+.main.main-overview {
+  overflow: hidden;
+}
+
 .main.main-map .map-stage:not(.is-expanded) {
   flex: 1;
   min-height: 0;
@@ -1458,7 +1462,7 @@
   align-items: stretch;
   width: auto;
   align-self: flex-start;
-  margin: 5px 0 9px;
+  margin: 4px 0 0;
   padding: 4px;
   border: 1px solid #dfe3e7;
   border-radius: 12px;
@@ -1711,6 +1715,14 @@
   overflow: auto;
 }
 
+.main.main-overview .stage-panel-overview {
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .stage-body.is-map-view {
   overflow: visible;
   flex: 1;
@@ -1797,29 +1809,24 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 .service-overview {
   display: flex;
   flex-direction: column;
+  flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   width: 100%;
   max-width: none;
-  padding: 8px 20px 24px;
+  padding: 2px 18px 14px;
 }
 
-.service-overview-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(240px, 1fr);
-  gap: 20px 28px;
-  align-items: start;
-  width: 100%;
-}
-
-/* Servis işlevi — bento grid */
 .service-bento {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   grid-auto-rows: minmax(min-content, auto);
-  gap: 14px;
+  gap: 10px;
   width: 100%;
   align-items: stretch;
+  flex: 1;
+  min-height: 0;
+  align-content: start;
 }
 
 .service-bento-form {
@@ -1850,6 +1857,12 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .service-bento-tile--summary {
   grid-column: 1 / -1;
+}
+
+.service-bento-tile--summary .service-doc-body {
+  max-height: min(16vh, 148px);
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .service-bento-tile--callers,
@@ -1928,7 +1941,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 .service-overview-toolbar {
   display: flex;
   justify-content: flex-end;
-  margin: 0 0 12px;
+  margin: 0 0 4px;
   flex-shrink: 0;
 }
 
@@ -1944,7 +1957,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .service-doc-section--compact {
-  padding: 14px 16px 16px;
+  padding: 11px 14px 13px;
   border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface) 97%, #efebe4);
@@ -4381,10 +4394,40 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .map-info-drawer-body {
-  padding: 0 12px 14px;
-  overflow: auto;
+  padding: 0;
+  overflow: hidden;
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.map-info-drawer-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 0 12px 14px;
+}
+
+.map-info-drawer.is-visit-collapsed .map-info-drawer-scroll {
+  overflow: hidden;
+}
+
+.map-info-visit-path-slot {
+  flex-shrink: 0;
+  transform-origin: top center;
+}
+
+.map-info-via-section.is-promoted {
+  flex-shrink: 0;
+}
+
+.map-info-via-section.is-promoted .path-bc-tree-list {
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 .map-info-drawer-body.is-collapsed {

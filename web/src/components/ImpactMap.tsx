@@ -1509,6 +1509,8 @@ export function ImpactMap({
   const [mapPane, setMapPane] = useState({ w: 0, h: 0 })
   const [userInteracting, setUserInteracting] = useState(false)
   const interactEndTimer = useRef(0)
+  const hoverClearTimer = useRef(0)
+  const drawerHoverRef = useRef(false)
   const nodeDragged = useRef(false)
   const lastTidyRef = useRef(0)
   const layoutEpochRef = useRef('')
@@ -2282,9 +2284,29 @@ export function ImpactMap({
   )
 
   const clearHoverFocus = useCallback(() => {
+    window.clearTimeout(hoverClearTimer.current)
     setFocusId(null)
     setFocusEdgeId(null)
   }, [])
+
+  const scheduleHoverClear = useCallback(() => {
+    window.clearTimeout(hoverClearTimer.current)
+    hoverClearTimer.current = window.setTimeout(() => {
+      if (!drawerHoverRef.current) {
+        setFocusId(null)
+        setFocusEdgeId(null)
+      }
+    }, 100)
+  }, [])
+
+  const onDrawerPointerChange = useCallback((inside: boolean) => {
+    drawerHoverRef.current = inside
+    if (inside) {
+      window.clearTimeout(hoverClearTimer.current)
+      return
+    }
+    scheduleHoverClear()
+  }, [scheduleHoverClear])
 
   const onMoveStart = useCallback(() => {
     window.clearTimeout(interactEndTimer.current)
@@ -2303,6 +2325,7 @@ export function ImpactMap({
   const onNodeMouseEnter = useCallback(
     (e: React.MouseEvent, node: Node) => {
       if (e.buttons || userInteracting) return
+      window.clearTimeout(hoverClearTimer.current)
       setFocusEdgeId(null)
       setFocusId((prev) => (prev === node.id ? prev : node.id))
     },
@@ -2310,12 +2333,13 @@ export function ImpactMap({
   )
 
   const onNodeMouseLeave = useCallback(() => {
-    setFocusId(null)
-  }, [])
+    scheduleHoverClear()
+  }, [scheduleHoverClear])
 
   const onEdgeMouseEnter = useCallback(
     (e: React.MouseEvent, edge: Edge) => {
       if (e.buttons || userInteracting) return
+      window.clearTimeout(hoverClearTimer.current)
       setFocusId(null)
       setFocusEdgeId(edge.id)
     },
@@ -2323,8 +2347,8 @@ export function ImpactMap({
   )
 
   const onEdgeMouseLeave = useCallback(() => {
-    setFocusEdgeId(null)
-  }, [])
+    scheduleHoverClear()
+  }, [scheduleHoverClear])
 
   const focusing = Boolean(
     !userInteracting && (focusId || focusEdgeId || expandedMethodServiceId),
@@ -2590,6 +2614,7 @@ export function ImpactMap({
           )
           setInfoPanelOpen(open)
         }}
+        onDrawerPointerChange={onDrawerPointerChange}
       />
       </div>
       {expandedMethodServiceId &&

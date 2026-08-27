@@ -26,7 +26,7 @@ import { MotionSheetBody } from '../motion/MotionSheet'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
-import { layoutSpring } from '../motion/config'
+import { autoHeightSpring, layoutSpring } from '../motion/config'
 import { MotionListItem } from '../motion/MotionList'
 import { DockTooltipPortal } from './DockTooltipPortal'
 
@@ -628,6 +628,8 @@ type MapInfoPanelProps = {
   onHoverPathSelect: (serviceId: string) => void
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Drawer üzerindeyken harita hover'ının düşmemesi için */
+  onDrawerPointerChange?: (inside: boolean) => void
 }
 
 /** Harita sağ sütun: etki özeti + ziyaret yolu + hover via yolu */
@@ -650,7 +652,19 @@ export function MapInfoPanel({
   onHoverPathSelect,
   open,
   onOpenChange,
+  onDrawerPointerChange,
 }: MapInfoPanelProps) {
+  const mainPathLength = useMemo(() => {
+    if (!focusId || focusId.startsWith('collapsed-')) return 0
+    return discoveryPathTo(centerId, focusId, parents)?.length ?? 0
+  }, [centerId, focusId, parents])
+
+  const collapseVisitPath = Boolean(
+    focusId &&
+      !focusId.startsWith('collapsed-') &&
+      (visitPath.length >= 3 || mainPathLength >= 3),
+  )
+
   const stats: BlastRadiusStats = useMemo(
     () =>
       summarizeBlastRadius(
@@ -668,11 +682,13 @@ export function MapInfoPanel({
 
   return (
     <motion.aside
-      className={`map-info-drawer${open ? '' : ' is-collapsed'}`}
+      className={`map-info-drawer${open ? '' : ' is-collapsed'}${collapseVisitPath ? ' is-visit-collapsed' : ''}`}
       aria-label="Etki özeti"
       layout
       transition={layoutSpring}
       data-motion="drawer-layout"
+      onPointerEnter={() => onDrawerPointerChange?.(true)}
+      onPointerLeave={() => onDrawerPointerChange?.(false)}
     >
       <div className="map-info-drawer-head">
         <h4 className="map-info-drawer-title">Etki özeti</h4>
@@ -698,6 +714,10 @@ export function MapInfoPanel({
         </button>
       </div>
       <MotionSheetBody open={open} className="map-info-drawer-body">
+        <div
+          className="map-info-drawer-scroll"
+          onWheel={(e) => e.stopPropagation()}
+        >
         <section className="map-info-section map-info-impact is-open">
             <MotionSpotlight className="map-info-spotlight-block">
             <div className="map-info-focus">
@@ -760,16 +780,32 @@ export function MapInfoPanel({
             </MotionSpotlight>
           </section>
 
-          <section className="map-info-section" aria-label="Ziyaret yolu">
-            <h4 className="map-info-heading">Ziyaret yolu</h4>
-            <VisitPathTree
-              steps={visitPath}
-              currentIndex={visitPathIndex}
-              onSelect={onVisitSelect}
-            />
-          </section>
+          <motion.div
+            className="map-info-visit-path-slot"
+            initial={false}
+            animate={{
+              height: collapseVisitPath ? 0 : 'auto',
+              opacity: collapseVisitPath ? 0 : 1,
+              marginTop: collapseVisitPath ? 0 : undefined,
+            }}
+            transition={autoHeightSpring}
+            style={{ overflow: 'hidden' }}
+            aria-hidden={collapseVisitPath}
+          >
+            <section className="map-info-section" aria-label="Ziyaret yolu">
+              <h4 className="map-info-heading">Ziyaret yolu</h4>
+              <VisitPathTree
+                steps={visitPath}
+                currentIndex={visitPathIndex}
+                onSelect={onVisitSelect}
+              />
+            </section>
+          </motion.div>
 
-          <section className="map-info-section" aria-label="Ana etki yolu">
+          <section
+            className={`map-info-section map-info-via-section${collapseVisitPath ? ' is-promoted' : ''}`}
+            aria-label="Ana etki yolu"
+          >
             <h4 className="map-info-heading">Ana etki yolu</h4>
             <PathBreadcrumb
               centerId={centerId}
@@ -780,6 +816,7 @@ export function MapInfoPanel({
               onSelect={onHoverPathSelect}
             />
           </section>
+        </div>
       </MotionSheetBody>
     </motion.aside>
   )

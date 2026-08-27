@@ -187,6 +187,23 @@ Ortak tabloda geçiyor; madde 2–4 yeni yük getiriyor:
 - Ekran/rapor kenarları snapshot’ta `impact` dışında mı duracak
 - **Replay** — eski snapshot’tan tablo/haritayı yeniden çizme (ileride)
 
+**Gezinti özeti (Ziyaret yolu) daraltma — mevcut (Harita → Etki özeti):**
+
+Uzun pivot geçmişinde panel taşmasını önlemek için hover sırasında ziyaret yolu geçici kapanır; ana etki yolu görünür kalır.
+
+| Davranış | Kural |
+| -------- | ----- |
+| Ne zaman kapanır | Node hover + (ziyaret yolu ≥ 3 adım **veya** ana etki yolu ≥ 3 düğüm) |
+| Animasyon | Ziyaret yolu yukarı slide + height collapse; hover bitince aşağı slide ile geri açılır |
+| Drawer scroll | Panel üzerindeyken hover düşmez; scroll ana etki yolunu sıfırlamaz |
+| Amaç | Etki özeti grid’inde scroll ihtiyacını azaltmak; uzun via zincirini okunaklı tutmak |
+
+Snapshot tarafında henüz kayıt yok; ileride düşünülecekler:
+
+- Daraltma anının snapshot’ta `ui.visitPathCollapsed: true/false` olarak saklanması
+- Replay’de aynı hover olmadan “ziyaret yolu kapalı” görünümünün gösterilip gösterilmeyeceği
+- Gezinti özeti ile ana etki yolunun snapshot JSON’da ayrı alanlar olarak tutulması (`visitPath`, `hoverViaPath`)
+
 ### 5.10 Dört fikirden önce netleştirilmeli
 
 Implementasyondan önce en çok değer katan beş konu:
@@ -223,6 +240,81 @@ Implementasyondan önce en çok değer katan beş konu:
 4. Metod sayısı çok artınca düz listede arama zorunlu mu?
 
 New servis için öneri taslak :  [https://saasinterface.com/components/side-panel/](https://saasinterface.com/components/side-panel/)
+
+---
+
+## 6. Motion & GSAP — animasyon önerileri
+
+> **Not:** Repo zaten [Motion for React](https://motion.dev/docs/react) (`motion/react`, `web/src/motion/`) kullanıyor. GSAP aşağıdaki önerilerde özellikle **SVG/harita okları**, **ağır timeline** ve **scroll-scrub** senaryoları için; layout/list/modal tarafında Motion ile devam etmek daha tutarlı.
+
+### 6.1 Madde 1 — Düz ağaç / metod aynı seviye
+
+| Öneri | Kütüphane | Ne işe yarar | Link |
+| ----- | --------- | ------------ | ---- |
+| Görünüm değişince satırların yumuşak kayması | Motion | Paket ↔ düz liste geçişinde `layout` + `AnimatePresence` (`mode="popLayout"`) | [Layout animations](https://motion.dev/docs/react-layout-animations) · [AnimatePresence](https://motion.dev/docs/react-animate-presence) |
+| Seçili satırın sağ panele “taşınması” hissi | Motion | Servis/metod seçiminde aynı `layoutId` ile shared layout | [Layout animations — shared](https://motion.dev/docs/react-layout-animations#shared-layout-animations) · [Örnek](https://motion.dev/examples/react-shared-layout-animation) |
+| Düz listede arama sonuçlarının sırayla gelmesi | Motion | `stagger()` + `variants` (`delayChildren`) | [stagger](https://motion.dev/docs/stagger) · [Variants örnek](https://motion.dev/tutorials/react-variants) |
+| Tip rozeti (servis/metod) geçişi | Motion | `layoutId` veya küçük `layout` scale/opacity | [motion component](https://motion.dev/docs/react-motion-component) |
+| İki farklı DOM ağacı arasında morph | GSAP | Paket hiyerarşisi ↔ düz liste: `Flip.getState()` → DOM değiş → `Flip.from()` | [Flip](https://gsap.com/docs/v3/Plugins/Flip/) · [SVG genel](https://gsap.com/svg/) |
+| İsteğe bağlı: sıralama / öncelik | Motion | Drag-to-reorder (admin/pin senaryosu) | [Reorder](https://motion.dev/docs/react-reorder) · [Örnek](https://motion.dev/examples/react-reorder-items) |
+
+### 6.2 Madde 2 — Katmanlı İlişkiler tablosu
+
+| Öneri | Kütüphane | Ne işe yarar | Link |
+| ----- | --------- | ------------ | ---- |
+| Katman grupları açılınca satırların cascade gelmesi | Motion | Parent `variants` + `stagger(0.05)`; 1. katman önce | [Variants](https://motion.dev/docs/react-animation#variants) · [Transitions — delayChildren](https://motion.dev/docs/react-transitions) |
+| Filtre değişince satır ekleme/çıkarma | Motion | `layout` satırlarda; grup başlığı `AutoHeight` (projede var) | [LayoutGroup](https://motion.dev/docs/react-layout-animations) |
+| Uzun tabloda scroll ilerlemesi | Motion | `useScroll` + satır/katman highlight (`scrollYProgress`) | [useScroll](https://motion.dev/docs/react-use-scroll) · [Scroll animations](https://motion.dev/docs/react-scroll-animations) |
+| Viewport’a giren satırların toplu animasyonu | GSAP | `ScrollTrigger.batch()` — aynı anda görünen satırlara stagger | [ScrollTrigger — batch](https://gsap.com/docs/v3/Plugins/ScrollTrigger/) |
+| Katman expand/collapse | GSAP | `Flip` ile grup açılışında satır pozisyon morph | [Flip](https://gsap.com/docs/v3/Plugins/Flip/) |
+| CSV export öncesi “katman vurgusu” | GSAP | Kısa `timeline` + `addLabel("hop1")` ile 1. katman flash | [Timeline labels](https://gsap.com/docs/v3/GSAP/Timeline/) |
+
+### 6.3 Madde 3 — Ekran / rapor kenarları
+
+| Öneri | Kütüphane | Ne işe yarar | Link |
+| ----- | --------- | ------------ | ---- |
+| Yeni kenar tipi eklenince ok çizimi | Motion | SVG `pathLength: 0 → 1` (hafif kenar sayısı) | [motion component — SVG](https://motion.dev/docs/react-motion-component) |
+| Filtre toggle: sadece servis / veri+UI | Motion | `AnimatePresence` ile kenar katmanları exit; `layout` ile düğüm reflow | [AnimatePresence](https://motion.dev/docs/react-animate-presence) |
+| Haritada okların progressive reveal | GSAP | `DrawSVG` — servis→ekran, servis→rapor farklı stroke | [DrawSVG](https://gsap.com/docs/v3/Plugins/DrawSVGPlugin/) |
+| Etki yolu üzerinde “akış” animasyonu | GSAP | `MotionPath` — seçili yol boyunca marker | [MotionPath](https://gsap.com/docs/v3/Plugins/MotionPathPlugin/) |
+| Kenar tipi değişimi (calls → UI embed) | GSAP | `MorphSVG` veya stroke renk tween (hafif) | [SVG plugins](https://gsap.com/svg/) |
+| Çok kenarlı grafikte scroll-scrub keşif | GSAP | `ScrollTrigger` + `scrub` ile katman katman ok açılımı | [ScrollTrigger](https://gsap.com/docs/v3/Plugins/ScrollTrigger/) |
+
+### 6.4 Madde 4 — Yeni servis sihirbazı
+
+| Öneri | Kütüphane | Ne işe yarar | Link |
+| ----- | --------- | ------------ | ---- |
+| “Yeni servis” → side panel açılışı | Motion | Mevcut `MotionModal` / `layoutId` morph (saasinterface side-panel tarzı) | [Shared layout](https://motion.dev/docs/react-layout-animations#shared-layout-animations) · projede `web/src/motion/MotionSheet.tsx` |
+| Adımlar arası geçiş (1→5) | Motion | `variants` + `custom` step index; `AnimatePresence` ile step panel | [Variants — custom](https://motion.dev/docs/react-motion-component#custom) |
+| Adım validasyonu sonrası sıralı animasyon | Motion | `useAnimate` — async `[scope, step1], [fields, step2]` zinciri | [useAnimate](https://motion.dev/docs/react-use-animate) |
+| Önizleme haritada yeni düğüm + ok ekleme | Motion | `layout` ile düğüm spawn; ok için `pathLength` | [Layout animation örnek](https://motion.dev/examples/react-layout-animation) |
+| 5 adımlı wizard timeline | GSAP | `timeline.addLabel("identity")` … `("preview")`; `tweenTo(label)` | [Timeline](https://gsap.com/docs/v3/GSAP/Timeline/) |
+| Side panel’de wheel/swipe ile adım | GSAP | `Observer` — `onDown`/`onUp` → sonraki/önceki label | [Observer](https://gsap.com/docs/v3/Plugins/Observer/) |
+| Bağımlılık listesi → mini harita morph | GSAP | `Flip.getState()` form listesinden harita DOM’una | [Flip](https://gsap.com/docs/v3/Plugins/Flip/) |
+| Adım göstergesi snap | GSAP | `ScrollTrigger.snap: { snapTo: "labels" }` (tam sayfa sihirbaz alternatifi) | [ScrollTrigger — snap](https://gsap.com/docs/v3/Plugins/ScrollTrigger/) |
+
+### 6.5 Ortak (§5 + dört fikir)
+
+| Öneri | Kütüphane | Ne işe yarar | Link |
+| ----- | --------- | ------------ | ---- |
+| `prefers-reduced-motion` | Motion | Projede `useReducedMotion` — yeni yüzeylerde aynı kural | [useReducedMotion](https://motion.dev/docs/react-use-reduced-motion) |
+| Global transition tutarlılığı | Motion | `MotionConfig` — spring süreleri tek yerden | [MotionConfig](https://motion.dev/docs/react-motion-config) |
+| Snapshot replay (ileride) | GSAP | Duraklatılmış `timeline` — hop1 → hop2 → upstream sırayla oynat | [Timeline controls](https://gsap.com/docs/v3/GSAP/Timeline/#methods) |
+| Inbox / toplu onay kartları | Motion | `stagger` + `whileInView` veya liste `layout` | [whileInView](https://motion.dev/docs/react-animation#whileinview) |
+| Büyük liste performansı | Motion | `layout="position"` (tam layout yerine) — 500+ satır ağaç | [Layout — position](https://motion.dev/docs/react-layout-animations) |
+| Reduced motion alternatifi | GSAP | `gsap.matchMedia()` — `(prefers-reduced-motion: reduce)` → duration 0 | [matchMedia](https://gsap.com/docs/v3/GSAP/gsap.matchMedia/) |
+
+### 6.6 Pratik ayrım (hangisini ne zaman)
+
+| Senaryo | Tercih | Gerekçe |
+| ------- | ------ | ------- |
+| Modal, sheet, tab, liste, layout reflow | **Motion** | Zaten entegre; React declarative |
+| SVG ok çizimi, path üzerinde akış, ağır scrub | **GSAP** | DrawSVG / MotionPath olgun |
+| DOM yapısı tamamen değişen görünüm (ağaç ↔ tablo) | **GSAP Flip** veya Motion `layout` | Flip büyük refactor; Motion küçük diff |
+| Wizard adım timeline + snap | **GSAP Timeline** | Label/snap kontrolü güçlü |
+| Erişilebilirlik | **İkisi de** | Animasyon kapalıyken anında durum; süre 0 |
+
+**Başlangıç paketi (MVP animasyon):** Madde 1 → Motion `layout` + `stagger`; Madde 2 → Motion `variants`; Madde 3 → Motion `pathLength` (az kenar) veya GSAP DrawSVG (çok kenar); Madde 4 → Motion `useAnimate` adım geçişi + mevcut modal/sheet.
 
 
 

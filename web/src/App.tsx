@@ -786,7 +786,7 @@ export default function App() {
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${!hasSelection ? ' is-empty' : ''}`}
+          className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${hasSelection && tab === 'overview' ? ' main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
           {!hasSelection && <WelcomeScreen />}
