@@ -18,6 +18,8 @@ import { StageTabs } from './motion/StageTabs'
 import { StageTabPanels } from './motion/StageTabPanels'
 import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
 import {
+  packageLabelsFromTree,
+  packagesInImpact,
   projectLabelsFromTree,
   projectsInImpact,
 } from './impact/projectFilter'
@@ -115,12 +117,58 @@ type VisitEntry = {
   expandedLayers: number[]
 }
 
+type VisitPathStep = {
+  id: string
+  name: string
+}
+
 function visitEntry(id: string, view?: Partial<Omit<VisitEntry, 'id'>>): VisitEntry {
   return {
     id,
     visibleMaxHop: view?.visibleMaxHop ?? 1,
     expandedLayers: view?.expandedLayers ? [...view.expandedLayers] : [],
   }
+}
+
+function StageVisitPath({
+  steps,
+  currentIndex,
+  onSelect,
+}: {
+  steps: VisitPathStep[]
+  currentIndex: number
+  onSelect: (index: number) => void
+}) {
+  if (steps.length === 0) return null
+
+  return (
+    <nav className="stage-visit-path" aria-label="Ziyaret yolu">
+      <span className="stage-visit-path-label">Ziyaret yolu</span>
+      <ol className="stage-visit-path-list">
+        {steps.map((step, i) => {
+          const current = i === currentIndex
+          return (
+            <li key={`${step.id}-${i}`} className="stage-visit-path-item">
+              {i > 0 && (
+                <span className="stage-visit-path-sep" aria-hidden>
+                  /
+                </span>
+              )}
+              <button
+                type="button"
+                className={`stage-visit-path-btn${current ? ' is-current' : ''}`}
+                title={step.name}
+                aria-current={current ? 'page' : undefined}
+                onClick={() => onSelect(i)}
+              >
+                {step.name}
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
 }
 
 export default function App() {
@@ -383,6 +431,7 @@ export default function App() {
   }, [refreshInbox])
 
   const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
+  const packageLabels = useMemo(() => packageLabelsFromTree(tree), [tree])
   const projectOrder = useMemo(
     () => tree.filter((n) => n.kind === 'project').map((n) => n.id),
     [tree],
@@ -390,6 +439,10 @@ export default function App() {
   const impactProjectOptions = useMemo(
     () => (impact ? projectsInImpact(impact, projectLabels) : []),
     [impact, projectLabels],
+  )
+  const impactPackageOptions = useMemo(
+    () => (impact ? packagesInImpact(impact, projectLabels, packageLabels) : []),
+    [impact, projectLabels, packageLabels],
   )
 
   const scrollToStageTop = useCallback(() => {
@@ -553,11 +606,32 @@ export default function App() {
       : undefined
   const hasSelection = !!pivotId
 
-  const serviceNameById = (() => {
+  const serviceNameById = useMemo(() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
     if (service) m.set(service.id, service.name)
     return m
-  })()
+  }, [catalogServices, service])
+
+  const visitSteps = useMemo(
+    () =>
+      breadcrumb.map((e) => ({
+        id: e.id,
+        name: serviceNameById.get(e.id) ?? e.id,
+      })),
+    [breadcrumb, serviceNameById],
+  )
+
+  const selectVisitIndex = useCallback(
+    (i: number) => {
+      if (i === historyIndex || i < 0 || i >= history.length) return
+      setNavDirection(i < historyIndex ? 'back' : 'forward')
+      setHistoryIndex(i)
+      setSelectedMethodId(undefined)
+      setMethodImpact(undefined)
+      setPivotId(history[i]!.id)
+    },
+    [history, historyIndex],
+  )
 
   return (
     <div className="app" data-theme={appTheme}>
@@ -839,6 +913,13 @@ export default function App() {
                     setTab('overview')
                   }}
                 />
+                {tab === 'map' && (
+                  <StageVisitPath
+                    steps={visitSteps}
+                    currentIndex={historyIndex}
+                    onSelect={selectVisitIndex}
+                  />
+                )}
               </div>
 
               <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
@@ -890,6 +971,7 @@ export default function App() {
                           mapExpanded={mapExpanded}
                           forceLtrSignal={mapForceLtrSignal}
                           projectOptions={impactProjectOptions}
+                          packageOptions={impactPackageOptions}
                           onPivot={(id) => selectPivot(id, { source: 'map' })}
                           onSelectMethod={selectMethod}
                           onBrowseMethods={browseServiceMethods}
@@ -901,11 +983,6 @@ export default function App() {
                             historyIndex >= 0 &&
                             historyIndex < history.length - 1
                           }
-                          visitPath={breadcrumb.map((e) => ({
-                            id: e.id,
-                            name: serviceNameById.get(e.id) ?? e.id,
-                          }))}
-                          visitPathIndex={historyIndex}
                           restoredView={
                             currentVisit
                               ? {
@@ -929,14 +1006,6 @@ export default function App() {
                                 ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
                                 : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
                             )
-                          }}
-                          onVisitSelect={(i) => {
-                            if (i === historyIndex) return
-                            setNavDirection(i < historyIndex ? 'back' : 'forward')
-                            setHistoryIndex(i)
-                            setSelectedMethodId(undefined)
-                            setMethodImpact(undefined)
-                            setPivotId(history[i].id)
                           }}
                         />
                       </MapStage>

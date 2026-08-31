@@ -44,10 +44,11 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import {
-  applyProjectFilter,
+  applyScopeFilter,
   discoveryParents,
   filterEdges,
   filterNodes,
+  type PackageOption,
   type ProjectOption,
 } from '../impact/projectFilter'
 import { animateViewport, easeInOutCubic, easeOutCubic, lerp, waitMs } from '../impact/pivotTransition'
@@ -96,7 +97,6 @@ import {
   MapViewportSync,
   ProjectFilterHint,
   RadialLabelZoomSync,
-  type VisitStep,
 } from './ImpactChrome'
 import { saveExploreSnapshot } from '../api/client'
 import { captureSnapshotScreenshots, downloadSnapshotPng } from '../snapshot/capture'
@@ -107,6 +107,7 @@ import { snapshotWatermarkLines } from '../snapshot/useSnapshotPack'
 type Props = {
   graph: ImpactGraph
   projectOptions: ProjectOption[]
+  packageOptions?: PackageOption[]
   onPivot: (serviceId: string) => void
   /** Metod chip → detay */
   onSelectMethod?: (serviceId: string, methodId: string) => void
@@ -117,9 +118,6 @@ type Props = {
   onPivotForward?: () => void
   canPivotBack?: boolean
   canPivotForward?: boolean
-  visitPath?: VisitStep[]
-  visitPathIndex?: number
-  onVisitSelect?: (index: number) => void
   mapExpanded?: boolean
   /** Geri/ileri: bu ziyarette bırakılan katman durumu */
   restoredView?: { visibleMaxHop: number; expandedLayers: number[] }
@@ -1435,6 +1433,7 @@ function reactFlowEdgeId(el: HTMLElement): string {
 export function ImpactMap({
   graph,
   projectOptions,
+  packageOptions = [],
   onPivot,
   onSelectMethod,
   onBrowseMethods: _onBrowseMethods,
@@ -1443,9 +1442,6 @@ export function ImpactMap({
   onPivotForward,
   canPivotBack = false,
   canPivotForward = false,
-  visitPath = [],
-  visitPathIndex = -1,
-  onVisitSelect,
   mapExpanded = false,
   restoredView,
   onViewStateChange,
@@ -1483,7 +1479,8 @@ export function ImpactMap({
   const [visibleMaxHop, setVisibleMaxHop] = useState(
     () => restoredView?.visibleMaxHop ?? 1,
   )
-  const [projectFilter, setProjectFilter] = useState('')
+  const [projectFilters, setProjectFilters] = useState<string[]>([])
+  const [packageFilters, setPackageFilters] = useState<string[]>([])
   const [focusId, setFocusId] = useState<string | null>(null)
   const [focusEdgeId, setFocusEdgeId] = useState<string | null>(null)
   const [showLinkedMethods, setShowLinkedMethods] = useState(false)
@@ -1523,12 +1520,29 @@ export function ImpactMap({
   const prevVisibleHopRef = useRef(visibleMaxHop)
   const revealClearTimerRef = useRef(0)
 
+  const hasScopeFilter = projectFilters.length > 0 || packageFilters.length > 0
   const filter = useMemo(
-    () => applyProjectFilter(graph, projectFilter || null),
-    [graph, projectFilter],
+    () =>
+      applyScopeFilter(
+        graph,
+        hasScopeFilter
+          ? { projectIds: projectFilters, packageIds: packageFilters }
+          : null,
+      ),
+    [graph, hasScopeFilter, projectFilters, packageFilters],
   )
-  const filterLabel =
-    projectOptions.find((p) => p.id === projectFilter)?.label ?? ''
+  const filterLabel = useMemo(() => {
+    const labels = [
+      ...projectFilters.map(
+        (id) => projectOptions.find((p) => p.id === id)?.label ?? id,
+      ),
+      ...packageFilters.map(
+        (id) => packageOptions?.find((p) => p.id === id)?.label ?? id,
+      ),
+    ]
+    if (labels.length <= 2) return labels.join(', ')
+    return `${labels.length} kapsam`
+  }, [projectFilters, packageFilters, projectOptions, packageOptions])
 
   const projectLabels = useMemo(() => {
     const m = new Map<string, string>()
@@ -1542,13 +1556,13 @@ export function ImpactMap({
   }, [projectOptions, graph.nodes])
 
   const filteredGraph = useMemo((): ImpactGraph => {
-    if (!projectFilter) return graph
+    if (!hasScopeFilter) return graph
     return {
       ...graph,
       nodes: filterNodes(graph.nodes, filter.keepIds),
       edges: filterEdges(graph.edges, filter.keepIds),
     }
-  }, [graph, projectFilter, filter.keepIds])
+  }, [graph, hasScopeFilter, filter.keepIds])
 
   const maxHopAvailable = useMemo(() => {
     let m = 1
@@ -1679,11 +1693,11 @@ export function ImpactMap({
       buildGraph(
         filteredGraph,
         expandedLayers,
-        projectFilter ? filter.bridgeIds : new Set(),
-        projectFilter ? filter.matchIds : new Set(),
+        hasScopeFilter ? filter.bridgeIds : new Set(),
+        hasScopeFilter ? filter.matchIds : new Set(),
         visibleMaxHop,
-        Boolean(projectFilter),
-        Boolean(projectFilter),
+        hasScopeFilter,
+        hasScopeFilter,
         layout,
         layoutMode,
         radialViewport,
@@ -1691,7 +1705,7 @@ export function ImpactMap({
     [
       filteredGraph,
       expandedLayers,
-      projectFilter,
+      hasScopeFilter,
       filter.bridgeIds,
       filter.matchIds,
       visibleMaxHop,
@@ -1813,7 +1827,8 @@ export function ImpactMap({
     setVisibleMaxHop(saved?.visibleMaxHop ?? 1)
     setFocusId(null)
     setFocusEdgeId(null)
-    setProjectFilter('')
+    setProjectFilters([])
+    setPackageFilters([])
     setShowLinkedMethods(false)
     setExpandedMethodServiceId(null)
     setNotesServiceId(null)
@@ -1845,10 +1860,10 @@ export function ImpactMap({
   }, [visibleMaxHop, expandedLayers])
 
   useEffect(() => {
-    if (!projectFilter || filter.matchCount === 0) return
+    if (!hasScopeFilter || filter.matchCount === 0) return
     setVisibleMaxHop(Math.max(1, filter.deepestHop))
     setExpandedLayers(new Set(filteredGraph.nodes.map((n) => n.hop)))
-  }, [projectFilter, filter.matchCount, filter.deepestHop, filteredGraph.nodes])
+  }, [hasScopeFilter, filter.matchCount, filter.deepestHop, filteredGraph.nodes])
 
   const visibleServiceIds = useMemo(() => {
     return built.nodes
@@ -2427,7 +2442,7 @@ export function ImpactMap({
           </button>
         </div>
       </div>
-      {projectFilter && (
+      {hasScopeFilter && (
         <ProjectFilterHint
           filterLabel={filterLabel}
           matchCount={filter.matchCount}
@@ -2577,9 +2592,12 @@ export function ImpactMap({
           showLinkedMethods={showLinkedMethods}
           methodsLoading={methodsLoading}
           onToggleLinkedMethods={() => setShowLinkedMethods((value) => !value)}
-          projectFilter={projectFilter}
+          projectFilters={projectFilters}
           projectOptions={projectOptions}
-          onProjectFilterChange={setProjectFilter}
+          packageFilters={packageFilters}
+          packageOptions={packageOptions}
+          onProjectFiltersChange={setProjectFilters}
+          onPackageFiltersChange={setPackageFilters}
         />
       </ReactFlowProvider>
       </div>
@@ -2593,13 +2611,10 @@ export function ImpactMap({
         nodes={graph.nodes}
         parents={parents}
         projectLabels={projectLabels}
-        matchIds={projectFilter ? filter.matchIds : null}
-        bridgeCount={projectFilter ? filter.bridgeIds.size : 0}
+        matchIds={hasScopeFilter ? filter.matchIds : null}
+        bridgeCount={hasScopeFilter ? filter.bridgeIds.size : 0}
         filterLabel={filterLabel || undefined}
         truncated={graph.truncated}
-        visitPath={visitPath}
-        visitPathIndex={visitPathIndex}
-        onVisitSelect={(i) => onVisitSelect?.(i)}
         focusId={breadcrumbFocus}
         nameById={nameById}
         onHoverPathSelect={(id) =>

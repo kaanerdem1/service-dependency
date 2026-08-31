@@ -1,6 +1,6 @@
 /**
- * Harita proje filtresi yardımcıları.
- * Bir proje seçilince yalnız o projedeki düğümler + merkeze giden köprü yolu kalır.
+ * Harita kapsam filtresi yardımcıları.
+ * Proje/jar seçilince eşleşen düğümler + merkeze giden köprü yolu kalır.
  */
 import type { ImpactEdge, ImpactGraph, ImpactNode, ModuleNode } from '../types'
 
@@ -41,6 +41,17 @@ export function discoveryPathTo(
 }
 
 export type ProjectOption = { id: string; label: string }
+export type PackageOption = {
+  id: string
+  label: string
+  projectId: string
+  projectLabel: string
+}
+
+export type ImpactScopeFilterInput = {
+  projectIds?: Iterable<string>
+  packageIds?: Iterable<string>
+}
 
 /** Modül ağacından proje etiketleri */
 export function projectLabelsFromTree(tree: ModuleNode[]): Map<string, string> {
@@ -62,6 +73,17 @@ export function projectLabelsFromTree(tree: ModuleNode[]): Map<string, string> {
   return m
 }
 
+/** Modül ağacından jar/paket etiketleri */
+export function packageLabelsFromTree(tree: ModuleNode[]): Map<string, string> {
+  const m = new Map<string, string>()
+  const walk = (node: ModuleNode) => {
+    if (node.kind === 'package') m.set(node.id, node.name)
+    for (const child of node.children ?? []) walk(child)
+  }
+  for (const n of tree) walk(n)
+  return m
+}
+
 /** Etki grafında geçen projeler (merkez hariç etkilenenler) */
 export function projectsInImpact(
   graph: ImpactGraph,
@@ -76,6 +98,29 @@ export function projectsInImpact(
   return [...seen.entries()]
     .map(([id, label]) => ({ id, label }))
     .sort((a, b) => a.label.localeCompare(b.label, 'tr'))
+}
+
+/** Etki grafında geçen jar/paketler */
+export function packagesInImpact(
+  graph: ImpactGraph,
+  labels: Map<string, string>,
+  packageLabels: Map<string, string> = new Map(),
+): PackageOption[] {
+  const seen = new Map<string, PackageOption>()
+  for (const n of graph.nodes) {
+    const id = n.service.packageId
+    if (!id || seen.has(id)) continue
+    seen.set(id, {
+      id,
+      label: packageLabels.get(id) ?? id,
+      projectId: n.service.projectId,
+      projectLabel: labels.get(n.service.projectId) ?? n.service.projectId,
+    })
+  }
+  return [...seen.values()].sort((a, b) => {
+    const byProject = a.projectLabel.localeCompare(b.projectLabel, 'tr')
+    return byProject || a.label.localeCompare(b.label, 'tr')
+  })
 }
 
 export type ImpactProjectFilter = {
@@ -96,13 +141,24 @@ export function applyProjectFilter(
   graph: ImpactGraph,
   projectId: string | null,
 ): ImpactProjectFilter {
+  return applyScopeFilter(graph, projectId ? { projectIds: [projectId] } : null)
+}
+
+export function applyScopeFilter(
+  graph: ImpactGraph,
+  scope: ImpactScopeFilterInput | null,
+): ImpactProjectFilter {
   const hopOf = new Map<string, number>([[graph.center.id, 0]])
   for (const n of graph.nodes) hopOf.set(n.service.id, n.hop)
 
   const allIds = new Set<string>([graph.center.id])
   for (const n of graph.nodes) allIds.add(n.service.id)
 
-  if (!projectId) {
+  const projectIds = new Set(scope?.projectIds ?? [])
+  const packageIds = new Set(scope?.packageIds ?? [])
+  const active = projectIds.size > 0 || packageIds.size > 0
+
+  if (!active) {
     let deepestHop = 0
     let hop1Matches = 0
     for (const n of graph.nodes) {
@@ -123,7 +179,12 @@ export function applyProjectFilter(
   const parents = discoveryParents(graph.center.id, graph.edges)
   const matchIds = new Set<string>()
   for (const n of graph.nodes) {
-    if (n.service.projectId === projectId) matchIds.add(n.service.id)
+    if (
+      projectIds.has(n.service.projectId) ||
+      packageIds.has(n.service.packageId)
+    ) {
+      matchIds.add(n.service.id)
+    }
   }
 
   const bridgeIds = new Set<string>()

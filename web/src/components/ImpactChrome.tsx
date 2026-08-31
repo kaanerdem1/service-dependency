@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useReactFlow, useStore } from 'reactflow'
 import type { MapLayout, MapLayoutMode, RadialLabelSide } from '../impact/mapLayout'
 import {
@@ -23,14 +23,10 @@ import {
 import type { ImpactNode, Service } from '../types'
 import { AnimatedNumber, AnimatedNumberPair } from '../motion/AnimatedNumber'
 import { MotionSheetBody } from '../motion/MotionSheet'
-import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
-import { autoHeightSpring, layoutSpring } from '../motion/config'
-import { MotionListItem } from '../motion/MotionList'
+import { layoutSpring } from '../motion/config'
 import { DockTooltipPortal } from './DockTooltipPortal'
-
-export type VisitStep = { id: string; name: string }
 
 /** Ortak lejant + filtre ipucu + path breadcrumb + blast özeti */
 
@@ -494,7 +490,10 @@ export function PathBreadcrumb({
                   data-tip={name}
                   onClick={() => onSelect(id)}
                 >
-                  {name}
+                  <span className="path-bc-tree-num" aria-hidden>
+                    {i + 1}
+                  </span>
+                  <span className="path-bc-tree-name">{name}</span>
                 </button>
               </li>
             )
@@ -549,66 +548,6 @@ export function PathBreadcrumb({
   )
 }
 
-function VisitPathTree({
-  steps,
-  currentIndex,
-  onSelect,
-}: {
-  steps: VisitStep[]
-  currentIndex: number
-  onSelect: (index: number) => void
-}) {
-  if (steps.length === 0) {
-    return (
-      <p className="map-info-hint">Haritada bir servise tıklayarak gezinin.</p>
-    )
-  }
-
-  return (
-    <nav className="visit-path-tree" aria-label="Ziyaret yolu" data-motion="visit-path-list">
-      <ol className="visit-path-list">
-        <AnimatePresence initial={false}>
-        {steps.map((step, i) => {
-          const isCurrent = i === currentIndex
-          const isStart = i === 0
-          return (
-            <MotionListItem
-              key={`${step.id}-${i}`}
-              id={`${step.id}-${i}`}
-              index={i}
-              className={[
-                'visit-path-item',
-                isCurrent && 'is-current',
-                isStart && 'is-start',
-                i < steps.length - 1 && 'has-child',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <button
-                type="button"
-                className="visit-path-btn name-tip"
-                data-tip={step.name}
-                aria-current={isCurrent ? 'step' : undefined}
-                onClick={() => onSelect(i)}
-              >
-                {step.name}
-              </button>
-              {isStart && steps.length > 1 && (
-                <span className="visit-path-tag">başlangıç</span>
-              )}
-              {isCurrent && !isStart && (
-                <span className="visit-path-tag">şu an</span>
-              )}
-            </MotionListItem>
-          )
-        })}
-        </AnimatePresence>
-      </ol>
-    </nav>
-  )
-}
-
 type MapInfoPanelProps = {
   center: Service
   projectLabel: string
@@ -620,9 +559,6 @@ type MapInfoPanelProps = {
   bridgeCount?: number
   filterLabel?: string
   truncated?: boolean
-  visitPath: VisitStep[]
-  visitPathIndex: number
-  onVisitSelect: (index: number) => void
   focusId: string | null
   nameById: Map<string, string>
   onHoverPathSelect: (serviceId: string) => void
@@ -644,9 +580,6 @@ export function MapInfoPanel({
   bridgeCount = 0,
   filterLabel,
   truncated,
-  visitPath,
-  visitPathIndex,
-  onVisitSelect,
   focusId,
   nameById,
   onHoverPathSelect,
@@ -654,17 +587,6 @@ export function MapInfoPanel({
   onOpenChange,
   onDrawerPointerChange,
 }: MapInfoPanelProps) {
-  const mainPathLength = useMemo(() => {
-    if (!focusId || focusId.startsWith('collapsed-')) return 0
-    return discoveryPathTo(centerId, focusId, parents)?.length ?? 0
-  }, [centerId, focusId, parents])
-
-  const collapseVisitPath = Boolean(
-    focusId &&
-      !focusId.startsWith('collapsed-') &&
-      (visitPath.length >= 3 || mainPathLength >= 3),
-  )
-
   const stats: BlastRadiusStats = useMemo(
     () =>
       summarizeBlastRadius(
@@ -682,10 +604,8 @@ export function MapInfoPanel({
 
   return (
     <motion.aside
-      className={`map-info-drawer${open ? '' : ' is-collapsed'}${collapseVisitPath ? ' is-visit-collapsed' : ''}`}
+      className={`map-info-drawer${open ? '' : ' is-collapsed'}`}
       aria-label="Etki özeti"
-      layout
-      transition={layoutSpring}
       data-motion="drawer-layout"
       onPointerEnter={() => onDrawerPointerChange?.(true)}
       onPointerLeave={() => onDrawerPointerChange?.(false)}
@@ -719,7 +639,7 @@ export function MapInfoPanel({
           onWheel={(e) => e.stopPropagation()}
         >
         <section className="map-info-section map-info-impact is-open">
-            <MotionSpotlight className="map-info-spotlight-block">
+            <div className="map-info-spotlight-block">
             <div className="map-info-focus">
               <span className="map-info-focus-label">Seçilen Servis</span>
               <strong
@@ -777,33 +697,11 @@ export function MapInfoPanel({
                 )}
               </dl>
             )}
-            </MotionSpotlight>
+            </div>
           </section>
 
-          <motion.div
-            className="map-info-visit-path-slot"
-            initial={false}
-            animate={{
-              height: collapseVisitPath ? 0 : 'auto',
-              opacity: collapseVisitPath ? 0 : 1,
-              marginTop: collapseVisitPath ? 0 : undefined,
-            }}
-            transition={autoHeightSpring}
-            style={{ overflow: 'hidden' }}
-            aria-hidden={collapseVisitPath}
-          >
-            <section className="map-info-section" aria-label="Ziyaret yolu">
-              <h4 className="map-info-heading">Ziyaret yolu</h4>
-              <VisitPathTree
-                steps={visitPath}
-                currentIndex={visitPathIndex}
-                onSelect={onVisitSelect}
-              />
-            </section>
-          </motion.div>
-
           <section
-            className={`map-info-section map-info-via-section${collapseVisitPath ? ' is-promoted' : ''}`}
+            className="map-info-section map-info-via-section"
             aria-label="Ana etki yolu"
           >
             <h4 className="map-info-heading">Ana etki yolu</h4>
@@ -979,9 +877,17 @@ type LayerControlsProps = {
   showLinkedMethods?: boolean
   methodsLoading?: boolean
   onToggleLinkedMethods?: () => void
-  projectFilter?: string
+  projectFilters?: string[]
   projectOptions?: Array<{ id: string; label: string }>
-  onProjectFilterChange?: (projectId: string) => void
+  packageFilters?: string[]
+  packageOptions?: Array<{
+    id: string
+    label: string
+    projectId: string
+    projectLabel: string
+  }>
+  onProjectFiltersChange?: (projectIds: string[]) => void
+  onPackageFiltersChange?: (packageIds: string[]) => void
 }
 
 function DockBtn({
@@ -1420,9 +1326,12 @@ export function MapCanvasBar({
   showLinkedMethods = false,
   methodsLoading = false,
   onToggleLinkedMethods,
-  projectFilter = '',
+  projectFilters = [],
   projectOptions = [],
-  onProjectFilterChange,
+  packageFilters = [],
+  packageOptions = [],
+  onProjectFiltersChange,
+  onPackageFiltersChange,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1450,6 +1359,23 @@ export function MapCanvasBar({
     sx: number
     sy: number
   } | null>(null)
+  const hasScopeFilter = projectFilters.length > 0 || packageFilters.length > 0
+  const toggleProjectFilter = (id: string) => {
+    const next = projectFilters.includes(id)
+      ? projectFilters.filter((x) => x !== id)
+      : [...projectFilters, id]
+    onProjectFiltersChange?.(next)
+  }
+  const togglePackageFilter = (id: string) => {
+    const next = packageFilters.includes(id)
+      ? packageFilters.filter((x) => x !== id)
+      : [...packageFilters, id]
+    onPackageFiltersChange?.(next)
+  }
+  const clearScopeFilters = () => {
+    onProjectFiltersChange?.([])
+    onPackageFiltersChange?.([])
+  }
 
   useEffect(() => {
     if (!placed || !rootRef.current || !dockRef.current) return
@@ -1718,7 +1644,7 @@ export function MapCanvasBar({
             </DockMagnifyRow>
           </div>
 
-          {(onToggleLinkedMethods || onProjectFilterChange) && (
+          {(onToggleLinkedMethods || onProjectFiltersChange || onPackageFiltersChange) && (
             <>
               <span className="map-dock-sep" aria-hidden />
               <div className="map-dock-group">
@@ -1739,71 +1665,86 @@ export function MapCanvasBar({
                       <IconLinkedMethods />
                     </DockBtn>
                   )}
-                  {onProjectFilterChange && (
+                  {(onProjectFiltersChange || onPackageFiltersChange) && (
                     <MotionPopover
                       open={projectPopOpen}
                       onOpenChange={setProjectPopOpen}
                       className="map-dock-wrap map-dock-project-wrap motion-popover-dock"
                       panelClassName="map-dock-project-pop"
                       placement="top"
-                      label="Proje filtresi"
+                      label="Kapsam filtresi"
                       trigger={
                         <button
                           type="button"
-                          className={`map-dock-btn map-dock-project-trigger${projectFilter ? ' is-pressed' : ''}${projectPopOpen ? ' is-open' : ''}`}
-                          title="Projeye göre filtrele"
+                          className={`map-dock-btn map-dock-project-trigger${hasScopeFilter ? ' is-pressed' : ''}${projectPopOpen ? ' is-open' : ''}`}
+                          title="Projeye veya jar'a göre filtrele"
                           aria-label={
-                            projectFilter
-                              ? 'Proje filtresini değiştir'
-                              : 'Projeye göre filtrele'
+                            hasScopeFilter
+                              ? 'Kapsam filtresini değiştir'
+                              : 'Projeye veya jar’a göre filtrele'
                           }
                           aria-expanded={projectPopOpen}
                           aria-haspopup="dialog"
                           onClick={() => setProjectPopOpen((open) => !open)}
                         >
                           <IconProjectFilter />
-                          {projectFilter ? (
+                          {hasScopeFilter ? (
                             <span className="map-dock-project-dot" aria-hidden />
                           ) : null}
                         </button>
                       }
                     >
                       <div className="map-dock-project-pop-head">
-                        <strong>Proje filtresi</strong>
-                        <span>Etki haritasında yalnız seçili projeyi vurgular</span>
+                        <strong>Kapsam filtresi</strong>
+                        <span>Etki haritasında seçili proje ve jar kapsamlarını gösterir</span>
                       </div>
-                      <div className="map-dock-project-list" role="listbox" aria-label="Proje filtresi">
+                      {hasScopeFilter ? (
                         <button
                           type="button"
-                          role="option"
-                          aria-selected={!projectFilter}
-                          className={`map-dock-project-opt${!projectFilter ? ' is-on' : ''}`}
-                          onClick={() => {
-                            onProjectFilterChange('')
-                            setProjectPopOpen(false)
-                          }}
+                          className="map-dock-project-clear"
+                          onClick={clearScopeFilters}
                         >
-                          <span>Tüm projeler</span>
-                          {!projectFilter ? <span className="map-dock-project-check">✓</span> : null}
+                          Filtreleri temizle
                         </button>
+                      ) : null}
+                      <div className="map-dock-project-list" aria-label="Kapsam filtresi">
+                        <p className="map-dock-project-section">Projeler</p>
                         {projectOptions.map((project) => (
                           <button
                             key={project.id}
                             type="button"
-                            role="option"
-                            aria-selected={projectFilter === project.id}
-                            className={`map-dock-project-opt${projectFilter === project.id ? ' is-on' : ''}`}
-                            onClick={() => {
-                              onProjectFilterChange(project.id)
-                              setProjectPopOpen(false)
-                            }}
+                            role="checkbox"
+                            aria-checked={projectFilters.includes(project.id)}
+                            className={`map-dock-project-opt${projectFilters.includes(project.id) ? ' is-on' : ''}`}
+                            onClick={() => toggleProjectFilter(project.id)}
                           >
                             <span>{project.label}</span>
-                            {projectFilter === project.id ? (
+                            {projectFilters.includes(project.id) ? (
                               <span className="map-dock-project-check">✓</span>
                             ) : null}
                           </button>
                         ))}
+                        <p className="map-dock-project-section">Jarlar</p>
+                        {packageOptions.length === 0 ? (
+                          <p className="map-dock-project-empty">Bu etki zincirinde jar yok.</p>
+                        ) : (
+                          packageOptions.map((pkg) => (
+                            <button
+                              key={pkg.id}
+                              type="button"
+                              role="checkbox"
+                              aria-checked={packageFilters.includes(pkg.id)}
+                              className={`map-dock-project-opt${packageFilters.includes(pkg.id) ? ' is-on' : ''}`}
+                              onClick={() => togglePackageFilter(pkg.id)}
+                            >
+                              <span>{pkg.label}</span>
+                              <span className="map-dock-project-sub">{pkg.projectLabel}</span>
+                              {packageFilters.includes(pkg.id) ? (
+                                <span className="map-dock-project-check">✓</span>
+                              ) : null}
+                            </button>
+                          ))
+                        )}
                       </div>
                     </MotionPopover>
                   )}
@@ -1937,24 +1878,24 @@ export function ProjectFilterHint({
   if (matchCount === 0) {
     return (
       <p className="map-filter-hint empty">
-        Bu etki zincirinde <strong>{filterLabel}</strong> altındaki etkilenen
-        servis yok — başka proje seçin veya filtreyi kaldırın.
+        Bu etki zincirinde <strong>{filterLabel}</strong> kapsamına giren
+        etkilenen servis yok — başka kapsam seçin veya filtreyi kaldırın.
       </p>
     )
   }
   if (hop1EmptyButDeeper) {
     return (
       <p className="map-filter-hint">
-        <strong>{filterLabel}</strong> altındaki servisler doğrudan (1.
+        <strong>{filterLabel}</strong> kapsamındaki servisler doğrudan (1.
         katman) etkilenmiyor. Etki <strong>{deepestHop}. katmanda</strong>{' '}
-        görünüyor ({matchCount} servis). Kesik gri çerçeve = başka projedeki
-        ara yol; kalın yeşil çerçeve = {filterLabel} eşleşen servis.
+        görünüyor ({matchCount} servis). Kesik gri çerçeve = filtre dışı ara
+        yol; kalın yeşil çerçeve = kapsamla eşleşen servis.
       </p>
     )
   }
   return (
     <p className="map-filter-hint">
-      Yalnız <strong>{filterLabel}</strong> altındaki etkilenen servisler (
+      Yalnız <strong>{filterLabel}</strong> kapsamındaki etkilenen servisler (
       {matchCount}
       {bridgeCount > 0 ? ` · ${bridgeCount} ara yol` : ''}).
     </p>
