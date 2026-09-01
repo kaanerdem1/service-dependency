@@ -353,7 +353,7 @@ function SqlDetailPanel({
       {statement.sources.length ? (
         <details className="dwh-sql-source-details" open={statement.sources.length <= 5}>
           <summary>
-            {statement.sources.length === 1 ? 'Okuduğu kaynak tablo' : 'Okuduğu kaynak tablolar'} ({statement.sources.length})
+            {statement.sources.length === 1 ? 'Prosedürün kullandığı kaynak tablo' : 'Prosedürün kullandığı kaynak tablolar'} ({statement.sources.length})
           </summary>
           <div className="dwh-sql-source-list">
             {statement.sources.map((source) => (
@@ -707,7 +707,10 @@ function ImpactPanel({
             <div className="dwh-impact-detail-head">
               <div>
                 <span className="dwh-eyebrow">Prosedürler</span>
-                <p>{activeTableName} tablosunu etkileyen sorgular</p>
+                <p className="dwh-impact-detail-title">
+                  <strong>{activeTableName}</strong>
+                  <span> tablosunu {fullTableName(table)} etki zincirinde değiştiren sorgular</span>
+                </p>
               </div>
               <button
                 type="button"

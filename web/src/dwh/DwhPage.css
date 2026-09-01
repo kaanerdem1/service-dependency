@@ -1901,6 +1901,12 @@
   white-space: nowrap;
 }
 
+.dwh-impact-detail-title strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 900;
+}
+
 .dwh-impact-detail-panel > .dwh-impact-statement-accordion {
   flex: 0 0 auto;
   min-height: 0;
