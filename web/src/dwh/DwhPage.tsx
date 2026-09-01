@@ -712,38 +712,20 @@ function ImpactPanel({
                 </div>
               </div>
 
-              {activeImpactTable.statements.length === 1 ? (
-                <div className="dwh-impact-statement-list">
-                  {activeImpactTable.statements.map((statement) => (
-                    <article key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement">
-                      <div className="dwh-impact-statement-head">
-                        <div>
-                          <span className="dwh-eyebrow">Sorgu</span>
-                          <h5>{impactProcedureLabel(statement)}</h5>
-                          <p>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</p>
-                        </div>
-                        <DmlBadge dmlType={statement.dmlType} />
-                      </div>
-                      <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="dwh-impact-statement-accordion">
-                  {activeImpactTable.statements.map((statement) => (
-                    <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
-                      <summary>
-                        <span>
-                          <strong>{impactProcedureLabel(statement)}</strong>
-                          <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
-                        </span>
-                        <DmlBadge dmlType={statement.dmlType} />
-                      </summary>
-                      <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
-                    </details>
-                  ))}
-                </div>
-              )}
+              <div className="dwh-impact-statement-accordion">
+                {activeImpactTable.statements.map((statement) => (
+                  <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
+                    <summary>
+                      <span>
+                        <strong>{impactProcedureLabel(statement)}</strong>
+                        <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
+                      </span>
+                      <DmlBadge dmlType={statement.dmlType} />
+                    </summary>
+                    <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
+                  </details>
+                ))}
+              </div>
             </>
           ) : (
             <div className="dwh-query-empty">Sorgu detayını görmek için soldan etkilenen tablo seçin.</div>

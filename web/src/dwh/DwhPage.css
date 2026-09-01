@@ -1850,26 +1850,11 @@
   font-weight: 650;
 }
 
-.dwh-impact-detail-panel > .dwh-impact-statement-list,
 .dwh-impact-detail-panel > .dwh-impact-statement-accordion {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   padding: 12px;
-}
-
-.dwh-impact-statement-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-}
-
-.dwh-impact-statement {
-  overflow: hidden;
-  border: 1px solid #e2e5e8;
-  border-radius: 8px;
-  background: #fff;
 }
 
 .dwh-impact-statement-accordion {
@@ -1932,46 +1917,13 @@
   border-bottom: 1px solid #edf0f2;
 }
 
-.dwh-impact-statement-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 10px;
-  border-bottom: 1px solid #edf0f2;
-  background: #fbfcfd;
-}
-
-.dwh-impact-statement-head > div {
-  min-width: 0;
-}
-
-.dwh-impact-statement-head h5 {
-  margin: 2px 0 0;
-  overflow: hidden;
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 850;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dwh-impact-statement-head p {
-  margin: 3px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 650;
-}
-
 .dwh-impact-sql {
-  margin: 0 10px 10px;
-  border: 1px solid #edf0f2;
-  border-radius: 8px;
-  background: #f7f8f9;
+  margin: 0;
+  background: #fff;
 }
 
 .dwh-impact-sql .dwh-sql-view-head {
-  padding: 8px 9px;
+  padding: 9px 10px 8px;
 }
 
 .dwh-impact-sql pre {
@@ -1980,6 +1932,7 @@
   overflow: auto;
   padding: 10px;
   border-top: 1px solid #edf0f2;
+  background: #f7f8f9;
   color: #26312d;
   font-size: 11.5px;
   line-height: 1.5;
