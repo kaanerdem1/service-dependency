@@ -2,6 +2,7 @@ import type {
   DwhReport,
   DwhReportDetail,
   DwhLineageGraph,
+  DwhTableImpact,
   DwhSqlStatement,
   DwhTable,
   DwhTableColumnsResponse,
@@ -57,6 +58,10 @@ export function getDwhTableLineageGraph(tableId: number, depth = 3, simple = fal
   return request<DwhLineageGraph>(
     queryPath(`/tables/${tableId}/lineage-graph`, { depth, simple: simple ? 1 : undefined }),
   )
+}
+
+export function getDwhTableImpact(tableId: number) {
+  return request<DwhTableImpact>(`/tables/${tableId}/impact`)
 }
 
 export function listDwhReports(q = '', limit = 100) {

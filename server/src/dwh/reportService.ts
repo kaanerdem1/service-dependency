@@ -1,5 +1,6 @@
 import { query, tableName } from './db.js'
 import { columnStableId, fullTableName, reportStableId, tableStableId } from './format.js'
+import { simplifySql } from './sqlSimplify.js'
 import type { DwhReport, DwhReportColumn, DwhTableRef } from './types.js'
 
 type ReportRow = {
@@ -132,6 +133,7 @@ export async function getReport(reportId: number) {
   return {
     ...toReport(report),
     sqlText: report.sql_metni,
+    simplifiedSql: simplifySql(report.sql_metni),
     sourceTables,
     columns,
   }

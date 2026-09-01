@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { DWH_SCHEMA, query } from './db.js'
 import { buildReportLineageGraph, buildTableLineageGraph } from './graphService.js'
+import { getTableImpact } from './impactService.js'
 import { getReport, listReports } from './reportService.js'
 import { getStatement } from './sqlService.js'
 import { getTable, listColumns, listStatementsForTable, listTables } from './tableService.js'
@@ -97,6 +98,18 @@ dwhRouter.get('/tables/:tableId/lineage-graph', async (req, res) => {
     })
     if (!graph) return res.status(404).json({ error: 'not_found' })
     res.json(graph)
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
+dwhRouter.get('/tables/:tableId/impact', async (req, res) => {
+  const tableId = parseId(req.params.tableId)
+  if (!tableId) return res.status(400).json({ error: 'invalid_table_id' })
+  try {
+    const impact = await getTableImpact(tableId)
+    if (!impact) return res.status(404).json({ error: 'not_found' })
+    res.json(impact)
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
   }
