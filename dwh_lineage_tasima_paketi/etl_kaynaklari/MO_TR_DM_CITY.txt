@@ -1,0 +1,90 @@
+CREATE OR REPLACE package body STAGE.MO_TR_DM_CITY is
+
+  PROCEDURE TR_DM_CITY is
+    sql_text       varchar2(8000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value, prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_CITY',
+                                  psubmodule   => 'TR_DM_CITY',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl);
+                                  
+   execute immediate 'truncate table TR_DM_CITY'; ---eod de hata aldıktan sonra ekledim Mert
+   
+    insert into TR_DM_CITY
+      select TT.CITY_NUMBERPLATE AS CITY_CODE,
+             TT.CITY_NAME        AS CITY_NAME,
+             TT.CITY_PHONE_CODE  AS CITY_PHONE_CODE,
+             TT.CITY_PHONE_CODE2 AS CITY_PHONE_CODE2,
+             null                AS COUNTRY_OID,
+             TT.COUNTRY_CODE     AS COUNTRY_CODE,
+             TT.COUNTRY_NAME     AS COUNTRY_NAME,
+             region_code         AS CITY_GROUP1,
+             branch_geo_region   AS CITY_GROUP1_DESC,
+             NULL                AS CITY_GROUP2,
+             NULL                AS CITY_GROUP2_DESC,
+             TT.SS_OID           AS SS_OID
+        from (select B.oid,
+                     B.status,
+                     B.OID,
+                     A.STATUS,
+                     A.COUNTRY_CODE      AS COUNTRY_CODE,
+                     A.COUNTRY_NAME      AS COUNTRY_NAME,
+                     A.OID               AS OID1,
+                     T.STATUS,
+                     T.COUNTRY_OID,
+                     T.CITY_NAME         AS CITY_NAME,
+                     T.CITY_NUMBERPLATE  AS CITY_NUMBERPLATE,
+                     T.CITY_PHONE_CODE   AS CITY_PHONE_CODE,
+                     T.CITY_PHONE_CODE2  AS CITY_PHONE_CODE2,
+                     T.OID               AS SS_OID,
+                     p.branch_geo_region,
+                     region_code
+                from EX_INFRA_LOCATION_COUNTRY B,
+                     TR_DM_COUNTRY_LAST        A,
+                     EX_INFRA_LOCATION_CITY    T,
+                     rasman.pr_dm_city_region  p
+               WHERE T.COUNTRY_OID = B.OID
+                 AND B.STATUS = '1'
+                 AND t.city_numberplate = p.city_code
+                 AND A.COUNTRY_CODE = B.COUNTRY_CODE
+                 AND T.STATUS = '1') TT;
+  
+    execute immediate 'truncate table TR_DM_CITY_LAST';
+    insert into TR_DM_CITY_LAST
+      select * from olap.dm_city;
+    commit;
+  
+    MN_TRANSFER.dim_transfer_stage(sname       => 'TR_DM_CITY',
+                                   tname       => 'TR_DM_CITY_LAST',
+                                   primary_key => 'CITY_CODE,COUNTRY_CODE');
+  
+    mn_utility.update_plog(pid => pid, success => 1, pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid,
+                             success   => 0,
+                             fail      => 'POSITION: ' || error_location ||
+                                          ' ERROR: ' || abs(SQLCODE) || ':' ||
+                                          SQLERRM || ' ' ||
+                                          DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+end MO_TR_DM_CITY;
+/

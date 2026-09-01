@@ -1,0 +1,394 @@
+CREATE OR REPLACE package body STAGE.mo_tr_dm_organization is
+
+  procedure rasman_memzuc_update is
+    sql_text       varchar2(32000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:blocker,2:critical,3:trivial,9:no problem 
+    pdate          varchar2(8);
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value
+                  ,prm_format)
+          ,prm_value
+      into pasofdate
+          ,pdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.insert_plog(pmodule      => 'MO_TR_DM_ORGANIZATION'
+                                 ,psubmodule   => 'TR_DM_ORGANIZATION'
+                                 ,project_name => 'EDW'
+                                 ,pasofdate    => pasofdate
+                                 ,pcritical    => pcritical_lvl);
+    --yeni eklenen şubeler rasman tablosuna gelmedi için aml'de hata almaktayız.bu nedenle rasman tablosuna insert yapılmaktadır.
+  
+    delete from rasman.pr_memzuc_org_county
+     where org_code in (select code
+                          from ex_infra_admin_org_org a
+                         where a.org_opening_date = to_char(pasofdate + 1
+                                                           ,'yyyymmdd'));
+    commit;
+  
+    insert into rasman.pr_memzuc_org_county
+      (org_code
+      ,county_order
+      ,city_code
+      ,county_code
+      ,org_name
+      ,default_branch
+      ,begin_date
+      ,end_date)
+      select a.code
+            ,null   as county_order
+            ,null   as city_code
+            ,null   as county_code
+            ,a.name as org_name
+            ,null   as default_branch
+            ,null   as begin_date
+            ,null   as end_date
+        from ex_infra_admin_org_org a
+       where a.org_opening_date = to_char(pasofdate + 1
+                                         ,'yyyymmdd');
+    commit;
+  
+    mn_utility.update_plog(pid       => pid
+                          ,success   => 1
+                          ,pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid
+                            ,success   => 0
+                            ,fail      => 'position: ' || error_location || ' error: ' || abs(sqlcode) || ':' || sqlerrm
+                            ,pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+  procedure tr_dm_organization is
+    sql_text       varchar2(32000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:blocker,2:critical,3:trivial,9:no problem 
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value
+                  ,prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.insert_plog(pmodule      => 'MO_TR_DM_ORGANIZATION'
+                                 ,psubmodule   => 'TR_DM_ORGANIZATION'
+                                 ,project_name => 'EDW'
+                                 ,pasofdate    => pasofdate
+                                 ,pcritical    => pcritical_lvl);
+  
+    rasman_memzuc_update;
+  
+    execute immediate 'truncate table tr_dm_organization';
+  
+    insert into tr_dm_organization
+      select org_code
+            ,gl_org_code
+            ,org_name
+            ,org_type
+            ,parent_code
+            ,parent_name
+            ,org_country_code
+            ,org_country_name
+            ,org_city_oid
+            ,org_city_code
+            ,org_city_name
+            ,org_county_oid
+            ,org_county_code
+            ,org_county_name
+            ,org_address
+            ,org_tel
+            ,org_fax
+            ,org_email
+            ,org_manager_file_no
+            ,org_manager_name
+            ,org_open_date
+            ,org_size
+            ,org_staff_number
+            ,org_limit_ankes_ytl
+            ,org_limit_ankes_usd
+            ,org_limit_ankes_eur
+            ,org_limit_atm_ytl
+            ,org_limit_atm_usd
+            ,org_limit_atm_eur
+            ,ss_oid
+            ,org_group1
+            ,org_group1_desc
+            ,org_group2
+            ,org_group2_desc
+            ,org_group3
+            ,org_group3_desc
+            ,org_group4
+            ,org_group4_desc
+            ,org_group5
+            ,org_group5_desc
+            ,org_group6
+            ,org_group6_desc
+            ,org_group7
+            ,org_group7_desc
+            ,org_group8
+            ,org_group8_desc
+            ,org_group9
+            ,org_group9_desc
+            ,org_group10
+            ,org_group10_desc
+            ,'0' as state
+            ,'CLOSED' as state_description
+            ,oid as org_oid
+            ,close_date
+            ,lpad(gl_org_code
+                 ,3
+                 ,'0') as unit_org_code
+        from rasman.pr_dm_memzuc_org --memzuç eksik şubeler 
+      union all
+      select t.org_code as org_code
+            ,t.gl_org_code as gl_org_code
+            ,t.org_name as org_name
+            ,t.org_type as org_type
+            ,cast(t.parent_code as varchar2(5)) as parent_code
+            ,t.parent_name as parent_name
+            ,t.country_code as org_country_code
+            ,t.country_name as org_country_name
+            ,t.org_city_oid as org_city_oid
+            ,t.org_city_code as org_city_code
+            ,t.org_city_name as org_city_name
+            ,t.org_county_oid as org_county_oid
+            ,t.org_county_code as org_county_code
+            ,t.org_county_name as org_county_name
+            ,t.addr as org_address
+            ,t.org_tel as org_tel
+            ,t.phone2 as org_fax
+            ,email as org_email
+            ,null as org_manager_file_no
+            ,null as org_manager_name
+            ,t.open_date as org_open_date
+            ,null as org_size
+            ,null as org_staff_number
+            ,t.ytl_limit_ankes as org_limit_ankes_ytl
+            ,t.usd_limit_ankes as org_limit_ankes_usd
+            ,null as org_limit_ankes_eur
+            ,t.ytl_limit_atm as org_limit_atm_ytl
+            ,t.usd_limit_atm as org_limit_atm_usd
+            ,null as org_limit_atm_eur
+            ,ss_oid as ss_oid
+            ,org_group1 as org_group1
+            ,org_group1_desc as org_group1_desc
+            ,org_group2 as org_group2
+            ,org_group2_desc as org_group2_desc
+            ,org_group3 as org_group3
+            ,org_group3_desc as org_group3_desc
+            ,org_group4 as org_group4
+            ,org_group4_desc as org_group4_desc
+            ,org_group5 as org_group5
+            ,org_group5_desc as org_group5_desc
+            ,org_group6 as org_group6
+            ,org_group6_desc as org_group6_desc
+            ,org_group7 as org_group7
+            ,org_group7_desc as org_group7_desc
+            ,org_group8 as org_group8
+            ,org_group8_desc as org_group8_desc
+            ,org_group9 as org_group9
+            ,org_group9_desc as org_group9_desc
+            ,county_order as org_group10
+            ,null as org_group10_desc
+            ,state as state
+            ,state_description as state_description
+            ,org_oid as org_oid
+            ,close_date
+            ,unit_org_code
+        from (select a.organization_oid as organization_oid
+                    ,a.org_city_oid as org_city_oid
+                    ,a.org_city_code as org_city_code
+                    ,a.org_city_name as org_city_name
+                    ,a.org_county_oid as org_county_oid
+                    ,a.org_county_code as org_county_code
+                    ,a.org_county_name as org_county_name
+                    ,a.org_address as org_address
+                    ,a.org_tel as org_tel
+                    ,a.phone2 as phone2
+                    ,g.oid
+                    ,g.org_code as org_code
+                    ,g.gl_org_code as gl_org_code
+                    ,g.org_type as org_type
+                    ,g.org_name as org_name
+                    ,g.parent_code as parent_code
+                    ,g.parent_name as parent_name
+                    ,g.open_date as open_date
+                    ,g.address as address
+                    ,g.country_code as country_code
+                    ,g.country_name as country_name
+                    ,null as org
+                    ,null as usd_limit_ankes
+                    ,null as ytl_limit_ankes
+                    ,null as usd_limit_atm
+                    ,null as ytl_limit_atm
+                    ,nvl(g.address
+                        ,a.org_address) as addr
+                    ,g.ss_oid as ss_oid
+                    ,o.org_group1
+                    ,o.org_group1_desc
+                    ,o.org_group2
+                    ,o.org_group2_desc
+                    ,o.org_group3
+                    ,o.org_group3_desc
+                    ,o.org_group4
+                    ,o.org_group4_desc
+                    ,o.org_group5
+                    ,o.org_group5_desc
+                    ,o.org_group6
+                    ,o.org_group6_desc
+                    ,o.org_group7
+                    ,o.org_group7_desc
+                    ,o.org_group8
+                    ,o.org_group8_desc
+                    ,o.org_group9
+                    ,o.org_group9_desc
+                    ,pr.county_order
+                    ,'1' state
+                    ,'OPEN' as state_description
+                    ,g.oid as org_oid
+                    ,null close_date
+                    ,lpad(gl_org_code
+                         ,3
+                         ,'0') as unit_org_code
+                    ,a.email
+                from tr_dm_org_address           a
+                    ,tr_dm_org_general           g
+                    ,tr_dm_org_group             o
+                    ,rasman.pr_memzuc_org_county pr
+               where g.org_code = o.org_code(+)
+                 and g.gl_org_code = pr.org_code(+)
+                 and g.oid = a.organization_oid(+)) t;
+    commit;
+  
+    -------open date set tarafında boş olduğu için eski datadan update ediyoruz.     
+    merge into tr_dm_organization dm
+    using rasman.dm_organization r
+    on (r.org_code = dm.org_code)
+    when matched then
+      update
+         set dm.org_open_date = r.org_open_date;
+    commit;
+    --daha once kapanan subeler veri ambarindan aliniyor.20160617 CC 
+  
+    insert into tr_dm_organization
+      select org_code
+            ,gl_org_code
+            ,org_name
+            ,org_type
+            ,parent_code
+            ,parent_name
+            ,org_country_code
+            ,org_country_name
+            ,org_city_oid
+            ,org_city_code
+            ,org_city_name
+            ,org_county_oid
+            ,org_county_code
+            ,org_county_name
+            ,org_address
+            ,org_tel
+            ,org_fax
+            ,org_email
+            ,org_manager_file_no
+            ,org_manager_name
+            ,org_open_date
+            ,org_size
+            ,org_staff_number
+            ,org_limit_ankes_ytl
+            ,org_limit_ankes_usd
+            ,org_limit_ankes_eur
+            ,org_limit_atm_ytl
+            ,org_limit_atm_usd
+            ,org_limit_atm_eur
+            ,ss_oid
+            ,org_group1
+            ,org_group1_desc
+            ,org_group2
+            ,org_group2_desc
+            ,org_group3
+            ,org_group3_desc
+            ,org_group4
+            ,org_group4_desc
+            ,org_group5
+            ,org_group5_desc
+            ,org_group6
+            ,org_group6_desc
+            ,org_group7
+            ,org_group7_desc
+            ,org_group8
+            ,org_group8_desc
+            ,org_group9
+            ,org_group9_desc
+            ,org_group10
+            ,org_group10_desc
+            ,'0' as state
+            , --CC 2016/09/21 olmayan kayıtları insert ederken yeni kapananlar state 1 olarak geldiği için alttaki case yakalanmıyor.
+             state_description
+            ,oid as org_oid
+            ,close_date
+            ,unit_org_code
+        from olap.dm_organization
+       where oid not in (select org_oid
+                           from tr_dm_organization);
+  
+    commit;
+  
+    ---------Kapanan şubelerin state 0 yapılıyor tarih te update edilecek.        
+    merge into tr_dm_organization org
+    using ( /*select org_code
+                                   from olap.dm_organization
+                                  where state = '1'
+                                 minus
+                                 select org_code
+                                   from tr_dm_organization*/ --2016/09/21 CC --yukarıda state 1 geldiği için yeni kapananlar update olmuyordu.
+           select org_code
+                  ,state
+             from tr_dm_organization a
+            where state = 0
+              and a.state_description = 'OPEN'
+           minus
+           select org_code
+                 ,state
+             from olap.dm_organization
+            where state = '1') mns
+    on (org.org_code = mns.org_code)
+    when matched then
+      update
+         set state             = '0'
+            ,state_description = 'CLOSED'
+            ,close_date        = pasofdate;
+    commit;
+  
+    -------  
+  
+    mn_utility.update_plog(pid       => pid
+                          ,success   => 1
+                          ,pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid
+                            ,success   => 0
+                            ,fail      => 'POSITION: ' || error_location || ' ERROR: ' || abs(sqlcode) || ':' || sqlerrm || ' ' || dbms_utility.format_error_backtrace
+                            ,pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+end mo_tr_dm_organization;
+/

@@ -1,0 +1,68 @@
+CREATE OR REPLACE package body STAGE.MO_TR_DM_ORG_BOLGE is
+
+  PROCEDURE TR_DM_ORG_BOLGE is
+    sql_text       varchar2(5000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value, prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_ORG_BOLGE',
+                                  psubmodule   => 'TR_DM_ORG_BOLGE',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl);
+  
+    execute immediate 'truncate table TR_DM_ORG_BOLGE';
+    insert into TR_DM_ORG_BOLGE
+      select SUBE_KODU     as SUBE_KODU,
+             SUBE_ADI      as SUBE_ADI,
+             ADRES         as ADRES,
+             ACILIS_TARIHI as ACILIS_TARIHI,
+             BOLGE_KODU    as BOLGE_KODU,
+             BOLGE_ADI     as BOLGE_ADI
+      
+        from (select a.code as sube_kodu,
+                     a.name as sube_adi,
+                     b.code as bolge_kodu,
+                     b.name as bolge_adi,
+                     null   as acilis_tarihi,
+                     null   as adres
+                from ex_infra_admin_org_org_dep x,
+                     ex_infra_admin_org_dep     y,
+                     ex_infra_admin_org_org     a,
+                     ex_infra_admin_org_org     b
+               where y.dependence_code = '014'
+                 and x.dependence_oid = y.oid
+                 and x.organization_oid = a.oid
+                 and x.dependent_org_oid = b.oid
+                 and x.status = '1'
+                 and y.status = '1'
+                 and a.status = '1'
+                 and b.status = '1');
+    commit;
+  
+    mn_utility.update_plog(pid => pid, success => 1, pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid,
+                             success   => 0,
+                             fail      => 'POSITION: ' || error_location ||
+                                          ' ERROR: ' || abs(SQLCODE) || ':' ||
+                                          SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+END MO_TR_DM_ORG_BOLGE;
+/

@@ -1,0 +1,111 @@
+CREATE OR REPLACE procedure OFSA_DAILY.E_ORDER_PAYMENTS_OLAX (pdate DATE) 
+IS
+
+    pid number;
+    error_location number:=1;
+    vdate char(8) := to_char(pdate,'yyyymmdd');
+    pcritical_lvl           number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+
+  begin
+
+    pid := stage.mn_utility.INSERT_PLOG(pmodule      => 'EXTRACTION',
+                                  psubmodule   => 'ORDER_PAYMENTS',
+                                  project_name => 'OFSA_DAILY',
+                                  pasofdate    => pdate,
+                                  pcritical    => 1);
+
+    execute immediate 'truncate table e_order_payments';  
+   
+    --maaş bilgileri
+    execute immediate 'truncate table e_pyf_fm_institution' ;
+    commit;
+
+    insert into e_pyf_fm_institution
+          select
+           main_oid oid, institution_code, institution_short_name, customer_code, marketing_expert, protocol_start_date, protocol_end_date,
+           protocol_description, order_oid, order_type, is_active, is_approved, is_locked, locked_by, locked_date, created_by, created_date,
+           updated_by, updated_date, lastupdated, status, last_effective_date, is_last_approved, reference_id, custom_status,
+           custom_status_desc, is_general_institution, branch_code, institution_business_code, approve_desc, has_promotion, approved_by,
+           blocked_day_count, block_with_holiday, is_acc_desc_detail, is_blocked, is_partial_payment_allowed, is_payment_after_due_allowed,
+           promotion_number,
+           VOUCHER_DESC --322055
+        from pyf_fm_institution_h@csofsa
+        where status = '1'
+          and is_active = 1
+          and real_status = '1'
+          and is_last_approved = '1'
+    union all
+          select oid, institution_code, institution_short_name, customer_code, marketing_expert, protocol_start_date, protocol_end_date,
+           protocol_description, order_oid, order_type, is_active, is_approved, is_locked, locked_by, locked_date, created_by, created_date,
+           updated_by, updated_date, lastupdated, status, null last_effective_date, null is_last_approved, reference_id,
+           custom_status, custom_status_desc, is_general_institution, branch_code, institution_business_code, approve_desc, has_promotion,
+           approved_by, blocked_day_count, block_with_holiday, is_acc_desc_detail, is_blocked, is_partial_payment_allowed, is_payment_after_due_allowed,
+           promotion_number,
+           VOUCHER_DESC --322055
+        from pyf_fm_institution@csofsa
+        where oid not in (select main_oid  from pyf_fm_institution_h@csofsa t)
+          and status = '1'
+          and is_active = 1
+          and is_approved = '1';
+        commit;
+
+    insert into e_order_payments
+    select to_date(opp.order_date,'yyyymmdd') as_of_date,
+           opp.oid id_number,
+           to_date( opp.ORDER_DATE  ,'yyyymmdd')order_date, --last_update_date
+           i.institution_code, i.institution_short_name,
+           i.protocol_start_date  protocol_start_date,
+           i.protocol_end_date  protocol_end_date,
+           inst_cus_no, inst_org_code, acc.account_code inst_account_code, nvl(cus_no,0)cus_no, i.account_code account_code,
+           'MAAŞ ÖDEMESİ' product_type, opp.payment_amount, --trns_amount,
+           opp.deduction_amount, opp.payment_amount_mt currency_code, p.payment_day_of_month, p.blocked_day_count, p.blocked_day_type,
+           p.updated_by, /*count(*) record_count, */
+           case when opp.ORDER_PLAN_STATUS = 0 then 'Ödenemedi'
+                when opp.ORDER_PLAN_STATUS = 1 then 'Ödendi'
+                when opp.ORDER_PLAN_STATUS = 2 then 'Ödenecek'
+                when opp.ORDER_PLAN_STATUS = 3 then 'İptal Edildi'
+                when opp.ORDER_PLAN_STATUS is null then 'Ödenmedi'
+           else opp.ORDER_PLAN_STATUS end status, i.personnel_status, i.is_active, i.has_promotion, opp.payment_reference_id, opp.order_oid,
+           i.REGISTER_NO,i.VOUCHER_DESC,opp.parameter1,customer_protocol_date --322055
+     from (select i.main_oid, i.order_oid, per.oid per_oid, to_number(per.customer_no) cus_no, to_number(i.customer_code) inst_cus_no, to_number(i.branch_code) inst_org_code,
+                  to_date(i.protocol_start_date,'yyyymmdd')protocol_start_date, to_date(i.protocol_end_date,'yyyymmdd')protocol_end_date, i.institution_code,
+                  i.institution_short_name, per.account_code, per.personnel_status,
+                  i.is_active, i.has_promotion,per.REGISTER_NO ,i.VOUCHER_DESC,to_date(substr(per.created_date,1,8),'yyyymmdd') as customer_protocol_date
+             from e_pyf_fm_institution i,
+                  pyf_wm_personnel@csofsa per
+            where per.institution_oid = i.main_oid
+              and per.status =1
+              and i.order_type = '05' --03 DAS kurumu, 04 dbs kurumu, 05 maaş kurumu 06 okul ödemesi eğitim kurumu anlamına geliyor
+              and i.status =1 )i,
+          pyf_wm_institution_protocol@csofsa p,
+          pyo_om_order_payment_plan@csofsa opp,
+          pyo_om_order_def@csofsa odef,
+          pyf_fm_cbranch_acc@csofsa acc
+    where i.main_oid = p.institution_oid(+)
+      and i.order_oid = opp.order_oid (+)
+      and i.per_oid = opp.second_order_account_oid(+)
+      and opp.order_date = vdate/*to_char(to_date(loading_date, 'dd.mm.yyyy'),'yyyymmdd')*/
+      and opp.order_oid = odef.oid(+)
+      and i.main_oid = acc.institution_oid(+)
+      and opp.status(+) = 1
+      and acc.status(+) =1  ;
+    commit;
+    --opp.order_oid eklenecek gözde abla
+    --163678 start
+    
+
+    pcritical_lvl  := 3;
+    error_location := 2;
+
+    STAGE.mn_utility.update_plog(pid => pid,success => 1,pcritical => 9);
+ exception
+    when others then
+      STAGE.mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      ROLLBACK;
+      RAISE;
+  end;
+/

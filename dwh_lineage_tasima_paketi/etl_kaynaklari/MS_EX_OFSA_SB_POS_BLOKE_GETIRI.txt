@@ -1,0 +1,330 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_POS_BLOKE_GETIRI IS
+
+PROCEDURE MS_EX_OFSA_SB_POS_BLOKE_GETIRI (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH         DATE;
+    READY              NUMBER;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --SEGMENTASYON ATAMASI
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_POS_BLOKE_GETIRI',
+                                        PSUBMODULE   => 'EX_OFSA_SB_POS_BLOKE_GETIRI',
+                                        PROJECT_NAME => 'OFSA_SB',
+                                        PASOFDATE    => PDATE,
+                                        PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_POS_BLOKE_GETIRI';
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_HASAT_POS_BLOKE_GETIRI';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+
+  --------/28.12.2021_P.Y._Bazı günler dolmadığı tespit edildi ve sleep koyuldu /-------
+        LOOP
+            SELECT COUNT(*) 
+            INTO READY
+            FROM SUMMARY_PROD.GL_LIABILITY
+            WHERE AS_OF_DATE=PDATE
+            AND COST_RATE IS NOT NULL
+            AND MODULE='VDZ';
+            EXIT WHEN READY>3600000;
+            SLEEP(300000);--5DK
+          END LOOP;
+   --------------------------------------------------------------------------------------
+
+
+
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+    AYBASI:=PDATE;
+    END IF; 
+
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_POS_BLOKE_GETIRI
+
+     (
+     SELECT PDATE AS AS_OF_DATE,
+       POS.CUSTOMER_CODE AS MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM) AS ISKOLU,
+        POS.SEGM AS SEGMENT,
+        CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END AS BOLGE,
+        POS.SUBE AS SUBE,
+        NVL(POS.MT_NO, 999999) AS MT,
+        999999999 AS URUN_KODU,
+        'POS' AS URUN,
+        POS.PB AS PB,
+        'POS_BLOKE_GETIRI' AS KAYNAK,
+        SUM(POS.FONLAMA) AS TUTAR
+          FROM OLAP.DM_ORGANIZATION ORG,
+          (  SELECT PDATE AS TARIH,
+                         TO_NUMBER(UNIT_NUM) AS SUBE,
+                         CUSTOMER_CODE,
+                         MT_NO,
+                         PB,
+                         SEGM,
+                         ROUND(SUM(FONLAMA), 2) FONLAMA
+                    FROM (SELECT POS.AS_OF_DATE,
+                                 MUS_SUBE_KODU UNIT_NUM,
+                                 POS.BALN,
+                                 POS.CUSTOMER_CODE,
+                                 POS.SEGM,
+                                 POS.PB PB,
+                                 ORAN.AS_OF_DATE,
+                                 ORAN.POOL_RATE,
+                                 POS.MT_NO,
+                                 POS.BALN * ORAN.POOL_RATE / 36500 FONLAMA
+                            FROM (SELECT   PDATE AS_OF_DATE,
+                                           C.MAIN_BRANCH_CODE AS MUS_SUBE_KODU,
+                                           C.CUSTOMER_CODE AS CUSTOMER_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE AS SEGM,
+                                           A.CURRENCY_CODE PB,
+                                           NVL(C.REPRESENTATIVE_FILE_NO, 888888) AS MT_NO,
+                                           SUM(A.GL_LCL_BALN) / (PDATE-AYBASI+1) AS BALN
+                                      FROM SUMMARY_PROD.GL_CUSTOMER A,
+                                           OLAP.FC_CUSTOMER C,
+                                           OLAP.FC_CUSTOMER  SEG
+                                     WHERE     A.AS_OF_DATE BETWEEN AYBASI AND PDATE -- AYIN ILK GÜNÜ VE RAPOR TARIHI
+                                           AND A.GL_NO IN  ('3909003','3909015','391901500','391901519','391901516','391901509','391901510','391901512','391901515','391901517','27890308','2799030800','2799030819','2799030816','2799030809','2799030810','2799030812','2799030815','2799030817')
+                                           AND A.CUSTOMER_CODE = C.CUSTOMER_CODE
+                                           AND C.AS_OF_DATE = PDATE
+                                           AND A.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+                                           AND SEG.AS_OF_DATE = SEGM_TARIH
+                                  GROUP BY C.MAIN_BRANCH_CODE,
+                                           C.REPRESENTATIVE_FILE_NO,
+                                           A.CURRENCY_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE,
+                                           C.CUSTOMER_CODE) POS,
+                                 (SELECT AVG(NVL(A.COST_RATE,A.POOL_RATE)) AS POOL_RATE,A.AS_OF_DATE
+                                  FROM SUMMARY_PROD.GL_LIABILITY A
+                                  WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                  AND A.MODULE='VDZ'
+                                  AND A.CURRENCY_CODE='TL'
+                                  GROUP BY A.AS_OF_DATE
+                                  ) ORAN)
+                GROUP BY PDATE,
+                         UNIT_NUM,
+                         CUSTOMER_CODE,
+                         PB,
+                         MT_NO,
+                         SEGM)POS
+         WHERE POS.FONLAMA > 1
+         AND TO_NUMBER(POS.SUBE)=TO_NUMBER(ORG.GL_ORG_CODE)
+         GROUP BY
+         PDATE,
+         POS.CUSTOMER_CODE,
+         OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM),
+          POS.SEGM,
+          CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+          POS.SUBE,
+          POS.MT_NO,
+          POS.PB
+     );
+
+      COMMIT;
+      
+    ------Hasat Pos Ex Tablosu-------
+    
+          INSERT
+      INTO OFSA_SB.OFSA_EX_HASAT_POS_BLOKE_GETIRI
+
+     (
+     SELECT PDATE AS AS_OF_DATE,
+       POS.CUSTOMER_CODE AS MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM) AS ISKOLU,
+        POS.SEGM AS SEGMENT,
+        CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END AS BOLGE,
+        POS.SUBE AS SUBE,
+        NVL(POS.MT_NO, 999999) AS MT,
+        999999999 AS URUN_KODU,
+        'HASAT_POS' AS URUN,
+        POS.PB AS PB,
+        'HASAT_POS_BLOKE_GETIRI' AS KAYNAK,
+        SUM(POS.FONLAMA) AS TUTAR
+          FROM OLAP.DM_ORGANIZATION ORG,
+          (  SELECT PDATE AS TARIH,
+                         TO_NUMBER(UNIT_NUM) AS SUBE,
+                         CUSTOMER_CODE,
+                         MT_NO,
+                         PB,
+                         SEGM,
+                         ROUND(SUM(FONLAMA), 2) FONLAMA
+                    FROM (SELECT POS.AS_OF_DATE,
+                                 MUS_SUBE_KODU UNIT_NUM,
+                                 POS.BALN,
+                                 POS.CUSTOMER_CODE,
+                                 POS.SEGM,
+                                 POS.PB PB,
+                                 ORAN.AS_OF_DATE,
+                                 ORAN.POOL_RATE,
+                                 POS.MT_NO,
+                                 POS.BALN * ORAN.POOL_RATE / 36500 FONLAMA
+                            FROM (SELECT   PDATE AS_OF_DATE,
+                                           C.MAIN_BRANCH_CODE AS MUS_SUBE_KODU,
+                                           C.CUSTOMER_CODE AS CUSTOMER_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE AS SEGM,
+                                           A.CURRENCY_CODE PB,
+                                           NVL(C.REPRESENTATIVE_FILE_NO, 888888) AS MT_NO,
+                                           SUM(A.GL_LCL_BALN) / (PDATE-AYBASI+1) AS BALN
+                                      FROM SUMMARY_PROD.GL_CUSTOMER A,
+                                           OLAP.FC_CUSTOMER C,
+                                           OLAP.FC_CUSTOMER SEG
+                                     WHERE     A.AS_OF_DATE BETWEEN AYBASI AND PDATE -- AYIN ILK GÜNÜ VE RAPOR TARIHI
+                                           --AND A.GL_NO IN  ('3909003','3909015','391901500','391901519','391901516','391901509','391901510','391901512','391901515','391901517','27890308','2799030800','2799030819','2799030816','2799030809','2799030810','2799030812','2799030815','2799030817')
+                                           AND A.GL_NO ='3905097'
+                                           AND A.CUSTOMER_CODE = C.CUSTOMER_CODE
+                                           AND C.AS_OF_DATE = PDATE
+                                           AND A.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+                                           AND SEG.AS_OF_DATE = SEGM_TARIH
+                                  GROUP BY C.MAIN_BRANCH_CODE,
+                                           C.REPRESENTATIVE_FILE_NO,
+                                           A.CURRENCY_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE,
+                                           C.CUSTOMER_CODE) POS,
+                                 (SELECT AVG(NVL(A.COST_RATE,A.POOL_RATE)) AS POOL_RATE,A.AS_OF_DATE
+                                  FROM SUMMARY_PROD.GL_LIABILITY A
+                                  WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                  AND A.MODULE='VDZ'
+                                  AND A.CURRENCY_CODE='TL'
+                                  GROUP BY A.AS_OF_DATE
+                                  ) ORAN)
+                GROUP BY PDATE,
+                         UNIT_NUM,
+                         CUSTOMER_CODE,
+                         PB,
+                         MT_NO,
+                         SEGM)POS
+         WHERE POS.FONLAMA > 1
+         AND TO_NUMBER(POS.SUBE)=TO_NUMBER(ORG.GL_ORG_CODE)
+         GROUP BY
+         PDATE,
+         POS.CUSTOMER_CODE,
+         OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM),
+          POS.SEGM,
+          CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+          POS.SUBE,
+          POS.MT_NO,
+          POS.PB
+     );
+     
+     COMMIT;
+
+    IF PDATE=LAST_DAY(AYBASI) THEN
+    
+    INSERT
+      INTO OFSA_SB.OFSA_EX_POS_BLOKE_GETIRI
+(
+     SELECT PDATE AS AS_OF_DATE,
+       POS.CUSTOMER_CODE AS MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM) AS ISKOLU,
+        POS.SEGM AS SEGMENT,
+        CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END AS BOLGE,
+        POS.SUBE AS SUBE,
+        NVL(POS.MT_NO, 999999) AS MT,
+        999999999 AS URUN_KODU,
+        'POS' AS URUN,
+        POS.PB AS PB,
+        'POS_BLOKE_GETIRI' AS KAYNAK,
+        SUM(POS.FONLAMA) *-1 AS TUTAR
+          FROM OLAP.DM_ORGANIZATION ORG,
+          ( SELECT PDATE AS TARIH,
+                         TO_NUMBER(UNIT_NUM) AS SUBE,
+                         CUSTOMER_CODE,
+                         MT_NO,
+                         PB,
+                         SEGM,
+                         ROUND(SUM(FONLAMA), 2) FONLAMA
+                    FROM (SELECT POS.AS_OF_DATE,
+                                 MUS_SUBE_KODU AS UNIT_NUM,
+                                 POS.BALN,
+                                 POS.CUSTOMER_CODE,
+                                 POS.SEGM,
+                                 POS.PB PB,
+                                 --ORAN.AS_OF_DATE,
+                                 ORAN.POOL_RATE,
+                                 POS.MT_NO,
+                                 POS.BALN *  ORAN.POOL_RATE / 36000 FONLAMA
+                            FROM (SELECT   PDATE AS AS_OF_DATE,
+                                           C.MAIN_BRANCH_CODE AS MUS_SUBE_KODU,
+                                           C.CUSTOMER_CODE AS CUSTOMER_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE AS SEGM,
+                                           A.CURRENCY_CODE PB,
+                                           NVL(C.REPRESENTATIVE_FILE_NO, 888888) AS MT_NO,
+                                           SUM(A.GL_LCL_BALN) / (PDATE-AYBASI+1) AS BALN
+                                      FROM SUMMARY_PROD.GL_CUSTOMER A,
+                                           OLAP.FC_CUSTOMER C,
+                                           OLAP.FC_CUSTOMER SEG
+                                     WHERE     A.AS_OF_DATE BETWEEN AYBASI AND PDATE -- AYIN ILK GÜNÜ VE RAPOR TARIHI
+                                           AND A.GL_NO IN  ('3909003','3909015','391901500','391901519','391901516','391901509','391901510','391901512','391901515','391901517','27890308','2799030800','2799030819','2799030816','2799030809','2799030810','2799030812','2799030815','2799030817')
+                                           AND A.CUSTOMER_CODE = C.CUSTOMER_CODE
+                                           AND C.AS_OF_DATE = PDATE
+                                           AND A.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+                                           AND SEG.AS_OF_DATE = SEGM_TARIH
+                                  GROUP BY PDATE,
+                                           C.MAIN_BRANCH_CODE,
+                                           NVL(C.REPRESENTATIVE_FILE_NO, 888888),
+                                           A.CURRENCY_CODE,
+                                           SEG.BUSINESS_SEGMENT_CODE,
+                                           C.CUSTOMER_CODE) POS,
+                                 (SELECT AVG(NVL(A.COST_RATE,A.POOL_RATE)) AS POOL_RATE
+                                  FROM SUMMARY_PROD.GL_LIABILITY A
+                                  WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                  AND A.MODULE='VDZ'
+                                  AND A.CURRENCY_CODE='TL'
+                                  --GROUP BY A.AS_OF_DATE
+                                  ) ORAN)
+                GROUP BY PDATE,
+                         UNIT_NUM,
+                         CUSTOMER_CODE,
+                         PB,
+                         MT_NO,
+                         SEGM)POS
+         WHERE POS.FONLAMA <>0
+         AND TO_NUMBER(POS.SUBE)=TO_NUMBER(ORG.GL_ORG_CODE)
+         GROUP BY
+         PDATE,
+         POS.CUSTOMER_CODE,
+         OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => POS.SEGM),
+          POS.SEGM,
+          CASE WHEN TO_NUMBER(POS.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+          POS.SUBE,
+          POS.MT_NO,
+          POS.PB
+          );
+ COMMIT; 
+
+END IF;  
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

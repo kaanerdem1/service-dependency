@@ -1,0 +1,1508 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_MANUEL_KALEMLER IS
+
+PROCEDURE MS_EX_OFSA_SB_MANUEL_KALEMLER /*(SECIM NUMBER) */ IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH         DATE;
+    AYSONU             DATE;
+    SAYAC              NUMBER :=0;
+    KART_CEK_SAYAC     NUMBER :=0;
+    ONCEKIAYSONU       DATE;
+    ONCEKIAYBASI       DATE;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+      SELECT PRM_VALUE, 
+      TO_DATE(PRM_VALUE, PRM_FORMAT),
+      TO_DATE(MONTH_BEGIN, PRM_FORMAT),
+      TO_DATE(LAST_SEGM_DATE, PRM_FORMAT),
+      TO_DATE(TO_CHAR(TRUNC(TO_DATE(PRM_VALUE,'YYYYMMDD'),'MM')-1,'YYYYMMDD'),'YYYYMMDD'),
+      trunc(add_months(TO_DATE(PRM_VALUE, PRM_FORMAT),-1),'MM')
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH,ONCEKIAYSONU, ONCEKIAYBASI
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+      -------------------------------------------------------
+      SELECT A.CALENDAR_MONTH_END --Aysonu tarihi ataması yapılıyor.
+      INTO AYSONU      
+      FROM OLAP.DM_TIME A
+      WHERE A.CALENDAR_DATE=PDATE;
+      -------------------------------------------------------
+      SELECT COUNT(1) --İlgili tarihte kayıt olma durumu knt ediliyor.
+      INTO SAYAC
+      FROM OFSA_SB.OFSA_TEMP_MEVD_PRIM_2021 B
+      WHERE B.AS_OF_DATE=PDATE;
+      -------------------------------------------------------
+
+      SELECT COUNT(SINIF)
+      INTO KART_CEK_SAYAC
+      FROM OFSA_SB.OFSA_MANUEL_UPLOAD_LOG
+      WHERE (SINIF='ŞUBEDE_BEKLEYEN_CEK_KARNE' or SINIF='SUBEDE_BEKLEYEN_TIC_KARTLAR')
+      AND AS_OF_DATE=PDATE;
+    
+      -------------------------------------------------------
+
+      IF PDATE<=SEGM_TARIH THEN --SEGMENTASYON ATAMASI
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_MANUEL_KALEMLER',
+                                        PSUBMODULE   => 'EX_OFSA_SB_MANUEL_KALEMLER',
+                                        PROJECT_NAME => 'OFSA_SB',
+                                        PASOFDATE    => PDATE,
+                                        PCRITICAL    => PCRITICAL_LVL);
+   
+   
+    /*******************************************************************************************************************/
+    
+/*    pdate:=to_date('20210331','yyyymmdd') ;
+    AYSONU:=to_date('20210331','yyyymmdd') ;
+    ONCEKIAYSONU:=to_date('20210228','yyyymmdd') ;*/
+    
+    --Vadeli ve Vadesiz mevduat primleri için ara tablo dolduruluyor
+    
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_MANUEL_KALEMLER';
+    EXECUTE IMMEDIATE 'ALTER session set nls_date_format= '||'yyyymmdd'||''; 
+      /*IF SECIM = 1 THEN*/
+      IF PDATE=AYSONU THEN
+
+         DELETE OFSA_SB.OFSA_TEMP_MEVD_PRIM_2021   T
+         WHERE T.AS_OF_DATE=PDATE;
+         COMMIT;
+    
+      INSERT INTO OFSA_SB.OFSA_TEMP_MEVD_PRIM_2021  
+      (
+      
+      SELECT 
+          PDATE  AS AS_OF_DATE,
+          A.sube,
+          A.SEGM,
+          GREATEST(SUM(CASE WHEN  A.AS_OF_DATE=PDATE  AND A.SINIF='Vadesiz' THEN A.TUTAR ELSE 0 END)-SUM(CASE WHEN A.AS_OF_DATE=ONCEKIAYSONU  AND A.SINIF='Vadesiz' THEN A.TUTAR ELSE 0 END),0) AS Gelisim_Vadesiz,         
+          sum(CASE WHEN A.AS_OF_DATE= PDATE AND A.SINIF='Vadeli' THEN A.TUTAR ELSE 0 END) AS Stok,
+          GREATEST(SUM(CASE WHEN  A.AS_OF_DATE= PDATE AND A.SINIF='Vadeli' AND a.ALT_SINIF='0-250K' THEN A.TUTAR ELSE 0 END)-SUM(CASE WHEN A.AS_OF_DATE= ONCEKIAYSONU  AND A.SINIF='Vadeli' AND a.ALT_SINIF='0-250K' THEN A.TUTAR ELSE 0 END),0) AS Gelisim_0_250k,
+          GREATEST(SUM(CASE WHEN  A.AS_OF_DATE= PDATE AND A.SINIF='Vadeli' AND A.ALT_SINIF='250K-1M' THEN A.TUTAR ELSE 0 END)-SUM(CASE WHEN  A.AS_OF_DATE= ONCEKIAYSONU  AND A.SINIF='Vadeli' AND a.ALT_SINIF='250K-1M' THEN A.TUTAR ELSE 0 END),0) AS GELISIM_250K_1M,
+          GREATEST(SUM(CASE WHEN  A.AS_OF_DATE= PDATE AND A.SINIF='Vadeli' AND A.ALT_SINIF='1M+' THEN A.TUTAR ELSE 0 END)-SUM(CASE WHEN  A.AS_OF_DATE= ONCEKIAYSONU AND A.SINIF='Vadeli' AND a.ALT_SINIF='1M+' THEN A.TUTAR ELSE 0 END),0) AS GELISIM_1M_UZERI,
+          'TL' as PB
+         FROM
+(
+
+select 
+        PDATE  as_of_date, 
+        a.customer_code as mus_no,
+        'Vadeli' as sinif,
+        CASE WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))<250000   THEN '0-250K'
+             WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000  THEN '250K-1M' 
+             WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) > 1050000  THEN '1M+' ELSE '0' END as alt_sinif,     
+        to_number(a.branch_code) as sube,   
+        o.org_name as sube_adi,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end as bolge_kodu,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end as bolge,         
+        SEG.profit_center_code as segm,
+        a.currency_code  as ccy, 
+        sum(nvl(a.main_balance,0))/( to_number((PDATE-ONCEKIAYSONU))) as Tutar,
+        sum(case when a.as_of_date= PDATE then (nvl(a.pool_rate,0) - nvl(a.interest_rate,0))*nvl(a.main_balance,0) /100 else 0 end) as SPREAD
+    from summary_prod.gl_liability a, olap.fc_customer c, olap.fc_customer SEG, olap.dm_organization o  
+    where a.as_of_date between ONCEKIAYSONU and PDATE
+    and c.as_of_date = PDATE
+    and a.customer_code = c.customer_code
+    and SEG.as_of_date = SEGM_TARIH
+    and a.customer_code = SEG.customer_code
+    and  to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) = to_number(o.gl_org_code)
+    and substr(a.main_gl_no,1,3) between '310' and '325'
+    and a.branch_code != '219'
+    and nvl(a.main_balance,0) <> 0
+    and a.currency_code = 'TL'
+group by
+       a.customer_code,a.branch_code, o.org_name,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end,         
+       SEG.profit_center_code,
+       a.currency_code 
+ UNION ALL 
+ select 
+        ONCEKIAYSONU  as_of_date, 
+        a.customer_code as mus_no,
+        'Vadeli' as sinif,
+        CASE WHEN sum(SUM(a.main_balance)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))<250000   THEN '0-250K'
+             WHEN sum(SUM(a.main_balance)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000  THEN '250K-1M' 
+             WHEN sum(SUM(a.main_balance)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000  THEN '1M+' ELSE '0' END as alt_sinif,     
+        to_number(a.branch_code) as sube,   
+        o.org_name as sube_adi,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end as bolge_kodu,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end as bolge,         
+        SEG.profit_center_code as segm,
+        a.currency_code  as ccy, 
+        sum(nvl(a.main_balance,0))/ 30 as Tutar,
+        sum(case when a.as_of_date= ONCEKIAYSONU then (nvl(a.pool_rate,0) - nvl(a.interest_rate,0))*nvl(a.main_balance,0) /100 else 0 end) as SPREAD
+    from summary_prod.gl_liability a, olap.fc_customer c, olap.fc_customer SEG, olap.dm_organization o  
+    where a.as_of_date between ONCEKIAYSONU-30 and ONCEKIAYSONU
+    and c.as_of_date = PDATE
+    and a.customer_code = c.customer_code
+    and SEG.as_of_date = SEGM_TARIH
+    and a.customer_code = SEG.customer_code
+    and  to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) = to_number(o.gl_org_code)
+    and substr(a.main_gl_no,1,3) between '310' and '325'
+    and a.branch_code != '219'
+    and nvl(a.main_balance,0) <> 0
+    and a.currency_code = 'TL'
+group by
+       a.customer_code,a.branch_code, o.org_name,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end,         
+       SEG.profit_center_code,
+       a.currency_code                       
+ UNION ALL
+select 
+        PDATE AS as_of_date, 
+        a.customer_code as mus_no,
+        'Vadesiz' as sinif,
+        CASE WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))<250000   THEN '0-250K'
+             WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000  THEN '250K-1M' 
+             WHEN sum(SUM(a.main_balance)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000  THEN '1M+' ELSE '0' END as alt_sinif,     
+        to_number(a.branch_code) as sube,   
+        o.org_name as sube_adi,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end as bolge_kodu,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end as bolge,         
+        SEG.profit_center_code  as segm,
+        a.currency_code, 
+      sum(nvl(a.main_balance,0)/( to_number((PDATE-ONCEKIAYSONU))) ) as Tutar,
+        0 as SPREAD
+    from summary_prod.gl_liability a, olap.fc_customer c, olap.fc_customer SEG, olap.dm_organization o  
+    where a.as_of_date between ONCEKIAYSONU and PDATE
+    and c.as_of_date = PDATE
+    and a.customer_code = c.customer_code
+    and SEG.as_of_date = SEGM_TARIH
+    and a.customer_code = SEG.customer_code
+    and to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) = to_number(o.gl_org_code)
+    and substr(a.main_gl_no,1,3) between '300' and '309'
+    and a.branch_code != '219'
+    and nvl(a.main_balance,0) <> 0
+group by
+       a.customer_code,a.branch_code, o.org_name,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end,         
+       SEG.profit_center_code,
+       a.currency_code 
+ UNION ALL
+select 
+        PDATE  as_of_date, 
+        a.customer_code as mus_no,
+        'Vadeli' as sinif,
+        CASE WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))<250000   THEN '0-250K'
+             WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000   THEN '250K-1M'
+             WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/( to_number((PDATE-ONCEKIAYSONU)))) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))> 1050000.01  THEN '1M+' ELSE '0' END as alt_sinif,     
+        to_number(a.branch_code) as sube,   
+        o.org_name as sube_adi,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end as bolge_kodu,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end as bolge,         
+        SEG.profit_center_code as segm,
+        a.currency_code as ccy, 
+        sum(nvl(a.main_balance_org,0)*kur.EVALUATION_BUY_RATE) / ( to_number((PDATE-ONCEKIAYSONU))) as Tutar,
+        sum(case when a.as_of_date=PDATE then (nvl(a.pool_rate,0) - nvl(a.interest_rate,0))*nvl(a.main_balance,0) /100 else 0 end) as SPREAD
+    from summary_prod.gl_liability a, olap.fc_customer c, olap.fc_customer SEG, olap.dm_organization o,  olap.fc_evaluation_rates kur  
+    where a.as_of_date between ONCEKIAYSONU and PDATE
+    and c.as_of_date = PDATE
+    and kur.as_of_date= PDATE
+    and a.customer_code = c.customer_code
+    and a.customer_code = SEG.customer_code
+    and SEG.as_of_date = SEGM_TARIH
+    and  kur.CURRENCY_CODE=a.currency_code
+    and to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) = to_number(o.gl_org_code)
+    and substr(a.main_gl_no,1,3) between '310' and '325'
+    and a.branch_code != '219'
+    and nvl(a.main_balance,0) <> 0
+    and a.currency_code <> 'TL'  
+group by
+       a.customer_code,a.branch_code, o.org_name,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end,         
+       SEG.profit_center_code,
+       a.currency_code    
+ UNION ALL
+select 
+        ONCEKIAYSONU  as_of_date, 
+        a.customer_code as mus_no,
+        'Vadeli' as sinif,
+        CASE WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))<250000   THEN '0-250K'
+             WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code)) between 250000.01 and 1050000   THEN '250K-1M'
+             WHEN sum(SUM(a.main_balance_org*kur.EVALUATION_BUY_RATE)/30) over (PARTITION BY A.CUSTOMER_CODE,to_number(a.branch_code))> 1050000.01  THEN '1M+' ELSE '0' END as alt_sinif,     
+        to_number(a.branch_code) as sube,   
+        o.org_name as sube_adi,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end as bolge_kodu,
+        case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end as bolge,         
+        SEG.profit_center_code as segm,
+        a.currency_code as ccy, 
+        sum(nvl(a.main_balance_org,0)*kur.EVALUATION_BUY_RATE) / 30 as Tutar,
+        sum(case when a.as_of_date = ONCEKIAYSONU then (nvl(a.pool_rate,0) - nvl(a.interest_rate,0))*nvl(a.main_balance,0) /100 else 0 end) as SPREAD
+    from summary_prod.gl_liability a, olap.fc_customer c, olap.fc_customer SEG, olap.dm_organization o,  olap.fc_evaluation_rates kur  
+    where a.as_of_date between ONCEKIAYSONU-30 and ONCEKIAYSONU
+    and c.as_of_date = PDATE
+    and kur.as_of_date= PDATE
+    and a.customer_code = c.customer_code
+    and SEG.as_of_date = SEGM_TARIH
+    and a.customer_code = SEG.customer_code
+    and  kur.CURRENCY_CODE=a.currency_code
+    and to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) = to_number(o.gl_org_code)
+    and substr(a.main_gl_no,1,3) between '310' and '325'
+    and a.branch_code != '219'
+    and nvl(a.main_balance,0) <> 0
+    and a.currency_code <> 'TL'  
+group by
+       a.customer_code,a.branch_code, o.org_name,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then '794' else o.parent_code end,
+       case when to_number(case when a.branch_code = '188' then c.main_branch_code else a.branch_code end) in ('6','220','372','122' ) then 'KURUMSAL ŞUBELER' else o.parent_name end,         
+       SEG.profit_center_code,
+       a.currency_code       
+ )  a   
+ group by PDATE,
+          A.sube,
+          A.SEGM              
+          );
+          COMMIT;
+    
+   
+    --Vadeli mevduat primi ekleniyor
+    
+    --*******30.06.2021 TARİHİ İTİBARIYLA YENİ KURALLAR UYGULAMAYA ALINMIŞTIR. A.Y. **********---------
+     
+ --buradan başla    
+    INSERT
+      INTO OFSA_SB.OFSA_EX_MANUEL_KALEMLER
+     (            
+     -----ŞUBE TİPİ KURUMSAL VEYA TİCARİ AĞIRLIKLI OLMAYAN ŞUBELER İÇİN VADELİ MEVDUAT PRİMİ--------  
+     
+     /*Kriterler: vadesiz mevduat gelişimi 0'dan büyük ve TYM H/G %90 ve üzeri olan şubelere 
+       0-250k TL gelişim için %5, 250-1050K TL gelişim için %2.5 prim verilir. YP mevduata prim verilmez. 30.06.2021 A.Y.*/
+         
+     SELECT 
+           PDATE AS AS_OF_DATE,
+           999999999 MUS_NO,
+           '99-SUBE_HAVUZ' AS ISKOLU,
+           '99998' SEGMENT,
+           CASE WHEN TO_NUMBER(Z.SUBE) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+           Z.sube AS SUBE,
+           '999999' AS MT,
+           '88888888' AS URUN_KODU,
+           'Vadeli Mevduat Primi' AS URUN,
+           'TL' AS PB,
+           'MANUEL_KALEMLER' AS KAYNAK,     
+           /*ROUND(SUM(Z.GELISIMDEN_PRIM250k * VADESIZ_CARPAN * TYM_CARPAN ) ,2 ) VADELI_MEVD_PRIM_250,
+           ROUND(SUM(Z.GELISIMDENPRIM250_1050k * VADESIZ_CARPAN * TYM_CARPAN ) ,2 ) VADELI_MEVD_PRIM_1050,*/
+                ROUND(SUM(Z.GELISIMDEN_PRIM250k * VADESIZ_CARPAN * TYM_CARPAN ),2) + 
+                ROUND(SUM(Z.GELISIMDENPRIM250_1050k * VADESIZ_CARPAN * TYM_CARPAN ),2 ) BAKIYE                                                                                                                                                      
+     FROM OLAP.DM_ORGANIZATION ORG,
+     
+     (    SELECT V.sube,
+                 V.segm,
+                 V.SUBE_TIPI,
+                 V.GELISIMDEN_PRIM250k AS GELISIMDEN_PRIM250k,
+                 V.GELISIMDENPRIM250_1050k AS GELISIMDENPRIM250_1050k,
+                 V.GELISIMDENPRIM1m AS GELISIMDENPRIM1m,
+                 CASE WHEN V.VADESIZ_GELISIM >0 THEN 1 ELSE 0 END AS VADESIZ_CARPAN, --VADESİZ ORTALAMASI AZALMIŞ İSE CARPAN 0 OLUR VE PRİM ALAMAZ  A.Y.
+                 TYM.TYM AS TYM_CARPAN --TYM HG %90 ALTI İSE CARPAN 0 OLUR VE PRİM ALAMAZ  A.Y.
+                 
+          FROM 
+          (                  
+           SELECT to_number(g.SUBE) as sube,
+                  g.SEGM,
+                  SUBE_TIPI.SUBE_TIPI as SUBE_TIPI,
+                  round(sum(g.GELISIM_VADESIZ),0)  AS VADESIZ_GELISIM,
+                  round(sum(g.GELISIM_0_250K),0) GELISIM_0_250K,
+                  round(sum(g.GELISIM_250K_1M),0) GELISIM_250_1050K,
+                  round(sum(g.GELISIM_250K_1M),0) GELISIM_1M_Uzeri,
+                  round(sum(g.GELISIM_0_250K) * 5 / 1200,0) AS GELISIMDEN_PRIM250k,
+                  round(sum(g.GELISIM_250K_1M) * 2.5 / 1200,0) AS GELISIMDENPRIM250_1050k , 
+                  round(sum(g.GELISIM_1M_UZERI) * 2.5 / 1200,0) AS GELISIMDENPRIM1m             
+       
+      
+                  FROM OFSA_SB.OFSA_TEMP_MEVD_PRIM_2021 g,
+                       ( SELECT b.*,a.org_type_desc SUBE_TIPI
+                           FROM skzn_prod.skzn_pr_org_type_desc@qadata_link a,skzn_prod.skzn_pr_org_type@qadata_link b
+                          WHERE b.org_type=a.org_type )SUBE_TIPI --SKZN QADATA geçişi sebebiyle tablolar linkli hale getirilmiştir. Y.T. 02.09.2024
+
+          WHERE g.as_of_date = PDATE 
+            and g.sube=SUBE_TIPI.ORG_CODE
+            and g.PB='TL'
+            and g.GELISIM_VADESIZ > 0
+       GROUP BY to_number(g.SUBE),
+                g.SEGM,
+                SUBE_TIPI.SUBE_TIPI
+          
+          ) V 
+          
+          LEFT JOIN
+          
+         (
+           SELECT ORG_CODE, 
+                  CASE WHEN HG >= 90 THEN 1 ELSE 0 END AS TYM
+             FROM
+                 (--SKZN QADATA geçişi sebebiyle tablolar linkli hale getirilmiştir ve Gösterge Kodları güncellenmiştir. Y.T. 02.09.2024
+                   SELECT ORG_CODE, 
+                          KARNE_TIPI,
+                          sum(case when KARNE_TIPI IN ('TARIM', 'İŞLETME') and GOSTERGE_KODU= 1 then nihai_urun_hedef_gerc_yuzde else
+                                        (case when KARNE_TIPI =  'BİREYSEL'  and GOSTERGE_KODU= 11 then nihai_urun_hedef_gerc_yuzde else
+                                        (case when KARNE_TIPI =  'KOBİ'  and GOSTERGE_KODU= 123 then nihai_urun_hedef_gerc_yuzde else 0 end) end) end ) HG
+--                   FROM skzn_prod.prod_skzn_org_smmry_rpt a
+                   FROM skzn_prod.prod_skzn_org_smmry_rpt@qadata_link a
+                  where GOSTERGE_KODU IN (1,11,123)
+                    and KARNE_TIPI IN ('TARIM', 'İŞLETME', 'KOBİ', 'BİREYSEL')
+                    and as_of_date = PDATE
+                  group by ORG_CODE, KARNE_TIPI
+                 )
+         ) TYM on V.sube=TYM.ORG_CODE
+                  
+      where v.SUBE_TIPI NOT IN ( 'KURUMSAL SUBE'  , 'TICARI AGIRLILI SUBE') 
+         
+     )Z 
+      
+     WHERE    TO_NUMBER(Z.sube)=TO_NUMBER(ORG.GL_ORG_CODE)
+     GROUP BY PDATE,
+              Z.sube,
+              SEGM,
+              CASE WHEN TO_NUMBER(Z.sube) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END
+    
+    
+    UNION ALL
+    
+    -------ŞUBE TİPİ KURUMSAL VE TİCARİ AĞIRLIKLI OLAN ŞUBELER İÇİN VADELİ MEVDUAT PRİMİ EKLENİYOR ------
+
+    /*Kriterler: 0-250K TL ve YP mevduat gelişimine %5, 250-1050K mevduat gelişimine %2.5, 1050K üzeri mevduat gelişimine %0.02 prim verilir.
+      Vadesiz gelişimi zorunlu değildir.
+      YP mevduatın TL cinsinden değeri alınıp hangi kırılımda olduğuna bakılır. A.Y. */
+     
+    
+    SELECT PDATE AS AS_OF_DATE,
+           999999999 MUS_NO,
+           '99-SUBE_HAVUZ' AS ISKOLU,
+           '99998' SEGMENT,
+           CASE WHEN TO_NUMBER(Z.SUBE) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+           Z.sube AS SUBE,
+           '999999' AS MT,
+           '88888888' AS URUN_KODU,
+           'Vadeli Mevduat Primi' AS URUN,
+           Z.PB AS PB,
+           'MANUEL_KALEMLER' AS KAYNAK,        
+           /*ROUND(SUM(Z.GELISIMDEN_PRIM250k ) ,2 ) VADELI_MEVD_PRIM_250,
+           ROUND(SUM(Z.GELISIMDENPRIM250_1050k ) ,2 ) VADELI_MEVD_PRIM_1050,
+           ROUND(SUM(Z.GELISIMDENPRIM1m  ) ,2 ) VADELI_MEVD_PRIM_1M,*/
+                ROUND(SUM(Z.GELISIMDEN_PRIM250k),2) + 
+                ROUND(SUM(Z.GELISIMDENPRIM250_1050k),2) +
+                ROUND(SUM(Z.GELISIMDENPRIM1m),2) BAKIYE                                                                                                                                                      
+    FROM OLAP.DM_ORGANIZATION ORG,
+    
+         ( SELECT V.sube,
+                  V.segm,
+                  PB,
+                  V.SUBE_TIPI,
+                  V.GELISIMDEN_PRIM250k AS GELISIMDEN_PRIM250k,
+                  V.GELISIMDENPRIM250_1050k AS GELISIMDENPRIM250_1050k,
+                  V.GELISIMDENPRIM1m AS GELISIMDENPRIM1m,
+                  1 AS VADESIZ_CARPAN 
+                 
+                 
+            FROM 
+                (
+                 SELECT to_number(g.SUBE) as sube,
+                        g.SEGM,
+                        g.PB,
+                        SUBE_TIPI.SUBE_TIPI as SUBE_TIPI,
+                        round(sum(g.GELISIM_VADESIZ),0)  AS VADESIZ_GELISIM,
+                        round(sum(g.GELISIM_0_250K),0) GELISIM_0_250K,
+                        round(sum(g.GELISIM_250K_1M),0) GELISIM_250_1050K,
+                        round(sum(g.GELISIM_250K_1M),0) GELISIM_1M_Uzeri,
+                        round(sum(g.GELISIM_0_250K) * 5 / 1200,0) AS GELISIMDEN_PRIM250k,
+                        round(sum(g.GELISIM_250K_1M) * 2.5 / 1200,0) AS GELISIMDENPRIM250_1050k , 
+                        round(sum(g.GELISIM_1M_UZERI) * 2 / 12000,0) AS GELISIMDENPRIM1m             
+       
+      
+                  FROM OFSA_SB.OFSA_TEMP_MEVD_PRIM_2021 g,
+                       ( SELECT b.*,a.org_type_desc SUBE_TIPI
+                           FROM skzn_prod.skzn_pr_org_type_desc@qadata_link a,skzn_prod.skzn_pr_org_type@qadata_link b
+                          WHERE b.org_type=a.org_type )SUBE_TIPI --SKZN QADATA geçişi sebebiyle tablolar linkli hale getirilmiştir. Y.T. 02.09.2024
+
+                  WHERE g.as_of_date = PDATE
+                    and g.sube=SUBE_TIPI.ORG_CODE
+                  GROUP BY to_number(g.SUBE),
+                           g.SEGM,
+                           g.PB,
+                           SUBE_TIPI.SUBE_TIPI
+                ) V 
+          
+           WHERE v.SUBE_TIPI IN ( 'KURUMSAL SUBE' , 'TICARI AGIRLILI SUBE')   
+         
+        )Z 
+        
+        WHERE TO_NUMBER(Z.sube)=TO_NUMBER(ORG.GL_ORG_CODE)
+        GROUP BY PDATE,
+                 Z.sube,SEGM, 
+                 PB,
+                 CASE WHEN TO_NUMBER(Z.sube) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END
+    
+ 
+     );
+     
+     COMMIT;
+--buraya kadar
+
+/*********************************************************************************************************************/
+    
+ -----FX İŞLEM İPTAL CEZALARI YANSITILIYOR 
+     
+     INSERT
+      INTO OFSA_SB.OFSA_EX_MANUEL_KALEMLER
+     (       
+      SELECT 
+           PDATE AS AS_OF_DATE,
+           NVL(Z.CUS_NO ,999999999) MUS_NO,
+           OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+           SEG.BUSINESS_SEGMENT_CODE SEGMENT,
+           CASE WHEN TO_NUMBER(Z.ORG_CODE) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+           Z.ORG_CODE AS SUBE,
+           NVL(C.REPRESENTATIVE_FILE_NO, '999999') AS MT,
+           '88888888' AS URUN_KODU,
+           'Fon Yönetimi FX İşlem İptal Cezaları' AS URUN,
+           'TL' AS PB,
+           'MANUEL_KALEMLER' AS KAYNAK,     
+           Z.CEZA AS BAKIYE            
+     FROM OLAP.DM_ORGANIZATION ORG,
+         (SELECT CUS_NO, ORG_CODE,SUM(CEZA)*-1 AS CEZA
+          FROM DM.INVESTMENT_PUNISHMENT@QADATA_LINK --OFSA_DAILY.INVESTMENT_PUNISHMENT@OFSA_ON_OLAXRUN  
+          WHERE ISLEM_TARIHI BETWEEN AYBASI AND PDATE
+          GROUP BY CUS_NO, ORG_CODE)Z 
+          LEFT JOIN OLAP.FC_CUSTOMER C 
+                 ON C.AS_OF_DATE=PDATE 
+                    AND C.CUSTOMER_CODE=Z.CUS_NO
+          LEFT JOIN OLAP.FC_CUSTOMER SEG 
+                 ON SEG.AS_OF_DATE=SEGM_TARIH 
+                    AND SEG.CUSTOMER_CODE=Z.CUS_NO          
+    WHERE TO_NUMBER(Z.ORG_CODE)=TO_NUMBER(ORG.GL_ORG_CODE)
+    );
+     
+  COMMIT;   
+   
+    /*******************************************************************************************************************/
+
+    --Manuel olarak yüklenen verilerin sisteme alınması yapılıyor.
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_MANUEL_KALEMLER
+     (
+       SELECT
+            PDATE AS AS_OF_DATE,
+            NVL(A.MUS_NO,999999999) MUS_NO,
+            CASE WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014','99999')                    THEN '7-BIREYSEL'
+                 WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('50044','50041','50042','50043','99996')                    THEN '5-TARIM'
+                 WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('40205', '40304', '40305', '40306', '40308', '40309')       THEN '4-KOBI'
+                 WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('60501','60502','99997','60503')                            THEN '6-ISLETME'
+                 WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('20511','20512', '99998')                                   THEN '2-TICARI'  
+                 WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('20203','20206','20204','20207')                            THEN '1-KURUMSAL'  
+            ELSE '99-SUBE_HAVUZ' END AS ISKOLU,
+            SEG.BUSINESS_SEGMENT_CODE SEGMENT,
+            CASE WHEN TO_NUMBER(A.SUBE) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+            TO_NUMBER(A.SUBE) AS SUBE,
+            NVL(A.MT,NVL(C.REPRESENTATIVE_FILE_NO,'999999')) AS MT,
+            '88888888' AS URUN_KODU,
+            A.SINIF AS URUN,
+            'TL' AS PB,
+            'MANUEL_KALEMLER' AS KAYNAK,
+            SUM(A.BAKIYE) BAKIYE
+      FROM OFSA_SB.OFSA_MANUEL_UPLOAD_LOG A 
+           LEFT JOIN OLAP.FC_CUSTOMER C 
+                  ON A.MUS_NO = C.CUSTOMER_CODE  
+                     AND C.AS_OF_DATE = PDATE
+           LEFT JOIN OLAP.FC_CUSTOMER SEG 
+                  ON A.MUS_NO = SEG.CUSTOMER_CODE  
+                     AND SEG.AS_OF_DATE = SEGM_TARIH,
+           OLAP.DM_ORGANIZATION ORG
+      WHERE A.AS_OF_DATE = PDATE
+        AND TO_NUMBER(A.SUBE)=TO_NUMBER(ORG.GL_ORG_CODE)
+     GROUP BY
+        PDATE,
+        NVL(A.MUS_NO,999999999),
+        CASE WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014','99999')                    THEN '7-BIREYSEL'
+             WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('50044','50041','50042','50043','99996')                    THEN '5-TARIM'
+             WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('40205', '40304', '40305', '40306', '40308', '40309')       THEN '4-KOBI'
+             WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('60501','60502','99997','60503')                            THEN '6-ISLETME'
+             WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('20511','20512', '99998')                                   THEN '2-TICARI'  
+             WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('20203','20206','20204','20207')                            THEN '1-KURUMSAL'  
+            ELSE '99-SUBE_HAVUZ' END,
+        SEG.BUSINESS_SEGMENT_CODE,
+        CASE WHEN TO_NUMBER(A.SUBE) IN ('6','122','220', '372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+        TO_NUMBER(A.SUBE),
+        NVL(A.MT,NVL(C.REPRESENTATIVE_FILE_NO,'999999')),
+        A.SINIF
+       );
+
+      COMMIT;
+    
+    
+/****************************PASİF BAYİİ ORANI CEZA*******SESIS 237200*****20250425***************************/
+
+  INSERT 
+     INTO OFSA_SB.OFSA_EX_MANUEL_KALEMLER
+     (
+     SELECT  PDATE AS AS_OF_DATE,
+        '999999999' AS MUS_NO,
+        '99-SUBE_HAVUZ' AS ISKOLU,
+        99998 AS SEGMENT,
+        P.BOLGE_KODU, 
+        P.SUBE_KODU,
+        999999 AS MT,
+        88888888 AS URUN_KODU,
+        'DBS Bayi Cezası' AS URUN,
+        'TL' AS PB,
+        'MANUEL_KALEMLER'  AS KAYNAK,
+        ROUND(CASE WHEN (ROUND(P.PASIF / P.TOPLAM,2)) < 0.05 
+                  THEN 0
+                WHEN (ROUND(P.PASIF / P.TOPLAM,2)) >= 0.05 
+                  THEN GREATEST((ABS(O.FAALIYET_KARI_LINEER) * 0.05 * (ROUND(P.PASIF / P.TOPLAM,2))), 250000) 
+       END,2)*-1 AS CEZA
+FROM
+    (SELECT P.SUBE_KODU,
+            P.BOLGE_KODU,
+            SUM(P.PASIF) AS PASIF,
+            COUNT(1) AS TOPLAM,
+            ROUND(SUM(P.PASIF) / COUNT(1),2) AS ORAN
+FROM
+(      
+    SELECT /*+ parallel(16) */
+           --ROW_NUMBER () OVER (ORDER BY AAA.ANAFIRMA_KODU, BBB.BAYI_KODU)
+           --               AS ID,
+            DISTINCT
+           BBB.CREATE_DATE,
+           TO_DATE (D.MATURITY_DATE, 'yyyymmdd')    AS MATURITY_DATE,
+           AAA."BAYI_KODU",
+           AAA."BAYI_UNVANI",
+           AAA."BAYI_MUSTERI_NO",
+           AAA."ANAFIRMA_KODU",
+           AAA."ANAFIRMA_UNVANI",
+           AAA."DBS_LIMIT_AMOUNT",
+           AAA."DBS_RISK_AMOUNT",
+           AAA."DBS_USABLE_AMOUNT",
+           AAA."FT_ADEDI",
+           BBB.ANAFIRMA_MUSTERI_NO,
+           BBB.BOLGE_KODU,
+           BBB.SUBE_KODU,
+           BBB.BOLGE_ADI,
+           BBB.SUBE_ADI,
+           BBB.MT_SICIL                AS MT_SICIL_NO,
+           CASE WHEN TO_DATE (D.MATURITY_DATE, 'yyyymmdd') < LAST_DAY(PDATE) 
+                    THEN 'Pasif' 
+                        ELSE 'Aktif'
+           END AS DURUM,
+           COUNT(DISTINCT CASE WHEN TO_DATE (D.MATURITY_DATE, 'yyyymmdd') < LAST_DAY(PDATE) 
+                    THEN 1
+                END) ,
+           COUNT(1) AS TOPLAM,
+           COUNT(DISTINCT CASE WHEN TO_DATE (D.MATURITY_DATE, 'yyyymmdd') < LAST_DAY(PDATE) 
+                    THEN 1
+                END) AS PASIF     
+      FROM (  SELECT FFF.BAYI_KODU,
+                     FFF.BAYI_UNVANI,
+                     FFF.BAYI_MUSTERI_NO,
+                     FFF.ANAFIRMA_KODU,
+                     FFF.ANAFIRMA_UNVANI,
+                     FFF.DBS_LIMIT_AMOUNT,
+                     FFF.DBS_RISK_AMOUNT,
+                     DBS_USABLE_AMOUNT,
+                     SUM (FT_ADEDI)        AS FT_ADEDI
+                FROM (  SELECT SSS.BAYI_KODU,
+                               SSS.BAYI_UNVANI,
+                               SSS.BAYI_MUSTERI_NO,
+                               SSS.ANAFIRMA_KODU,
+                               SSS.ANAFIRMA_UNVANI,
+                               SSS.DBS_LIMIT_AMOUNT,
+                               SSS.DBS_RISK_AMOUNT,
+                               DBS_USABLE_AMOUNT,
+                               COUNT (ZZZ.INVOICE_NUMBER) AS FT_ADEDI
+                          FROM (SELECT XXX.*,
+                                       YYY.DBS_LIMIT_AMOUNT,
+                                       YYY.DBS_RISK_AMOUNT,
+                                       YYY.DBS_USABLE_AMOUNT
+                                  FROM (SELECT TO_DATE (
+                                                   SUBSTR (R.CREATED_DATE, 1, 8),
+                                                   'YYYYMMDD')
+                                                   AS TANIM_TARIHI,
+                                               R.RETAILER_CODE
+                                                   AS BAYI_KODU,
+                                               R.RETAILER_NAME
+                                                   AS BAYI_UNVANI,
+                                               CASE R.RETAILER_STATUS
+                                                   WHEN '1' THEN 'AKTIF'
+                                                   ELSE 'PASIF'
+                                               END
+                                                   AS BAYI_STATUSU,
+                                               R.CUSTOMER_CODE
+                                                   AS BAYI_MUSTERI_NO,
+                                               I.INSTITUTION_CODE
+                                                   AS ANAFIRMA_KODU,
+                                               I.INSTITUTION_SHORT_NAME
+                                                   AS ANAFIRMA_UNVANI,
+                                               I.CUSTOMER_CODE
+                                                   AS ANAFIRMA_MUSTERI_NO,
+                                               C.MAIN_BRANCH_CODE
+                                                   AS SUBE_KODU,
+                                               B.BOLGE_ADI
+                                                   AS BOLGE_ADI,
+                                               B.SUBE_ADI
+                                                   AS SUBE_ADI,
+                                               CASE R.IS_CREDIT
+                                                   WHEN '1' THEN 'KREDILI'
+                                                   ELSE 'KREDISIZ'
+                                               END
+                                                   AS KREDI_DURUMU,
+                                               I.ORDER_OID
+                                          FROM PAY.PYF_DB_RETAILER@CBRAS_PRODUX         R,
+                                               PAY.PYF_FM_INSTITUTION@CBRAS_PRODUX      I,
+                                               OLAP.FC_CUSTOMER                         C,
+                                               OFSA_SB.BOLGELER                         B
+                                         WHERE     R.INSTITUTION_OID = I.OID
+                                               AND R.CUSTOMER_CODE = C.CUSTOMER_CODE
+                                               AND C.AS_OF_DATE=PDATE
+                                               AND R.STATUS = '1'
+                                               AND I.STATUS = '1'
+                                               AND R.RETAILER_STATUS = '1'
+                                               AND I.ORDER_TYPE = '04'
+                                               AND I.IS_ACTIVE = 1
+                                               AND B.SUBE_KODU = TO_NUMBER(C.MAIN_BRANCH_CODE)
+                                               ) XXX
+                                       INNER JOIN
+                                       (  SELECT I.INSTITUTION_CODE,
+                                                 I.INSTITUTION_SHORT_NAME,
+                                                 B.RETAILER_CODE,
+                                                 SUM (A.DBS_LIMIT_AMOUNT)
+                                                     AS DBS_LIMIT_AMOUNT,
+                                                 SUM (A.DBS_RISK_AMOUNT)
+                                                     AS DBS_RISK_AMOUNT,
+                                                   SUM (A.DBS_LIMIT_AMOUNT)
+                                                 - SUM (A.DBS_RISK_AMOUNT)
+                                                     AS DBS_USABLE_AMOUNT
+                                            FROM PAY.PYF_FM_INSTITUTION@CBRAS_PRODUX I
+                                                 LEFT OUTER JOIN
+                                                 (SELECT R.RETAILER_CODE,
+                                                         CONCAT (
+                                                             CONCAT (
+                                                                 R.RETAILER_CODE,
+                                                                 '_'),
+                                                             R.IS_CREDIT)
+                                                             AS IS_CREDIT,
+                                                         R.INSTITUTION_OID,
+                                                         R.CUSTOMER_CODE,
+                                                         R.CREDIT_TEMPLATE_OID
+                                                    FROM PAY.PYF_DB_RETAILER@CBRAS_PRODUX R
+                                                   WHERE     R.STATUS = 1
+                                                         AND R.RETAILER_STATUS = 1)
+                                                 B
+                                                     ON I.OID = B.INSTITUTION_OID
+                                                 LEFT OUTER JOIN
+                                                 (SELECT US.CUSTOMER_CODE,
+                                                         US.AMOUNT
+                                                             AS DBS_LIMIT_AMOUNT,
+                                                         0
+                                                             AS DBS_RISK_AMOUNT,
+                                                         US.USAGE_PATTERN_OID
+                                                    FROM PAY.PYF_DB_RETAILER@CBRAS_PRODUX RE
+                                                         INNER JOIN
+                                                         CCS.PRODUCT_USAGE_INFO_TEMPLET@CBRAS_PRODUX
+                                                         TE
+                                                             ON RE.CREDIT_TEMPLATE_OID =
+                                                                TE.OID
+                                                         INNER JOIN
+                                                         CCS.CRD_CREDIT_USAGE@CBRAS_PRODUX US
+                                                             ON     US.CUSTOMER_CODE =
+                                                                    RE.CUSTOMER_CODE
+                                                                AND US.USAGE_PATTERN_OID =
+                                                                    RE.CREDIT_TEMPLATE_OID
+                                                   WHERE     US.STATUS = '1'
+                                                         AND US.STATE IN ('2', '6')
+                                                         AND US.RECORD_TYPE IN
+                                                                 ('C')
+                                                         AND US.PRODUCT_PROPERTIES =
+                                                             'DBS'
+                                                  UNION
+                                                  SELECT US.CUSTOMER_CODE,
+                                                         0
+                                                             AS DBS_LIMIT_AMOUNT,
+                                                           (POS.USAGE_AMOUNT)
+                                                         - (POS.COLL_MAIN_AMOUNT)
+                                                         - (POS.RETURN_AMOUNT)
+                                                         - (POS.REST_AMOUNT)
+                                                             AS DBS_RISK_AMOUNT,
+                                                         US.USAGE_PATTERN_OID
+                                                    FROM CCS.CRD_CREDIT_USAGE@CBRAS_PRODUX US
+                                                         INNER JOIN
+                                                         CCS.CRD_CREDIT_POSITION@CBRAS_PRODUX
+                                                         POS
+                                                             ON US.OID =
+                                                                POS.USAGE_OID
+                                                   WHERE     US.STATUS = '1'
+                                                         AND US.STATE IN ('2', '6')
+                                                         AND US.RECORD_TYPE IN
+                                                                 ('U')
+                                                         AND US.PRODUCT_PROPERTIES =
+                                                             'DBS'
+                                                         AND POS.POSITION_DATE =
+                                                             TO_CHAR(PDATE,'YYYYMMDD')
+                                                         AND POS.STATUS = '1') A
+                                                     ON     B.CUSTOMER_CODE =
+                                                            A.CUSTOMER_CODE
+                                                        AND B.CREDIT_TEMPLATE_OID =
+                                                            A.USAGE_PATTERN_OID
+                                           WHERE     I.ORDER_TYPE = '04'
+                                                 AND I.IS_ACTIVE = 1
+                                                 AND I.STATUS = 1
+                                                 AND B.RETAILER_CODE IS NOT NULL
+                                        GROUP BY I.INSTITUTION_CODE,
+                                                 I.INSTITUTION_SHORT_NAME,
+                                                 B.RETAILER_CODE) YYY
+                                           ON     XXX.BAYI_KODU =
+                                                  YYY.RETAILER_CODE
+                                              AND XXX.ANAFIRMA_KODU =
+                                                  YYY.INSTITUTION_CODE) SSS
+                               LEFT OUTER JOIN
+                               (SELECT F.INSTITUTION_CODE,
+                                       R.RETAILER_CODE,
+                                       OP.ORDER_OID,
+                                       OP.PAYMENT_AMOUNT_MT
+                                           AS INVOICE_CURRENCY_CODE,
+                                       OP.CREATED_DATE
+                                           AS INVOICE_DATE,
+                                       ''
+                                           AS INVOICE_EXPLANATION,
+                                       OP.PARAMETER4
+                                           AS INVOICE_NUMBER,
+                                       CASE ORDER_PLAN_STATUS
+                                           WHEN '0' THEN 'ODENEMEYEN'
+                                           WHEN '1' THEN 'ODENDI'
+                                           WHEN '2' THEN 'ODENECEK'
+                                           WHEN '3' THEN 'IPTAL'
+                                       END
+                                           AS INVOICE_STATUS_CODE,
+                                       OP.PAYMENT_AMOUNT
+                                           AS INVOICE_AMOUNT,
+                                       OP.ORDER_DATE
+                                           AS LAST_PAYMENT_DATE,
+                                       OP.PAYMENT_AMOUNT
+                                           AS PAYMENT_AMOUNT,
+                                       OP.PAYMENT_AMOUNT_MT
+                                           AS PAYMENT_CURRENCY_CODE,
+                                       OP.ORDER_DATE
+                                           AS PAYMENT_DATE
+                                  FROM PAY.PYO_OM_ORDER_PAYMENT_PLAN@CBRAS_PRODUX OP
+                                       INNER JOIN PAY.PYF_FM_INSTITUTION@CBRAS_PRODUX F
+                                           ON OP.ORDER_OID = F.ORDER_OID
+                                       INNER JOIN PAY.PYF_DB_RETAILER@CBRAS_PRODUX R
+                                           ON OP.SECOND_ORDER_ACCOUNT_OID = R.OID
+                                 WHERE     F.ORDER_TYPE = '04'
+                                       AND OP.STATUS = 1
+                                       AND OP.ORDER_OID = F.ORDER_OID
+                                       AND OP.ORDER_DATE >=
+                                           TO_CHAR (PDATE, 'YYYYMMDD')
+                                       AND OP.ORDER_PLAN_STATUS IN ('0', '2'))
+                               ZZZ
+                                   ON     ZZZ.ORDER_OID = SSS.ORDER_OID
+                                      AND ZZZ.INSTITUTION_CODE =
+                                          SSS.ANAFIRMA_KODU
+                                      AND ZZZ.RETAILER_CODE = SSS.BAYI_KODU
+                      GROUP BY SSS.BAYI_KODU,
+                               SSS.BAYI_UNVANI,
+                               SSS.BAYI_MUSTERI_NO,
+                               SSS.ANAFIRMA_KODU,
+                               SSS.ANAFIRMA_UNVANI,
+                               SSS.DBS_LIMIT_AMOUNT,
+                               SSS.DBS_RISK_AMOUNT,
+                               DBS_USABLE_AMOUNT,
+                               ZZZ.INVOICE_CURRENCY_CODE) FFF
+            GROUP BY FFF.BAYI_KODU,
+                     FFF.BAYI_UNVANI,
+                     FFF.BAYI_MUSTERI_NO,
+                     FFF.ANAFIRMA_KODU,
+                     FFF.ANAFIRMA_UNVANI,
+                     FFF.DBS_LIMIT_AMOUNT,
+                     FFF.DBS_RISK_AMOUNT,
+                     DBS_USABLE_AMOUNT) AAA
+           INNER JOIN
+           (SELECT R.RETAILER_CODE                  AS BAYI_KODU,
+                   R.RETAILER_NAME                  AS BAYI_UNVANI,
+                   R.CUSTOMER_CODE                  AS BAYI_MUSTERI_NO,
+                   SUBSTR (R.CREATED_DATE, 1, 8)    AS CREATE_DATE,
+                   I.INSTITUTION_CODE               AS ANAFIRMA_KODU,
+                   I.INSTITUTION_SHORT_NAME         AS ANAFIRMA_UNVANI,
+                   I.CUSTOMER_CODE                  AS ANAFIRMA_MUSTERI_NO,
+                   C.MAIN_BRANCH_CODE               AS SUBE_KODU,
+                   CASE
+                       WHEN MAIN_BRANCH_CODE IN ('372', '006', '220')
+                       THEN
+                           999
+                       ELSE
+                           B.BOLGE_KODU
+                   END                              AS BOLGE_KODU,
+                   B.BOLGE_ADI                      AS BOLGE_ADI,
+                   B.SUBE_ADI                       AS SUBE_ADI,
+                   CASE R.IS_CREDIT
+                       WHEN '1' THEN 'KREDILI'
+                       ELSE 'KREDISIZ'
+                   END                              AS KREDI_DURUMU,
+                   C.REPRESENTATIVE_FILE_NO         AS MT_SICIL
+              FROM PAY.PYF_DB_RETAILER@CBRAS_PRODUX                R,
+                   PAY.PYF_FM_INSTITUTION@CBRAS_PRODUX             I,
+                   OLAP.FC_CUSTOMER                                C,
+                   OFSA_SB.BOLGELER                                B,
+                   DM.DIM_PROFIT_CENTER@QADATA_LINK                E
+             WHERE     R.INSTITUTION_OID = I.OID
+                   AND R.CUSTOMER_CODE = C.CUSTOMER_CODE
+                   AND C.AS_OF_DATE= PDATE
+                   AND R.STATUS = '1'
+                   AND I.STATUS = '1'
+                   AND I.ORDER_TYPE = '04'
+                   AND I.IS_ACTIVE = 1
+                   AND B.SUBE_KODU = TO_NUMBER(C.MAIN_BRANCH_CODE)
+            ) BBB
+               ON     AAA.BAYI_KODU = BBB.BAYI_KODU
+                  AND AAA.BAYI_MUSTERI_NO = BBB.BAYI_MUSTERI_NO
+                  AND AAA.ANAFIRMA_KODU = BBB.ANAFIRMA_KODU
+           LEFT OUTER JOIN
+           (SELECT *
+              FROM (SELECT RANK ()
+                               OVER (PARTITION BY CUSTOMER_CODE
+                                     ORDER BY DT DESC)    AS SIRA,
+                           CUSTOMER_CODE,
+                           DT,
+                           MATURITY_DATE
+                      FROM (SELECT OID,
+                                   CUSTOMER_CODE,
+                                   ALL_DATE              AS DT,
+                                   ALL_MATURITY_DATE     AS MATURITY_DATE
+                              FROM CCS.ALLOTMENT@CBRAS_PRODUX A
+                             WHERE     A.STATUS = '1'
+                                   AND ALL_STATE IN (1,
+                                                     2,
+                                                     6,
+                                                     16,
+                                                     11)
+                            UNION ALL
+                            SELECT OID,
+                                   CUSTOMER_CODE,
+                                   DT_START_DATE     AS DT,
+                                   MATURITY_DATE
+                              FROM CCS.DT_MAIN@CBRAS_PRODUX
+                             WHERE     STATUS = '1'
+                                   AND STATE IN (1,
+                                                 2,
+                                                 6,
+                                                 16,
+                                                 11)
+                            UNION ALL
+                            SELECT OID,
+                                   CUSTOMER_CODE,
+                                   PROPOSAL_DATE     AS DT,
+                                   MATURITY_DATE
+                              FROM CCS.PROPOSAL@CBRAS_PRODUX
+                             WHERE     STATUS = '1'
+                                   AND STATE IN (1,
+                                                 2,
+                                                 6,
+                                                 16,
+                                                 11)))
+             WHERE SIRA = 1) D
+               ON BBB.BAYI_MUSTERI_NO = D.CUSTOMER_CODE
+    GROUP BY 
+          BBB.CREATE_DATE,
+           TO_DATE (D.MATURITY_DATE, 'yyyymmdd'),
+           AAA."BAYI_KODU",
+           AAA."BAYI_UNVANI",
+           AAA."BAYI_MUSTERI_NO",
+           AAA."ANAFIRMA_KODU",
+           AAA."ANAFIRMA_UNVANI",
+           AAA."DBS_LIMIT_AMOUNT",
+           AAA."DBS_RISK_AMOUNT",
+           AAA."DBS_USABLE_AMOUNT",
+           AAA."FT_ADEDI",
+           BBB.ANAFIRMA_MUSTERI_NO,
+           BBB.BOLGE_KODU,
+           BBB.SUBE_KODU,
+           BBB.BOLGE_ADI,
+           BBB.SUBE_ADI,
+           BBB.MT_SICIL,
+           CASE WHEN TO_DATE (D.MATURITY_DATE, 'yyyymmdd') < LAST_DAY(PDATE) 
+                    THEN 'Pasif' 
+                        ELSE 'Aktif'
+           END
+    )P
+    WHERE MATURITY_DATE IS NOT NULL
+    GROUP BY SUBE_KODU, BOLGE_KODU
+    )P,
+    (SELECT SUBE_KODU, 
+            SUM(FAALIYET_KARI_LINEER) AS FAALIYET_KARI_LINEER
+       FROM OFSA_SB.PROD_ORG_PROFIT 
+      WHERE AS_OF_DATE = PDATE
+       GROUP BY SUBE_KODU)O
+WHERE P.SUBE_KODU=O.SUBE_KODU
+     );
+     
+     COMMIT;
+
+END IF;
+
+/******************************************************************************************************************************/
+     
+      /*
+      ====================Pasif Teklif Oranı Ceza=======================
+      Pasif teklif oranı %10 üzerinde ise şubenin faaliyet kârının %25'lik kısmı ayrıştırılır.
+      Bu tutar pasif teklif oranı ile çarpılır. Çıkan değer eğer 25.000 TL'nin altındaysa 25.000 TL, üzerindeyse çıkan değer dikkate alınarak ceza işlemi yansıtılır.
+      */
+      --Pasif teklif oranı %5 üzerinde ise şubenin faaliyet kârının %25'lik kısmı ayrıştırılır.
+      --Bu tutar pasif teklif oranı ile çarpılır. Çıkan değer eğer 250.000 TL'nin altındaysa 250.000 TL, üzerindeyse çıkan değer --20.07.2026-İY
+  INSERT 
+     INTO OFSA_SB.OFSA_EX_MANUEL_KALEMLER
+     (
+      SELECT KAR.AS_OF_DATE,
+             '999999999' AS MUS_NO,
+             '99-SUBE_HAVUZ' AS ISKOLU,
+             99998 AS SEGMENT,
+             KAR.BOLGE_KODU, 
+             KAR.SUBE_KODU,
+             999999 AS MT,
+             88888888 AS URUN_KODU,
+             'Pasif Teklif Oranı Cezası' AS URUN,
+             'TL' AS PB,
+             'MANUEL_KALEMLER'  AS KAYNAK,
+             ROUND(CASE WHEN (PTEKLIF.PASIF_ORAN>=0.05 AND KAR.BOLGE_KODU=-1 AND KAR.SUBE_KODU=217) THEN 0 
+             WHEN PTEKLIF.PASIF_ORAN>=0.05 THEN -1*GREATEST(FAAL_KAR*0.25*PTEKLIF.PASIF_ORAN,250000)
+             ELSE 0 END ,2) AS CEZA
+
+      FROM 
+            (SELECT PDATE AS AS_OF_DATE,
+                    A.SUBE_KODU,
+                    A.BOLGE_KODU,
+                    ABS(SUM(A.FAALIYET_KARI_LINEER)) AS FAAL_KAR
+            FROM OFSA_SB.PROD_ORG_PROFIT A
+            WHERE A.AS_OF_DATE=PDATE-1
+            GROUP BY A.AS_OF_DATE,A.SUBE_KODU,A.BOLGE_KODU) KAR,
+           (
+            SELECT
+            PDATE AS AS_OF_DATE,
+            BOLGE_ADI, 
+            TO_NUMBER(SUBE_KODU) AS SUBE_KODU, 
+            SUBE_ADI, 
+            CASE WHEN SUM(NVL(TOPLAM_RISK,0))<>0
+              THEN ROUND(NVL(SUM(CASE WHEN REVIZE_FLG = 1 THEN NVL(TOPLAM_RISK,0) END) / SUM(NVL(TOPLAM_RISK,0)),0),4) 
+                ELSE 0 END AS PASIF_ORAN
+                  
+            FROM 
+
+                    (SELECT
+                    RISK.TARIH,
+                    CASE
+                      WHEN TT.STATE_NAME = 'Aktif' THEN 0
+                        WHEN CASE WHEN ROW_NUMBER () OVER(PARTITION BY ORGANIZE.SUBE_KODU ORDER BY NVL(RISK.TOPLAM_RISK,0) DESC ) <= 25 THEN 1 ELSE 0 END = 1 THEN 1
+                          ELSE 1 END AS REVIZE_FLG,
+
+                    CASE 
+                      WHEN MÜŞTERI.KAR_MERKEZI IN ('2-Ticari/Kurumsal','3-KOBİ') AND (RISK.TOPLAM_RISK >= 100000 )  THEN 1 
+                        WHEN MÜŞTERI.KAR_MERKEZI NOT IN ('2-Ticari/Kurumsal','3-KOBİ') AND (RISK.TOPLAM_RISK >= 50000 ) THEN 1
+                          ELSE 0 END AS RISK_KRITERI_FLG, 
+                    CASE WHEN ROW_NUMBER () OVER(PARTITION BY ORGANIZE.SUBE_KODU ORDER BY NVL(RISK.TOPLAM_RISK,0) DESC ) <= 25 THEN 1 ELSE 0 END AS ILK_25_FLG,
+
+                    ORGANIZE.BOLGE_ADI,
+                    ORGANIZE.SUBE_KODU,
+                    ORGANIZE.SUBE_ADI,
+                    RISK.MUSTERI_NO,
+                    RISK.MUSTERI_ADI,
+                    TT.ALLOTMENT_NO AS SON_TAHSIS_NO,
+                    CASE WHEN (NVL(TT.ACR_REMAKE,'NO') = 'YES' OR NVL(TT.LIQUIDATION,'0') = '1') THEN 'Evet' ELSE 'Hayır' END AS TASFIYE,
+                    TT.MODÜL,
+                    TT.TEKLIF_TÜRÜ,
+                    TT.STATE_NAME AS DURUM,
+                    TT.MATURITY_DATE AS VADE_TARIHI,
+                    NVL(TT.APPROVE_CHAIR,'XX') APPROVE_CHAIR,
+                    CASE
+                    WHEN TT.APPROVE_CHAIR LIKE 'BK%' THEN 'Bölge Kredi Komitesi'
+                    WHEN TT.APPROVE_CHAIR LIKE 'BT%' THEN 'Bölge Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR LIKE 'BL%' THEN 'Bölge Müdürü'
+                    WHEN TT.APPROVE_CHAIR LIKE 'BOTM%' THEN 'Bölge Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR LIKE 'SBM%' THEN 'Şube Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('GM','GMD','GM1') THEN 'Genel Müdür'
+                    WHEN TT.APPROVE_CHAIR IN ('GMY', 'GMY1') THEN 'Tahsis GMY'
+                    WHEN TT.APPROVE_CHAIR = 'GMYKK' THEN 'GMY Kredi Komitesi'
+                    WHEN TT.APPROVE_CHAIR IN ('TK', 'TK1') THEN 'GM Kredi Tahsis Kurulu'
+                    WHEN TT.APPROVE_CHAIR IN ('MKSM', 'IKSM' ) THEN 'İşletme Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('TARKR', 'TKSM' ) THEN 'Tarım Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('KOBI', 'KKSM' ) THEN 'Kobi Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('TKRD', 'TKRDY' ) THEN 'Ticari ve Kurumsal Krediler Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('KK','KK1','KKM') THEN 'Kredi Komitesi'
+                    WHEN TT.APPROVE_CHAIR IN ('PKRD','PRKRD') THEN 'İşletme ve Tarım Kredileri Müdürü'
+                    WHEN TT.APPROVE_CHAIR IN ('YKR','YKR1') THEN 'Yönetim Kurulu'
+                    WHEN TT.YETKI_TÜRÜ = 'Şube Yetkili' THEN 'Şube Müdürü'
+                    WHEN (TT.APPROVE_CHAIR IS NULL AND TT.TEKLIF_TÜRÜ = 'Mikrofinansman Teklif') THEN 'Mikro Finansman'
+                    ELSE TT.APPROVE_CHAIR_NAME END AS ONAY_MAKAMI,
+
+                    TT.MTR_TÜRÜ,
+                    TT.MTR_NOTU,
+                    MÜŞTERI.KAR_MERKEZI,
+                    CASE WHEN MÜŞTERI.GRUP_KODU IS NULL THEN 'Firma' ELSE 'Grup' END AS "FIRMA/GRUP",
+                    NVL(MÜŞTERI.GRUP_KODU,RISK.MUSTERI_NO) AS GRUP_KODU,
+                    NVL(MÜŞTERI.GRUP_ADI,RISK.MUSTERI_ADI) AS GRUP_ADI,
+                    MÜŞTERI.KREDI_STATÜSÜ,
+                    MÜŞTERI.RISK_KODU,
+                    NVL(RISK.NAKIT_RISK,0) NAKIT_RISK ,
+                    NVL(RISK.GN_RISK,0) GN_RISK, 
+                    NVL(RISK.TOPLAM_RISK,0) TOPLAM_RISK,
+                    IST.ISTISNA_BITIS_TARIHI AS ISTISNA_BITIS_TARIHI
+
+
+                    FROM
+
+                    (SELECT 
+                    A.AS_OF_DATE AS TARIH,
+                    A.CUSTOMER_CODE AS MUSTERI_NO,
+                    A.CUSTOMER_NAME AS MUSTERI_ADI,
+
+                    SUM (CASE    WHEN (A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%'  AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN (A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                                        ELSE 0
+                                        END) AS NAKIT_RISK,
+
+                    SUM (CASE    WHEN (A.MAIN_GL_NO LIKE '9%' AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN (A.MAIN_GL_NO LIKE '9%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN A.MAIN_GL_NO LIKE '9%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                                        ELSE 0
+                                        END) AS GN_RISK,
+                    SUM (CASE    WHEN (A.MAIN_GL_NO NOT LIKE '17%'  AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN (A.MAIN_GL_NO NOT LIKE '17%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                                        WHEN A.MAIN_GL_NO NOT LIKE '17%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                                        ELSE 0
+                                        END) AS TOPLAM_RISK 
+                                                                          
+                    FROM SUMMARY_PROD.GL_ASSET A 
+                    WHERE 1=1
+                    AND A.CUSTOMER_CODE IN (SELECT T.CUSTOMER_CODE FROM OLAP.VW_FC_CS_RISK_CODE T WHERE T.AS_OF_DATE = PDATE AND NVL(T.CUSTOMER_RISK_CODE,'01') IN ('01','02') AND NVL(T.PROCESS_TYPE,'xx') NOT IN ('Yapılandırma Ve Analiz'))  
+                    AND A.AS_OF_DATE = PDATE
+                    AND A.PROFIT_CENTER_CODE NOT IN ('1')    
+                    AND SUBSTR(A.MAIN_GL_NO,1,1) IN ('1','9')
+                    AND NVL(A.MODULE,'xx') NOT IN ('CEK')
+                    AND (A.CUSTOMER_NAME NOT LIKE '%ŞEKERBANK%' OR A.CUSTOMER_NAME LIKE '%KIBRIS%')
+                    GROUP BY A.CUSTOMER_CODE, A.AS_OF_DATE, A.CUSTOMER_NAME  )  RISK 
+
+                    ---------------------------------MÜŞTERI İSTİSNALARINI GETIRIR-----------------------------------------
+
+                    LEFT JOIN OFSA_SB.TEMP_PASIF_TEKLIF_ISTISNA IST ON RISK.MUSTERI_NO=IST.MUS_NO AND IST.ISTISNA_BITIS_TARIHI>=PDATE --Pasif teklifler için istisna tanımlaması yapılıyor. 19/07/2023 U.U.- D.K - M.K.Ç.
+                    -----------------------------------MÜŞTERI BILGILERINI GETIR-------------------------------------------
+
+                    LEFT JOIN ( SELECT 
+                                E.CUSTOMER_CODE,
+                                CASE WHEN NVL(E.PRIVATE_BRANCH_FLAG,0)<>1 THEN E.MAIN_BRANCH_CODE 
+                                     ELSE E.OLD_BRANCH_CODE END AS MUSTERI_SUBESI,
+                                E.PROFIT_CENTER_CODE || '-' || DECODE (E.PROFIT_CENTER_CODE,'1','Bireysel','2','Ticari/Kurumsal','3','KOBİ','4','Tarım','5','İşletme') AS KAR_MERKEZI,
+                                E.GROUP_FIRM_CODE AS GRUP_KODU,
+                                E.GROUP_FIRM_NAME AS GRUP_ADI,
+                                E.RATE_GROUP_DATE AS RISK_KODU_TARIHI,
+                                E.CCS_ARL_CREDIT_STATUS_DESC AS KREDI_STATÜSÜ,
+                                E.RATE_GROUP AS RISK_KODU
+
+                                FROM OLAP.FC_CUSTOMER E 
+                                WHERE E.AS_OF_DATE = PDATE) MÜŞTERI ON RISK.MUSTERI_NO = MÜŞTERI.CUSTOMER_CODE 
+
+
+                    -----------------------------ŞUBE VE BÖLGE ADINI GETIR-----------------------------------------------
+
+                    LEFT JOIN (SELECT DISTINCT
+                                      E.MAIN_BRANCH_CODE AS SUBE_KODU,
+                                      ORG.ORG_NAME AS SUBE_ADI,
+                                      CASE WHEN ORG.ORG_GROUP4 IS NOT NULL THEN 'KURUMSAL' ELSE ORG.PARENT_NAME END AS BOLGE_ADI
+                                FROM OLAP.FC_CUSTOMER E, OLAP.DM_ORGANIZATION ORG
+                                WHERE 1=1
+                                AND E.STATUS = 1 AND ORG.STATUS = 1
+                                AND E.AS_OF_DATE = TRUNC(SYSDATE-1)
+                                AND E.MAIN_BRANCH_CODE = ORG.ORG_CODE ) ORGANIZE ON MÜŞTERI.MUSTERI_SUBESI = ORGANIZE.SUBE_KODU
+
+                    ---------------------------------TAHSIS BILGISINI GETIR ----------------------------------------------
+
+                    INNER JOIN (SELECT
+                                T.DT_APPROVE_DATE,
+                                T.MATURITY_DATE,
+                                CASE WHEN ADD_MONTHS(T.MATURITY_DATE,3) >= PDATE THEN 'Aktif' ELSE 'Pasif' END AS STATE_NAME,
+                                T.OID,
+                                T.CUSTOMER_CODE,
+                                T.ALLOTMENT_NO,
+                                DECODE(T.MODULE,'ALLOTMENT','Tahsis','PROPOSAL','Teklif','DT_MAIN','Karar_Aracı',T.MODULE) AS MODÜL,
+                                T.APPROVE_CHAIR,
+                                T.APPROVE_CHAIR_NAME,
+                                T.IS_NEW_CUSTOMER,
+
+                                T.USABLE_APP_CASH_LIMIT ,
+                                T.USABLE_APP_NCASH_LIMIT ,
+                                T.USABLE_APP_SUM_LIMIT ,
+                                T.ALLOTMENT_CHANGE,
+                                T.ACR_REMAKE,
+                                T.LIQUIDATION,
+                                CASE 
+                                  WHEN T.PROPOSAL_TYPE_NAME IS NOT NULL THEN T.PROPOSAL_TYPE_NAME
+                                    WHEN  T.MODULE = 'PROPOSAL' THEN 'Orta Teklif'
+                                      WHEN T.MODULE = 'ALLOTMENT' THEN 'Tahsis Modülü'
+                                        WHEN T.MODULE = 'DT_MAIN' THEN 'Karar Aracı' ELSE 'HATA' END AS TEKLIF_TÜRÜ,
+                                            
+                                DECODE (T.AUTHORITY_TYPE,'A','Otorize','B','Şube Yetkili') AS YETKI_TÜRÜ,
+                                F.REPORT_TYPE AS MTR_TÜRÜ,
+                                F.EVAL AS MTR_NOTU,
+
+                                ROW_NUMBER () OVER(PARTITION BY T.CUSTOMER_CODE ORDER BY NVL(T.ALLOTMENT_NO,1111) DESC , T.DT_APPROVE_DATE DESC) SIRALAMA
+
+                                FROM OLAP.DM_ALLOTMENT T LEFT JOIN OLAP.DM_FIA_REPORT F 
+                                ON  T.FIA_NO = F.REPORT_NO AND F.STATUS = 1 AND T.STATUS = 1 AND T.CUSTOMER_CODE = F.CUSTOMER_CODE
+
+                                WHERE 1=1
+                                AND T.STATE_NAME IN ('Aktif', 'Pasif','Transfer')
+                                AND NVL(T.DT_APPROVE_DATE,to_date('19000101','yyyymmdd')) <= PDATE ) TT ON TT.CUSTOMER_CODE = RISK.MUSTERI_NO AND TT.SIRALAMA = 1
+                    ) LISTE
+
+                    WHERE 1=1
+                    AND NVL(LISTE.ISTISNA_BITIS_TARIHI,to_date('19000101','yyyymmdd'))<=PDATE
+                    AND LISTE.TASFIYE = 'Hayır'
+                    AND LISTE.TEKLIF_TÜRÜ <> 'Nakit Karşılıklı Teklif'
+                    AND LISTE.APPROVE_CHAIR NOT IN ('YKR','YKR1','KK','KK1','KKM')
+                    AND (LISTE.RISK_KRITERI_FLG = 1 OR LISTE.ILK_25_FLG = 1)
+
+                    GROUP BY BOLGE_ADI, SUBE_KODU, SUBE_ADI
+          ) PTEKLIF
+
+      WHERE KAR.AS_OF_DATE=PTEKLIF.AS_OF_DATE
+      AND TO_NUMBER(KAR.SUBE_KODU)=TO_NUMBER(PTEKLIF.SUBE_KODU)
+      );
+    COMMIT;
+
+
+
+/*********************************************************************************************************************/
+
+    
+    --ŞUBE KASASINDA BEKLEYEN ÇEK KARNELERİ VE TİCARİ KARTLAR 
+    
+    IF PDATE=AYSONU  AND KART_CEK_SAYAC = 0  THEN
+    
+    INSERT
+      INTO OFSA_SB.OFSA_MANUEL_UPLOAD_LOG
+     (      SELECT PDATE AS AS_OF_DATE,
+        '999999999' MUS_NO,
+        
+        CASE
+          WHEN TO_NUMBER(TABLO.BRANCH_CODE) IN
+            ('6', '122',  '220',   '372') THEN
+          -1
+          ELSE
+          TO_NUMBER(ORG.PARENT_CODE)
+        END BOLGE,
+        TO_NUMBER(TABLO.BRANCH_CODE) AS SUBE,
+         '999999' AS MT,
+        /*'88888888' AS URUN_KODU,
+        TABLO.TUR AS URUN,
+        'TL' AS PB,
+        'MANUEL_KALEMLER' AS KAYNAK,*/
+        TUR as SINIF,
+        SUM(TABLO.TUTAR) * -1 BAKIYE,
+        'EVET' AS YANSITILMA_DURUMU,
+        PDATE AS YUKLENME_TARIHI,
+        '' AS OPR_ACIKLAMA
+      FROM (SELECT 'SUBEDE_BEKLEYEN_TIC_KARTLAR' AS TUR,
+            BRANCH_CODE,
+            CUSTOMER_CODE,
+            COUNT(DISTINCT ACCOUNT_NO) ADET,
+            COUNT(DISTINCT ACCOUNT_NO) * 250 TUTAR
+          FROM (SELECT ACCOUNT_NO,
+                BRANCH_CODE,
+                CUSTOMER_CODE,
+                TO_CHAR(BEKLEME_GUN) AS BEKLEME_GUN
+              FROM (SELECT KART.ACCOUNT_NO,
+                    KART.BRANCH_CODE,
+                    KART.CUSTOMER_CODE,
+                    KURYE.BEKLEME_GUN
+                  FROM (                      
+                      SELECT ACCOUNT_NO, BRANCH_CODE, CUSTOMER_CODE
+                      FROM CARD.CMS_ACCOUNT@CBRAS_PRODUX
+                      WHERE BLOCK_CODE IN ('I', 'Y')
+                      AND RECLASS_CODE IN ('G', 'Z')
+                     /* AND SUBSTR(ACCOUNT_NO, 1, 6) IN
+                        ('547311', '403836', '411159', '519753')*/                      
+                      ) KART                  
+                  LEFT JOIN                  
+                  (SELECT BRANCH_CODE,
+                      ACCOUNT_NO,
+                      RECEIVER_NAME,
+                      COURIER_COMMENT,
+                      TESLIM_TARIHI TESLIM_TARIHI,
+                      PDATE,  
+                      TO_NUMBER(PDATE -
+                          TO_DATE(TESLIM_TARIHI, 'yyyymmdd')) BEKLEME_GUN                  
+                  FROM 
+                      (SELECT B.ACCOUNT_NO,
+                          B.BRANCH_CODE,
+                          NVL(A.LAST_DELIVERY_DATE,
+                            A.ARRIVAL_DATE) TESLIM_TARIHI,
+                          A.COURIER_COMMENT,
+                          A.RECEIVER_NAME,
+                          A.COURIER_DETAIL_STATUS,
+                          A.COURIER_MAIN_STATUS,
+                          A.COST_NOTICE_DATE,
+                          B.CARD_TRACKING_STATUS,
+                          RANK() OVER(PARTITION BY B.ACCOUNT_NO ORDER BY NVL(A.ARRIVAL_DATE, A.LAST_DELIVERY_DATE) DESC) AS SIRA1
+                        FROM CARD.CCC_CARD_DELIVERY_ACTIONS@CBRAS_PRODUX A,
+                          CARD.CMS_ACCOUNT@CBRAS_PRODUX               B,
+                          CARD.CMS_CARD_ISSUE@CBRAS_PRODUX            C,
+                          CARD.CMS_ACCOUNT_CARD@CBRAS_PRODUX          D
+                      WHERE B.OID(+) = D.ACCOUNT_OID
+                        AND C.ACCOUNT_CARD_OID = D.OID(+)
+                        AND B.STATUS = 1
+                        AND A.CARD_ISSUE_OID(+) = C.OID
+                        AND B.CARD_TRACKING_STATUS IN ('05', '04')
+                        AND A.COURIER_DETAIL_STATUS IN ('11907')
+                      )
+                  WHERE SIRA1 = 1) KURYE
+                    ON KURYE.ACCOUNT_NO = KART.ACCOUNT_NO                  
+                  )              
+              WHERE BEKLEME_GUN >= 30              
+              UNION ALL              
+              -----------GEÇEN AY ŞUBE KASASINDA BEKLEYİP BU AY İPTAL EDİLEN KARTLAR EKLENİYOR-----------
+              SELECT ACCOUNT_NO,
+                    BRANCH_CODE,
+                    CUSTOMER_CODE,
+                    KOD
+              FROM (SELECT ACCOUNT_NO,
+                    BRANCH_CODE,
+                    CUSTOMER_CODE,
+                    LAST_BLOCKED_DATE,
+                    BLOCK_CODE || RECLASS_CODE KOD
+                  FROM CARD.CMS_ACCOUNT@CBRAS_PRODUX
+                 /* WHERE SUBSTR(ACCOUNT_NO, 1, 6) IN
+                    ('547311', '403836', '411159', '519753')*/)
+              WHERE KOD IN ('IX', 'FK', 'TM')
+              AND LAST_BLOCKED_DATE between  ONCEKIAYBASI and ONCEKIAYSONU
+              AND ACCOUNT_NO IN                
+                (SELECT ACCOUNT_NO
+                  FROM (SELECT KART.BRANCH_CODE,
+                        KART.ACCOUNT_NO,
+                        KURYE.BEKLEME_GUN
+                      FROM (                          
+                          SELECT ACCOUNT_NO, BRANCH_CODE
+                          FROM CARD.CMS_ACCOUNT@CBRAS_PRODUX
+                          WHERE BLOCK_CODE_PREV1 IN ('I', 'Y')
+                          AND RECLASS_CODE_PRV2 IN ('G', 'Z')
+                          /*AND SUBSTR(ACCOUNT_NO, 1, 6) IN
+                            ('547311',
+                              '403836',
+                              '411159',
+                              '519753')*/                          
+                          ) KART                      
+                      LEFT JOIN                      
+                      (SELECT BRANCH_CODE,
+                          ACCOUNT_NO,
+                          RECEIVER_NAME,
+                          COURIER_COMMENT,
+                          TESLIM_TARIHI TESLIM_TARIHI,
+                          ONCEKIAYSONU,
+                          ONCEKIAYSONU -
+                          TO_DATE(TESLIM_TARIHI, 'yyyymmdd') BEKLEME_GUN                      
+                      FROM 
+                          (SELECT B.ACCOUNT_NO,
+                              B.BRANCH_CODE,
+                              NVL(A.ARRIVAL_DATE,
+                                A.LAST_DELIVERY_DATE) TESLIM_TARIHI,
+                              A.COURIER_COMMENT,
+                              A.RECEIVER_NAME,
+                              A.COURIER_DETAIL_STATUS,
+                              A.COURIER_MAIN_STATUS,
+                              A.COST_NOTICE_DATE,
+                              B.CARD_TRACKING_STATUS,
+                              RANK() OVER(PARTITION BY B.ACCOUNT_NO ORDER BY NVL(A.ARRIVAL_DATE, A.LAST_DELIVERY_DATE) DESC) AS SIRA1
+                         FROM CARD.CCC_CARD_DELIVERY_ACTIONS@CBRAS_PRODUX A,
+                              CARD.CMS_ACCOUNT@CBRAS_PRODUX               B,
+                              CARD.CMS_CARD_ISSUE@CBRAS_PRODUX            C,
+                              CARD.CMS_ACCOUNT_CARD@CBRAS_PRODUX          D
+                          WHERE B.OID(+) = D.ACCOUNT_OID
+                            AND C.ACCOUNT_CARD_OID = D.OID(+)
+                            AND B.STATUS = 1
+                            AND A.CARD_ISSUE_OID(+) = C.OID
+                            AND A.COURIER_DETAIL_STATUS IN
+                              ('11907')
+                          )
+                      WHERE SIRA1 = 1) KURYE
+                        ON KURYE.ACCOUNT_NO = KART.ACCOUNT_NO
+                                           )                  
+                  WHERE BEKLEME_GUN >= 30                  
+                  )              
+              )
+          GROUP BY BRANCH_CODE, CUSTOMER_CODE          
+          UNION ALL          
+          SELECT 'ŞUBEDE_BEKLEYEN_CEK_KARNE' AS TUR,
+            BRANCH_CODE,
+            CUSTOMER_CODE,
+            COUNT(CUSTOMER_CODE) ADET,
+            COUNT(CUSTOMER_CODE) * 250 TUTAR
+          FROM (SELECT A.CUSTOMER_CODE,
+                A.CHECK_COUNT,
+                A.ACCOUNT_NO,
+                A.STATE,
+                A.ISLEM_TARIHI,
+                A.BRANCH_CODE,
+                A.CHECKBOOK_NO,
+                A.KODU,
+                A.ADI              
+              FROM OLAP.DM_ORGANIZATION O,                
+                (SELECT C.CUSTOMER_CODE,
+                    NVL((CUS.TITLE),
+                      (CUS.NAME || '  ' || CUS.SECOND_NAME || '  ' ||
+                      CUS.SURNAME)),
+                    B.CHECK_COUNT,
+                    B.CURRENCY_CODE,
+                    B.ACCOUNT_NO,
+                    B.STATE,
+                    TO_DATE(D.TRANSACTION_DATE, 'yyyymmdd') ISLEM_TARIHI,
+                    LOOKUP_VALUES4.CODE KODU,
+                    LOOKUP_VALUES4.NAME ADI,
+                    B.BRANCH_CODE,
+                    O.NAME,
+                    D.USER_NO,
+                    D.REFERENCE_ID,
+                    DECODE(B.CHECKBOOK_TYPE,
+                        '1',
+                        'Normal Çek',
+                        '2',
+                        'Continuous Çek',
+                        '3',
+                        'Çizgili Blokeli Şube Çek',
+                        '4',
+                        'Gümüş Üreten Çek',
+                        '5',
+                        'Altın Üreten Çek',
+                        '6',
+                        'Gümüş Prestij Çek',
+                        '7',
+                        'Altın Prestij Çek',
+                        '8',
+                        'Platinum Prestij Çek'),
+                    B.CHECKBOOK_NO,
+                    B.MIN_CHECK_NO,
+                    B.MAX_CHECK_NO,
+                    INFRA_CUST_CUST_PROFIT_CENTER2.PROFIT_CENTER_NAME,
+                    R.CUSTOMER_RISK_CODE,
+                    INFRA_CUST_CUST_PROFIT_CENTER2.PROFIT_SEGMENT_NAME,
+                    T.PARENT_ORG_NAME,
+                    (CASE
+                      WHEN B.CHECKBOOK_TYPE = '2' THEN
+                      DECODE(B.IS_LASER, '1', 'Evet', 'Hayır')
+                      ELSE
+                      ''
+                    END),
+                    (CASE
+                      WHEN B.CHECKBOOK_TYPE = '3' THEN
+                      ''
+                      ELSE
+                      DECODE(B.IS_QR_CODE, '1', 'Evet', 'Hayır')
+                    END)
+                  FROM CHECKSBILLS.CHECK_CHECKBOOK_OWNER@CBRAS_PRODUX C,
+                    INFRA.CUST_CUST_CUST@CBRAS_PRODUX CUS,
+                    CHECKSBILLS.CHECK_CHECKBOOK@CBRAS_PRODUX B,
+                    CHECKSBILLS.CHECK_CHECKBOOK_TRANSACTIONS@CBRAS_PRODUX D,
+                    (SELECT U.CODE CODE, U.NAME NAME, Y.NAME PRM
+                      FROM AURORA.DICT_ML_REFERENCE_DATA_ITEM@CBRAS_PRODUX U,
+                        AURORA.DICT_ML_REFERENCE_DATA@CBRAS_PRODUX      Y
+                      WHERE U.REFERENCE_DATA_OID = Y.OID) LOOKUP_VALUES4,
+                    INFRA.ADMIN_ORG_ORGANIZATION@CBRAS_PRODUX O,
+                    INFRA.CUST_CUST_PROFIT_CENTER@CBRAS_PRODUX INFRA_CUST_CUST_PROFIT_CENTER2,
+                    CCS.ARL_CMMN_CUSTOMER_RISK_CODE@CBRAS_PRODUX R,
+                    (SELECT SUBE.*,
+                        SUBE.CODE           AS PARENT_ORG_CODE,
+                        SUBE.NAME           AS PARENT_ORG_NAME,
+                        SUBE.CODE           AS SUBE_CODE,
+                        DEP.DEPENDENCE_NAME
+                      FROM INFRA.ADMIN_ORG_ORGANIZATION@CBRAS_PRODUX   SUBE,
+                        INFRA.ADMIN_ORG_DEPENDENCE@CBRAS_PRODUX     DEP,
+                        INFRA.ADMIN_ORG_ORG_DEPENDENCE@CBRAS_PRODUX ORG_DEP
+                      WHERE DEPENDENCE_CODE = '014'
+                      AND SUBE.OID = ORG_DEP.ORGANIZATION_OID(+)
+                      AND DEP.OID(+) = ORG_DEP.DEPENDENCE_OID                      
+                      ) T,                    
+                    DEPOSIT.DEPOSIT_ACCOUNT@CBRAS_PRODUX DEPOSIT
+                  WHERE B.OID = C.CHECKBOOK_OID
+                  AND C.CUSTOMER_CODE = CUS.CUSTOMER_CODE
+                  AND B.OID = D.CHECKBOOK_OID(+)
+                  AND B.OWNER_OID = C.OID
+                  AND LOOKUP_VALUES4.PRM =
+                    'PRM_CHECKS_BOOKMNG_BOOK_STATE'
+                  AND LOOKUP_VALUES4.CODE = B.STATE
+                  AND O.CODE = B.BRANCH_CODE
+                  AND O.STATUS = 1
+                  AND DEPOSIT.STATUS = 1
+                  AND DEPOSIT.OID = C.ACCOUNT_OID
+                  AND CUS.PROFIT_CENTER_CODE =
+                    INFRA_CUST_CUST_PROFIT_CENTER2.PROFIT_CENTER_CODE(+)
+                  AND CUS.PROFIT_SEGMENT_CODE =
+                    INFRA_CUST_CUST_PROFIT_CENTER2.PROFIT_SEGMENT_CODE(+)
+                  AND INFRA_CUST_CUST_PROFIT_CENTER2.STATUS(+) = 1
+                  AND R.CUSTOMER_CODE = C.CUSTOMER_CODE
+                  AND R.STATUS = 1
+                  AND DEPOSIT.ORG_CODE = T.CODE
+                  AND B.STATUS = '1'
+                    --TO_DATE(D.TRANSACTION_DATE,'yyyymmdd')  BETWEEN  
+                  AND D.STATE = '01'                  
+                  ) A              
+              WHERE A.KODU = '10'
+              AND O.GL_ORG_CODE = A.BRANCH_CODE
+              AND O.STATE = 1
+              AND A.ISLEM_TARIHI <= PDATE - 30)
+          GROUP BY BRANCH_CODE, CUSTOMER_CODE          
+          ) TABLO,
+        OLAP.FC_CUSTOMER C,
+        OLAP.DM_ORGANIZATION ORG
+      WHERE TABLO.CUSTOMER_CODE = C.CUSTOMER_CODE
+      AND TABLO.BRANCH_CODE = ORG.GL_ORG_CODE
+      AND C.AS_OF_DATE = SEGM_TARIH      
+      GROUP BY           
+          CASE
+            WHEN TO_NUMBER(TABLO.BRANCH_CODE) IN
+              ('6', '122',  '220',   '372') THEN
+            -1
+            ELSE
+            TO_NUMBER(ORG.PARENT_CODE)
+          END,
+          TO_NUMBER(TABLO.BRANCH_CODE),
+          TABLO.TUR
+          );
+     
+     END IF;
+     
+     COMMIT;
+
+    /*****************************************************************************************************************************/      
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      IF ABS(SQLCODE) = '08103'
+         OR ABS(SQLCODE) = '12801'     
+                               
+      THEN
+        ROLLBACK;
+--        DBMS_LOCK.SLEEP(180);
+         OFSA_SB.MS_EX_OFSA_SB_MANUEL_KALEMLER.MS_EX_OFSA_SB_MANUEL_KALEMLER();
+      ELSE
+      ROLLBACK;
+        RAISE;
+        END IF;
+  END;
+
+END;
+/

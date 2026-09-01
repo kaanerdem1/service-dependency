@@ -1,0 +1,465 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_POS_KOM_GIDER IS
+
+  PROCEDURE MS_EX_OFSA_SB_POS_KOM_GIDER(SECIM NUMBER) IS
+
+    ERROR_LOCATION NUMBER;
+    PID            NUMBER;
+    PDATE          DATE;
+    AYBASI         DATE;
+    PAYBASI        VARCHAR2(8);
+    PASOFDATE      VARCHAR2(8);
+    PCRITICAL_LVL  NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH     DATE;
+    PDATE_18       DATE; --Max 18 ay taksit olabilir
+  BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE,
+           TO_DATE(PRM_VALUE, 'YYYYMMDD'),
+           TO_DATE(MONTH_BEGIN, 'YYYYMMDD'),
+           TO_DATE(LAST_SEGM_DATE, 'YYYYMMDD'),
+           MONTH_BEGIN,
+           ADD_MONTHS(TO_DATE(PRM_VALUE, 'YYYYMMDD'),-18)
+      INTO PASOFDATE, PDATE, AYBASI, SEGM_TARIH, PAYBASI,PDATE_18
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+     WHERE PARAMETER = 'OFSA_SB_DATE';
+
+    IF PDATE <= SEGM_TARIH THEN
+      --SEGMENTASYON ATAMASI
+      SEGM_TARIH := SEGM_TARIH;
+    ELSE
+      SEGM_TARIH := PDATE;
+    END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_POS_KOM_GIDER',
+                                          PSUBMODULE   => 'EX_OFSA_SB_POS_KOM_GIDER',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+    /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_POS_KOM_GIDER';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+    EXECUTE IMMEDIATE 'alter session set "_subquery_pruning_enabled" = false'; --Bu parametre bu pakete özel eklenmiştir. Diğer paketlerde kullanılması gerekirse kaynak planlama için dbaoracle ekibiyle görüşülmesi gerekir U.U. 21.09.2020
+
+    IF SECIM = 0 THEN
+      --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+      PAYBASI := PASOFDATE;
+      AYBASI  :=PDATE;
+    END IF;
+
+
+    INSERT INTO OFSA_SB.OFSA_EX_POS_KOM_GIDER
+
+      (       SELECT POS.TARIH AS AS_OF_DATE,
+              POS.CUSTOMER_CODE AS MUS_NO,
+              OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU(BUSINESS_SEGMENT_CODE => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+              SEG.BUSINESS_SEGMENT_CODE AS SEGMENT,
+              CASE WHEN TO_NUMBER(C.MAIN_BRANCH_CODE) IN ('6', '220', '372', '122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END BOLGE,
+              TO_NUMBER(C.MAIN_BRANCH_CODE) AS SUBE,
+              NVL(C.REPRESENTATIVE_FILE_NO, 999999) MT,
+              POS.URUN_KODU AS URUN_KODU,
+              'POS' AS URUN,
+               POS.PB AS PB,
+              'POS_KOMISYON_GIDERI' AS KAYNAK,
+               SUM(NVL(POS.AMOUNT_II *(POS.KOM_GID_ORAN/CASE WHEN NVL(POS.CAL_SART,'E')='H' THEN CVV_II ELSE 1 END ) / 100,0)) * -1+ /*1-) Bu alan takas komisyon gideridir. Gelecekte ayrıştırmak istendiğinde burası açılacaktır*/
+               SUM((CASE WHEN NVL(POS.CAL_SART,'E')='H' THEN 0 ELSE 1 END) * NVL(POS.AMOUNT_II *(POS.TAKSIT_FONLAMA_ORAN) / 100,0)) * -1 AS TAKAS_KOMISYON_GIDERI  /*2-) Bu alan taksit fonlama maliyetidir.Tablo ile uyumlu olması amacıyla ismi takas_komisyon_gideri olarak girilmiştir. U.U. 31.07.2022*/
+
+         FROM (SELECT --GÜNLÜK PROVIZYONDAKI IŞLEMLER ALINIYOR
+                      CASE WHEN ISLEMLER.CVV<>0 AND TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD') - to_Date(ISLEMLER.TX_DATE,'YYYYMMDD')>5 THEN add_months(TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD'),-1) ELSE to_Date(ISLEMLER.TX_DATE,'yyyymmdd') END AS TARIH,
+                      ISLEMLER.ISLEMTIPI,
+                      ISLEMLER.KARTTIPI,
+                      ISLEMLER.MERCHANT_CODE,
+                      ISLEMLER.CUSTOMER_CODE,
+                      ISLEMLER.POS_CODE,
+                      ISLEMLER.URUN_KODU,
+                      ISLEMLER.URUN,
+                      ISLEMLER.CARD_PAN,
+                      ISLEMLER.VALOR_DATE,
+                      CASE WHEN ISLEMLER.CVV<>0 AND NVL(PARAMETRE.CAL_SART,'E')='E' THEN ISLEMLER.CVV ELSE 1 END AS CVV_II,
+                      ISLEMLER.TX_TIME,
+                      ISLEMLER.AMOUNT,
+                      CASE WHEN (CASE WHEN ISLEMLER.CVV<>0 AND TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD') - to_Date(ISLEMLER.TX_DATE,'YYYYMMDD')>5 THEN add_months(TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD'),-1)
+                                       ELSE to_Date(ISLEMLER.TX_DATE,'yyyymmdd') END) BETWEEN PDATE_18 AND PDATE THEN ISLEMLER.AMOUNT
+                           ELSE 0 END AMOUNT_II,
+
+                      ISLEMLER.BRANCH_CODE,
+                      ISLEMLER.COMMISSION,
+                      ISLEMLER.CVV,
+                      ISLEMLER.VSN_043,
+                      ISLEMLER.CARD_INSTALLMENT_AMOUNT,
+                      ISLEMLER.CARD_INSTALLMENT_COUNT,
+                      ISLEMLER.BATCH_CLOSE_DATE,
+                      ISLEMLER.SERVICE_FEE,
+                      ISLEMLER.REWARD_BONUS,
+                      ISLEMLER.REEDEM_BONUS,
+                      ISLEMLER.AUTH_CODE,
+                      ISLEMLER.COMMISSION_BSMV,
+                      ISLEMLER.SERVICE_FEE_BSMV,
+                      ISLEMLER.COMMISSION_RATIO,
+                      ISLEMLER.PB,
+                      CASE
+                         WHEN ISLEMLER.CUSTOMER_CODE IN (SELECT MUS_NO FROM LIBYA_MS) THEN 2.30 --***BUNA BAKILACAK
+                         WHEN ISLEMLER.KARTTIPI in ('Bonusnet', 'GarantiBonus') then (0.85) * CARD_RATES.RATE -- Bonus ile yapılan anlaşma gereği takas maliyetinde %15 indirim uygulanıyor.
+                         ELSE CARD_RATES.RATE END KOM_GID_ORAN,
+
+                      CASE WHEN (nvl(ISLEMLER.CVV,0) > 0 AND KARTTIPI = 'Onus' ) THEN  TAKSIT_KOM.FONLAMA_ORANI
+                           WHEN (nvl(ISLEMLER.CVV,0) > 0 AND KARTTIPI != 'Onus') THEN TAKSIT_KOM.FONLAMA_ORANI_T ELSE 0
+                      END AS TAKSIT_FONLAMA_ORAN,
+                       ISLEMLER.COMMISSION + ISLEMLER.COMMISSION_BSMV AS KOM_GELIR,
+                       PARAMETRE.CAL_SART
+
+                  FROM (SELECT t.CURRENCY_CODE,
+                               case  when t.PROCESS_TYPE IN (4, 5, 6 , 32,55,120,123, 125,256,282) then  'SATIS'
+                                     when t.PROCESS_TYPE IN (8,33,116,140,258) then  'TKST'
+                                     when t.PROCESS_TYPE IN  (24, 68, 121, 122, 274, 318) then 'IADE'
+                                     when t.PROCESS_TYPE IN (91, 241) then  'NAKIT'
+                                     when t.PROCESS_TYPE IN (119) then  'PUCRT'
+                                     when t.PROCESS_TYPE IN (128) then  'PSBGS'
+                                     when t.PROCESS_TYPE IN (98, 348) then 'PPSTS'
+                                     when t.PROCESS_TYPE IN (129) then 'POSPR'
+                                     when t.PROCESS_TYPE IN (57, 94) then  'BNSK'
+                                     when t.PROCESS_TYPE IN (58) then  'IADEB' else  'TMNSZ' end as ISLEMTIPI,
+
+                                CASE  WHEN VSN_043 IN ('YDMDK', 'YDVDK') THEN 'Yurt_Dışı_Debit'
+                                     WHEN VSN_043 IN ('YDMKK', 'YDVKK') THEN 'Yurt_Dışı_KK'
+                                     WHEN VSN_043 IN ('YIMKK', 'YIVKK', 'YITKK') THEN 'BKM'
+                                     WHEN VSN_043 IN ('GBBNSTK', 'GBBONUS') THEN 'GarantiBonus'
+                                     WHEN VSN_043 IN ('YDAKK') THEN 'Yurt_Dışı_AE'
+                                     WHEN VSN_043 IN ('YIAKK', 'GABONUS') THEN 'American_Express'
+                                     WHEN VSN_043 IN ('YISKK', 'BONUS', 'BNSTK') THEN 'Onus'
+                                     WHEN VSN_043 IN ('YISDK', 'YIMDK', 'YIVDK', 'YITDK') THEN 'Debit'
+                                     WHEN VSN_043 IN ('BNSAB','DNZBONUS','EBTBONUS','FIBABNS','INGBONUS','TEBNSTK',
+                                                      'TEBONUS','TFKBONUS','BNSPT','BNSTS','DNZBNSTK','INGBNSTK') THEN 'Bonusnet' ELSE '0' END AS KARTTIPI,
+                              ----- Bankada kullanılan yeni bir ürün olması durumunda gruplamaya VSN043'DEKI ÜRÜN EKLENMELIDIR. A.Y.
+                               CASE
+                                 WHEN VSN_043 IN ('YISDK', 'YIMDK', 'YIVDK', 'YITDK')                          THEN 'DEBIT_CARD'
+                                 WHEN VSN_043 IN ('YIMKK','YIVKK','YITKK','GBBNSTK','GBBONUS',
+                                                  'GABONUS','BNSAB','DNZBONUS','EBTBONUS','FIBABNS',
+                                                  'INGBONUS','TEBNSTK','TEBONUS','TFKBONUS','BNSPT',
+                                                  'BNSTS','DNZBNSTK','INGBNSTK')                               THEN  'CREDIT_CARD'
+
+                                 WHEN VSN_043 IN ('YIAKK', 'GABONUS')                                          THEN 'American_Express'
+                                 ELSE 'CUSTOM' END CARD_DESC,
+
+                               T.MERCHANT_CODE,
+                               C.CUSTOMER_CODE,
+                               T.POS_CODE,
+                               PP.POSS_APPLICATION_TYPE_CODE URUN_KODU,
+                               PP.POSS_APPLICATION_TYPE URUN,
+                               T.CARD_PAN,
+                               T.VALOR_DATE,
+                               T.TX_TIME,
+                               CASE WHEN T.CURRENCY_CODE = '949' THEN T.AMOUNT ELSE
+                                                        (CASE WHEN T.CURRENCY_CODE = '840' THEN T.AMOUNT * USD.EVALUATION_BUY_RATE ELSE
+                                                              (CASE WHEN T.CURRENCY_CODE = '978' THEN T.AMOUNT * EUR.EVALUATION_BUY_RATE END) END) END AS AMOUNT,
+                               T.BRANCH_CODE,
+                               T.COMMISSION,
+                               T.CVV,
+                               T.VSN_043,
+                               T.CARD_INSTALLMENT_AMOUNT,
+                               T.CARD_INSTALLMENT_COUNT,
+                               T.BATCH_CLOSE_DATE,
+                               T.SERVICE_FEE,
+                               T.REWARD_BONUS,
+                               T.REEDEM_BONUS,
+                               T.AUTH_CODE,
+                               T.COMMISSION_BSMV,
+                               T.SERVICE_FEE_BSMV,
+                               T.TX_DATE,
+                               CASE WHEN T.CURRENCY_CODE = 949 THEN 'TL' ELSE 'YP' END AS PB,
+                               COMMISSION_RATIO
+
+                          FROM POS.BATCH_EFFECTIVE_DATE_TEMP@CBRAS_PRODUX T,
+                               INFRA.CUST_CUST_CUST@CBRAS_PRODUX          C,
+                               POS.POS_MERCHANT_MASTER@CBRAS_PRODUX       P,
+                               OLAP.DM_POS                                PP,
+                               OLAP.FC_EVALUATION_RATES                   USD,
+                               OLAP.FC_EVALUATION_RATES                   EUR
+                         WHERE T.MERCHANT_CODE = P.MERCHANT_CODE
+                           AND (P.CUSTOMER_OID(+) = C.OID)
+                           AND TO_NUMBER(T.POS_CODE) =
+                               TO_NUMBER(PP.POSS_NO(+))
+                           AND USD.CURRENCY_CODE = 'USD'
+                           AND EUR.CURRENCY_CODE = 'EUR'
+                           AND TO_CHAR(USD.AS_OF_DATE, 'yyyymmdd') = T.TX_DATE
+                           AND TO_CHAR(EUR.AS_OF_DATE, 'yyyymmdd') = T.TX_DATE
+                          -- AND T.VALOR_DATE!='99999999'------18 ekim hatalı kaydı almamak için  DK
+                           and T.VALOR_DATE NOT LIKE '%9999%' /*HASAN ACAR*/
+                           AND to_Date(T.TX_DATE,'yyyymmdd') BETWEEN PDATE_18 AND PDATE
+
+                        UNION
+
+                        SELECT CUM.CURRENCY_CODE,
+                               CASE  WHEN CUM.PROCESS_TYPE IN (4, 5, 6 , 32,55,120,123, 125,256,282) THEN  'SATIS'
+                                     WHEN CUM.PROCESS_TYPE IN (8,33,116,140,258) THEN  'TKST'
+                                     WHEN CUM.PROCESS_TYPE IN  (24, 68, 121, 122, 274, 318) THEN 'IADE'
+                                     WHEN CUM.PROCESS_TYPE IN (91, 241) THEN  'NAKIT'
+                                     WHEN CUM.PROCESS_TYPE IN (119) THEN  'PUCRT'
+                                     WHEN CUM.PROCESS_TYPE IN (128) THEN  'PSBGS'
+                                     WHEN CUM.PROCESS_TYPE IN (98, 348) THEN 'PPSTS'
+                                     WHEN CUM.PROCESS_TYPE IN (129) THEN 'POSPR'
+                                     WHEN CUM.PROCESS_TYPE IN (57, 94) THEN  'BNSK'
+                                     WHEN CUM.PROCESS_TYPE IN (58) THEN  'IADEB' ELSE  'TMNSZ' END AS ISLEMTIPI,
+
+                               CASE  WHEN VSN_043 IN ('YDMDK', 'YDVDK') THEN 'Yurt_Dışı_Debit'
+                                     WHEN VSN_043 IN ('YDMKK', 'YDVKK') THEN 'Yurt_Dışı_KK'
+                                     WHEN VSN_043 IN ('YIMKK', 'YIVKK', 'YITKK') THEN 'BKM'
+                                     WHEN VSN_043 IN ('GBBNSTK', 'GBBONUS') THEN 'GarantiBonus'
+                                     WHEN VSN_043 IN ('YDAKK') THEN 'Yurt_Dışı_AE'
+                                     WHEN VSN_043 IN ('YIAKK', 'GABONUS') THEN 'American_Express'
+                                     WHEN VSN_043 IN ('YISKK', 'BONUS', 'BNSTK') THEN 'Onus'
+                                     WHEN VSN_043 IN ('YISDK', 'YIMDK', 'YIVDK', 'YITDK') THEN 'Debit'
+                                     WHEN VSN_043 IN ('BNSAB','DNZBONUS','EBTBONUS','FIBABNS',
+                                                      'INGBONUS','TEBNSTK','TEBONUS','TFKBONUS',
+                                                      'BNSPT','BNSTS','DNZBNSTK','INGBNSTK') THEN 'Bonusnet' ELSE '0' END AS KARTTIPI,
+                               /*BANKADA KULLANILAN YENI BIR ÜRÜN OLMASI DURUMUNDA GRUPLAMAYA VSN043'deki ürün eklenmelidir. A.Y. */
+                               CASE
+                                 when VSN_043 in ('YISDK', 'YIMDK', 'YIVDK', 'YITDK') then 'DEBIT_CARD'
+                                 when VSN_043 in ('YIMKK','YIVKK','YITKK','GBBNSTK','GBBONUS',
+                                                  'GABONUS','BNSAB','DNZBONUS','EBTBONUS',
+                                                  'FIBABNS','INGBONUS','TEBNSTK','TEBONUS',
+                                                  'TFKBONUS','BNSPT','BNSTS','DNZBNSTK','INGBNSTK') then  'CREDIT_CARD'
+                                 when VSN_043 in ('YIAKK', 'GABONUS') then 'AMERICAN_EXPRESS' ELSE 'CUSTOM' END CARD_DESC,
+
+                               cum.MERCHANT_CODE,
+                               c.CUSTOMER_CODE,
+                               cum.POS_CODE,
+                               PP.POSS_APPLICATION_TYPE_CODE URUN_KODU,
+                               PP.POSS_APPLICATION_TYPE URUN,
+                               cum.CARD_PAN,
+                               cum.VALOR_DATE,
+                               cum.TX_TIME,
+                              CASE WHEN CUM.CURRENCY_CODE = '949' THEN CUM.AMOUNT ELSE
+                                                        (CASE WHEN CUM.CURRENCY_CODE = '840' THEN CUM.AMOUNT * USD.EVALUATION_BUY_RATE ELSE
+                                                              (CASE WHEN CUM.CURRENCY_CODE = '978' THEN CUM.AMOUNT * EUR.EVALUATION_BUY_RATE END) END)
+                               END   as AMOUNT,
+                               cum.BRANCH_CODE,
+                               CUM.COMMISSION,
+                               cum.CVV,
+                               cum.VSN_043,
+                               cum.CARD_INSTALLMENT_AMOUNT,
+                               cum.CARD_INSTALLMENT_COUNT,
+                               cum.BATCH_CLOSE_DATE,
+                               cum.SERVICE_FEE,
+                               cum.REWARD_BONUS,
+                               cum.REEDEM_BONUS,
+                               cum.AUTH_CODE,
+                               cum.COMMISSION_BSMV,
+                               cum.SERVICE_FEE_BSMV,
+                               CUM.TX_DATE,
+                               CASE WHEN CUM.CURRENCY_CODE = 949 THEN 'TL' ELSE 'YP' END AS PB,
+                               COMMISSION_RATIO
+
+                          FROM POS.BATCH_EFFECTIVE_DATE_CUM@CBRAS_PRODUX cum,
+                               INFRA.CUST_CUST_CUST@CBRAS_PRODUX         c,
+                               POS.POS_MERCHANT_MASTER@CBRAS_PRODUX      p,
+                               OLAP.DM_POS                               pp,
+                               olap.fc_evaluation_rates                  usd,
+                               olap.fc_evaluation_rates                  eur
+                         WHERE p.MERCHANT_CODE = cum.MERCHANT_CODE
+                           AND (p.CUSTOMER_OID(+) = c.OID)
+                           AND to_number(cum.pos_code) =
+                               to_number(pp.poss_no(+))
+                           and usd.currency_code = 'USD'
+                           and eur.currency_code = 'EUR'
+                           and to_char(usd.as_of_date, 'YYYYMMDD') =cum.TX_DATE
+                           and to_char(eur.as_of_date, 'YYYYMMDD') =cum.TX_DATE
+                           AND to_Date(cum.TX_DATE,'yyyymmdd')BETWEEN PDATE_18 AND PDATE
+
+                        ) ISLEMLER LEFT OUTER JOIN ( --Tek çekim işlemler için oranlar alınıyor
+                                                     /*SELECT TO_CHAR(LASTUPDATED, 'YYYYMMDD') AS MIN_TRH,
+                                                            NVL(TO_CHAR(MAX_TRH, 'YYYYMMDD') - 1, '20991231') AS MAX_TRH,
+                                                            CARD_DESC,
+                                                            RATE
+                                                       FROM (SELECT LASTUPDATED,
+                                                                    CARD_DESC,
+                                                                    RATE\**0.95*\ AS RATE, --BSMV hariç hesaplatılıyor.
+                                                                    --Latif Bey'in talebiyle hariç bırakılan BSMV tutarı hesaplama içerisine dahil edilmiştir. Y.T. 20240927
+                                                                    LEAD(LASTUPDATED, 1) OVER(PARTITION BY CARD_DESC ORDER BY LASTUPDATED) AS MAX_TRH
+                                                               FROM SKS.OFSA_D_CLEARING_TRAN_TYPES_LOG --Ödeme sistemleri operasyon md güncelliyor. U.U. 20221202
+                                                              WHERE TRAN_CODE = 5)*/
+
+                                                     --Ödeme Sistemleri tarafından oluşturulan CLEARING tablosu sisteme eklenmiştir. Y.T. 13.05.2025
+                                                     SELECT LAST_UPDATED_DATE AS MIN_TRH,
+                                                            NVL(MAX_TRH- 1, '20991231') AS MAX_TRH,
+                                                            CARD_DESC,
+                                                            RATE
+                                                      FROM (SELECT LAST_UPDATED_DATE,
+                                                                   CARD_DESC,
+                                                                   RATE/**0.95*/ AS RATE, --BSMV hariç hesaplatılıyor.
+                                                                   --Latif Bey'in talebiyle hariç bırakılan BSMV tutarı hesaplama içerisine dahil edilmiştir. Y.T. 20240927
+                                                                   LEAD(LAST_UPDATED_DATE, 1) OVER(PARTITION BY CARD_DESC ORDER BY LAST_UPDATED_DATE) AS MAX_TRH
+                                                              FROM CLEARING.CLEARING_COMM_RATES_LOG@CBRAS_PRODUX a --Ödeme sistemleri operasyon md güncelliyor. U.U. 20221202
+                                                             WHERE TRAN_CODE = 5)
+
+                                                     UNION ALL
+
+                                                     SELECT MIN_TRH AS MIN_TRH,
+                                                            TRUNC(MAX_TRH) AS MAX_TRH,
+                                                            CARD_DESC AS CARD_DESC,
+                                                            RATE AS RATE
+                                                       FROM AE_CARD_RATES -- Biz güncelliyoruz U.U. 20221202
+
+                                                     /*American Express kart tipi için geçmiş tarihli ve güncel komisyon oranları TCMB'NIN SITESINDEN ALINMAKTA VE AE_CARD_RATES TABLOSUNA INSERT EDILMEKTEDIR. A.Y.*/
+                                                    ) CARD_RATES ON (CASE WHEN ISLEMLER.CARD_DESC IN ('CREDIT_CARD', 'DEBIT_CARD') THEN ISLEMLER.CARD_DESC ELSE KARTTIPI END) = CARD_RATES.CARD_DESC
+                                                                  AND ISLEMLER.VALOR_DATE >= CARD_RATES.MIN_TRH
+                                                                  AND ISLEMLER.VALOR_DATE < CARD_RATES.MAX_TRH
+
+                                   LEFT OUTER JOIN ( --Taksitli işlemler için oranlar alınıyor
+                                                    SELECT AS_OF_DATE,
+                                                           TAKSIT,
+                                                           ROUND(SUM(FONLAMA_ORANI_ONUS),4) AS FONLAMA_ORANI,
+                                                           ROUND(SUM(FONLAMA_ORANI_NOTONUS),4) AS FONLAMA_ORANI_T
+                                                       FROM
+                                                        (
+                                                            SELECT --Onus işlemler
+                                                                   A.AS_OF_DATE,
+                                                                   B.TAKSIT,
+                                                                   A.ACTIVE_RATE,
+                                                                   A.ACTIVE_RATE / 360 * B.FONLAMA_GUN_SAYISI FONLAMA_ORANI_ONUS,
+                                                                   0 AS FONLAMA_ORANI_NOTONUS
+                                                             FROM OFSA_SB.SY_ACTIVE_PASSIVE_RATES  A INNER JOIN TAKSIT_FONLAMA_GUN_TBL B ON B.FONLAMA_GUN_SAYISI BETWEEN A.MIN_DAY AND A.MAX_DAY
+                                                            WHERE A.CURRENCY_CODE = 'TL'
+                                                            AND a.as_of_date  BETWEEN PDATE_18 AND PDATE
+                                                            UNION ALL
+                                                            SELECT --Notonus işlemler
+                                                                   A.AS_OF_DATE,
+                                                                   B.TAKSIT,
+                                                                   A.ACTIVE_RATE,
+                                                                   0,
+                                                                   A.ACTIVE_RATE / 360 * B.FONLAMA_GUN_SAYISI FONLAMA_ORANI
+                                                             FROM OFSA_SB.SY_ACTIVE_PASSIVE_RATES  A INNER JOIN TAKSIT_FONLAMA_GUN_TBL_NOTONUS B ON B.FONLAMA_GUN_SAYISI BETWEEN A.MIN_DAY AND A.MAX_DAY
+                                                            WHERE A.CURRENCY_CODE = 'TL'
+                                                            AND a.as_of_date  BETWEEN PDATE_18 AND PDATE
+                                                         )
+                                                    GROUP BY AS_OF_DATE,TAKSIT
+                                                             ) TAKSIT_KOM ON TAKSIT_KOM.TAKSIT = nvl(ISLEMLER.CVV,0)
+                                                                                AND (CASE WHEN ISLEMLER.CVV<>0 AND TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD') - to_Date(ISLEMLER.TX_DATE,'YYYYMMDD')>5 THEN TO_DATE(ISLEMLER.VALOR_DATE,'YYYYMMDD')-30 ELSE to_Date(ISLEMLER.TX_DATE,'YYYYMMDD') END)=TAKSIT_KOM.AS_OF_DATE
+
+                                     LEFT JOIN (SELECT *
+                                                  FROM
+                                                      (--Taksit işlemlerinin müşterinin hesabına taksit taksit geçmesine bakılıyor. E ise fonlama maliyeti yazar,H ise (ertesi gün yazıyorsa) fonlama maliyeti yazmaz.
+                                                      SELECT
+                                                             A.ADVANCE_PAY_IND AS CAL_SART,
+                                                             A.MERCHANT_CODE,
+                                                             RANK() OVER(PARTITION BY A.MERCHANT_CODE ORDER BY A.LASTUPDATED DESC, A.OID) SIRA
+                                                        FROM POS.POS_PRM_MERCHANT_PARAMETER@CBRAS_PRODUX A
+                                                       WHERE A.INSTALLMENT_COUNT<>0
+                                                      )
+                                                  WHERE SIRA=1) PARAMETRE ON PARAMETRE.MERCHANT_CODE=ISLEMLER.MERCHANT_CODE
+
+
+
+                WHERE ISLEMLER.KARTTIPI IS NOT NULL
+                  AND ISLEMLER.ISLEMTIPI IN ('SATIS', 'TKST', 'PUCRT')
+              ) POS,
+              OLAP.FC_CUSTOMER C,
+              OLAP.DM_ORGANIZATION O,
+              OLAP.FC_CUSTOMER SEG
+        WHERE POS.CUSTOMER_CODE = C.CUSTOMER_CODE
+          AND C.AS_OF_DATE = PDATE
+          AND POS.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+          AND seg.AS_OF_DATE = SEGM_TARIH
+          AND TO_NUMBER(C.MAIN_BRANCH_CODE) = TO_NUMBER(O.GL_ORG_CODE)
+          AND POS.TARIH  BETWEEN AYBASI AND  PDATE
+
+        GROUP BY  POS.TARIH ,
+                  POS.CUSTOMER_CODE,
+                  OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU(BUSINESS_SEGMENT_CODE => SEG.BUSINESS_SEGMENT_CODE),
+                  SEG.BUSINESS_SEGMENT_CODE,
+                  CASE WHEN TO_NUMBER(C.MAIN_BRANCH_CODE) IN ('6', '220', '372', '122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,
+                  TO_NUMBER(C.MAIN_BRANCH_CODE),
+                  NVL(C.REPRESENTATIVE_FILE_NO, 999999),
+                  POS.URUN_KODU,
+                  POS.PB
+
+
+        UNION ALL
+
+        ---------------**********   CEPOS EKLENİYOR *************--------------------
+
+        SELECT PDATE AS AS_OF_DATE,
+       B.MUS_NO AS MUS_NO,
+       ISKOLU AS ISKOLU,
+       B.BUSINESS_SEGMENT_CODE as SEGMENT,
+       BOLGE AS BOLGE,
+       SUBE AS SUBE,
+       NVL(B.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+       '999999999' AS URUN_KODU,
+       'POS' AS URUN,
+       /*'BONUS POS' AS URUN,*/
+       'TL' AS PB,
+       'POS_KOMISYONLARI' AS KAYNAK,
+       SUM(TAKAS_KOM_GIDERI) AS TAKAS_KOMISYON_GIDERI
+       FROM
+ (
+       SELECT C.AS_OF_DATE,
+              M.CUSTOMER_CODE AS MUS_NO,
+              OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+              SEG.BUSINESS_SEGMENT_CODE AS BUSINESS_SEGMENT_CODE,
+              CASE WHEN TO_NUMBER(M.MAIN_BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END as BOLGE,
+              TO_NUMBER(M.MAIN_BRANCH_CODE) AS SUBE,
+              M.REPRESENTATIVE_FILE_NO AS REPRESENTATIVE_FILE_NO,
+              SUM(C.DAILY_BONUS_CIRO) AS CIRO,
+              SUM(C.DAILY_BONUS_CIRO) * 0.0172 AS POS_KOMISYON_GELIRI,
+              SUM(C.DAILY_BONUS_CIRO) * 0.0172 AS TAKAS_KOM_GIDERI
+        FROM  BI_APP.CEPOS_ODEAL C,
+              OLAP.FC_CUSTOMER M,
+              OLAP.FC_CUSTOMER SEG,
+              DEPOSIT.DEPOSIT_ACCOUNT@CBRAS_PRODUX D,
+              OLAP.DM_ORGANIZATION O
+       WHERE  (M.TAX_NO=C.VERGI_NO OR to_number(SUBSTR(D.IBAN_NO, INSTR(D.IBAN_NO, 'TR')+2, 30))=to_number(C.IBAN))
+              AND    C.AS_OF_DATE= PDATE
+              AND    C.AS_OF_DATE= M.AS_OF_DATE
+              AND    SEG.AS_OF_DATE= SEGM_TARIH
+              AND    SEG.CUSTOMER_CODE= D.CUST_CODE
+              AND    D.CUST_CODE=M.CUSTOMER_CODE
+              AND    M.MAIN_BRANCH_CODE=O.GL_ORG_CODE
+              AND    D.CURRENCY_CODE= 'TL'
+              AND    C.DAILY_BONUS_CIRO != 0
+       GROUP BY C.AS_OF_DATE,
+                M.CUSTOMER_CODE,
+                OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                SEG.BUSINESS_SEGMENT_CODE,
+                M.REPRESENTATIVE_FILE_NO,
+                CASE WHEN TO_NUMBER(M.MAIN_BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,
+                TO_NUMBER(M.MAIN_BRANCH_CODE)
+       ) B
+        group by PDATE,
+               B.MUS_NO,
+               ISKOLU,
+               B.BUSINESS_SEGMENT_CODE,
+               BOLGE,
+               SUBE,
+               NVL(B.REPRESENTATIVE_FILE_NO, 999999)
+
+
+
+
+                 );
+    COMMIT;
+
+    /*******************************************************************************************************************/
+
+    OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID       => PID,
+                                   SUCCESS   => 1,
+                                   PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID       => PID,
+                                     SUCCESS   => 0,
+                                     FAIL      => 'POSITION: ' ||
+                                                  ERROR_LOCATION ||
+                                                  ' ERROR: ' || ABS(SQLCODE) || ':' ||
+                                                  SQLERRM || ' ' ||
+                                                  DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                     PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

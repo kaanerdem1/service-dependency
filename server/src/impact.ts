@@ -21,7 +21,7 @@ export const IMPACT_VIEW = {
 export function buildImpactGraph(
   centerId: string,
   maxNodes: number,
-  maxHops = IMPACT_VIEW.maxHops,
+  maxHops: number = IMPACT_VIEW.maxHops,
 ) {
   const center = services[centerId]
   if (!center) return undefined

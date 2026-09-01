@@ -1,0 +1,357 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_FX_TRV_ISLM_GDR IS
+
+PROCEDURE MS_EX_OFSA_SB_FX_TRV_ISLM_GDR (SECIM NUMBER)IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH         DATE;
+    READY              NUMBER;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+   SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT), TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --SEGMENTASYON ATAMASI
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_FX_TRV_ISLM_GDR',
+                                          PSUBMODULE   => 'EX_OFSA_SB_FX_TRV_ISLM_GDR',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+   Loop
+        SELECT count(*)
+        into READY
+        FROM DM.OFSA_DAILY_INVESTMENT@QADATA_LINK A
+        where as_of_date=PDATE
+        AND PRODUCT_TYPE = 'BFX';
+        exit when READY>0;
+        sleep(300000);--5dk
+        end loop;
+   /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_FX_TRV_ISLM_GDR';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+    
+    EXECUTE IMMEDIATE 'ALTER session set nls_date_format= '||'yyyymmdd'||''; 
+
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+     AYBASI:=PDATE;
+    END IF; 
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_FX_TRV_ISLM_GDR
+
+     (
+    SELECT PDATE AS AS_OF_DATE,
+       NVL(MUS_NO,999999999) AS MUS_NO,
+       ISKOLU AS ISKOLU,
+       SEGMENT AS SEGMENT,
+       CASE WHEN TO_NUMBER(SUBE) IN ('6','122', '220','372') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END BOLGE,
+       TO_NUMBER(SUBE) AS SUBE,
+       NVL(MT,88888) AS MT,
+       '88888888' AS URUN_KODU,
+       URUN,
+       CCY AS PB,
+       'FX_HAZINE_GELIR_GIDER' AS KAYNAK,
+       SUM(BAKIYE) BAKIYE
+    FROM OLAP.DM_ORGANIZATION O,
+       (SELECT PDATE AS TARIH,
+               CASE WHEN A.CUS_NO IS NULL THEN TO_NUMBER(A.ORG_CODE) ELSE TO_NUMBER(C.MAIN_BRANCH_CODE) END AS SUBE,
+               A.CUS_NO AS MUS_NO,
+               A.CUS_NAME AS MUS_ADI,
+               'BFX' AS URUN,
+               OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+               SEG.BUSINESS_SEGMENT_CODE AS SEGMENT,
+               A.ISO_CURRENCY_CD CCY,
+               NVL(C.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+               SUM(A.FX_GAIN_LOSS) AS BAKIYE
+          FROM DM.OFSA_DAILY_INVESTMENT@QADATA_LINK A, OLAP.FC_CUSTOMER C, OLAP.FC_CUSTOMER SEG
+         WHERE A.AS_OF_DATE BETWEEN  AYBASI AND PDATE
+           AND C.AS_OF_DATE (+) = PDATE
+           AND A.CUS_NO  = C.CUSTOMER_CODE (+)
+           AND SEG.AS_OF_DATE (+) = SEGM_TARIH
+           AND A.CUS_NO = SEG.CUSTOMER_CODE (+)
+           AND PRODUCT_TYPE = 'BFX'
+          -- AND NVL(A.CUS_NO,0)!=0
+           AND A.FX_GAIN_LOSS <> 0
+           AND A.ID_NUMBER NOT LIKE 'BFXDCD%'
+           AND A.ID_NUMBER NOT LIKE 'BFXFW%'        
+         GROUP BY CASE WHEN A.CUS_NO IS NULL THEN TO_NUMBER(A.ORG_CODE) ELSE TO_NUMBER(C.MAIN_BRANCH_CODE) END, A.CUS_NO, A.CUS_NAME,
+            OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                  SEG.BUSINESS_SEGMENT_CODE,
+                  A.ISO_CURRENCY_CD,
+                  NVL(C.REPRESENTATIVE_FILE_NO, 999999)
+        UNION ALL
+        SELECT PDATE AS TARIH,
+               TO_NUMBER(C.MAIN_BRANCH_CODE) AS SUBE,
+               TO_NUMBER(A.CUST_NO) AS MUS_NO,
+               A.CUST_NAME AS MUS_ADI,
+               'DCD' AS URUN,
+               OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+               SEG.BUSINESS_SEGMENT_CODE AS SEGMENT,
+               A.CURRENCY_CODE CCY,
+               NVL(C.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+               SUM(A.PROFIT_LOSS) BAKIYE        
+          FROM BFX.DCD_OP_TRANSACTION@CBRAS_PRODUX A, OLAP.FC_CUSTOMER C, OLAP.FC_CUSTOMER SEG
+         WHERE TO_DATE(A.VALOR_DATE,'YYYYMMDD') BETWEEN AYBASI AND PDATE
+           AND C.CUSTOMER_CODE = A.CUST_NO
+           AND C.AS_OF_DATE = PDATE
+           AND SEG.CUSTOMER_CODE = A.CUST_NO
+           AND SEG.AS_OF_DATE = SEGM_TARIH
+         GROUP BY TO_NUMBER(C.MAIN_BRANCH_CODE),
+                  TO_NUMBER(A.CUST_NO),
+                  A.CUST_NAME,
+                  OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                  SEG.BUSINESS_SEGMENT_CODE,
+                  A.CURRENCY_CODE,
+                  NVL(C.REPRESENTATIVE_FILE_NO, 999999)        
+        UNION ALL
+        SELECT TARIH,
+               SUBE,
+               MUS_NO,
+               MUS_ADI,
+               'FORWARD' AS URUN,
+               ISKOLU,
+               SEGMENT,
+               CCY,
+               MT,
+               PV        
+          FROM (SELECT PDATE AS TARIH,
+                       TO_NUMBER(C.MAIN_BRANCH_CODE) AS SUBE,
+                       A.REFERENCE_ID,
+                       TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') - PDATE) AS TERM,
+                       TO_NUMBER(A.CUST_NO) AS MUS_NO,
+                       A.CUST_NAME AS MUS_ADI,
+                       'FORWARD' AS URUN,
+                       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+                       SEG.BUSINESS_SEGMENT_CODE SEGMENT,
+                       NVL(C.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+                       A.CURRENCY_CODE CCY,
+                       SUM(A.PROFIT_LOSS) AS KAR_ZARAR,
+                    --   ROUND(SUM(A.PROFIT_LOSS /
+                    --             POWER((1 + LIB.ORAN / 36500),
+                    --                   (TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') - PDATE + 1)))),
+                    --         2) AS PV
+                       SUM(A.PROFIT_LOSS) AS PV
+                  FROM BFX.FXFWD_OP_TRANSACTION@CBRAS_PRODUX A,
+                       OLAP.FC_CUSTOMER                      C,  
+                       OLAP.FC_CUSTOMER                      SEG--,                     
+--                       (SELECT A.RATE_DATE,
+--                               CASE
+--                                 WHEN A.MATURITY <= 1 THEN
+--                                  '1'
+--                                 WHEN A.MATURITY <= 7 THEN
+--                                  '7'
+--                                 WHEN A.MATURITY <= 31 THEN
+--                                  '31'
+--                                 WHEN A.MATURITY <= 63 THEN
+--                                  '63'
+--                                 WHEN A.MATURITY <= 92 THEN
+--                                  '92'
+--                                 WHEN A.MATURITY <= 184 THEN
+--                                  '184'
+--                                 WHEN A.MATURITY <= 274 THEN
+--                                  '274'
+--                                 WHEN A.MATURITY <= 365 THEN
+--                                  '365'
+--                                 WHEN A.MATURITY <= 459 THEN
+--                                  '459'
+--                                 WHEN A.MATURITY <= 550 THEN
+--                                  '550'
+--                                 WHEN A.MATURITY <= 640 THEN
+--                                  '640'
+--                                 WHEN A.MATURITY <= 732 THEN
+--                                  '732'
+--                                 ELSE
+--                                  '732+'
+--                               END TERM,
+--                               ROUND(AVG(A.INTEREST_RATE) * 100, 4) AS ORAN
+--                          FROM FINMAN.LIBOR_RATE@CBRAS_PRODUX A
+--                         WHERE TO_DATE(A.RATE_DATE,'YYYYMMDD') =PDATE
+--                           AND A.CURVE_NAME IN ('TRL.COMIRSZ', 'TRL.COMZ','TL.OIS')
+--                        --    AND A.REFERENCE_ID='DAY_CLOSE'
+--                         GROUP BY A.RATE_DATE,
+--                                  CASE
+--                                    WHEN A.MATURITY <= 1 THEN
+--                                     '1'
+--                                    WHEN A.MATURITY <= 7 THEN
+--                                     '7'
+--                                    WHEN A.MATURITY <= 31 THEN
+--                                     '31'
+--                                    WHEN A.MATURITY <= 63 THEN
+--                                     '63'
+--                                    WHEN A.MATURITY <= 92 THEN
+--                                     '92'
+--                                    WHEN A.MATURITY <= 184 THEN
+--                                     '184'
+--                                    WHEN A.MATURITY <= 274 THEN
+--                                     '274'
+--                                    WHEN A.MATURITY <= 365 THEN
+--                                     '365'
+--                                    WHEN A.MATURITY <= 459 THEN
+--                                     '459'
+--                                    WHEN A.MATURITY <= 550 THEN
+--                                     '550'
+--                                    WHEN A.MATURITY <= 640 THEN
+--                                     '640'
+--                                    WHEN A.MATURITY <= 732 THEN
+--                                     '732'
+--                                    ELSE
+--                                     '732+'
+--                                  END                        
+--                        ) LIB                
+                 WHERE TO_DATE(A.VALOR_DATE,'YYYYMMDD') BETWEEN AYBASI AND PDATE
+                   AND C.CUSTOMER_CODE = A.CUST_NO
+                   AND C.AS_OF_DATE = SEGM_TARIH
+                   AND SEG.CUSTOMER_CODE = A.CUST_NO
+                   AND SEG.AS_OF_DATE = SEGM_TARIH
+                --   AND TO_DATE(LIB.RATE_DATE,'YYYYMMDD') = PDATE
+--                   AND LIB.TERM = (CASE
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 1 THEN
+--                                      '1'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 7 THEN
+--                                      '7'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 31 THEN
+--                                      '31'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 63 THEN
+--                                      '63'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 92 THEN
+--                                      '92'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 184 THEN
+--                                      '184'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 274 THEN
+--                                      '274'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 365 THEN
+--                                      '365'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 459 THEN
+--                                      '459'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 550 THEN
+--                                      '550'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 640 THEN
+--                                      '640'
+--                                     WHEN TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -
+--                                                    PDATE + 1) <= 732 THEN
+--                                      '732'
+--                                     ELSE
+--                                      '732+'
+--                                   END)                
+                 GROUP BY TO_NUMBER(C.MAIN_BRANCH_CODE),
+                          TO_NUMBER(A.CUST_NO),
+                          A.CUST_NAME,
+                          A.REFERENCE_ID,
+                          TO_NUMBER(TO_DATE(A.RETURN_DATE,'YYYYMMDD') -PDATE),
+                          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                          SEG.BUSINESS_SEGMENT_CODE,
+                          NVL(C.REPRESENTATIVE_FILE_NO, 999999),
+                          A.CURRENCY_CODE)
+         ----------------------------------------------------------------------------------------------------------------------------------------------------------  
+         UNION ALL
+         SELECT PDATE AS TARIH,
+                TO_NUMBER(C.MAIN_BRANCH_CODE) AS SUBE,
+                TO_NUMBER(M.CUSTOMER_NO) AS MUS_NO,
+                C.NAME AS MUS_ADI,
+                'OPSİYON' AS URUN,
+                OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+                SEG.BUSINESS_SEGMENT_CODE SEGMENT,
+                M.BUY_CURRENCY_CODE CCY,
+                NVL(C.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+                SUM(M.PROFIT_LOSS) AS BAKIYE         
+           FROM BFX.OPTION_OP_TRANSACTION@CBRAS_PRODUX M, OLAP.FC_CUSTOMER C, OLAP.FC_CUSTOMER SEG         
+          WHERE M.CUSTOMER_NO = C.CUSTOMER_CODE
+            AND TO_DATE(M.TRANSACTION_DATE, 'YYYYMMDD') BETWEEN AYBASI AND PDATE
+            AND C.AS_OF_DATE = PDATE
+            AND SEG.AS_OF_DATE = SEGM_TARIH
+            AND M.CUSTOMER_NO = SEG.CUSTOMER_CODE
+            AND M.PROFIT_LOSS <> 0         
+          GROUP BY PDATE,
+                   TO_NUMBER(C.MAIN_BRANCH_CODE),
+                   TO_NUMBER(M.CUSTOMER_NO),
+                   C.NAME,
+                   OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                   SEG.BUSINESS_SEGMENT_CODE,
+                   NVL(C.REPRESENTATIVE_FILE_NO, 999999),
+                   M.BUY_CURRENCY_CODE                   
+         UNION ALL         
+           SELECT PDATE AS TARIH,
+                      TO_NUMBER(C.MAIN_BRANCH_CODE) AS SUBE,
+                      TO_NUMBER(A.INV_ACC_CUST_CODE) AS MUS_NO,
+                      C.NAME AS MUS_ADI,
+                      'EUROBOND' AS URUN,
+                      OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+                      SEG.BUSINESS_SEGMENT_CODE AS SEGMENT,
+                      'YP' AS CCY,
+                      NVL(C.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+                      SUM((ABS(A.TREASURE_DIRTY_UNIT_PRICE-A.DIRTY_UNIT_PRICE)*A.NOMINAL*A.EXCHANGE_RATE/100)) AS KAR_ZARAR
+           FROM FIS.FISTRADE_OPERATION@CBRAS_PRODUX      A,
+                OLAP.FC_CUSTOMER                         C,
+                OLAP.FC_CUSTOMER                         SEG,
+                OLAP.DM_ORGANIZATION                     DO
+             -- OFSA_DAILY.CUST_REP_CUST@OFSA_ON_OLAXRUN CR                               
+              WHERE TO_DATE(A.VALUE_DATE,'YYYYMMDD') BETWEEN AYBASI AND PDATE
+              AND A.TUREV_PURPOSE='1'
+              AND (ABS(A.TREASURE_DIRTY_UNIT_PRICE-A.DIRTY_UNIT_PRICE)*A.NOMINAL*A.EXCHANGE_RATE/100)<>0
+              AND A.INV_ACC_CUST_CODE!=1
+              AND C.CUSTOMER_CODE = A.INV_ACC_CUST_CODE
+              AND C.AS_OF_DATE = PDATE
+              AND SEG.CUSTOMER_CODE = A.INV_ACC_CUST_CODE
+              AND SEG.AS_OF_DATE = SEGM_TARIH   
+              AND TO_NUMBER(C.MAIN_BRANCH_CODE)= DO.ORG_CODE
+         GROUP BY TO_NUMBER(C.MAIN_BRANCH_CODE),
+                  PDATE,
+                  TO_NUMBER(a.INV_ACC_CUST_CODE),
+                  C.NAME,
+                  SEG.BUSINESS_SEGMENT_CODE,
+                  NVL(C.REPRESENTATIVE_FILE_NO, 999999),
+                  OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE)
+            )
+          WHERE TO_NUMBER(O.GL_ORG_CODE) = TO_NUMBER(SUBE)
+          GROUP BY MUS_NO, ISKOLU, SEGMENT, TO_NUMBER(SUBE), MT,
+          CASE WHEN TO_NUMBER(SUBE) IN ('6','122', '220','372') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,URUN,CCY 
+     );
+
+      COMMIT;
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/*/
+grant execute on OFSA_SB.MS_EX_OFSA_SB_FX_TRV_ISLM_GDR to ALTERNATIVE_DATA;
+grant execute on OFSA_SB.MS_EX_OFSA_SB_FX_TRV_ISLM_GDR to BI_APP;
+grant execute on OFSA_SB.MS_EX_OFSA_SB_FX_TRV_ISLM_GDR to MSTR_APP;*/
+/

@@ -1,0 +1,764 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_PROD_OFSA_SB_CUST_DETAIL_L IS
+
+      PROCEDURE MS_PROD_OFSA_SB_CUST_DETAIL_L IS
+
+      ERROR_LOCATION        NUMBER;
+      PID                   NUMBER;
+      PCRITICAL_LVL         NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+      PDATE                 DATE;
+      PASOFDATE             VARCHAR2(8);
+      AYBASI                DATE;
+      AYSONU                DATE;
+      YILBASI               DATE;
+      SEGM_TARIH            DATE;
+      PDATE_PASIFTEKLIF     DATE;
+      READY                 NUMBER;
+
+
+      BEGIN
+
+      ERROR_LOCATION := 1;
+      SELECT PRM_VALUE,
+             TO_DATE(PRM_VALUE, PRM_FORMAT),
+             TRUNC(TO_DATE(PRM_VALUE,'yyyymmdd'),'MM'),
+             TM.CALENDAR_MONTH_END,
+             TRUNC(TO_DATE(PRM_VALUE,'yyyymmdd'),'YYYY'),
+             CASE WHEN TO_DATE(PRM_VALUE, PRM_FORMAT)=TO_DATE(TRUNC(SYSDATE))  THEN TO_DATE(PRM_VALUE, 'YYYYMMDD')-1 ELSE TO_DATE(PRM_VALUE, 'YYYYMMDD') END,
+             TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+        INTO PASOFDATE,
+             PDATE,
+             AYBASI,
+             AYSONU,
+             YILBASI,
+             PDATE_PASIFTEKLIF,
+             SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T,OLAP.DM_TIME TM
+      WHERE PARAMETER = 'OFSA_SB_DATE'
+      AND TO_DATE(T.PRM_VALUE,'YYYYMMDD')=TM.CALENDAR_DATE;
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+      PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_PROD_OFSA_SB_CUST_DETAIL_L',
+                                          PSUBMODULE   => 'PROD_OFSA_SB_CUST_DETAIL_L',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+
+      OFSA_SB.MN_UTILITY.PARTITION_CREATE(TOWNER         => 'OFSA_SB', --PARTION OLUŞTURMA IŞLEMI YAPILIYOR
+                                          TNAME          => 'PROD_CUST_DETAIL_LOG',
+                                          PARTITION_DATE => PDATE );
+
+  /*****************************************************************************************************************/
+
+
+     EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+     EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.TEMP_CUST_DETAIL';
+
+
+    INSERT /*+ parallel(8)*/
+         INTO
+
+             OFSA_SB.TEMP_CUST_DETAIL
+          ( SELECT  /*+ PARALLEL(A,4) PARALLEL(B,4) */
+              /*A.AS_OF_DATE,*/CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN A.AS_OF_DATE ELSE AYBASI-1 END AS_OF_DATE,
+              SYSDATE,
+              A.MUS_NO,
+              A.ISKOLU,
+              A.SEGMENT,
+              ORG.BOLGE_KODU AS BOLGE,
+              CASE WHEN A.MUS_NO in /*SESIS 395998 - TALEP EDİLEN MÜŞTERİLERİN KARLILIĞININ SİLİVRİ ŞUBEYE YANSITILMASI A.Y.K. 04.04.2026*/
+                                (
+                                '35902783',
+                                '33874091',
+                                '30442625',
+                                '31226704',
+                                '31226704',
+                                '37463183',
+                                '36985391',
+                                '33292087',
+                                '32124548',
+                                '32124553',
+                                '34152938'
+                                ) THEN 310 ELSE A.SUBE END as SUBE,
+              CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END MT, --31.01.2021 tarihinin aylık yüklenmesinden kaynaklı sorun sebebiyle bu düzenleme yapılmıştır. 2022 yılında iptal edilecek. U.U.,A.Y.,S.A.
+              A.URUN_KODU,
+              A.URUN,
+              A.PB,
+              NULL,
+              SUM(A.FAIZ_DISI_GELIR_BHG) AS  FAIZ_DISI_GELIR_BHG,
+              SUM(A.FAIZ_DISI_GELIR_DIGER) AS  FAIZ_DISI_GELIR_DIGER,
+              SUM(A.FAIZ_DISI_GELIR_KREDI) AS  FAIZ_DISI_GELIR_KREDI,
+              SUM(A.FAIZ_DISI_GELIR_KREDI_KARTI) AS  FAIZ_DISI_GELIR_KREDI_KARTI,
+              SUM(A.FAIZ_DISI_GIDER_AMORTISMAN) AS  FAIZ_DISI_GIDER_AMORTISMAN,
+              SUM(A.FAIZ_DISI_GIDER_DAVA) AS  FAIZ_DISI_GIDER_DAVA,
+              SUM(A.FAIZ_DISI_GIDER_ISLETME) AS  FAIZ_DISI_GIDER_ISLETME,
+              SUM(A.FAIZ_DISI_GIDER_PERSONEL) AS  FAIZ_DISI_GIDER_PERSONEL,
+              SUM(A.FAIZ_DISI_GIDER_VERGI) AS  FAIZ_DISI_GIDER_VERGI,
+              SUM(A.FAIZ_DISI_GIDER_VERILEN_KOM) AS  FAIZ_DISI_GIDER_VERILEN_KOM,
+              SUM(A.FAIZ_DISI_GIDER_DESMER) AS  FAIZ_DISI_GIDER_DESMER,
+              SUM(A.FAIZ_GELIRI_KREDI_KARTI) AS  FAIZ_GELIRI_KREDI_KARTI,
+              SUM(A.FAIZ_GELIRI_KREDILER) AS  FAIZ_GELIRI_KREDILER,
+              SUM(A.FAIZ_GELIRI_LINEER_KK) AS  FAIZ_GELIRI_LINEER_KK,
+              SUM(A.FAIZ_GELIRI_LINEER_KRD) AS  FAIZ_GELIRI_LINEER_KRD,
+              SUM(A.FAIZ_GIDERI_DIGER) AS  FAIZ_GIDERI_DIGER,
+              SUM(A.FAIZ_GIDERI_GM_BILANCO) AS  FAIZ_GIDERI_GM_BILANCO,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_LINEER)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_LINEER) END AS  FAIZ_GIDERI_LINEER,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_MEVDUAT)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_MEVDUAT) END AS  FAIZ_GIDERI_MEVDUAT,
+              SUM(A.FONLAMA_GETIRI_GM_BILANCO) AS  FONLAMA_GETIRI_GM_BILANCO,
+              SUM(A.FONLAMA_GETIRI_MEVD_BLOKE) AS  FONLAMA_GETIRI_MEVD_BLOKE,
+              SUM(A.FONLAMA_MALIYETI_KK) AS  FONLAMA_MALIYETI_KK,
+              SUM(A.FONLAMA_MALIYETI_KREDI) AS  FONLAMA_MALIYETI_KREDI,
+              SUM(A.FX_KAR_ZARAR) AS  FX_KAR_ZARAR,
+              SUM(A.KASA_FONLAMA_TL) AS  KASA_FONLAMA_TL,
+              SUM(A.KASA_FONLAMA_YP) AS  KASA_FONLAMA_YP,
+              SUM(A.MUNZAM_MALIYETI) AS  MUNZAM_MALIYETI,
+              SUM(A.SKYATIRIM_SUBE_KULL_PAYI) AS  SKYATIRIM_SUBE_KULL_PAYI,
+              SUM(A.POS_BLOKE_GELIR) AS  POS_BLOKE_GELIR,
+              SUM(A.POS_KOM_GEL_ISYERI_BEDELI) AS  POS_KOM_GEL_ISYERI_BEDELI,
+              SUM(A.POS_KOM_GEL_KIRA_BEDELI) AS  POS_KOM_GEL_KIRA_BEDELI,
+              SUM(A.POS_KOM_GEL_SERVIS_BEDELI) AS  POS_KOM_GEL_SERVIS_BEDELI,
+              SUM(A.POS_KOM_GEL_TOPLAM) AS  POS_KOM_GEL_TOPLAM,
+              SUM(A.POS_KOM_GEL_UYE_ISYERI_KATKI) AS  POS_KOM_GEL_UYE_ISYERI_KATKI,
+              SUM(A.POS_KOMISYON_GIDER) AS  POS_KOMISYON_GIDER,
+              SUM(A.SEPET_2_AYRILAN_KARSILIK) AS  SEPET_2_AYRILAN_KARSILIK,
+              SUM(A.SEPET_3_AYRILAN_KARSILIK) AS  SEPET_3_AYRILAN_KARSILIK,
+              SUM(A.SKYATIRIM_FON_VERIM) AS  SKYATIRIM_FON_VERIM,
+              SUM(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI) AS  SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+              SUM(A.SKYATIRIM_HS_KOM_TUTARI) AS  SKYATIRIM_HS_KOM_TUTARI,
+              SUM(A.SKYATIRIM_SGMK_VERIM) AS  SKYATIRIM_SGMK_VERIM,
+              SUM(A.SKYATIRIM_SWEET_KOM_TUTARI) AS  SKYATIRIM_SWEET_KOM_TUTARI,
+              SUM(A.SKYATIRIM_VOB_KOM_TUTARI) AS  SKYATIRIM_VOB_KOM_TUTARI,
+              SUM(A.VADE_BOZUM_KAR_ZARAR) AS  VADE_BOZUM_KAR_ZARAR,
+              SUM(A.GM_MASRAF_PAYI) AS  GM_MASRAF_PAYI,
+              SUM(A.SUBE_KIRA) AS  SUBE_KIRA,
+              SUM(A.HAZINE_BONO_PRIMLERI) AS  HAZINE_BONO_PRIMLERI,
+              SUM(A.VADESIZ_MEVDUAT_PRIM) AS  VADESIZ_MEVDUAT_PRIM,
+              SUM(A.SEKERKUR_ALT_FW_DCD_PRIM) AS  SEKERKUR_ALT_FW_DCD_PRIM,
+              SUM(A.VADELI_MEV_PRIM) AS  VADELI_MEV_PRIM,
+              SUM(A.SKLEASING_ISLEM_YON_KOM) AS  SKLEASING_ISLEM_YON_KOM,
+              SUM(A.DIS_TICARET_PRIM) AS  DIS_TICARET_PRIM,
+              SUM(A.NAKIT_YONETIM_PRIM) AS  NAKIT_YONETIM_PRIM,
+              SUM(A.KUL_KAY_HATALI_ISL_MALIYET) AS  KUL_KAY_HATALI_ISL_MALIYET,
+              SUM(A.EFT_KAP_SAATI_SON_EK_UCRETI) AS  EFT_KAP_SAATI_SON_EK_UCRETI,
+              SUM(A.KULLANILMAYAN_IZIN_MALIYETI) AS  KULLANILMAYAN_IZIN_MALIYETI,
+              SUM(A.YATIRIM_EKSTRE_UCRETI) AS  YATIRIM_EKSTRE_UCRETI,
+              SUM(A.FON_YON_FX_ISLEM_IPTAL_CEZA) AS  FON_YON_FX_ISLEM_IPTAL_CEZA,
+              SUM(A.HATALI_ISLEM_MALIYETI) AS  HATALI_ISLEM_MALIYETI,
+              SUM(A.GMENKUL_PRIMI) AS  GMENKUL_PRIMI,
+              SUM(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR) AS  SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+              SUM(GECICI_GOREV_MALIYETI)   AS GECICI_GOREV_MALIYETI,
+              SUM(PASIF_TEKLIF_ORANI_CEZASI) AS PASIF_TEKLIF_ORANI_CEZASI,
+              SUM(PASIF_BAYI_ORANI_CEZASI) AS PASIF_BAYI_ORANI_CEZASI,
+              SUM(SEKAR) AS SEKAR,
+              SUM(A.EK_ALAN_6) AS  EK_ALAN_6,
+              SUM(A.INAKTIF_POS_MALIYETI) AS  INAKTIF_POS_MALIYETI,
+              SUM(A.SEPET_1_AYRILAN_KARSILIK) AS  SEPET_1_AYRILAN_KARSILIK,
+              SUM(A.ORT_BAKIYE_YILLIK) AS  ORT_BAKIYE_YILLIK,
+              SUM(A.BAKIYE) AS  BAKIYE,
+              0,
+              SUM(A.FAIZ_GELIRI_SORUNLU_KRD) AS FAIZ_GELIRI_SORUNLU_KRD,
+              SUM(A.FAIZ_GIDERI_SORUNLU_KRD) AS FAIZ_GIDERI_SORUNLU_KRD,
+              SUM(A.FAIZ_DISI_GELIR_ATM) AS FAIZ_DISI_GELIR_ATM,
+              SUM(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD) AS FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+              SUM(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD) AS FAIZ_GIDERI_LINEER_SORUNLU_KRD,
+              SUM(A.FONLAMA_GETIRI_KK_ALACAK_BKY) AS FONLAMA_GETIRI_KK_ALACAK_BKY,
+              SUM(A.HASAT_POS_BLOKE_GELIR) AS  HASAT_POS_BLOKE_GELIR,
+              NVL(A.PRIVATE_BRANCH_FLAG,0) AS PRIVATE_BRANCH_FLAG,
+              NVL(A.GOLGE_FLAG,0) AS GOLGE_FLAG
+         FROM OFSA_SB.PROD_CUST_DETAIL A,
+              OFSA_SB.BOLGELER ORG
+        WHERE A.AS_OF_DATE BETWEEN YILBASI AND PDATE
+          AND (CASE WHEN A.MUS_NO in /*SESIS 395998 - TALEP EDİLEN MÜŞTERİLERİN KARLILIĞININ SİLİVRİ ŞUBEYE YANSITILMASI A.Y.K. 04.04.2026*/
+                                (
+                                '35902783',
+                                '33874091',
+                                '30442625',
+                                '31226704',
+                                '31226704',
+                                '37463183',
+                                '36985391',
+                                '33292087',
+                                '32124548',
+                                '32124553',
+                                '34152938'
+                                ) THEN 310 ELSE A.SUBE END)=ORG.SUBE_KODU
+        GROUP BY
+                /*A.AS_OF_DATE,*/CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN A.AS_OF_DATE ELSE AYBASI-1 END,
+                A.MUS_NO,
+                A.ISKOLU,
+                A.SEGMENT,
+                ORG.BOLGE_KODU,
+                A.SUBE,
+                CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END,
+                A.URUN_KODU,
+                A.URUN,
+                A.PB,
+                NVL(A.PRIVATE_BRANCH_FLAG,0),
+                NVL(A.GOLGE_FLAG,0)
+           );
+
+      COMMIT;
+    /*******************************************************************************************************************/
+   --Aktif-pasif oranları işleniyor
+
+    OFSA_SB.MN_UTILITY.PARTITION_CREATE(TOWNER         => 'OFSA_SB', --PARTION OLUŞTURMA IŞLEMI YAPILIYOR
+                                        TNAME          => 'SY_ACTIVE_PASSIVE_RATES',
+                                        PARTITION_DATE => PDATE );
+
+       lOOP
+        SELECT COUNT(*)
+        INTO READY
+        FROM SUMMARY_PROD.GL_LIABILITY
+        WHERE AS_OF_DATE=PDATE
+         AND NVL(COST_RATE,POOL_RATE) IS NOT NULL;
+        EXIT WHEN (READY) > 0;
+        SLEEP(30000);
+      END LOOP;
+
+        DELETE
+           FROM OFSA_SB.SY_ACTIVE_PASSIVE_RATES
+           WHERE AS_OF_DATE=PDATE;
+           COMMIT;
+
+     -----------------------------
+            INSERT
+               INTO OFSA_SB.SY_ACTIVE_PASSIVE_RATES
+             (
+                 SELECT AS_OF_DATE,
+                         CURRENCY_CODE,
+                         DAY_INT_OID,
+                         TO_NUMBER(SUBSTR(DAY_INT_OID,1,4)) AS MIN_DAY,
+                         TO_NUMBER(SUBSTR(DAY_INT_OID,6,4)) AS MAX_DAY,
+                         ROUND(PASSIVE_RATE, 2) AS PASSIVE_RATE,
+                         ROUND(ACTIVE_RATE, 2) AS ACTIVE_RATE
+                   FROM (SELECT *
+                            FROM (SELECT T.CALENDAR_DATE AS AS_OF_DATE,
+                                         A.CALENDAR_DATE,
+                                         A.CURRENCY_CODE,
+                                         A.DAY_INT_OID,
+                                         A.PASSIVE_RATE,
+                                         A.ACTIVE_RATE,
+                                         RANK() OVER(PARTITION BY A.CALENDAR_DATE, A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.VALOR DESC, A.ACT_DATE DESC, A.ACT_TIME DESC, A.LASTUPDATED DESC) AS SIRA
+                                    FROM OLAP.DM_TIME T,
+                                         (SELECT *
+                                            FROM (SELECT T.CALENDAR_DATE,
+                                                         A.VALOR,
+                                                         A.ACT_DATE,
+                                                         A.ACT_TIME,
+                                                         A.LASTUPDATED,
+                                                         A.CURRENCY_CODE,
+                                                         A.DAY_INT_OID,
+                                                         A.PASSIVE_RATE,
+                                                         A.MARGIN,
+                                                         A.ACTIVE_RATE,
+                                                         ROW_NUMBER() OVER(PARTITION BY T.CALENDAR_DATE, A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.VALOR DESC, A.ACT_DATE DESC, A.ACT_TIME DESC, A.LASTUPDATED DESC) AS RW_NUM
+                                                    FROM OLAP.DM_TIME T,
+                                                         (SELECT OID,
+                                                                 LASTUPDATED,
+                                                                 STATUS,
+                                                                 VALOR,
+                                                                 ACT_DATE,
+                                                                 ACT_TIME,
+                                                                USER_NO,
+                                                                 CURRENCY_CODE,
+                                                                 DECODE(DAY_INT_OID,
+                                                                        '0021_0029_3HAFTA',
+                                                                        '0021_0031_1AYLIK',
+                                                                        '0030_0049_1AYLIK',
+                                                                        '0032_0049_GUNLUK',
+                                                                        '0050_0089_2AYLIK',
+                                                                        '0050_0091_3AYLIK',
+                                                                        '0090_0119_3AYLIK',
+                                                                        '0092_0119_GUNLUK',
+                                                                        '0150_0179_5AYLIK',
+                                                                        '0150_0180_6AYLIK',
+                                                                        '0180_0364_6AYLIK',
+                                                                        '0181_0270_9AYLIK',
+                                                                        DAY_INT_OID) AS DAY_INT_OID,
+                                                                 PASSIVE_RATE,
+                                                                 MARGIN,
+                                                                 ACTIVE_RATE,
+                                                                 APPROVER_NO
+                                                            FROM BFX.PR_POOL_RATES@CBRAS_PRODUX PR
+                                                           WHERE PR.VALOR <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR.ACT_DATE <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR.STATUS = 1
+                                                          UNION ALL
+                                                          SELECT OID,
+                                                                 LASTUPDATED,
+                                                                 STATUS,
+                                                                 VALOR,
+                                                                 ACT_DATE,
+                                                                 ACT_TIME,
+                                                                 USER_NO,
+                                                                 CURRENCY_CODE,
+                                                                 DECODE(DAY_INT_OID,
+                                                                        '0021_0029_3HAFTA',
+                                                                        '0021_0031_1AYLIK',
+                                                                        '0030_0049_1AYLIK',
+                                                                        '0032_0049_GUNLUK',
+                                                                        '0050_0089_2AYLIK',
+                                                                        '0050_0091_3AYLIK',
+                                                                        '0090_0119_3AYLIK',
+                                                                        '0092_0119_GUNLUK',
+                                                                        '0150_0179_5AYLIK',
+                                                                        '0150_0180_6AYLIK',
+                                                                        '0180_0364_6AYLIK',
+                                                                        '0181_0270_9AYLIK',
+                                                                        DAY_INT_OID) AS DAY_INT_OID,
+                                                                 PASSIVE_RATE,
+                                                                 MARGIN,
+                                                                 ACTIVE_RATE,
+                                                                 APPROVER_NO
+                                                            FROM BFX.PR_POOL_RATES_ARCHIVE@CBRAS_PRODUX PR_ARC
+                                                           WHERE PR_ARC.VALOR <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR_ARC.ACT_DATE <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR_ARC.STATUS = 1) A
+                                                   WHERE T.CHAR_DATE BETWEEN  to_char(PDATE,'YYYYMMDD') AND to_char(PDATE,'YYYYMMDD')
+                                                     AND A.VALOR <= T.CHAR_DATE)
+                                           WHERE RW_NUM = 1) A
+                                   WHERE T.CHAR_DATE  = to_char(PDATE,'YYYYMMDD')
+                                     AND A.CALENDAR_DATE = T.CALENDAR_DATE)
+                                         )
+                  WHERE CURRENCY_CODE = 'TL'
+                  GROUP BY AS_OF_DATE,
+                            CURRENCY_CODE,
+                            DAY_INT_OID,
+                            PASSIVE_RATE,
+                            ACTIVE_RATE
+         );
+
+         COMMIT;
+
+       /***************************************DILAY  TABLO  ************************/
+
+
+
+   --Aktif-pasif oranları işleniyor
+  /*  -- partitionsız tablo, partition adımları kaldırıldı CGOKTAS 20260304
+    OFSA_SB.MN_UTILITY.PARTITION_CREATE(TOWNER         => 'OFSA_SB', --PARTION OLUŞTURMA IŞLEMI YAPILIYOR
+                                        TNAME          => 'SY_ACTIVE_PASSIVE_RATES_DLY',
+                                        PARTITION_DATE => PDATE );
+
+
+        IF OFSA_SB.MN_UTILITY.PARTITION_EXISTS(TOWNER => 'OFSA_SB',
+                                               TNAME => 'SY_ACTIVE_PASSIVE_RATES_DLY',
+                                               PNAME => 'P_' || PASOFDATE) THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE OFSA_SB.SY_ACTIVE_PASSIVE_RATES_DLY TRUNCATE PARTITION P_' ||PASOFDATE;
+        END IF;
+       OFSA_SB.MN_UTILITY.FIX_PARTITION_NAMES(T_OWNER => 'OFSA_SB',
+                                              T_NAME => 'SY_ACTIVE_PASSIVE_RATES_DLY');
+
+*/
+
+        DELETE
+           FROM OFSA_SB.SY_ACTIVE_PASSIVE_RATES_DLY
+           WHERE AS_OF_DATE=PDATE;
+           COMMIT;
+
+     -----------------------------
+            INSERT
+               INTO OFSA_SB.SY_ACTIVE_PASSIVE_RATES_DLY
+             (
+
+                   SELECT A.AS_OF_DATE AS AS_OF_DATE,
+                         A.CURRENCY_CODE AS CURRENCY_CODE,
+                         A.DAY_INT_OID AS DAY_INT_OID,
+                         TO_NUMBER(SUBSTR(A.DAY_INT_OID,1,4)) AS MIN_DAY,
+                         TO_NUMBER(SUBSTR(A.DAY_INT_OID,6,4)) AS MAX_DAY,
+                         ROUND(A.PASSIVE_RATE, 2) AS PASSIVE_RATE,
+                         ROUND(A.ACTIVE_RATE, 2) AS ACTIVE_RATE,
+                         ROUND(B.VDZ_RATE,2) AS VDZ_RATE
+                                    FROM (SELECT *
+                            FROM (SELECT T.CALENDAR_DATE AS AS_OF_DATE,
+                                         A.CALENDAR_DATE,
+                                         A.CURRENCY_CODE,
+                                         A.DAY_INT_OID,
+                                         A.PASSIVE_RATE,
+                                         A.ACTIVE_RATE,
+                                         RANK() OVER(PARTITION BY A.CALENDAR_DATE, A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.VALOR DESC, A.ACT_DATE DESC, A.ACT_TIME DESC, A.LASTUPDATED DESC) AS SIRA
+                                    FROM OLAP.DM_TIME T,
+                                         (SELECT *
+                                            FROM (SELECT T.CALENDAR_DATE,
+                                                         A.VALOR,
+                                                         A.ACT_DATE,
+                                                         A.ACT_TIME,
+                                                         A.LASTUPDATED,
+                                                         A.CURRENCY_CODE,
+                                                         A.DAY_INT_OID,
+                                                         A.PASSIVE_RATE,
+                                                         A.MARGIN,
+                                                         A.ACTIVE_RATE,
+                                                         ROW_NUMBER() OVER(PARTITION BY T.CALENDAR_DATE, A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.VALOR DESC, A.ACT_DATE DESC, A.ACT_TIME DESC, A.LASTUPDATED DESC) AS RW_NUM
+                                                    FROM OLAP.DM_TIME T,
+                                                         (SELECT OID,
+                                                                 LASTUPDATED,
+                                                                 STATUS,
+                                                                 VALOR,
+                                                                 ACT_DATE,
+                                                                 ACT_TIME,
+                                                                 USER_NO,
+                                                                 CURRENCY_CODE,
+                                                                 DECODE(DAY_INT_OID,
+                                                                        '0021_0029_3HAFTA',
+                                                                        '0021_0031_1AYLIK',
+                                                                        '0030_0049_1AYLIK',
+                                                                        '0032_0049_GUNLUK',
+                                                                        '0050_0089_2AYLIK',
+                                                                        '0050_0091_3AYLIK',
+                                                                        '0090_0119_3AYLIK',
+                                                                        '0092_0119_GUNLUK',
+                                                                        '0150_0179_5AYLIK',
+                                                                        '0150_0180_6AYLIK',
+                                                                        '0180_0364_6AYLIK',
+                                                                        '0181_0270_9AYLIK',
+                                                                        DAY_INT_OID) AS DAY_INT_OID,
+                                                                 PASSIVE_RATE,
+                                                                 MARGIN,
+                                                                 ACTIVE_RATE,
+                                                                 APPROVER_NO
+                                                            FROM BFX.PR_POOL_RATES@CBRAS_PRODUX PR
+                                                           WHERE PR.VALOR <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR.ACT_DATE <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR.STATUS = 1
+                                                          UNION ALL
+                                                          SELECT OID,
+                                                                 LASTUPDATED,
+                                                                 STATUS,
+                                                                 VALOR,
+                                                                 ACT_DATE,
+                                                                 ACT_TIME,
+                                                                 USER_NO,
+                                                                 CURRENCY_CODE,
+                                                                 DECODE(DAY_INT_OID,
+                                                                        '0021_0029_3HAFTA',
+                                                                        '0021_0031_1AYLIK',
+                                                                        '0030_0049_1AYLIK',
+                                                                        '0032_0049_GUNLUK',
+                                                                        '0050_0089_2AYLIK',
+                                                                        '0050_0091_3AYLIK',
+                                                                        '0090_0119_3AYLIK',
+                                                                        '0092_0119_GUNLUK',
+                                                                        '0150_0179_5AYLIK',
+                                                                        '0150_0180_6AYLIK',
+                                                                        '0180_0364_6AYLIK',
+                                                                        '0181_0270_9AYLIK',
+                                                                        DAY_INT_OID) AS DAY_INT_OID,
+                                                                 PASSIVE_RATE,
+                                                                 MARGIN,
+                                                                 ACTIVE_RATE,
+                                                                APPROVER_NO
+                                                            FROM BFX.PR_POOL_RATES_ARCHIVE@CBRAS_PRODUX PR_ARC
+                                                           WHERE PR_ARC.VALOR <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR_ARC.ACT_DATE <=to_char(PDATE,'YYYYMMDD')
+                                                             AND PR_ARC.STATUS = 1) A
+                                                   WHERE T.CHAR_DATE BETWEEN  to_char(PDATE,'YYYYMMDD') AND to_char(PDATE,'YYYYMMDD')
+                                                     AND A.VALOR <= T.CHAR_DATE)
+                                           WHERE RW_NUM = 1) A
+                                   WHERE T.CHAR_DATE  = to_char(PDATE,'YYYYMMDD')
+                                     AND A.CALENDAR_DATE = T.CALENDAR_DATE)
+                                         ) A,
+                                         (Select --distinct
+                                          to_number(nvl(S.cost_rate,S.POOL_RATE)) AS VDZ_RATE
+                                          from SUMMARY_PROD.GL_LIABILITY s
+       where s.as_of_date=PDATE-1
+       and   SUBSTR(s.MAIN_GL_NO,1,3) BETWEEN '300' AND '319'
+       and   s.module ='VDZ'
+       and   s.currency_code='TL'  ) B
+                  WHERE CURRENCY_CODE = 'TL'
+                  GROUP BY AS_OF_DATE,
+                            CURRENCY_CODE,
+                            DAY_INT_OID,
+                            PASSIVE_RATE,
+                            ACTIVE_RATE,
+                            VDZ_RATE
+         );
+
+         COMMIT;
+
+
+
+    /*****************************************************************************************************************/
+    /*
+     OFSA_SB.MN_UTILITY.PARTITION_CREATE(TOWNER         => 'OFSA_SB', --PARTION OLUŞTURMA IŞLEMI YAPILIYOR
+                                         TNAME          => 'OFSA_SB_POS_VDZ_FON_GET',
+                                         PARTITION_DATE => PDATE );
+
+    */
+   /*
+    DELETE
+      FROM OFSA_SB.OFSA_SB_POS_VDZ_FON_GET A
+
+      WHERE A.AS_OF_DATE=PDATE;
+      COMMIT;
+    */
+   /*
+    INSERT --POS vadesiz TL getirisi (ciro ile sınırlandırılmış) hesaplatılıyor. 23.03.2023 U.U.
+     INTO OFSA_SB.OFSA_SB_POS_VDZ_FON_GET
+      (SELECT *
+       FROM
+            (
+            SELECT PDATE AS AS_OF_DATE,
+                   S.CUS_NO,
+                   OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU(SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+                   NVL(SEG.BUSINESS_SEGMENT,'Diger Ticari')  AS SEGMENT_CODE,
+                   S.ORG_CODE,
+                   S.OFF_CODE,
+                   ROUND(SUM(LEAST(NVL(CIRO.CIRO,0),NVL(S.HACIM,0))*S.ORT_HAVUZ/36500),4) AS FONLAMA_GETIRISI,
+                   C.PRIVATE_BRANCH_FLAG
+             FROM OLAP.FC_CUSTOMER C,
+                  OLAP.FC_CUSTOMER SEG,
+                  (SELECT    S.CUSTOMER_CODE AS CUS_NO,
+                             TO_NUMBER(S.BRANCH_CODE) AS ORG_CODE,
+                             NVL(S.REPRESENTATIVE_FILE_NO,999999) OFF_CODE,
+                             SUM((S.BS_MAIN_BALANCE+S.BS_REDISCOUNT) * NVL(S.COST_RATE,S.POOL_RATE) ) / SUM((S.BS_MAIN_BALANCE+S.BS_REDISCOUNT)+1)      AS ORT_HAVUZ,
+                             SUM(S.BS_MAIN_BALANCE+S.BS_REDISCOUNT)/ 30 AS HACIM
+
+                   FROM SUMMARY_PROD.GL_LIABILITY S
+                   WHERE S.AS_OF_DATE BETWEEN PDATE-30  AND PDATE
+                   AND   SUBSTR(S.MAIN_GL_NO,1,3) BETWEEN '300' AND '319'
+                   AND   S.MODULE ='VDZ'
+                   AND   S.CURRENCY_CODE='TL'
+                   GROUP BY S.CUSTOMER_CODE,
+                            TO_NUMBER(S.BRANCH_CODE),
+                            NVL(S.REPRESENTATIVE_FILE_NO,999999)
+                     )S  LEFT JOIN (SELECT CUSTOMER_CODE, SUM(AMOUNT) CIRO
+                                    FROM (SELECT ISLEMLER.CUSTOMER_CODE,
+                                                 ISLEMLER.TX_DATE TX_DATE,
+                                                 SUM(ISLEMLER.AMOUNT) AMOUNT
+                                            FROM (SELECT T.MERCHANT_CODE,
+                                                         C.CUSTOMER_CODE,
+                                                         T.TX_DATE,
+                                                         T.AMOUNT,
+                                                         T.OID --24.04.2023 tarihinde eklenmiştir. U.U
+                                                    FROM POS.BATCH_EFFECTIVE_DATE_TEMP@CBRAS_PRODUX T,
+                                                         INFRA.CUST_CUST_CUST@CBRAS_PRODUX          C,
+                                                         POS.POS_MERCHANT_MASTER@CBRAS_PRODUX       P
+                                                   WHERE T.MERCHANT_CODE = P.MERCHANT_CODE
+                                                     AND P.CUSTOMER_OID(+) = C.OID
+                                                     AND TO_DATE(T.TX_DATE,'YYYYMMDD')  BETWEEN PDATE-30  AND PDATE
+
+                                                  UNION
+                                                  SELECT CUM.MERCHANT_CODE,
+                                                         C.CUSTOMER_CODE,
+                                                         CUM.TX_DATE,
+                                                         CUM.AMOUNT,
+                                                         cum.oid
+                                                    FROM POS.BATCH_EFFECTIVE_DATE_CUM@CBRAS_PRODUX CUM,
+                                                        INFRA.CUST_CUST_CUST@CBRAS_PRODUX         C,
+                                                         POS.POS_MERCHANT_MASTER@CBRAS_PRODUX      P
+                                                   WHERE P.MERCHANT_CODE = CUM.MERCHANT_CODE
+                                                     AND P.CUSTOMER_OID(+) = C.OID
+                                                     AND TO_DATE(CUM.TX_DATE,'YYYYMMDD') BETWEEN PDATE-30  AND PDATE) ISLEMLER
+                                           GROUP BY ISLEMLER.CUSTOMER_CODE,
+                                                    ISLEMLER.MERCHANT_CODE,
+                                                    ISLEMLER.TX_DATE)
+                                   GROUP BY CUSTOMER_CODE) CIRO ON CIRO.CUSTOMER_CODE=S.CUS_NO
+              WHERE S.CUS_NO=C.CUSTOMER_CODE
+              AND C.AS_OF_DATE=PDATE
+              AND SEG.AS_OF_DATE=SEGM_TARIH
+              AND S.CUS_NO=SEG.CUSTOMER_CODE
+              GROUP BY  S.CUS_NO,S.ORG_CODE,S.OFF_CODE,OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU(seg.BUSINESS_SEGMENT_CODE),
+                        NVL(seg.BUSINESS_SEGMENT,'Diger Ticari'),
+                        C.PRIVATE_BRANCH_FLAG
+              )
+             WHERE FONLAMA_GETIRISI<>0
+        );
+       COMMIT;*/
+    /*****************************************************************************************************************/
+
+
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.TEMP_PASIF_TEKLIF_ORANI';
+      /* ------------==============PASİF TEKLİF ORANI===================
+        -     Riski bulunan müşteriler içinden risk kodu ?01? veya ?02? olup ?Yapılandırma ve Analiz? kapsamında olmayanlar,
+        -     Bireysel krediler ve çek kaynaklı krediler hariç
+        -     Nakit karşılıklı teklifler hariç
+        -     Yönetim Kurulu ve Kredi Komitesi yetkisinde tahsis edilmiş müşteriler hariç,
+        -     Son tahsisi tasfiye amaçlı yapılmamış, tasfiye tahsisi olmayanlar*/
+
+
+
+      INSERT
+        INTO OFSA_SB.TEMP_PASIF_TEKLIF_ORANI
+      (
+          SELECT * FROM
+          (SELECT
+          RISK.TARIH,
+          CASE
+            WHEN TT.STATE_NAME = 'Aktif' THEN 0
+              WHEN CASE WHEN ROW_NUMBER () OVER(PARTITION BY ORGANIZE.SUBE_KODU ORDER BY NVL(RISK.TOPLAM_RISK,0) DESC ) <= 25 THEN 1 ELSE 0 END = 1 THEN 1
+                ELSE 1 END AS REVIZE_FLG,
+          CASE
+            WHEN MÜŞTERI.KAR_MERKEZI IN ('2-Ticari/Kurumsal','3-KOBİ') AND (RISK.TOPLAM_RISK >= 100000 )  THEN 1
+              WHEN MÜŞTERI.KAR_MERKEZI NOT IN ('2-Ticari/Kurumsal','3-KOBİ') AND (RISK.TOPLAM_RISK >= 50000 ) THEN 1
+                ELSE 0 END AS RISK_KRITERI_FLG,
+          CASE WHEN ROW_NUMBER () OVER(PARTITION BY ORGANIZE.SUBE_KODU ORDER BY NVL(RISK.TOPLAM_RISK,0) DESC ) <= 25 THEN 1 ELSE 0 END AS ILK_25_FLG,
+          ORGANIZE.BOLGE_ADI,
+          ORGANIZE.SUBE_KODU,
+          ORGANIZE.SUBE_ADI,
+          RISK.MUSTERI_NO,
+          RISK.MUSTERI_ADI,
+          TT.ALLOTMENT_NO AS SON_TAHSIS_NO,
+          CASE WHEN (NVL(TT.ACR_REMAKE,'NO') = 'YES' OR NVL(TT.LIQUIDATION,'0') = '1') THEN 'Evet' ELSE 'Hayır' END AS TASFIYE,
+          TT.MODÜL,
+          TT.TEKLIF_TÜRÜ,
+          TT.STATE_NAME AS DURUM,
+          TT.MATURITY_DATE AS VADE_TARIHI,
+          NVL(TT.APPROVE_CHAIR,'XX') APPROVE_CHAIR,
+          CASE
+          WHEN TT.APPROVE_CHAIR LIKE 'BK%' THEN 'Bölge Kredi Komitesi'
+          WHEN TT.APPROVE_CHAIR LIKE 'BT%' THEN 'Bölge Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR LIKE 'BL%' THEN 'Bölge Müdürü'
+          WHEN TT.APPROVE_CHAIR LIKE 'BOTM%' THEN 'Bölge Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR LIKE 'SBM%' THEN 'Şube Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('GM','GMD','GM1') THEN 'Genel Müdür'
+          WHEN TT.APPROVE_CHAIR IN ('GMY', 'GMY1') THEN 'Tahsis GMY'
+          WHEN TT.APPROVE_CHAIR = 'GMYKK' THEN 'GMY Kredi Komitesi'
+          WHEN TT.APPROVE_CHAIR IN ('TK', 'TK1') THEN 'GM Kredi Tahsis Kurulu'
+          WHEN TT.APPROVE_CHAIR IN ('MKSM', 'IKSM' ) THEN 'İşletme Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('TARKR', 'TKSM' ) THEN 'Tarım Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('KOBI', 'KKSM' ) THEN 'Kobi Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('TKRD', 'TKRDY' ) THEN 'Ticari ve Kurumsal Krediler Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('KK','KK1','KKM') THEN 'Kredi Komitesi'
+          WHEN TT.APPROVE_CHAIR IN ('PKRD','PRKRD') THEN 'İşletme ve Tarım Kredileri Müdürü'
+          WHEN TT.APPROVE_CHAIR IN ('YKR','YKR1') THEN 'Yönetim Kurulu'
+          WHEN TT.YETKI_TÜRÜ = 'Şube Yetkili' THEN 'Şube Müdürü'
+          WHEN (TT.APPROVE_CHAIR IS NULL AND TT.TEKLIF_TÜRÜ = 'Mikrofinansman Teklif') THEN 'Mikro Finansman'
+          ELSE TT.APPROVE_CHAIR_NAME END AS ONAY_MAKAMI,
+          TT.MTR_TÜRÜ,
+          TT.MTR_NOTU,
+          MÜŞTERI.KAR_MERKEZI,
+          CASE WHEN MÜŞTERI.GRUP_KODU IS NULL THEN 'Firma' ELSE 'Grup' END AS "FIRMA/GRUP",
+          NVL(MÜŞTERI.GRUP_KODU,RISK.MUSTERI_NO) AS GRUP_KODU,
+          NVL(MÜŞTERI.GRUP_ADI,RISK.MUSTERI_ADI) AS GRUP_ADI,
+          MÜŞTERI.KREDI_STATÜSÜ,
+          MÜŞTERI.RISK_KODU,
+          NVL(RISK.NAKIT_RISK,0) NAKIT_RISK ,
+          NVL(RISK.GN_RISK,0) GN_RISK,
+          NVL(RISK.TOPLAM_RISK,0) TOPLAM_RISK,
+          CASE WHEN NVL(IST.ISTISNA_BITIS_TARIHI,to_date('19000101','yyyymmdd'))<PDATE_PASIFTEKLIF THEN NULL ELSE IST.ISTISNA_BITIS_TARIHI END AS ISTISNA_BITIS_TARIHI
+          FROM
+          (SELECT
+          A.AS_OF_DATE AS TARIH,
+          A.CUSTOMER_CODE AS MUSTERI_NO,
+          A.CUSTOMER_NAME AS MUSTERI_ADI,
+          SUM (CASE    WHEN (A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%'  AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN (A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN A.MAIN_GL_NO LIKE '1%' AND A.MAIN_GL_NO NOT LIKE '17%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                              ELSE 0
+                              END) AS NAKIT_RISK,
+          SUM (CASE    WHEN (A.MAIN_GL_NO LIKE '9%' AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN (A.MAIN_GL_NO LIKE '9%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN A.MAIN_GL_NO LIKE '9%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                              ELSE 0
+                              END) AS GN_RISK,
+          SUM (CASE    WHEN (A.MAIN_GL_NO NOT LIKE '17%'  AND A.CURRENCY_CODE = 'TL' AND A.IS_INDEXED = 0)   THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN (A.MAIN_GL_NO NOT LIKE '17%' AND A.CURRENCY_CODE <> 'TL')                                 THEN ROUND(A.MAIN_BALANCE*-1)
+                              WHEN A.MAIN_GL_NO NOT LIKE '17%'  THEN ROUND(A.MAIN_BALANCE_ORG*-1*INDEX_EVALUATION_RATE)
+                              ELSE 0
+                              END) AS TOPLAM_RISK
+          FROM SUMMARY_PROD.GL_ASSET A
+          WHERE 1=1
+          AND A.CUSTOMER_CODE IN (SELECT T.CUSTOMER_CODE
+                                  FROM OLAP.VW_FC_CS_RISK_CODE T
+                                  WHERE T.AS_OF_DATE = PDATE_PASIFTEKLIF
+                                  AND NVL(T.CUSTOMER_RISK_CODE,'01') IN ('01','02')
+                                  AND NVL(T.PROCESS_TYPE,'xx') NOT IN ('Yapılandırma Ve Analiz')
+                                  )
+          AND A.AS_OF_DATE = PDATE_PASIFTEKLIF
+          AND A.PROFIT_CENTER_CODE NOT IN ('1')
+          AND SUBSTR(A.MAIN_GL_NO,1,1) IN ('1','9')
+          AND NVL(A.MODULE,'xx') NOT IN ('CEK')
+          AND (A.CUSTOMER_NAME NOT LIKE '%ŞEKERBANK%' OR A.CUSTOMER_NAME LIKE '%KIBRIS%')
+          GROUP BY A.CUSTOMER_CODE,
+                   A.AS_OF_DATE,
+                   A.CUSTOMER_NAME  )  RISK
+
+          LEFT JOIN OFSA_SB.TEMP_PASIF_TEKLIF_ISTISNA IST ON RISK.MUSTERI_NO=IST.MUS_NO AND IST.ISTISNA_BITIS_TARIHI>=PDATE_PASIFTEKLIF --Pasif teklifler için istisna tanımlaması yapılıyor. 19/07/2023 U.U.- D.K - M.K.Ç.
+          LEFT JOIN ( SELECT
+                        E.CUSTOMER_CODE,
+                        CASE WHEN NVL(E.PRIVATE_BRANCH_FLAG,0)<>1 THEN E.MAIN_BRANCH_CODE
+                                     ELSE E.OLD_BRANCH_CODE END AS MUSTERI_SUBESI,
+                        SEG.PROFIT_CENTER_CODE || '-' || DECODE (SEG.PROFIT_CENTER_CODE,'1','Bireysel','2','Ticari/Kurumsal','3','KOBİ','4','Tarım','5','İşletme') AS KAR_MERKEZI,
+                        E.GROUP_FIRM_CODE AS GRUP_KODU,
+                        E.GROUP_FIRM_NAME AS GRUP_ADI,
+                        E.RATE_GROUP_DATE AS RISK_KODU_TARIHI,
+                        E.CCS_ARL_CREDIT_STATUS_DESC AS KREDI_STATÜSÜ,
+                        E.RATE_GROUP AS RISK_KODU
+                        FROM OLAP.FC_CUSTOMER E,
+                             OLAP.FC_CUSTOMER SEG
+                        WHERE E.AS_OF_DATE = PDATE_PASIFTEKLIF
+                         AND SEG.AS_OF_DATE=SEGM_TARIH
+                         AND E.CUSTOMER_CODE=SEG.CUSTOMER_CODE ) MÜŞTERI ON RISK.MUSTERI_NO = MÜŞTERI.CUSTOMER_CODE
+          LEFT JOIN (SELECT DISTINCT
+                            E.MAIN_BRANCH_CODE AS SUBE_KODU,
+                            ORG.ORG_NAME AS SUBE_ADI,
+                            CASE WHEN ORG.ORG_GROUP4 IS NOT NULL THEN 'KURUMSAL'
+                                 WHEN E.PRIVATE_BRANCH_FLAG=1 AND ORG.ORG_NAME LIKE '%ÖZEL BANKACILIK%' THEN 'ÖZEL BANKACILIK'
+                                  ELSE ORG.PARENT_NAME END AS BOLGE_ADI
+                            FROM OLAP.FC_CUSTOMER E, OLAP.DM_ORGANIZATION ORG
+                            WHERE 1=1
+                           AND E.STATUS = 1 AND ORG.STATUS = 1
+                            AND E.AS_OF_DATE = PDATE_PASIFTEKLIF
+                            AND E.MAIN_BRANCH_CODE = ORG.ORG_CODE ) ORGANIZE ON MÜŞTERI.MUSTERI_SUBESI = ORGANIZE.SUBE_KODU
+          INNER JOIN (SELECT
+                        T.DT_APPROVE_DATE,
+                        T.MATURITY_DATE,
+                        CASE WHEN ADD_MONTHS(T.MATURITY_DATE,3) >= PDATE_PASIFTEKLIF THEN 'Aktif' ELSE 'Pasif' END AS STATE_NAME,
+                        T.OID,
+                        T.CUSTOMER_CODE,
+                        T.ALLOTMENT_NO,
+                        DECODE(T.MODULE,'ALLOTMENT','Tahsis','PROPOSAL','Teklif','DT_MAIN','Karar_Aracı',T.MODULE) AS MODÜL,
+                        T.APPROVE_CHAIR,
+                        T.APPROVE_CHAIR_NAME,
+                        T.IS_NEW_CUSTOMER,
+                        T.USABLE_APP_CASH_LIMIT ,
+                        T.USABLE_APP_NCASH_LIMIT ,
+                        T.USABLE_APP_SUM_LIMIT ,
+                        T.ALLOTMENT_CHANGE,
+                        T.ACR_REMAKE,
+                        T.LIQUIDATION,
+                        CASE
+                          WHEN T.PROPOSAL_TYPE_NAME IS NOT NULL THEN T.PROPOSAL_TYPE_NAME
+                            WHEN  T.MODULE = 'PROPOSAL' THEN 'Orta Teklif'
+                              WHEN T.MODULE = 'ALLOTMENT' THEN 'Tahsis Modülü'
+                                WHEN T.MODULE = 'DT_MAIN' THEN 'Karar Aracı' ELSE 'HATA' END AS TEKLIF_TÜRÜ,
+                        DECODE (T.AUTHORITY_TYPE,'A','Otorize','B','Şube Yetkili') AS YETKI_TÜRÜ,
+                        F.REPORT_TYPE AS MTR_TÜRÜ,
+                        F.EVAL AS MTR_NOTU,
+                        ROW_NUMBER () OVER(PARTITION BY T.CUSTOMER_CODE ORDER BY NVL(T.ALLOTMENT_NO,1111) DESC , T.DT_APPROVE_DATE DESC) SIRALAMA
+                        FROM OLAP.DM_ALLOTMENT T LEFT JOIN OLAP.DM_FIA_REPORT F
+                        ON  T.FIA_NO = F.REPORT_NO AND F.STATUS = 1 AND T.STATUS = 1 AND T.CUSTOMER_CODE = F.CUSTOMER_CODE
+                        WHERE 1=1
+                        AND T.STATE_NAME IN ('Aktif', 'Pasif','Transfer')
+                        AND NVL(T.DT_APPROVE_DATE,to_date('19000101','yyyymmdd') ) <= PDATE_PASIFTEKLIF ) TT ON TT.CUSTOMER_CODE = RISK.MUSTERI_NO AND TT.SIRALAMA = 1
+          ) LISTE
+          WHERE 1=1
+          AND LISTE.TASFIYE = 'Hayır'
+          AND LISTE.TEKLIF_TÜRÜ <> 'Nakit Karşılıklı Teklif'
+          AND LISTE.APPROVE_CHAIR NOT IN ('YKR','YKR1','KK','KK1','KKM')
+          AND (LISTE.RISK_KRITERI_FLG = 1 OR LISTE.ILK_25_FLG = 1)
+      );
+      COMMIT;
+
+
+    /*****************************************************************************************************************/
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

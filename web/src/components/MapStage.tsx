@@ -53,6 +53,9 @@ export function MapStage({
   useLayoutEffect(() => {
     const slot = slotRef.current
     if (!slot) return
+    let raf1 = 0
+    let raf2 = 0
+    let settleTimer = 0
     const measure = () => {
       const r = slot.getBoundingClientRect()
       const stageTop = document.querySelector('.stage-top')
@@ -67,17 +70,31 @@ export function MapStage({
         stageTopH: lift || 96,
       })
     }
+    const measureAfterLayout = () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      window.clearTimeout(settleTimer)
+      raf1 = requestAnimationFrame(() => {
+        measure()
+        raf2 = requestAnimationFrame(measure)
+      })
+      settleTimer = window.setTimeout(measure, 180)
+    }
     measure()
+    measureAfterLayout()
     const ro = new ResizeObserver(measure)
     ro.observe(slot)
-    window.addEventListener('resize', measure)
-    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measureAfterLayout)
+    window.addEventListener('scroll', measureAfterLayout, true)
     return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      window.clearTimeout(settleTimer)
       ro.disconnect()
-      window.removeEventListener('resize', measure)
-      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measureAfterLayout)
+      window.removeEventListener('scroll', measureAfterLayout, true)
     }
-  }, [expanded])
+  }, [active, expanded])
 
   const dockedStyle: CSSProperties | undefined = !active
     ? { display: 'none' }

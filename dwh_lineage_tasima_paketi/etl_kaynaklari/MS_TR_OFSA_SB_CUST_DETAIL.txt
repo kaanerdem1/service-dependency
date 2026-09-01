@@ -1,0 +1,2058 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_TR_OFSA_SB_CUST_DETAIL IS
+
+PROCEDURE MS_TR_OFSA_SB_CUST_DETAIL IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    PDATE              DATE;
+    PASOFDATE          VARCHAR2(8);
+
+BEGIN
+
+    ERROR_LOCATION := 1;
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_TR_OFSA_SB_CUST_DETAIL',
+                                          PSUBMODULE   => 'TR_OFSA_SB_CUST_DETAIL',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+   EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_TR_CUST_DETAIL';
+
+      /********************************AYRILAN KARSILIK**********************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(1)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      SEPET_2_AYRILAN_KARSILIK,
+      SEPET_3_AYRILAN_KARSILIK,
+      SEPET_1_AYRILAN_KARSILIK
+      )
+      (
+
+      SELECT  A.AS_OF_DATE,
+          A.MUS_NO,
+          A.ISKOLU,
+          A.SEGMENT,
+          A.BOLGE,
+          A.SUBE,
+          A.MT,
+          A.URUN_KODU,
+          A.URUN,
+          A.PB,
+          A.KAYNAK,
+          NVL(sum(A.SEPET_2_AYRILAN_KARSILIK),0),
+          NVL(sum(A.SEPET_3_AYRILAN_KARSILIK),0),
+          NVL(sum(A.SEPET_1_AYRILAN_KARSILIK),0)
+        FROM OFSA_SB.OFSA_EX_AYRILAN_KARSILIK A
+        group by A.AS_OF_DATE,
+          A.MUS_NO,
+          A.ISKOLU,
+          A.SEGMENT,
+          A.BOLGE,
+          A.SUBE,
+          A.MT,
+          A.URUN_KODU,
+          A.URUN,
+          A.PB,
+          A.KAYNAK);
+      COMMIT;
+
+      /*****************************FONLAMA GETİRİSİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(2)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      SEGMENT,
+      ISKOLU,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      FONLAMA_GETIRI_MEVD_BLOKE,
+      FONLAMA_GETIRI_GM_BILANCO,
+      FONLAMA_GETIRI_KK_ALACAK_BKY
+      )
+
+      (SELECT A.AS_OF_DATE,
+          A.MUS_NO,
+          A.SEGMENT,
+          A.ISKOLU,
+          A.BOLGE,
+          A.SUBE,
+          A.MT,
+          A.URUN_KODU,
+          A.URUN,
+          A.PB,
+          A.KAYNAK,
+          NVL(MEVD_BLOKE_TUTAR,0),
+          NVL(GM_BILANCO_TUTAR,0),
+          NVL(KK_ALACAK_BKY,0)
+      FROM OFSA_SB.OFSA_EX_FONLAMA_GETIRISI A);
+
+      COMMIT;
+      /*****************************FONLAMA MALIYETI*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(3)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      FONLAMA_MALIYETI_KREDI,
+      FONLAMA_MALIYETI_KK)
+      (SELECT A.AS_OF_DATE,
+          A.MUS_NO,
+          A.ISKOLU,
+          A.SEGMENT,
+          A.BOLGE,
+          A.SUBE,
+          A.MT,
+          A.URUN_KODU,
+         A.URUN,
+          A.PB,
+          A.KAYNAK,
+          NVL(A.FONLAMA_MALIYETI_KREDI,0),
+          NVL(A.FONLAMA_MALIYETI_KK,0)
+
+      FROM OFSA_SB.OFSA_EX_FONLAMA_MALIYETI A);
+
+      COMMIT;
+      /*****************************FX*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(4)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      FX_KAR_ZARAR
+      )
+      (
+      SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.BAKIYE,0)
+
+      FROM OFSA_SB.OFSA_EX_FX_TRV_ISLM_GDR A);
+
+      COMMIT;
+      /*****************************KASA FONLAMA MALİYETİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(5)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      KASA_FONLAMA_TL,
+      KASA_FONLAMA_YP
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.TL_BAKIYE,0),
+      NVL(A.YP_BAKIYE,0)
+
+      FROM OFSA_SB.OFSA_EX_KASA_FONLAMA_MALIYETI A);
+
+      COMMIT;
+      /*****************************LINEER FAIZ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(6)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL C
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      FAIZ_GELIRI_LINEER_KK,
+      FAIZ_GELIRI_LINEER_KRD,
+      FAIZ_GIDERI_LINEER,
+      FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+      FAIZ_GIDERI_LINEER_SORUNLU_KRD
+      )
+      (
+      SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.FAIZ_GELIRI_LINEER_KK,0),
+      NVL(A.FAIZ_GELIRI_LINEER_KRD,0),
+      NVL(A.FAIZ_GIDERI_LINEER,0),
+      NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0),
+      NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)
+
+      FROM OFSA_SB.OFSA_EX_LINEER_FAIZ A);
+
+      COMMIT;
+      /*****************************MANUEL KALEMLER*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(7)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      MANUEL_KALEMLER
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.BAKIYE,0)
+
+      FROM OFSA_SB.OFSA_EX_MANUEL_KALEMLER A);
+
+      COMMIT;
+      /*****************************MİZAN GELİR GİDER*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+     INSERT /*+ parallel(8)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      FAIZ_GELIRI_KREDILER,
+      FAIZ_GELIRI_KREDI_KARTI,
+      FAIZ_GIDERI_GM_BILANCO,
+      FAIZ_GIDERI_MEVDUAT,
+      FAIZ_GIDERI_DIGER,
+      FAIZ_DISI_GELIR_KREDI_KARTI,
+      FAIZ_DISI_GELIR_BHG,
+      FAIZ_DISI_GELIR_KREDI,
+      FAIZ_DISI_GELIR_DIGER,
+      FAIZ_DISI_GIDER_PERSONEL,
+      FAIZ_DISI_GIDER_ISLETME,
+      FAIZ_DISI_GIDER_VERGI,
+      FAIZ_DISI_GIDER_VERILEN_KOM,
+      FAIZ_DISI_GIDER_AMORTISMAN,
+      FAIZ_DISI_GIDER_DAVA,
+      FAIZ_DISI_GIDER_DESMER,
+      FAIZ_GELIRI_SORUNLU_KRD,
+      FAIZ_GIDERI_SORUNLU_KRD,
+      FAIZ_DISI_GELIR_ATM
+      )
+      (SELECT 
+      A.AS_OF_DATE,
+      A.MUS_NO,
+     A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.FAIZ_GELIRI_KREDILER,0),
+      NVL(A.FAIZ_GELIRI_KREDI_KARTI,0),
+      NVL(A.FAIZ_GIDERI_GM_BILANCO,0),
+      NVL(A.FAIZ_GIDERI_MEVDUAT,0),
+      NVL(A.FAIZ_GIDERI_DIGER,0),
+      NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0),
+      NVL(A.FAIZ_DISI_GELIR_BHG,0),
+      NVL(A.FAIZ_DISI_GELIR_KREDI,0),
+      NVL(A.FAIZ_DISI_GELIR_DIGER,0),
+      NVL(A.FAIZ_DISI_GIDER_PERSONEL,0),
+      NVL(A.FAIZ_DISI_GIDER_ISLETME,0),
+      NVL(A.FAIZ_DISI_GIDER_VERGI,0),
+      NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0),
+      NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0),
+     NVL(A.FAIZ_DISI_GIDER_DAVA,0),
+      NVL(A.FAIZ_DISI_GIDER_DESMER,0),
+      NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0),
+      NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0),
+      NVL(A.FAIZ_DISI_GELIR_ATM,0)
+      
+
+      FROM OFSA_SB.OFSA_EX_MIZAN_GELIRGIDER A);
+
+      COMMIT;
+      /*****************************MUNZAM MALİYETİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(9)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      MUNZAM_MALIYETI)
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+     NVL(A.MUNZAM_MALIYETI,0)
+
+      FROM OFSA_SB.OFSA_EX_MUNZAM_MALIYETI A);
+
+      COMMIT;
+      /*****************************POS BLOKE GETİRİSİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(10)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      POS_BLOKE_GELIR
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      'TL', ---BUNA BAKALIM
+      A.KAYNAK,
+      NVL(A.TUTAR,0)
+
+      FROM OFSA_SB.OFSA_EX_POS_BLOKE_GETIRI A);
+
+      COMMIT;
+      
+      /*****************************HASAT POS BLOKE GETİRİSİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(10)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      HASAT_POS_BLOKE_GELIR
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      'TL', ---BUNA BAKALIM
+      A.KAYNAK,
+      NVL(A.TUTAR,0)
+
+      FROM OFSA_SB.OFSA_EX_HASAT_POS_BLOKE_GETIRI A);
+
+      COMMIT;
+      /*****************************POS KOMİSYON GİDERİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(11)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      POS_KOMISYON_GIDER)
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.POS_KOMISYON_GIDERI,0)
+
+     FROM OFSA_SB.OFSA_EX_POS_KOM_GIDER A);
+
+      COMMIT;
+      /*****************************POS KOMİSYON GELİRİ*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(12)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      POS_KOM_GEL_KIRA_BEDELI,
+      POS_KOM_GEL_ISYERI_BEDELI,
+      POS_KOM_GEL_UYE_ISYERI_KATKI,
+      POS_KOM_GEL_SERVIS_BEDELI,
+      POS_KOM_GEL_TOPLAM
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.KIRA_BEDELI,0),
+      NVL(A.ISYERI_KOMISYONU,0),
+      NVL(A.UYE_ISYERI_KATKI_PAYI,0),
+      NVL(A.SERVIS_KOMISYONU,0),
+      NVL(A.TOPLAM_KOMISYON,0)
+      FROM OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR A);
+
+      COMMIT;
+      /*****************************ŞEKER YATIRIM*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(13)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      SKYATIRIM_HS_KOM_TUTARI,
+      SKYATIRIM_VOB_KOM_TUTARI,
+      SKYATIRIM_FON_VERIM,
+      SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+      SKYATIRIM_SGMK_VERIM,
+      SKYATIRIM_SWEET_KOM_TUTARI
+
+      )
+      (SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.HS_KOMISYON_TUTARI,0),
+      NVL(A.VOB_KOMISYON_TUTARI,0),
+      NVL(A.FON_VERIM,0),
+      NVL(A.HALKA_ARZ_KOMISYON_TUTARI,0),
+      NVL(A.SGMK_VERIM,0),
+      NVL(A.SWEET_KOMISYON_TUTARI,0)
+
+      FROM OFSA_SB.OFSA_EX_SEKERYATIRIM A
+      WHERE NVL(A.HS_KOMISYON_TUTARI,0)+NVL(A.VOB_KOMISYON_TUTARI,0)+NVL(A.FON_VERIM,0)+NVL(A.HALKA_ARZ_KOMISYON_TUTARI,0)+NVL(A.SGMK_VERIM,0)+NVL(A.SWEET_KOMISYON_TUTARI,0)<>0      
+      );
+
+      COMMIT;
+      /*****************************VADE BOZUM KAR ZARAR*************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(14)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      VADE_BOZUM_KAR_ZARAR
+      )
+      (
+      SELECT A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.TUTAR,0)
+
+      FROM OFSA_SB.OFSA_EX_VADE_BOZUM_ZARARI A);
+
+      COMMIT;
+    
+   /*****************************KİRA ÖDEMESİ**************************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(14)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      SUBE_KIRA
+      )
+      (
+      SELECT 
+      A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.YANSITILACAK_TUTAR,0)
+
+      FROM OFSA_SB.OFSA_EX_SUBE_KIRA A
+      WHERE A.AS_OF_DATE=PDATE
+      );
+
+      COMMIT;
+    /*********************************GM MASRAF PAYI*******************************************/
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    INSERT /*+ parallel(15)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+     SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      GM_MASRAF_PAYI
+      )
+
+    (SELECT 
+       A.AS_OF_DATE,
+       A.MUS_NO,
+       A.ISKOLU,
+       A.SEGMENT,
+       A.BOLGE,
+       A.SUBE,
+       A.MT,
+       A.URUN_KODU,
+       A.URUN,
+       A.PB,
+       A.KAYNAK,
+       A.GM_MASRAF_PAYI
+    FROM OFSA_SB.OFSA_EX_GM_MASRAF_PAYI A
+    );
+    COMMIT;
+    
+       /*****************************BAKİYE**************************************************/
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(14)*/
+      INTO OFSA_SB.OFSA_TR_CUST_DETAIL
+      (
+      AS_OF_DATE,
+      MUS_NO,
+      ISKOLU,
+      SEGMENT,
+      BOLGE,
+      SUBE,
+      MT,
+      URUN_KODU,
+      URUN,
+      PB,
+      KAYNAK,
+      BAKIYE
+      )
+      (
+      SELECT 
+      A.AS_OF_DATE,
+      A.MUS_NO,
+      A.ISKOLU,
+      A.SEGMENT,
+      A.BOLGE,
+      A.SUBE,
+      A.MT,
+      A.URUN_KODU,
+      A.URUN,
+      A.PB,
+      A.KAYNAK,
+      NVL(A.BAKIYE,0)
+
+      FROM OFSA_SB.OFSA_EX_BAKIYE A
+      
+      );
+
+      COMMIT;
+    /*******************************************************************************************/
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+
+
+
+    /***********************************************************************************************/
+
+  PROCEDURE MS_PROD_OFSA_SB_CUST_DETAIL IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    PDATE              DATE;
+    PASOFDATE          VARCHAR2(8);
+    AYBASI             DATE;
+    YILBASI            DATE;
+  BEGIN
+
+    ERROR_LOCATION := 1;
+      SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT), TO_DATE(MONTH_BEGIN,'YYYYMMDD'), TRUNC(TO_DATE(PRM_VALUE,'yyyymmdd'),'YYYY')
+        INTO PASOFDATE, PDATE, AYBASI, YILBASI
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_TR_OFSA_SB_CUST_DETAIL',
+                                          PSUBMODULE   => 'PROD_OFSA_SB_CUST_DETAIL',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+
+     OFSA_SB.MN_UTILITY.PARTITION_CREATE(towner         => 'OFSA_SB', --Partion oluşturma işlemi yapılıyor
+                                          tname          => 'PROD_CUST_DETAIL',
+                                          partition_date => pdate );
+   
+   /*****************************************************************************************************************/
+
+    --EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+    DELETE
+    FROM OFSA_SB.PROD_CUST_DETAIL
+    WHERE AS_OF_DATE = PDATE; 
+    COMMIT;    
+    
+  /*****************************************************************************************************************/
+  
+
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(1)*/
+      INTO OFSA_SB.PROD_CUST_DETAIL 
+      (
+          AS_OF_DATE,
+          CREATE_DATE,
+          MUS_NO,
+          ISKOLU,
+          SEGMENT,
+          BOLGE,
+          SUBE,
+          MT,
+          URUN_KODU,
+          URUN,
+          PB,
+          KAYNAK,
+          FAIZ_DISI_GELIR_BHG,
+          FAIZ_DISI_GELIR_DIGER,
+          FAIZ_DISI_GELIR_KREDI,
+          FAIZ_DISI_GELIR_KREDI_KARTI,
+          FAIZ_DISI_GIDER_AMORTISMAN,
+          FAIZ_DISI_GIDER_DAVA,
+          FAIZ_DISI_GIDER_ISLETME,
+          FAIZ_DISI_GIDER_PERSONEL,
+          FAIZ_DISI_GIDER_VERGI,
+          FAIZ_DISI_GIDER_VERILEN_KOM,
+          FAIZ_DISI_GIDER_DESMER,
+          FAIZ_GELIRI_KREDI_KARTI,
+          FAIZ_GELIRI_KREDILER,
+          FAIZ_GELIRI_LINEER_KK,
+          FAIZ_GELIRI_LINEER_KRD,
+          FAIZ_GIDERI_DIGER,
+          FAIZ_GIDERI_GM_BILANCO,
+          FAIZ_GIDERI_LINEER,
+          FAIZ_GIDERI_MEVDUAT,
+          FONLAMA_GETIRI_GM_BILANCO,                 
+          FONLAMA_GETIRI_MEVD_BLOKE,
+          FONLAMA_MALIYETI_KK,
+          FONLAMA_MALIYETI_KREDI,
+          FX_KAR_ZARAR,
+          KASA_FONLAMA_TL,
+          KASA_FONLAMA_YP,
+          MUNZAM_MALIYETI,
+          SKYATIRIM_SUBE_KULL_PAYI,
+          POS_BLOKE_GELIR,
+          POS_KOM_GEL_ISYERI_BEDELI,
+          POS_KOM_GEL_KIRA_BEDELI,
+          POS_KOM_GEL_SERVIS_BEDELI,
+          POS_KOM_GEL_TOPLAM,
+          POS_KOM_GEL_UYE_ISYERI_KATKI,
+          POS_KOMISYON_GIDER,
+          SEPET_2_AYRILAN_KARSILIK,
+          SEPET_3_AYRILAN_KARSILIK,
+          SKYATIRIM_FON_VERIM,
+          SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+          SKYATIRIM_HS_KOM_TUTARI,
+          SKYATIRIM_SGMK_VERIM,
+          SKYATIRIM_SWEET_KOM_TUTARI,
+          SKYATIRIM_VOB_KOM_TUTARI,
+          VADE_BOZUM_KAR_ZARAR,
+          GM_MASRAF_PAYI,
+          SUBE_KIRA,
+          HAZINE_BONO_PRIMLERI,
+          VADESIZ_MEVDUAT_PRIM,
+          SEKERKUR_ALT_FW_DCD_PRIM,
+          VADELI_MEV_PRIM,
+          SKLEASING_ISLEM_YON_KOM,
+          DIS_TICARET_PRIM,
+          NAKIT_YONETIM_PRIM,
+          KUL_KAY_HATALI_ISL_MALIYET,
+          EFT_KAP_SAATI_SON_EK_UCRETI,
+          KULLANILMAYAN_IZIN_MALIYETI,
+          YATIRIM_EKSTRE_UCRETI,
+          FON_YON_FX_ISLEM_IPTAL_CEZA,
+          HATALI_ISLEM_MALIYETI,
+          GMENKUL_PRIMI,
+          SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+          GECICI_GOREV_MALIYETI,
+          PASIF_TEKLIF_ORANI_CEZASI,
+          PASIF_BAYI_ORANI_CEZASI,          
+          SEKAR,
+          EK_ALAN_6,
+          INAKTIF_POS_MALIYETI,
+          SEPET_1_AYRILAN_KARSILIK,
+          BAKIYE,
+          FAIZ_GELIRI_SORUNLU_KRD,
+          FAIZ_GIDERI_SORUNLU_KRD,
+          FAIZ_DISI_GELIR_ATM,
+          FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+          FAIZ_GIDERI_LINEER_SORUNLU_KRD,
+          FONLAMA_GETIRI_KK_ALACAK_BKY,
+          HASAT_POS_BLOKE_GELIR,
+          PRIVATE_BRANCH_FLAG,
+          GOLGE_FLAG
+
+      )
+     (
+     SELECT 
+          A.AS_OF_DATE,
+          SYSDATE,
+          A.MUS_NO,
+          A.ISKOLU,
+          A.SEGMENT,
+          ORG.BOLGE_KODU AS BOLGE,
+          CASE WHEN A.MUS_NO in /*SESIS 395998 - TALEP EDİLEN MÜŞTERİLERİN KARLILIĞININ SİLİVRİ ŞUBEYE YANSITILMASI A.Y.K. 04.04.2026*/
+                                (
+                                '35902783',
+                                '33874091',
+                                '30442625',
+                                '31226704',
+                                '31226704',
+                                '37463183',
+                                '36985391',
+                                '33292087',
+                                '32124548',
+                                '32124553',
+                                '34152938'
+                                ) THEN 310 ELSE A.SUBE END AS SUBE ,
+          CASE WHEN (c.main_establishment_type = 'SK' and c.sub_establishment_type = '999') THEN 999999 ELSE A.MT END, --999999
+          NVL(A.URUN_KODU, 88888888),
+          NVL(A.URUN, 'DIGER_URUN'),
+          A.PB,
+          A.KAYNAK,
+          NVL(A.FAIZ_DISI_GELIR_BHG,0),
+          NVL(A.FAIZ_DISI_GELIR_DIGER,0),
+          NVL(A.FAIZ_DISI_GELIR_KREDI,0),
+          NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0),
+          NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0),
+          NVL(A.FAIZ_DISI_GIDER_DAVA,0),
+          NVL(A.FAIZ_DISI_GIDER_ISLETME,0),
+          NVL(A.FAIZ_DISI_GIDER_PERSONEL,0),
+          NVL(A.FAIZ_DISI_GIDER_VERGI,0),
+          NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0),
+          NVL(A.FAIZ_DISI_GIDER_DESMER,0),
+          NVL(A.FAIZ_GELIRI_KREDI_KARTI,0),
+          NVL(A.FAIZ_GELIRI_KREDILER,0),
+          NVL(A.FAIZ_GELIRI_LINEER_KK,0),
+          NVL(A.FAIZ_GELIRI_LINEER_KRD,0),
+          NVL(A.FAIZ_GIDERI_DIGER,0),
+          NVL(A.FAIZ_GIDERI_GM_BILANCO,0),
+          NVL(A.FAIZ_GIDERI_LINEER,0),
+          NVL(A.FAIZ_GIDERI_MEVDUAT,0),
+          NVL(A.FONLAMA_GETIRI_GM_BILANCO,0),  
+          NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0),
+          NVL(A.FONLAMA_MALIYETI_KK,0),
+          NVL(A.FONLAMA_MALIYETI_KREDI,0),
+          NVL(A.FX_KAR_ZARAR,0),
+          NVL(A.KASA_FONLAMA_TL,0),
+          NVL(A.KASA_FONLAMA_YP,0),
+          NVL(A.MUNZAM_MALIYETI,0),
+          CASE WHEN A.URUN='Şeker Yatırım Komisyon Geliri' THEN NVL(A.MANUEL_KALEMLER,0) ELSE 0 END SKYATIRIM_SUBE_KULL_PAYI,
+          NVL(A.POS_BLOKE_GELIR,0),
+          NVL(A.POS_KOM_GEL_ISYERI_BEDELI,0),
+          NVL(A.POS_KOM_GEL_KIRA_BEDELI,0),
+          NVL(A.POS_KOM_GEL_SERVIS_BEDELI,0),
+          NVL(A.POS_KOM_GEL_TOPLAM,0),
+          NVL(A.POS_KOM_GEL_UYE_ISYERI_KATKI,0),
+          NVL(A.POS_KOMISYON_GIDER,0),
+          NVL(A.SEPET_2_AYRILAN_KARSILIK,0),
+          NVL(A.SEPET_3_AYRILAN_KARSILIK,0),
+          NVL(A.SKYATIRIM_FON_VERIM,0),
+          NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_HS_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_SGMK_VERIM,0),
+          NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0),
+          NVL(A.VADE_BOZUM_KAR_ZARAR,0),
+          NVL(A.GM_MASRAF_PAYI,0),
+          NVL(A.SUBE_KIRA,0),
+          CASE WHEN A.URUN='Hazine Bonosu Primleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                            AS HAZINE_BONO_PRIMLERI,
+          CASE WHEN A.URUN='Vadesiz Mevduat Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                             AS VADESIZ_MEVDUAT_PRIM,
+          CASE WHEN A.URUN='Şeker Kur, Altın, Forward ve DCD Primleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END         AS SEKERKUR_ALT_FW_DCD_PRIM,
+          CASE WHEN A.URUN='Vadeli Mevduat Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                              AS VADELI_MEV_PRIM,
+          CASE WHEN A.URUN='Şeker Leasing İşlem Yönlendirme Komisyonu' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END         AS SKLEASING_ISLEM_YON_KOM,
+          CASE WHEN A.URUN='Dış Ticaret Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                 AS DIS_TICARET_PRIM,
+          CASE WHEN A.URUN='Nakit Yönetimi Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                              AS NAKIT_YONETIM_PRIM,
+          CASE WHEN A.URUN='Kullanıcı Kaynaklı Hatalı İşlem Maliyeti(KRDOPS)' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END  AS KUL_KAY_HATALI_ISL_MALIYET,
+          CASE WHEN A.URUN='EFT Kapanış Saati Sonrası Ek İşlem Ücreti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END         AS EFT_KAP_SAATI_SON_EK_UCRETI,
+          CASE WHEN A.URUN='Kullanılmayan Yıllık İzin Maliyeti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                AS KULLANILMAYAN_IZIN_MALIYETI,
+          CASE WHEN A.URUN='Yatirim Ekstre Ucretleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                          AS YATIRIM_EKSTRE_UCRETI,
+          CASE WHEN A.URUN='Fon Yönetimi FX İşlem İptal Cezaları' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END              AS FON_YON_FX_ISLEM_IPTAL_CEZA,
+          CASE WHEN A.URUN IN ('Hatalı İşlem Maliyeti','Sinerji Primi') THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END        AS HATALI_ISLEM_MALIYETI, --02.06.2023 tarihinde pasif teklif oranı eklenmiştir U.U
+          CASE WHEN A.URUN='Gayrimenkul Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                 AS GMENKUL_PRIMI,
+          CASE WHEN A.URUN in ('SUBEDE_BEKLEYEN_TIC_KARTLAR', 'ŞUBEDE_BEKLEYEN_CEK_KARNE') THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END AS SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+          CASE WHEN A.URUN = 'Geçici Görev Maliyeti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                           AS GECICI_GOREV_MALIYETI,
+          CASE WHEN A.URUN ='Pasif Teklif Oranı Cezası' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                        AS PASIF_TEKLIF_ORANI_CEZASI,
+          CASE WHEN A.URUN ='DBS Bayi Cezası' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                  AS PASIF_BAYI_ORANI_CEZASI,
+          CASE WHEN A.URUN ='Sekar' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                            AS SEKAR,
+          NVL(A.EK_ALAN_6, 0 ),
+          CASE WHEN A.URUN='INAKTIF_POS_MALIYETI' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                              AS INAKTIF_POS_MALIYETI,          
+          NVL(A.SEPET_1_AYRILAN_KARSILIK,0),
+          NVL(A.BAKIYE,0),
+          NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0),
+          NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0),
+          NVL(A.FAIZ_DISI_GELIR_ATM,0),
+          NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0),
+          NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0),
+          NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0),
+          NVL(A.HASAT_POS_BLOKE_GELIR,0),
+          NVL(c.private_branch_flag,0) AS private_branch_flag,
+          0 AS GOLGE_FLAG
+     FROM OFSA_SB.OFSA_TR_CUST_DETAIL A 
+          LEFT JOIN olap.fc_customer c 
+                 ON  c.as_of_date= PDATE AND TO_NUMBER(c.customer_code)=a.mus_no
+          LEFT JOIN OFSA_SB.BOLGELER ORG
+                 ON (CASE WHEN A.MUS_NO in /*SESIS 395998 - TALEP EDİLEN MÜŞTERİLERİN KARLILIĞININ SİLİVRİ ŞUBEYE YANSITILMASI A.Y.K. 04.04.2026*/
+                                (
+                                '35902783',
+                                '33874091',
+                                '30442625',
+                                '31226704',
+                                '31226704',
+                                '37463183',
+                                '36985391',
+                                '33292087',
+                                '32124548',
+                                '32124553',
+                                '34152938'
+                                ) THEN 310 ELSE A.SUBE END )=ORG.SUBE_KODU         
+        WHERE  
+          (NVL(A.FAIZ_DISI_GELIR_BHG,0)+
+          NVL(A.FAIZ_DISI_GELIR_DIGER,0)+
+          NVL(A.FAIZ_DISI_GELIR_KREDI,0)+
+          NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0)+
+          NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0)+
+          NVL(A.FAIZ_DISI_GIDER_DAVA,0)+
+          NVL(A.FAIZ_DISI_GIDER_ISLETME,0)+
+          NVL(A.FAIZ_DISI_GIDER_PERSONEL,0)+
+          NVL(A.FAIZ_DISI_GIDER_VERGI,0)+
+          NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0)+
+          NVL(A.FAIZ_DISI_GIDER_DESMER,0)+
+          NVL(A.FAIZ_GELIRI_KREDI_KARTI,0)+
+          NVL(A.FAIZ_GELIRI_KREDILER,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_KRD,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_KK,0)+
+          NVL(A.FAIZ_GIDERI_DIGER,0)+
+          NVL(A.FAIZ_GIDERI_GM_BILANCO,0)+
+          NVL(A.FAIZ_GIDERI_LINEER,0)+
+          NVL(A.FAIZ_GIDERI_MEVDUAT,0)+
+          NVL(A.FONLAMA_GETIRI_GM_BILANCO,0)+                 
+          NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0)+
+          NVL(A.FONLAMA_MALIYETI_KK,0)+
+          NVL(A.FONLAMA_MALIYETI_KREDI,0)+
+          NVL(A.FX_KAR_ZARAR,0)+
+          NVL(A.KASA_FONLAMA_TL,0)+
+          NVL(A.KASA_FONLAMA_YP,0)+
+          NVL(A.MUNZAM_MALIYETI,0)+
+          NVL(A.POS_BLOKE_GELIR,0)+
+          NVL(A.POS_KOM_GEL_TOPLAM,0)+
+          NVL(A.POS_KOMISYON_GIDER,0)+
+          NVL(A.POS_KOM_GEL_SERVIS_BEDELI,0)+
+          NVL(A.SEPET_2_AYRILAN_KARSILIK,0)+
+          NVL(A.SEPET_3_AYRILAN_KARSILIK,0)+
+          NVL(A.SKYATIRIM_FON_VERIM,0)+
+          NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_HS_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_SGMK_VERIM,0)+
+          NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0)+
+          NVL(A.VADE_BOZUM_KAR_ZARAR,0)+
+          NVL(A.MANUEL_KALEMLER,0)+
+          NVL(A.GM_MASRAF_PAYI,0)+NVL(SUBE_KIRA,0)+
+          NVL(A.SEPET_1_AYRILAN_KARSILIK,0)+
+          NVL(A.BAKIYE,0)+
+          NVL(A.INAKTIF_POS_MALIYETI,0)+
+          NVL(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0)+
+          NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_DISI_GELIR_ATM,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)+
+          NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)+
+          NVL(A.HASAT_POS_BLOKE_GELIR,0))<> 0
+UNION ALL
+          SELECT 
+          A.AS_OF_DATE,
+          SYSDATE,
+          A.MUS_NO,
+          A.ISKOLU,
+          A.SEGMENT,
+          ORG.BOLGE_KODU AS BOLGE,
+          to_number(C.OLD_BRANCH_CODE),
+          NVL((CASE WHEN C.REPRESENTATIVE_FILE_NO<>c.OLD_REPRESENTATIVE_CODE 
+                    THEN to_number(c.OLD_REPRESENTATIVE_CODE)
+                      ELSE 999999 END), 999999),
+          NVL(A.URUN_KODU, 88888888),
+          NVL(A.URUN, 'DIGER_URUN'),
+          A.PB,
+          A.KAYNAK,
+          NVL(A.FAIZ_DISI_GELIR_BHG,0),
+          NVL(A.FAIZ_DISI_GELIR_DIGER,0),
+          NVL(A.FAIZ_DISI_GELIR_KREDI,0),
+          NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0),
+          NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0),
+          NVL(A.FAIZ_DISI_GIDER_DAVA,0),
+          NVL(A.FAIZ_DISI_GIDER_ISLETME,0),
+          NVL(A.FAIZ_DISI_GIDER_PERSONEL,0),
+          NVL(A.FAIZ_DISI_GIDER_VERGI,0),
+          NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0),
+          NVL(A.FAIZ_DISI_GIDER_DESMER,0),
+          NVL(A.FAIZ_GELIRI_KREDI_KARTI,0),
+          NVL(A.FAIZ_GELIRI_KREDILER,0),
+          NVL(A.FAIZ_GELIRI_LINEER_KK,0),
+          NVL(A.FAIZ_GELIRI_LINEER_KRD,0),
+          NVL(A.FAIZ_GIDERI_DIGER,0),
+          NVL(A.FAIZ_GIDERI_GM_BILANCO,0),
+          NVL(A.FAIZ_GIDERI_LINEER,0),
+          NVL(A.FAIZ_GIDERI_MEVDUAT,0),
+          NVL(A.FONLAMA_GETIRI_GM_BILANCO,0),  
+          NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0),
+          NVL(A.FONLAMA_MALIYETI_KK,0),
+          NVL(A.FONLAMA_MALIYETI_KREDI,0),
+          NVL(A.FX_KAR_ZARAR,0),
+          NVL(A.KASA_FONLAMA_TL,0),
+          NVL(A.KASA_FONLAMA_YP,0),
+          NVL(A.MUNZAM_MALIYETI,0),
+          CASE WHEN A.URUN='Şeker Yatırım Komisyon Geliri' THEN NVL(A.MANUEL_KALEMLER,0) ELSE 0 END SKYATIRIM_SUBE_KULL_PAYI,
+          NVL(A.POS_BLOKE_GELIR,0),
+          NVL(A.POS_KOM_GEL_ISYERI_BEDELI,0),
+          NVL(A.POS_KOM_GEL_KIRA_BEDELI,0),
+          NVL(A.POS_KOM_GEL_SERVIS_BEDELI,0),
+          NVL(A.POS_KOM_GEL_TOPLAM,0),
+          NVL(A.POS_KOM_GEL_UYE_ISYERI_KATKI,0),
+          NVL(A.POS_KOMISYON_GIDER,0),
+          NVL(A.SEPET_2_AYRILAN_KARSILIK,0),
+          NVL(A.SEPET_3_AYRILAN_KARSILIK,0),
+          NVL(A.SKYATIRIM_FON_VERIM,0),
+          NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_HS_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_SGMK_VERIM,0),
+          NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0),
+          NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0),
+          NVL(A.VADE_BOZUM_KAR_ZARAR,0),
+          NVL(A.GM_MASRAF_PAYI,0),
+          NVL(A.SUBE_KIRA,0),
+          CASE WHEN A.URUN='Hazine Bonosu Primleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                          AS HAZINE_BONO_PRIMLERI,
+          CASE WHEN A.URUN='Vadesiz Mevduat Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                           AS VADESIZ_MEVDUAT_PRIM,
+          CASE WHEN A.URUN='Şeker Kur, Altın, Forward ve DCD Primleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END   AS SEKERKUR_ALT_FW_DCD_PRIM,
+          CASE WHEN A.URUN='Vadeli Mevduat Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                 AS VADELI_MEV_PRIM,
+          CASE WHEN A.URUN='Şeker Leasing İşlem Yönlendirme Komisyonu' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END    AS SKLEASING_ISLEM_YON_KOM,
+          CASE WHEN A.URUN='Dış Ticaret Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                   AS DIS_TICARET_PRIM,
+          CASE WHEN A.URUN='Nakit Yönetimi Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                              AS NAKIT_YONETIM_PRIM,
+          CASE WHEN A.URUN='Kullanıcı Kaynaklı Hatalı İşlem Maliyeti(KRDOPS)' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END         AS KUL_KAY_HATALI_ISL_MALIYET,
+          CASE WHEN A.URUN='EFT Kapanış Saati Sonrası Ek İşlem Ücreti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END AS EFT_KAP_SAATI_SON_EK_UCRETI,
+          CASE WHEN A.URUN='Kullanılmayan Yıllık İzin Maliyeti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END        AS KULLANILMAYAN_IZIN_MALIYETI,
+          CASE WHEN A.URUN='Yatirim Ekstre Ucretleri' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                        AS YATIRIM_EKSTRE_UCRETI,
+          CASE WHEN A.URUN='Fon Yönetimi FX İşlem İptal Cezaları' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END      AS FON_YON_FX_ISLEM_IPTAL_CEZA,
+          CASE WHEN A.URUN IN ('Hatalı İşlem Maliyeti','Sinerji Primi') THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END   AS HATALI_ISLEM_MALIYETI, --02.06.2023 tarihinde pasif teklif oranı eklenmiştir U.U
+          CASE WHEN A.URUN='Gayrimenkul Primi' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                      AS GMENKUL_PRIMI,
+          CASE WHEN A.URUN in ('SUBEDE_BEKLEYEN_TIC_KARTLAR', 'ŞUBEDE_BEKLEYEN_CEK_KARNE') THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END AS SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+          CASE WHEN A.URUN = 'Geçici Görev Maliyeti' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END   AS GECICI_GOREV_MALIYETI,
+          CASE WHEN A.URUN ='Pasif Teklif Oranı Cezası' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END  AS PASIF_TEKLIF_ORANI_CEZASI,
+          CASE WHEN A.URUN ='DBS Bayi Cezası' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END  AS PASIF_BAYI_ORANI_CEZASI,
+          CASE WHEN A.URUN ='Sekar' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END                                  AS SEKAR,
+          NVL(A.EK_ALAN_6, 0 ),
+          CASE WHEN A.URUN='INAKTIF_POS_MALIYETI' THEN NVL(MANUEL_KALEMLER, 0) ELSE 0 END  AS INAKTIF_POS_MALIYETI,          
+          NVL(A.SEPET_1_AYRILAN_KARSILIK,0),
+          NVL(A.BAKIYE,0),
+          NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0),
+          NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0),
+          NVL(A.FAIZ_DISI_GELIR_ATM,0),
+          NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0),
+          NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0),
+          NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0),
+          NVL(A.HASAT_POS_BLOKE_GELIR,0),
+          NVL(C.PRIVATE_BRANCH_FLAG,0) AS private_branch_flag,
+          1 AS GOLGE_FLAG
+     FROM OFSA_SB.OFSA_TR_CUST_DETAIL A 
+          LEFT JOIN olap.fc_customer c 
+                 ON  c.as_of_date= PDATE AND TO_NUMBER(c.customer_code)=a.mus_no
+          LEFT JOIN OFSA_SB.BOLGELER ORG 
+                 ON TO_NUMBER(C.Old_Branch_Code)=ORG.SUBE_KODU 
+        WHERE  TO_NUMBER(C.MAIN_BRANCH_CODE) =  A.SUBE AND  
+          (NVL(A.FAIZ_DISI_GELIR_BHG,0)+
+          NVL(A.FAIZ_DISI_GELIR_DIGER,0)+
+          NVL(A.FAIZ_DISI_GELIR_KREDI,0)+
+          NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0)+
+          NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0)+
+          NVL(A.FAIZ_DISI_GIDER_DAVA,0)+
+          NVL(A.FAIZ_DISI_GIDER_ISLETME,0)+
+          NVL(A.FAIZ_DISI_GIDER_PERSONEL,0)+
+          NVL(A.FAIZ_DISI_GIDER_VERGI,0)+
+          NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0)+
+          NVL(A.FAIZ_DISI_GIDER_DESMER,0)+
+          NVL(A.FAIZ_GELIRI_KREDI_KARTI,0)+
+          NVL(A.FAIZ_GELIRI_KREDILER,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_KRD,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_KK,0)+
+          NVL(A.FAIZ_GIDERI_DIGER,0)+
+          NVL(A.FAIZ_GIDERI_GM_BILANCO,0)+
+          NVL(A.FAIZ_GIDERI_LINEER,0)+
+          NVL(A.FAIZ_GIDERI_MEVDUAT,0)+
+          NVL(A.FONLAMA_GETIRI_GM_BILANCO,0)+                 
+          NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0)+
+          NVL(A.FONLAMA_MALIYETI_KK,0)+
+          NVL(A.FONLAMA_MALIYETI_KREDI,0)+
+          NVL(A.FX_KAR_ZARAR,0)+
+          NVL(A.KASA_FONLAMA_TL,0)+
+          NVL(A.KASA_FONLAMA_YP,0)+
+          NVL(A.MUNZAM_MALIYETI,0)+
+          NVL(A.POS_BLOKE_GELIR,0)+
+          NVL(A.POS_KOM_GEL_TOPLAM,0)+
+          NVL(A.POS_KOMISYON_GIDER,0)+
+          NVL(A.POS_KOM_GEL_SERVIS_BEDELI,0)+
+          NVL(A.SEPET_2_AYRILAN_KARSILIK,0)+
+          NVL(A.SEPET_3_AYRILAN_KARSILIK,0)+
+          NVL(A.SKYATIRIM_FON_VERIM,0)+
+          NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_HS_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_SGMK_VERIM,0)+
+          NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0)+
+          NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0)+
+          NVL(A.VADE_BOZUM_KAR_ZARAR,0)+
+          NVL(A.MANUEL_KALEMLER,0)+
+          NVL(A.GM_MASRAF_PAYI,0)+NVL(SUBE_KIRA,0)+
+          NVL(A.SEPET_1_AYRILAN_KARSILIK,0)+
+          NVL(A.BAKIYE,0)+
+          NVL(A.INAKTIF_POS_MALIYETI,0)+
+          NVL(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0)+
+          NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_DISI_GELIR_ATM,0)+
+          NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0)+
+          NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)+
+          NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)+
+          NVL(A.HASAT_POS_BLOKE_GELIR,0))<> 0
+          and c.PRIVATE_BRANCH_FLAG=1
+          AND c.BRANCH_TRANSFER_DATE IS NOT NULL
+          AND C.OLD_BRANCH_CODE NOT IN (SELECT SUBE_KODU 
+                                          FROM OFSA_SB.BOLGELER
+                                         WHERE BOLGE_KODU= -2) 
+         );
+
+      COMMIT;
+    /*******************************************************************************************************************/
+       UPDATE OFSA_SB.PROD_CUST_DETAIL A --EXİM KREDİLERİNDEKİ FAİZ GELİRİ VE GİDERİ 0 YAPILIYOR. U.U.
+       SET A.FAIZ_GIDERI_LINEER=0,
+           A.FAIZ_GIDERI_MEVDUAT=0,
+           A.FAIZ_GIDERI_DIGER=0,
+           A.FAIZ_GIDERI_GM_BILANCO=0,
+           A.FAIZ_GIDERI_SORUNLU_KRD=0,
+           A.FAIZ_GIDERI_LINEER_SORUNLU_KRD=0,
+
+           A.FAIZ_GELIRI_KREDI_KARTI=0,
+           A.FAIZ_GELIRI_KREDILER=0,
+           A.FAIZ_GELIRI_LINEER_KK=0,
+           A.FAIZ_GELIRI_LINEER_KRD=0,
+           A.FAIZ_GELIRI_SORUNLU_KRD=0,
+           A.FAIZ_GELIRI_LINEER_SORUNLU_KRD=0   
+       WHERE SUBSTR(A.URUN,1,4) IN ('EXİM','EXIM')
+       AND A.KAYNAK IN ('MIZAN_GELIR_GIDER','FAIZ_GELIR_GIDER_LINEER')
+       AND A.AS_OF_DATE=PDATE;
+       COMMIT;
+       
+    DELETE 
+      FROM OFSA_SB.PROD_CUST_DETAIL_YEDEK
+     WHERE AS_OF_DATE=PDATE;
+     
+    COMMIT;
+     
+    INSERT INTO OFSA_SB.PROD_CUST_DETAIL_YEDEK
+    SELECT * 
+      FROM OFSA_SB.PROD_CUST_DETAIL
+     WHERE AS_OF_DATE=PDATE; 
+     
+    COMMIT; 
+       
+    execute immediate 'truncate table OFSA_SB.TEMP_FAIZ_GELIRI_DUZELTME';
+    
+        
+     COMMIT;
+     
+     INSERT INTO OFSA_SB.TEMP_FAIZ_GELIRI_DUZELTME 
+     SELECT 
+           PDATE AS AS_OF_DATE,
+           AST.MUS_NO,
+           C.URUN_KODU,
+           C.URUN,
+           AST.SUBE,
+           AST.ONCEKI_GUN_SUBE,
+           SUM(C.FAIZ_GELIRI_LINEER_KRD) AS KREDI_FAIZ_GELIRI_LINEER,
+           SUM(C.FAIZ_GELIRI_KREDILER)   AS KREDI_FAIZ_GELIRI_IRR,
+           SUM(C.FONLAMA_MALIYETI_KREDI) AS FONLAMA_MALIYETI_KREDI
+     FROM OFSA_SB.TEMP_CUST_DETAIL C,
+          (
+           SELECT DISTINCT TARIH,MUS_NO,URUN_KODU,URUN,SUBE,ONCEKI_GUN_SUBE
+             FROM(
+                  SELECT A.AS_OF_DATE AS TARIH,
+                         A.CUSTOMER_CODE AS MUS_NO,
+                         A.ACCOUNT_NO AS HESAP_NO,
+                         A.PRODUCT_TYPE AS URUN_KODU,
+                         A.PRODUCT_NAME AS URUN,
+                         A.CUSTOMER_BRANCH_CODE AS SUBE,
+                         NVL(LEAD(A.CUSTOMER_BRANCH_CODE) OVER (PARTITION BY A.CUSTOMER_CODE,A.ACCOUNT_NO ORDER BY A.AS_OF_DATE DESC ),A.CUSTOMER_BRANCH_CODE) ONCEKI_GUN_SUBE 
+                    FROM SUMMARY_PROD.GL_ASSET A 
+              WHERE AS_OF_DATE BETWEEN PDATE-1 AND PDATE
+                AND A.CUSTOMER_BRANCH_CODE NOT IN (1,172,187,219)
+                AND A.MODULE IN ('BKS','HK','KRM','KYS')
+                AND A.MAIN_GL_NO LIKE '1%'
+                AND A.MAIN_GL_NO NOT LIKE '17%'
+                AND NVL(A.PRODUCT_TYPE, '999') NOT IN ('0803002', '0903002', '0801003')
+                AND (NVL(A.MAIN_BALANCE, 0) + NVL(A.REDISCOUNT_102, 0) +
+                     NVL(A.REDISCOUNT_103, 0) + NVL(A.REDISCOUNT_350059, 0) +
+                     NVL(A.REDISCOUNT_35040, 0)) <> 0
+               ORDER BY 1) 
+               ) AST
+    WHERE AST.TARIH=PDATE
+      AND C.SUBE=AST.ONCEKI_GUN_SUBE
+      AND AST.MUS_NO=C.MUS_NO 
+      AND AST.URUN_KODU=C.URUN_KODU 
+      AND AST.SUBE<>AST.ONCEKI_GUN_SUBE
+    GROUP BY 
+       AST.MUS_NO,
+       C.URUN_KODU,
+       C.URUN,
+       AST.SUBE,
+       AST.ONCEKI_GUN_SUBE ;
+       
+       COMMIT;      
+       
+    MERGE INTO OFSA_SB.PROD_CUST_DETAIL CD
+      USING
+      (
+       SELECT CD.AS_OF_DATE,
+              CD.MUS_NO,
+              CD.SUBE,
+              CD.URUN_KODU,
+              CD.URUN,
+              SUM(CD.FAIZ_GELIRI_LINEER_KRD) AS GELIR,
+              MIN(CD.ROWID) AS RW
+
+       FROM  PROD_CUST_DETAIL CD
+     
+       WHERE CD.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+         AND CD.AS_OF_DATE=PDATE
+         AND CD.FAIZ_GELIRI_LINEER_KRD<0
+         AND CD.GOLGE_FLAG<>1
+         AND EXISTS (
+                                     SELECT DISTINCT A.MUS_NO
+                                     FROM TEMP_FAIZ_GELIRI_DUZELTME A
+                                     WHERE CD.MUS_NO=A.MUS_NO
+                                       AND CD.URUN_KODU=A.URUN_KODU
+                                       AND CD.SUBE=A.ONCEKI_GUN_SUBE
+                                       AND A.FONLAMA_MALIYETI_KREDI<>0
+                                       AND A.MUS_NO IN (SELECT MUS_NO
+                                                          FROM (
+                                                                 select A.MUS_NO,COUNT(DISTINCT A.SUBE) AS SUBE
+                                                                 from PROD_CUST_DETAIL A,
+                                                                      TEMP_FAIZ_GELIRI_DUZELTME T
+                                                                 where A.AS_OF_DATE=PDATE
+                                                                   and A.SUBE IN (T.SUBE,T.ONCEKI_GUN_SUBE)
+                                                                   AND A.MUS_NO=T.MUS_NO
+                                                                   AND A.AS_OF_DATE=T.AS_OF_DATE
+                                                                   AND A.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+                                                                   and T.FONLAMA_MALIYETI_KREDI<>0
+                                                                   AND T.SUBE NOT IN (SELECT BRANCH_CODE FROM OFSA_SB.PRIVATE_BRANCH_LIST)
+                                                                 HAVING COUNT(DISTINCT A.SUBE)>1
+                                                                 GROUP BY A.MUS_NO)
+                                                        )
+                    )
+       GROUP BY CD.AS_OF_DATE,CD.MUS_NO,CD.SUBE,CD.URUN_KODU,CD.URUN
+      )F
+      ON   (CD.SUBE=F.SUBE
+          AND CD.URUN_KODU=F.URUN_KODU
+          AND CD.MUS_NO=F.MUS_NO
+          AND CD.AS_OF_DATE=F.AS_OF_DATE
+          AND CD.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+          AND CD.AS_OF_DATE=PDATE
+          AND CD.ROWID=F.RW
+          )
+      WHEN MATCHED THEN
+       UPDATE SET CD.FONLAMA_MALIYETI_KREDI=CASE WHEN ABS(F.GELIR)>=ABS((SELECT T.FONLAMA_MALIYETI_KREDI 
+                                                                         FROM TEMP_FAIZ_GELIRI_DUZELTME T 
+                                                                         WHERE T.MUS_NO=CD.MUS_NO 
+                                                                           AND T.URUN_KODU=CD.URUN_KODU
+                                                                           AND T.ONCEKI_GUN_SUBE=CD.SUBE
+                                                                           AND T.URUN=CD.URUN))  
+                                                 THEN (SELECT T.FONLAMA_MALIYETI_KREDI 
+                                                       FROM TEMP_FAIZ_GELIRI_DUZELTME T 
+                                                       WHERE T.MUS_NO=CD.MUS_NO 
+                                                         AND T.URUN_KODU=CD.URUN_KODU
+                                                         AND T.ONCEKI_GUN_SUBE=CD.SUBE
+                                                         AND T.URUN=CD.URUN)*-1 
+                                                 ELSE (F.GELIR)*-1 END;
+                                                 
+       COMMIT;
+
+    MERGE INTO OFSA_SB.PROD_CUST_DETAIL CD
+      USING
+      (
+       SELECT CD.AS_OF_DATE,
+              CD.MUS_NO,
+              CD.SUBE,
+              CD.URUN_KODU,
+              CD.URUN,
+              SUM(CD.FAIZ_GELIRI_LINEER_KRD) AS GELIR,
+              MIN(CD.ROWID) AS RW
+
+       FROM   PROD_CUST_DETAIL CD
+     
+       WHERE CD.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+         AND CD.AS_OF_DATE=PDATE
+         AND EXISTS (
+                                     SELECT DISTINCT A.MUS_NO
+                                     FROM TEMP_FAIZ_GELIRI_DUZELTME A
+                                     WHERE CD.MUS_NO=A.MUS_NO
+                                       AND CD.URUN_KODU=A.URUN_KODU
+                                       AND CD.SUBE=A.SUBE
+                                       AND A.FONLAMA_MALIYETI_KREDI<>0
+                                       AND A.MUS_NO IN (SELECT MUS_NO
+                                                          FROM (
+                                                                 select A.MUS_NO,COUNT(DISTINCT A.SUBE) AS SUBE
+                                                                 from PROD_CUST_DETAIL A,
+                                                                      TEMP_FAIZ_GELIRI_DUZELTME T
+                                                                 where A.AS_OF_DATE=PDATE
+                                                                   and A.SUBE IN (T.SUBE,T.ONCEKI_GUN_SUBE)
+                                                                   AND A.MUS_NO=T.MUS_NO
+                                                                   AND A.AS_OF_DATE=T.AS_OF_DATE
+                                                                   AND A.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+                                                                   and T.FONLAMA_MALIYETI_KREDI<>0
+                                                                 HAVING COUNT(DISTINCT A.SUBE)>1
+                                                                 GROUP BY A.MUS_NO)
+                                                        )
+                    )
+       GROUP BY CD.AS_OF_DATE,CD.MUS_NO,CD.SUBE,CD.URUN_KODU,CD.URUN
+      )F
+      ON   (CD.SUBE=F.SUBE
+          AND CD.URUN_KODU=F.URUN_KODU
+          AND CD.MUS_NO=F.MUS_NO
+          AND CD.AS_OF_DATE=F.AS_OF_DATE
+          AND CD.KAYNAK='FAIZ_GELIR_GIDER_LINEER'
+          AND CD.AS_OF_DATE=PDATE
+          AND CD.ROWID=F.RW
+          )
+      WHEN MATCHED THEN
+	       UPDATE SET CD.FONLAMA_MALIYETI_KREDI=CASE WHEN CD.SUBE IN (SELECT BRANCH_CODE FROM OFSA_SB.PRIVATE_BRANCH_LIST) AND
+                                                      (SELECT NVL(SUM(T.FAIZ_GELIRI_LINEER_KRD),0)
+                                                       FROM   PROD_CUST_DETAIL T
+                                                       WHERE  T.AS_OF_DATE=PDATE
+                                                         AND  T.MUS_NO=CD.MUS_NO 
+                                                         AND  T.URUN_KODU=CD.URUN_KODU
+                                                         AND  T.URUN=CD.URUN
+                                                         AND  T.GOLGE_FLAG<>1
+                                                         AND  T.SUBE NOT IN (SELECT BRANCH_CODE FROM OFSA_SB.PRIVATE_BRANCH_LIST)
+                                                         AND  T.FAIZ_GELIRI_LINEER_KRD<>0)<0
+                                                 THEN 
+                                                        CASE WHEN ABS((SELECT SUM(P.FAIZ_GELIRI_LINEER_KRD)
+                                                                      FROM   PROD_CUST_DETAIL P
+                                                                      WHERE  P.AS_OF_DATE=PDATE
+                                                                        AND  P.MUS_NO=CD.MUS_NO 
+                                                                        AND  P.URUN_KODU=CD.URUN_KODU
+                                                                        AND  P.URUN=CD.URUN
+                                                                        AND  P.GOLGE_FLAG<>1
+                                                                        AND  P.SUBE NOT IN (SELECT BRANCH_CODE FROM OFSA_SB.PRIVATE_BRANCH_LIST)
+                                                                        AND  P.FAIZ_GELIRI_LINEER_KRD<>0)) >= ABS((SELECT T.FONLAMA_MALIYETI_KREDI 
+                                                                                                                  FROM   TEMP_FAIZ_GELIRI_DUZELTME T 
+                                                                                                                  WHERE  T.MUS_NO=CD.MUS_NO 
+                                                                                                                    AND  T.URUN_KODU=CD.URUN_KODU
+                                                                                                                    AND  T.SUBE=CD.SUBE
+                                                                                                                    AND  T.URUN=CD.URUN))
+                                                                                                   
+                                                            THEN (SELECT T.FONLAMA_MALIYETI_KREDI 
+                                                                  FROM   TEMP_FAIZ_GELIRI_DUZELTME T 
+                                                                  WHERE  T.MUS_NO=CD.MUS_NO 
+                                                                    AND  T.URUN_KODU=CD.URUN_KODU
+                                                                    AND  T.SUBE=CD.SUBE
+                                                                    AND  T.URUN=CD.URUN)
+                                                    
+                                                            ELSE (SELECT SUM(P.FAIZ_GELIRI_LINEER_KRD)
+                                                                  FROM   PROD_CUST_DETAIL P
+                                                                  WHERE  P.AS_OF_DATE=PDATE
+                                                                    AND  P.MUS_NO=CD.MUS_NO 
+                                                                    AND  P.URUN_KODU=CD.URUN_KODU
+                                                                    AND  P.URUN=CD.URUN
+                                                                    AND  P.GOLGE_FLAG<>1
+                                                                    AND  P.SUBE NOT IN (SELECT BRANCH_CODE FROM OFSA_SB.PRIVATE_BRANCH_LIST)
+                                                                    AND  P.FAIZ_GELIRI_LINEER_KRD<>0)*-1 END
+                                                      
+                               
+                               
+                                                 WHEN        
+                                                      (SELECT NVL(P.FONLAMA_MALIYETI_KREDI,0) 
+                                                       FROM   PROD_CUST_DETAIL P 
+                                                       WHERE  P.AS_OF_DATE=PDATE
+                                                         AND  P.MUS_NO=CD.MUS_NO 
+                                                         AND  P.URUN_KODU=CD.URUN_KODU
+                                                         AND  P.URUN=CD.URUN
+                                                         AND  P.FAIZ_GELIRI_LINEER_KRD<>0 
+                                                         AND  P.FONLAMA_MALIYETI_KREDI<>0)<>0
+
+                                                 THEN 
+                                                       (SELECT P.FONLAMA_MALIYETI_KREDI 
+                                                        FROM   PROD_CUST_DETAIL P 
+                                                        WHERE  P.AS_OF_DATE=PDATE
+                                                          AND  P.MUS_NO=CD.MUS_NO 
+                                                          AND  P.URUN_KODU=CD.URUN_KODU
+                                                          AND  P.URUN=CD.URUN
+                                                          AND  P.FAIZ_GELIRI_LINEER_KRD<>0 
+                                                          AND  P.FONLAMA_MALIYETI_KREDI<>0)*-1 
+
+                                                 ELSE 0 END;
+       
+       COMMIT;
+       
+    
+    /*******************************************************************************************************************/
+   -- EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.TEMP_CUST_DETAIL'; LOG PAKETİNDE YILBAŞI-PDATE-1 YÜKLEMESİ SEBEBİYLE BU ALAN KAPATILMIŞTIR. 08.05.2021
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';  
+
+DELETE FROM OFSA_SB.TEMP_CUST_DETAIL 
+ WHERE AS_OF_DATE= PDATE;
+ 
+ COMMIT;
+ 
+     INSERT INTO OFSA_SB.TEMP_CUST_DETAIL      
+          ( SELECT 
+              A.AS_OF_DATE,
+              SYSDATE,
+              A.MUS_NO,
+              A.ISKOLU,
+              A.SEGMENT,
+              ORG.BOLGE_KODU AS BOLGE,
+              A.SUBE,
+              CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END MT, --31.01.2021 tarihinin aylık yüklenmesinden kaynaklı sorun sebebiyle bu düzenleme yapılmıştır. 2022 yılında iptal edilecek. U.U.,A.Y.,S.A.
+              A.URUN_KODU,
+              A.URUN,
+              A.PB,
+              NULL,
+              SUM(A.FAIZ_DISI_GELIR_BHG) AS  FAIZ_DISI_GELIR_BHG,
+              SUM(A.FAIZ_DISI_GELIR_DIGER) AS  FAIZ_DISI_GELIR_DIGER,
+              SUM(A.FAIZ_DISI_GELIR_KREDI) AS  FAIZ_DISI_GELIR_KREDI,
+              SUM(A.FAIZ_DISI_GELIR_KREDI_KARTI) AS  FAIZ_DISI_GELIR_KREDI_KARTI,
+              SUM(A.FAIZ_DISI_GIDER_AMORTISMAN) AS  FAIZ_DISI_GIDER_AMORTISMAN,
+              SUM(A.FAIZ_DISI_GIDER_DAVA) AS  FAIZ_DISI_GIDER_DAVA,
+              SUM(A.FAIZ_DISI_GIDER_ISLETME) AS  FAIZ_DISI_GIDER_ISLETME,
+              SUM(A.FAIZ_DISI_GIDER_PERSONEL) AS  FAIZ_DISI_GIDER_PERSONEL,
+              SUM(A.FAIZ_DISI_GIDER_VERGI) AS  FAIZ_DISI_GIDER_VERGI,
+              SUM(A.FAIZ_DISI_GIDER_VERILEN_KOM) AS  FAIZ_DISI_GIDER_VERILEN_KOM,
+              SUM(A.FAIZ_DISI_GIDER_DESMER) AS  FAIZ_DISI_GIDER_DESMER,
+              SUM(A.FAIZ_GELIRI_KREDI_KARTI) AS  FAIZ_GELIRI_KREDI_KARTI,
+              SUM(A.FAIZ_GELIRI_KREDILER) AS  FAIZ_GELIRI_KREDILER,
+              SUM(A.FAIZ_GELIRI_LINEER_KK) AS  FAIZ_GELIRI_LINEER_KK,
+              SUM(A.FAIZ_GELIRI_LINEER_KRD) AS  FAIZ_GELIRI_LINEER_KRD,
+              SUM(A.FAIZ_GIDERI_DIGER) AS  FAIZ_GIDERI_DIGER,
+              SUM(A.FAIZ_GIDERI_GM_BILANCO) AS  FAIZ_GIDERI_GM_BILANCO,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_LINEER)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_LINEER) END AS  FAIZ_GIDERI_LINEER,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_MEVDUAT)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_MEVDUAT) END AS  FAIZ_GIDERI_MEVDUAT,
+              SUM(A.FONLAMA_GETIRI_GM_BILANCO) AS  FONLAMA_GETIRI_GM_BILANCO,
+              SUM(A.FONLAMA_GETIRI_MEVD_BLOKE) AS  FONLAMA_GETIRI_MEVD_BLOKE,
+              SUM(A.FONLAMA_MALIYETI_KK) AS  FONLAMA_MALIYETI_KK,
+              SUM(A.FONLAMA_MALIYETI_KREDI) AS  FONLAMA_MALIYETI_KREDI,
+              SUM(A.FX_KAR_ZARAR) AS  FX_KAR_ZARAR,
+              SUM(A.KASA_FONLAMA_TL) AS  KASA_FONLAMA_TL,
+              SUM(A.KASA_FONLAMA_YP) AS  KASA_FONLAMA_YP,
+              SUM(A.MUNZAM_MALIYETI) AS  MUNZAM_MALIYETI,
+              SUM(A.SKYATIRIM_SUBE_KULL_PAYI) AS  SKYATIRIM_SUBE_KULL_PAYI,
+              SUM(A.POS_BLOKE_GELIR) AS  POS_BLOKE_GELIR,
+              SUM(A.POS_KOM_GEL_ISYERI_BEDELI) AS  POS_KOM_GEL_ISYERI_BEDELI,
+              SUM(A.POS_KOM_GEL_KIRA_BEDELI) AS  POS_KOM_GEL_KIRA_BEDELI,
+              SUM(A.POS_KOM_GEL_SERVIS_BEDELI) AS  POS_KOM_GEL_SERVIS_BEDELI,
+              SUM(A.POS_KOM_GEL_TOPLAM) AS  POS_KOM_GEL_TOPLAM,
+              SUM(A.POS_KOM_GEL_UYE_ISYERI_KATKI) AS  POS_KOM_GEL_UYE_ISYERI_KATKI,
+              SUM(A.POS_KOMISYON_GIDER) AS  POS_KOMISYON_GIDER,
+              SUM(A.SEPET_2_AYRILAN_KARSILIK) AS  SEPET_2_AYRILAN_KARSILIK,
+              SUM(A.SEPET_3_AYRILAN_KARSILIK) AS  SEPET_3_AYRILAN_KARSILIK,
+              SUM(A.SKYATIRIM_FON_VERIM) AS  SKYATIRIM_FON_VERIM,
+              SUM(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI) AS  SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+              SUM(A.SKYATIRIM_HS_KOM_TUTARI) AS  SKYATIRIM_HS_KOM_TUTARI,
+              SUM(A.SKYATIRIM_SGMK_VERIM) AS  SKYATIRIM_SGMK_VERIM,
+              SUM(A.SKYATIRIM_SWEET_KOM_TUTARI) AS  SKYATIRIM_SWEET_KOM_TUTARI,
+              SUM(A.SKYATIRIM_VOB_KOM_TUTARI) AS  SKYATIRIM_VOB_KOM_TUTARI,
+              SUM(A.VADE_BOZUM_KAR_ZARAR) AS  VADE_BOZUM_KAR_ZARAR,
+              SUM(A.GM_MASRAF_PAYI) AS  GM_MASRAF_PAYI,
+              SUM(A.SUBE_KIRA) AS  SUBE_KIRA,
+              SUM(A.HAZINE_BONO_PRIMLERI) AS  HAZINE_BONO_PRIMLERI,
+              SUM(A.VADESIZ_MEVDUAT_PRIM) AS  VADESIZ_MEVDUAT_PRIM,
+              SUM(A.SEKERKUR_ALT_FW_DCD_PRIM) AS  SEKERKUR_ALT_FW_DCD_PRIM,
+              SUM(A.VADELI_MEV_PRIM) AS  VADELI_MEV_PRIM,
+              SUM(A.SKLEASING_ISLEM_YON_KOM) AS  SKLEASING_ISLEM_YON_KOM,
+              SUM(A.DIS_TICARET_PRIM) AS  DIS_TICARET_PRIM,
+              SUM(A.NAKIT_YONETIM_PRIM) AS  NAKIT_YONETIM_PRIM,
+              SUM(A.KUL_KAY_HATALI_ISL_MALIYET) AS  KUL_KAY_HATALI_ISL_MALIYET,
+              SUM(A.EFT_KAP_SAATI_SON_EK_UCRETI) AS  EFT_KAP_SAATI_SON_EK_UCRETI,
+              SUM(A.KULLANILMAYAN_IZIN_MALIYETI) AS  KULLANILMAYAN_IZIN_MALIYETI,
+              SUM(A.YATIRIM_EKSTRE_UCRETI) AS  YATIRIM_EKSTRE_UCRETI,
+              SUM(A.FON_YON_FX_ISLEM_IPTAL_CEZA) AS  FON_YON_FX_ISLEM_IPTAL_CEZA,
+              SUM(A.HATALI_ISLEM_MALIYETI) AS  HATALI_ISLEM_MALIYETI,
+              SUM(A.GMENKUL_PRIMI) AS  GMENKUL_PRIMI,
+              SUM(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR) AS  SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+              SUM(GECICI_GOREV_MALIYETI)   AS GECICI_GOREV_MALIYETI,
+              SUM(PASIF_TEKLIF_ORANI_CEZASI) AS PASIF_TEKLIF_ORANI_CEZASI,
+              SUM(PASIF_BAYI_ORANI_CEZASI) AS PASIF_BAYI_ORANI_CEZASI,
+              SUM(SEKAR) AS SEKAR,
+              SUM(A.EK_ALAN_6) AS  EK_ALAN_6,
+              SUM(A.INAKTIF_POS_MALIYETI) AS  INAKTIF_POS_MALIYETI,
+              SUM(A.SEPET_1_AYRILAN_KARSILIK) AS  SEPET_1_AYRILAN_KARSILIK,
+              SUM(A.ORT_BAKIYE_YILLIK) AS  ORT_BAKIYE_YILLIK,
+              SUM(A.BAKIYE) AS  BAKIYE,
+              0,
+              SUM(NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0)) AS FAIZ_GELIRI_SORUNLU_KRD,
+              SUM(NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0)) AS FAIZ_GIDERI_SORUNLU_KRD,
+              SUM(NVL(A.FAIZ_DISI_GELIR_ATM,0)) AS FAIZ_DISI_GELIR_ATM,
+              SUM(NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0)) AS FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+              SUM(NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)) AS FAIZ_GIDERI_LINEER_SORUNLU_KRD,
+              SUM(NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)) AS FONLAMA_GETIRI_KK_ALACAK_BKY,
+              SUM(NVL(A.HASAT_POS_BLOKE_GELIR,0)) AS  HASAT_POS_BLOKE_GELIR,              
+              NVL(C.PRIVATE_BRANCH_FLAG,0) AS PRIVATE_BRANCH_FLAG,
+              NVL(A.GOLGE_FLAG,0) AS GOLGE_FLAG
+         FROM OFSA_SB.PROD_CUST_DETAIL A,
+              OLAP.FC_CUSTOMER C ,
+              OFSA_SB.BOLGELER ORG             
+        WHERE A.AS_OF_DATE = PDATE 
+          AND C.AS_OF_DATE (+) =PDATE
+          AND A.SUBE=ORG.SUBE_KODU
+          AND A.MUS_NO = C.CUSTOMER_CODE (+)
+        GROUP BY 
+                A.AS_OF_DATE,
+                A.MUS_NO,
+                A.ISKOLU,
+                A.SEGMENT,
+                ORG.BOLGE_KODU,
+                A.SUBE,
+                CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END,
+                A.URUN_KODU,
+                A.URUN,
+                A.PB,
+                NVL(C.PRIVATE_BRANCH_FLAG,0),
+                NVL(A.GOLGE_FLAG,0)
+           );  
+  
+             /* Profitte MIS prim düzenlemesi yapmak için primler ve cezaların kayıtlarının müşteri no, işkolu, segment,
+               MT ve ürün kodları eşitleniyor. A.Y. */
+           
+           UPDATE OFSA_SB.TEMP_CUST_DETAIL D SET D.MUS_NO=999999999,
+                                      D.ISKOLU='99-SUBE_HAVUZ',
+                                      D.SEGMENT= NULL,
+                                      D.MT='999999',
+                                      D.URUN_KODU='88888888'
+
+           WHERE(NVL(D.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0)+
+                 NVL(D.INAKTIF_POS_MALIYETI,0)+
+                 NVL(D.GMENKUL_PRIMI,0)+
+                 NVL(D.HATALI_ISLEM_MALIYETI,0)+
+                 NVL(D.FON_YON_FX_ISLEM_IPTAL_CEZA,0)+
+                 NVL(D.KULLANILMAYAN_IZIN_MALIYETI,0)+
+                 NVL(D.EFT_KAP_SAATI_SON_EK_UCRETI,0)+
+                 NVL(D.KUL_KAY_HATALI_ISL_MALIYET,0)+
+                 NVL(D.NAKIT_YONETIM_PRIM,0)+
+                 NVL(D.DIS_TICARET_PRIM,0)+
+                 NVL(D.SKLEASING_ISLEM_YON_KOM,0)+
+                 NVL(D.VADELI_MEV_PRIM,0)+
+                 NVL(D.SEKERKUR_ALT_FW_DCD_PRIM,0)+
+                 NVL(D.VADESIZ_MEVDUAT_PRIM,0)+
+                 NVL(D.HAZINE_BONO_PRIMLERI,0)+
+                 NVL(D.MUNZAM_MALIYETI,0)+
+                 NVL(GECICI_GOREV_MALIYETI,0)+
+                 NVL(PASIF_TEKLIF_ORANI_CEZASI,0)+
+                 NVL(PASIF_BAYI_ORANI_CEZASI,0)+
+                 NVL(D.SEKAR,0)+
+                 NVL(D.YATIRIM_EKSTRE_UCRETI,0) != 0);
+     
+          COMMIT;
+  
+  
+  
+           
+        /* INSERT INTO OFSA_SB.TEMP_CUST_DETAIL      
+          ( SELECT 
+              A.AS_OF_DATE,
+              SYSDATE,
+              A.MUS_NO,
+              A.ISKOLU,
+              A.SEGMENT,
+              A.BOLGE,
+              A.SUBE,
+              CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END MT, --31.01.2021 tarihinin aylık yüklenmesinden kaynaklı sorun sebebiyle bu düzenleme yapılmıştır. 2022 yılında iptal edilecek. U.U.,A.Y.,S.A.
+              A.URUN_KODU,
+              A.URUN,
+              A.PB,
+              NULL,
+              SUM(A.FAIZ_DISI_GELIR_BHG) AS  FAIZ_DISI_GELIR_BHG,
+              SUM(A.FAIZ_DISI_GELIR_DIGER) AS  FAIZ_DISI_GELIR_DIGER,
+              SUM(A.FAIZ_DISI_GELIR_KREDI) AS  FAIZ_DISI_GELIR_KREDI,
+              SUM(A.FAIZ_DISI_GELIR_KREDI_KARTI) AS  FAIZ_DISI_GELIR_KREDI_KARTI,
+              SUM(A.FAIZ_DISI_GIDER_AMORTISMAN) AS  FAIZ_DISI_GIDER_AMORTISMAN,
+              SUM(A.FAIZ_DISI_GIDER_DAVA) AS  FAIZ_DISI_GIDER_DAVA,
+              SUM(A.FAIZ_DISI_GIDER_ISLETME) AS  FAIZ_DISI_GIDER_ISLETME,
+              SUM(A.FAIZ_DISI_GIDER_PERSONEL) AS  FAIZ_DISI_GIDER_PERSONEL,
+              SUM(A.FAIZ_DISI_GIDER_VERGI) AS  FAIZ_DISI_GIDER_VERGI,
+              SUM(A.FAIZ_DISI_GIDER_VERILEN_KOM) AS  FAIZ_DISI_GIDER_VERILEN_KOM,
+              SUM(A.FAIZ_DISI_GIDER_DESMER) AS  FAIZ_DISI_GIDER_DESMER,
+              SUM(A.FAIZ_GELIRI_KREDI_KARTI) AS  FAIZ_GELIRI_KREDI_KARTI,
+              SUM(A.FAIZ_GELIRI_KREDILER) AS  FAIZ_GELIRI_KREDILER,
+             SUM(A.FAIZ_GELIRI_LINEER_KK) AS  FAIZ_GELIRI_LINEER_KK,
+              SUM(A.FAIZ_GELIRI_LINEER_KRD) AS  FAIZ_GELIRI_LINEER_KRD,
+              SUM(A.FAIZ_GIDERI_DIGER) AS  FAIZ_GIDERI_DIGER,
+              SUM(A.FAIZ_GIDERI_GM_BILANCO) AS  FAIZ_GIDERI_GM_BILANCO,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_LINEER)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_LINEER) END AS  FAIZ_GIDERI_LINEER,
+              CASE WHEN ABS(SUM(A.FONLAMA_GETIRI_MEVD_BLOKE))<=ABS(SUM(A.FAIZ_GIDERI_MEVDUAT)) THEN SUM(A.FONLAMA_GETIRI_MEVD_BLOKE)*-1 ELSE  SUM(A.FAIZ_GIDERI_MEVDUAT) END AS  FAIZ_GIDERI_MEVDUAT,
+              SUM(A.FONLAMA_GETIRI_GM_BILANCO) AS  FONLAMA_GETIRI_GM_BILANCO,
+              SUM(A.FONLAMA_GETIRI_MEVD_BLOKE) AS  FONLAMA_GETIRI_MEVD_BLOKE,
+              SUM(A.FONLAMA_MALIYETI_KK) AS  FONLAMA_MALIYETI_KK,
+              SUM(A.FONLAMA_MALIYETI_KREDI) AS  FONLAMA_MALIYETI_KREDI,
+              SUM(A.FX_KAR_ZARAR) AS  FX_KAR_ZARAR,
+              SUM(A.KASA_FONLAMA_TL) AS  KASA_FONLAMA_TL,
+              SUM(A.KASA_FONLAMA_YP) AS  KASA_FONLAMA_YP,
+              SUM(A.MUNZAM_MALIYETI) AS  MUNZAM_MALIYETI,
+              SUM(A.SKYATIRIM_SUBE_KULL_PAYI) AS  SKYATIRIM_SUBE_KULL_PAYI,
+              SUM(A.POS_BLOKE_GELIR) AS  POS_BLOKE_GELIR,
+              SUM(A.POS_KOM_GEL_ISYERI_BEDELI) AS  POS_KOM_GEL_ISYERI_BEDELI,
+              SUM(A.POS_KOM_GEL_KIRA_BEDELI) AS  POS_KOM_GEL_KIRA_BEDELI,
+              SUM(A.POS_KOM_GEL_SERVIS_BEDELI) AS  POS_KOM_GEL_SERVIS_BEDELI,
+              SUM(A.POS_KOM_GEL_TOPLAM) AS  POS_KOM_GEL_TOPLAM,
+              SUM(A.POS_KOM_GEL_UYE_ISYERI_KATKI) AS  POS_KOM_GEL_UYE_ISYERI_KATKI,
+              SUM(A.POS_KOMISYON_GIDER) AS  POS_KOMISYON_GIDER,
+              SUM(A.SEPET_2_AYRILAN_KARSILIK) AS  SEPET_2_AYRILAN_KARSILIK,
+              SUM(A.SEPET_3_AYRILAN_KARSILIK) AS  SEPET_3_AYRILAN_KARSILIK,
+              SUM(A.SKYATIRIM_FON_VERIM) AS  SKYATIRIM_FON_VERIM,
+              SUM(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI) AS  SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+              SUM(A.SKYATIRIM_HS_KOM_TUTARI) AS  SKYATIRIM_HS_KOM_TUTARI,
+              SUM(A.SKYATIRIM_SGMK_VERIM) AS  SKYATIRIM_SGMK_VERIM,
+              SUM(A.SKYATIRIM_SWEET_KOM_TUTARI) AS  SKYATIRIM_SWEET_KOM_TUTARI,
+              SUM(A.SKYATIRIM_VOB_KOM_TUTARI) AS  SKYATIRIM_VOB_KOM_TUTARI,
+              SUM(A.VADE_BOZUM_KAR_ZARAR) AS  VADE_BOZUM_KAR_ZARAR,
+              SUM(A.GM_MASRAF_PAYI) AS  GM_MASRAF_PAYI,
+              SUM(A.SUBE_KIRA) AS  SUBE_KIRA,
+              SUM(A.HAZINE_BONO_PRIMLERI) AS  HAZINE_BONO_PRIMLERI,
+              SUM(A.VADESIZ_MEVDUAT_PRIM) AS  VADESIZ_MEVDUAT_PRIM,
+              SUM(A.SEKERKUR_ALT_FW_DCD_PRIM) AS  SEKERKUR_ALT_FW_DCD_PRIM,
+              SUM(A.VADELI_MEV_PRIM) AS  VADELI_MEV_PRIM,
+              SUM(A.SKLEASING_ISLEM_YON_KOM) AS  SKLEASING_ISLEM_YON_KOM,
+              SUM(A.DIS_TICARET_PRIM) AS  DIS_TICARET_PRIM,
+              SUM(A.NAKIT_YONETIM_PRIM) AS  NAKIT_YONETIM_PRIM,
+              SUM(A.KUL_KAY_HATALI_ISL_MALIYET) AS  KUL_KAY_HATALI_ISL_MALIYET,
+              SUM(A.EFT_KAP_SAATI_SON_EK_UCRETI) AS  EFT_KAP_SAATI_SON_EK_UCRETI,
+              SUM(A.KULLANILMAYAN_IZIN_MALIYETI) AS  KULLANILMAYAN_IZIN_MALIYETI,
+              SUM(A.YATIRIM_EKSTRE_UCRETI) AS  YATIRIM_EKSTRE_UCRETI,
+              SUM(A.FON_YON_FX_ISLEM_IPTAL_CEZA) AS  FON_YON_FX_ISLEM_IPTAL_CEZA,
+              SUM(A.HATALI_ISLEM_MALIYETI) AS  HATALI_ISLEM_MALIYETI,
+              SUM(A.GMENKUL_PRIMI) AS  GMENKUL_PRIMI,
+              SUM(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR) AS  SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+              SUM(A.EK_ALAN_2) AS  EK_ALAN_2,
+              SUM(A.EK_ALAN_3) AS  EK_ALAN_3,
+              SUM(A.EK_ALAN_4) AS  EK_ALAN_4,
+              SUM(A.EK_ALAN_5) AS  EK_ALAN_5,
+              SUM(A.EK_ALAN_6) AS  EK_ALAN_6,
+              SUM(A.INAKTIF_POS_MALIYETI) AS  INAKTIF_POS_MALIYETI,
+              SUM(A.SEPET_1_AYRILAN_KARSILIK) AS  SEPET_1_AYRILAN_KARSILIK,
+              SUM(A.ORT_BAKIYE_YILLIK) AS  ORT_BAKIYE_YILLIK,
+              SUM(A.BAKIYE) AS  BAKIYE
+              
+              FROM OFSA_SB.PROD_CUST_DETAIL A
+              
+              WHERE A.AS_OF_DATE BETWEEN YILBASI AND PDATE
+              AND   (nvl(a.faiz_disi_gider_amortisman,0)+ --Giderler aşağıda ayrıca işkolu kırılarak eklenmesi sebebiyle burada elenmiştir
+                      nvl(a.Faiz_Disi_Gider_Dava,0)+
+                      nvl(a.faiz_disi_gider_isletme,0)+
+                      nvl(a.faiz_disi_gider_vergi,0)+
+                      nvl(a.faiz_disi_gider_verilen_kom,0)+
+                      nvl(a.faiz_disi_gider_desmer,0)+
+                      nvl(a.kasa_fonlama_tl,0)+
+                      nvl(a.kasa_fonlama_yp,0)+
+                      nvl(a.gm_masraf_payi,0)+
+                      nvl(a.faiz_disi_gider_personel,0)+
+                      NVL(A.MUNZAM_MALIYETI,0)=0 AND A.ISKOLU!='99-SUBE_HAVUZ')
+              
+              GROUP BY A.AS_OF_DATE,
+                A.MUS_NO,
+                A.ISKOLU,
+                A.SEGMENT,
+                A.BOLGE,
+                A.SUBE,
+                CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END,
+                A.URUN_KODU,
+                 A.URUN,
+                 A.PB
+            
+          UNION ALL --********************İŞLETME GİDERLERİ EKLENİYOR
+                
+          SELECT 
+              A.AS_OF_DATE,
+              SYSDATE,
+              A.MUS_NO,
+              NVL(KIR.ISKOLU,'99-SUBE_HAVUZ') AS ISKOLU,
+              a.segment,
+              A.BOLGE,
+              A.SUBE,
+              CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END MT,
+              A.URUN_KODU,
+              A.URUN,
+              A.PB,
+              NULL,
+              0 AS  FAIZ_DISI_GELIR_BHG,
+              0 AS  FAIZ_DISI_GELIR_DIGER,
+              0 AS  FAIZ_DISI_GELIR_KREDI,
+              0 AS  FAIZ_DISI_GELIR_KREDI_KARTI,
+              SUM(a.faiz_disi_gider_amortisman)*NVL(KIR.ORAN,1) AS  FAIZ_DISI_GIDER_AMORTISMAN,
+              SUM(a.Faiz_Disi_Gider_Dava)*NVL(KIR.ORAN,1) AS Faiz_Disi_Gider_Dava,
+              SUM(a.faiz_disi_gider_isletme)*NVL(KIR.ORAN,1) AS faiz_disi_gider_isletme,
+              0 AS  FAIZ_DISI_GIDER_PERSONEL,
+              SUM(a.faiz_disi_gider_vergi)*NVL(KIR.ORAN,1) AS faiz_disi_gider_vergi,
+              SUM(a.faiz_disi_gider_verilen_kom)*NVL(KIR.ORAN,1) AS faiz_disi_gider_verilen_kom,
+              SUM(a.faiz_disi_gider_desmer)*NVL(KIR.ORAN,1) AS faiz_disi_gider_desmer,
+              0 AS  FAIZ_GELIRI_KREDI_KARTI,
+              0 AS  FAIZ_GELIRI_KREDILER,
+              0AS  FAIZ_GELIRI_LINEER_KK,
+              0 AS  FAIZ_GELIRI_LINEER_KRD,
+              0 AS  FAIZ_GIDERI_DIGER,
+              0 AS  FAIZ_GIDERI_GM_BILANCO,
+              0 AS  FAIZ_GIDERI_LINEER,
+              0 AS  FAIZ_GIDERI_MEVDUAT,
+              0 AS  FONLAMA_GETIRI_GM_BILANCO,
+              0 AS  FONLAMA_GETIRI_MEVD_BLOKE,
+              0 AS  FONLAMA_MALIYETI_KK,
+              0 AS  FONLAMA_MALIYETI_KREDI,
+              0AS  FX_KAR_ZARAR,
+              SUM(a.kasa_fonlama_tl)*NVL(KIR.ORAN,1) AS kasa_fonlama_tl,
+              SUM(a.kasa_fonlama_yp)*NVL(KIR.ORAN,1) AS kasa_fonlama_yp,
+              SUM(A.MUNZAM_MALIYETI)*NVL(KIR.ORAN,1) AS  MUNZAM_MALIYETI,
+              0 AS  SKYATIRIM_SUBE_KULL_PAYI,
+              0 AS  POS_BLOKE_GELIR,
+              0 AS  POS_KOM_GEL_ISYERI_BEDELI,
+              0 AS  POS_KOM_GEL_KIRA_BEDELI,
+              0 AS  POS_KOM_GEL_SERVIS_BEDELI,
+              0 AS  POS_KOM_GEL_TOPLAM,
+              0 AS  POS_KOM_GEL_UYE_ISYERI_KATKI,
+              0 AS  POS_KOMISYON_GIDER,
+              0 AS  SEPET_2_AYRILAN_KARSILIK,
+              0 AS  SEPET_3_AYRILAN_KARSILIK,
+              0 AS  SKYATIRIM_FON_VERIM,
+              0 AS  SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+              0 AS  SKYATIRIM_HS_KOM_TUTARI,
+              0 AS  SKYATIRIM_SGMK_VERIM,
+              0 AS  SKYATIRIM_SWEET_KOM_TUTARI,
+              0 AS  SKYATIRIM_VOB_KOM_TUTARI,
+              0 AS  VADE_BOZUM_KAR_ZARAR,
+              SUM(a.gm_masraf_payi)*NVL(KIR.ORAN,1) AS  GM_MASRAF_PAYI,
+              0 AS  SUBE_KIRA,
+              0 AS  HAZINE_BONO_PRIMLERI,
+              0 AS  VADESIZ_MEVDUAT_PRIM,
+              0 AS  SEKERKUR_ALT_FW_DCD_PRIM,
+              0 AS  VADELI_MEV_PRIM,
+              0 AS  SKLEASING_ISLEM_YON_KOM,
+              0 AS  DIS_TICARET_PRIM,
+              0 AS  NAKIT_YONETIM_PRIM,
+              0 AS  KUL_KAY_HATALI_ISL_MALIYET,
+              0 AS  EFT_KAP_SAATI_SON_EK_UCRETI,
+              0 AS  KULLANILMAYAN_IZIN_MALIYETI,
+              0 AS  YATIRIM_EKSTRE_UCRETI,
+              0 AS  FON_YON_FX_ISLEM_IPTAL_CEZA,
+              0 AS  HATALI_ISLEM_MALIYETI,
+              0 AS  GMENKUL_PRIMI,
+              0 AS  SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+              0 AS  EK_ALAN_2,
+              0 AS  EK_ALAN_3,
+              0 AS  EK_ALAN_4,
+              0 AS  EK_ALAN_5,
+              0 AS  EK_ALAN_6,
+              0 AS  INAKTIF_POS_MALIYETI,
+              0 AS  SEPET_1_AYRILAN_KARSILIK,
+              0 AS  ORT_BAKIYE_YILLIK,
+              0 AS  BAKIYE
+
+              FROM OFSA_SB.PROD_CUST_DETAIL A LEFT JOIN (SELECT A.AS_OF_DATE,
+                                                                A.ORG_CODE,
+                                                                A.ORG,
+                                                                CASE WHEN A.GOSTERGE_KODU=24 THEN '2-TICARI'
+                                                                               WHEN A.GOSTERGE_KODU=26 THEN '6-ISLETME'
+                                                                               WHEN A.GOSTERGE_KODU=25 THEN '4-KOBI'
+                                                                               WHEN A.GOSTERGE_KODU=32 THEN '7-BIREYSEL'
+                                                                               WHEN A.GOSTERGE_KODU=31 THEN '5-TARIM'
+                                                                      ELSE '99-SUBE_HAVUZ'  END ISKOLU,                                                                        
+                                                                  ROUND(A.AGIRLIK / SUM(A.AGIRLIK) OVER(PARTITION BY A.ORG_CODE, A.AS_OF_DATE),8) AS ORAN
+                                                                  FROM SKZN_PROD.PROD_SKZN_MNGR_SMMRY_RPT A
+                                                                WHERE A.AS_OF_DATE = PDATE -1
+                                                                   AND A.AGIRLIK <> 0
+                                                                   AND A.GOSTERGE_KODU IN ('32', '25', '26', '24', '31')
+                                                                                        
+                                                                                         ) KIR ON A.SUBE=KIR.ORG_CODE 
+
+              WHERE  a.iskolu='99-SUBE_HAVUZ'
+              AND A.AS_OF_DATE BETWEEN YILBASI  AND PDATE 
+              AND nvl(a.faiz_disi_gider_amortisman,0)+
+                    nvl(a.Faiz_Disi_Gider_Dava,0)+
+                    nvl(a.faiz_disi_gider_isletme,0)+
+                    nvl(a.faiz_disi_gider_vergi,0)+
+                    nvl(a.faiz_disi_gider_verilen_kom,0)+
+                    nvl(a.faiz_disi_gider_desmer,0)+
+                    nvl(a.kasa_fonlama_tl,0)+
+                    nvl(a.kasa_fonlama_yp,0)+
+                    nvl(a.gm_masraf_payi,0)+NVL(A.MUNZAM_MALIYETI,0)<>0
+            
+              group by A.AS_OF_DATE,
+                       SYSDATE,
+                       A.MUS_NO,
+                       NVL(KIR.ISKOLU,'99-SUBE_HAVUZ'),
+                       a.segment,
+                       A.BOLGE,
+                       A.SUBE,
+                       KIR.ORAN,
+                       CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END,
+                       A.URUN_KODU,
+                       A.URUN,
+                       A.PB
+                       
+          UNION ALL ----********************PERSONEL GİDERLERİ EKLENİYOR
+            
+                SELECT 
+              A.AS_OF_DATE,
+              SYSDATE,
+              A.MUS_NO,
+              NVL(MT.SINIF,A.ISKOLU) AS ISKOLU,
+              a.segment,
+              A.BOLGE,
+              A.SUBE,
+              CASE WHEN A.AS_OF_DATE=to_date('20210131','yyyymmdd') THEN 999999 ELSE  A.MT END MT,
+              A.URUN_KODU,
+              A.URUN,
+              A.PB,
+              NULL,
+              0 AS  FAIZ_DISI_GELIR_BHG,
+              0 AS  FAIZ_DISI_GELIR_DIGER,
+              0 AS  FAIZ_DISI_GELIR_KREDI,
+              0 AS  FAIZ_DISI_GELIR_KREDI_KARTI,
+              0 AS  FAIZ_DISI_GIDER_AMORTISMAN,
+              0 AS Faiz_Disi_Gider_Dava,
+              0 AS faiz_disi_gider_isletme,
+              NVL(AGR_BRUT_MAAS,a.Faiz_Disi_Gider_Personel-SUM(AGR_BRUT_MAAS) over (PARTITION BY MT.AS_OF_DATE,MT.SUBE ) ) AS  FAIZ_DISI_GIDER_PERSONEL,
+              0 AS faiz_disi_gider_vergi,
+              0 AS faiz_disi_gider_verilen_kom,
+              0 AS faiz_disi_gider_desmer,
+              0 AS  FAIZ_GELIRI_KREDI_KARTI,
+              0 AS  FAIZ_GELIRI_KREDILER,
+              0 AS  FAIZ_GELIRI_LINEER_KK,
+              0 AS  FAIZ_GELIRI_LINEER_KRD,
+              0 AS  FAIZ_GIDERI_DIGER,
+              0 AS  FAIZ_GIDERI_GM_BILANCO,
+              0 AS  FAIZ_GIDERI_LINEER,
+              0 AS  FAIZ_GIDERI_MEVDUAT,
+              0 AS  FONLAMA_GETIRI_GM_BILANCO,
+              0 AS  FONLAMA_GETIRI_MEVD_BLOKE,
+              0 AS  FONLAMA_MALIYETI_KK,
+              0 AS  FONLAMA_MALIYETI_KREDI,
+              0 AS  FX_KAR_ZARAR,
+              0 AS  kasa_fonlama_tl,
+              0 AS  kasa_fonlama_yp,
+              0 AS  MUNZAM_MALIYETI,
+              0 AS  SKYATIRIM_SUBE_KULL_PAYI,
+              0 AS  POS_BLOKE_GELIR,
+              0 AS  POS_KOM_GEL_ISYERI_BEDELI,
+              0 AS  POS_KOM_GEL_KIRA_BEDELI,
+              0 AS  POS_KOM_GEL_SERVIS_BEDELI,
+              0 AS  POS_KOM_GEL_TOPLAM,
+              0 AS  POS_KOM_GEL_UYE_ISYERI_KATKI,
+              0 AS  POS_KOMISYON_GIDER,
+              0 AS  SEPET_2_AYRILAN_KARSILIK,
+              0 AS  SEPET_3_AYRILAN_KARSILIK,
+              0 AS  SKYATIRIM_FON_VERIM,
+              0 AS  SKYATIRIM_HALKA_ARZ_KOM_TUTARI,
+              0 AS  SKYATIRIM_HS_KOM_TUTARI,
+              0 AS  SKYATIRIM_SGMK_VERIM,
+              0 AS  SKYATIRIM_SWEET_KOM_TUTARI,
+              0 AS  SKYATIRIM_VOB_KOM_TUTARI,
+              0 AS  VADE_BOZUM_KAR_ZARAR,
+              0 AS  GM_MASRAF_PAYI,
+              0 AS  SUBE_KIRA,
+              0 AS  HAZINE_BONO_PRIMLERI,
+              0 AS  VADESIZ_MEVDUAT_PRIM,
+              0 AS  SEKERKUR_ALT_FW_DCD_PRIM,
+              0 AS  VADELI_MEV_PRIM,
+              0 AS  SKLEASING_ISLEM_YON_KOM,
+              0 AS  DIS_TICARET_PRIM,
+              0 AS  NAKIT_YONETIM_PRIM,
+              0 AS  KUL_KAY_HATALI_ISL_MALIYET,
+              0 AS  EFT_KAP_SAATI_SON_EK_UCRETI,
+              0 AS  KULLANILMAYAN_IZIN_MALIYETI,
+              0 AS  YATIRIM_EKSTRE_UCRETI,
+              0 AS  FON_YON_FX_ISLEM_IPTAL_CEZA,
+              0 AS  HATALI_ISLEM_MALIYETI,
+              0 AS  GMENKUL_PRIMI,
+              0 AS  SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+              0 AS  EK_ALAN_2,
+              0 AS  EK_ALAN_3,
+              0 AS  EK_ALAN_4,
+              0 AS  EK_ALAN_5,
+              0 AS  EK_ALAN_6,
+              0 AS  INAKTIF_POS_MALIYETI,
+              0 AS  SEPET_1_AYRILAN_KARSILIK,
+              0 AS  ORT_BAKIYE_YILLIK,
+              0 AS  BAKIYE
+              
+              FROM OFSA_SB.PROD_CUST_DETAIL A LEFT JOIN ( SELECT PERS.AS_OF_DATE,PERS.SUBE,PERS.SINIF, SUM(PERS.ADET*KTS.ORT_BRUT_MAAS*-1) AS AGR_BRUT_MAAS 
+                                                                                     FROM 
+                                                                                            (
+                                                                                            SELECT 
+                                                                                            A.AS_OF_DATE,
+                                                                                            TO_NUMBER(A.STAFF_ORG_CODE) AS SUBE,
+                                                                                            CASE WHEN a.staff_org_unit_code='18' THEN '7-BIREYSEL'
+                                                                                                    WHEN a.staff_org_unit_code='118' THEN '6-ISLETME'
+                                                                                                    WHEN a.staff_org_unit_code = '25' THEN '2-TICARI'
+                                                                                                    WHEN a.staff_org_unit_code='24' THEN '1-KURUMSAL'
+                                                                                                    WHEN a.staff_org_unit_code = '17' THEN '4-KOBI'
+                                                                                                    WHEN a.staff_org_unit_code = '91101' THEN '5-TARIM'
+                                                                                            ELSE  '99-SUBE_HAVUZ' END sinif,
+                                                                                            CASE WHEN a.staff_org_unit_code NOT IN ('18','118','25','24','17','91101') THEN 'DIGER' ELSE A.STAFF_TITLE END UNVAN,
+                                                                                            COUNT(a.staff_file_no) ADET
+                                                                                            FROM olap.fc_staff a,OLAP.DM_ORGANIZATION ORG 
+                                                                                            WHERE a.as_of_date=PDATE
+                                                                                            AND NVL(a.Staff_Status,'XX')!='AYRILAN'
+                                                                                            AND a.staff_org_unit IS NOT NULL
+                                                                                            AND TO_NUMBER(A.STAFF_ORG_CODE)=TO_NUMBER(ORG.GL_ORG_CODE)
+                                                                                            AND ORG.ORG_TYPE=5--Şubeler
+                                                                                            AND org.state=1--Açık Şubeler
+                                                                                            AND a.staff_org_unit NOT IN ('TİCARİ PAZARLAMA') --Test kullanıcısı olduğu gözlenmesi sebebiyle eleniyor
+                                                                                            GROUP BY A.STAFF_TITLE,TO_NUMBER(A.STAFF_ORG_CODE),A.AS_OF_DATE,a.staff_org_unit_code
+                                                                                            ) PERS LEFT JOIN ofsa_sb.ofsa_gider_paylasim_maas_ktsy KTS ON PERS.SINIF=KTS.SINIF AND PERS.UNVAN=KTS.UNVAN AND KTS.YEAR= EXTRACT (YEAR FROM PDATE )
+                                                                                    GROUP BY PERS.AS_OF_DATE,PERS.SUBE,PERS.SINIF) MT ON MT.SUBE=A.SUBE AND MT.AS_OF_DATE=A.AS_OF_DATE
+              WHERE  a.iskolu='99-SUBE_HAVUZ'
+              AND A.AS_OF_DATE BETWEEN YILBASI  AND PDATE 
+              AND nvl(a.faiz_disi_gider_personel,0)<>0
+          
+          );    */     
+           
+      COMMIT;  
+    
+
+
+    /*******************************************************************************************************************/
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

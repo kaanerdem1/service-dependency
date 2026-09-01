@@ -8,6 +8,7 @@
  * - changeRequests.ts → talep / flag / inbox
  * - permissions.ts   → kim talep açabilir
  * - notes.ts         → servis notları (MVP)
+ * - dwh/*           → PostgreSQL katalog read-only API
  *
  * Vite UI `/api/*` isteklerini buraya proxy eder.
  */
@@ -54,6 +55,7 @@ import {
   getSnapshotImage,
   listSnapshotsForRequest,
 } from './snapshots.js'
+import { dwhRouter } from './dwh/routes.js'
 import type { SnapshotClientPayload } from './snapshotTypes.js'
 
 const app = express()
@@ -61,6 +63,7 @@ const PORT = Number(process.env.PORT ?? 4000)
 
 app.use(cors())
 app.use(express.json({ limit: '15mb' }))
+app.use('/api/dwh', dwhRouter)
 
 // —— Sağlık / oturum / ağaç ——
 app.get('/api/health', (_req, res) => {

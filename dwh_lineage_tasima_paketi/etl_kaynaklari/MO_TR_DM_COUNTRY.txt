@@ -1,0 +1,167 @@
+CREATE OR REPLACE PACKAGE BODY STAGE.MO_TR_DM_COUNTRY IS
+  PROCEDURE TEST IS
+  BEGIN
+    stage.mn_test.assert_is_unique(definition => 'Ulke Kodu tekil olmali',
+                                   sql_text   => 'SELECT COUNTRY_CODE FROM TR_DM_COUNTRY');
+  END;
+
+  PROCEDURE TR_DM_COUNTRY IS
+    sql_text       VARCHAR2(8000);
+    error_location NUMBER;
+    pid            NUMBER;
+    control        NUMBER;
+    pasofdate      DATE;
+    pcritical_lvl  NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+  BEGIN
+    error_location := 1;
+  
+    SELECT TO_DATE(prm_value, prm_format)
+      INTO pasofdate
+      FROM rasman.sy_system_parameters t
+     WHERE parameter = 'DIM_DATE';
+  
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_COUNTRY',
+                                  psubmodule   => 'TR_DM_COUNTRY',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl);
+  
+    EXECUTE IMMEDIATE 'truncate table TR_DM_COUNTRY';
+  
+    INSERT INTO stage.TR_DM_COUNTRY
+      SELECT a.country_code                AS country_code,
+             a.country_name                AS country_name,
+             a.country_phone_code          AS country_phone_code,
+             a.country_name_en             AS country_name_en,
+             NULL                          AS country_group1,
+             NULL                          AS country_group1_desc,
+             NULL                          AS country_group2,
+             NULL                          AS country_group2_desc,
+             a.ss_oid                      AS ss_oid,
+             a.country_swift_code          AS country_swift_code,
+             is_ab                         AS is_eu,
+             mly_code                      AS maliye_code,
+             is_oecd                       AS is_oecd,
+             is_offshore                   AS is_offshore,
+             currency_code                 AS country_currency_code,
+             currency_desc                 AS currency_desc,
+             capital                       AS capital,
+             a.kkb_code                    AS kkb_code,
+             country_iso_3166_alfa_3_codes AS country_iso_3166_alfa_3_codes,
+             tcmb_country_name             AS tcmb_country_name,
+             country_code                  AS orijinal_country_code,
+             a.country_name                AS orijinal_country_name,
+             a.crs_reporting               AS crs_reporting
+        FROM (SELECT t.status,
+                     t.country_name,
+                     t.country_phone_code,
+                     t.country_code,
+                     t.country_name_en,
+                     t.oid AS ss_oid,
+                     t.country_swift_code,
+                     x.is_ab,
+                     x.mly_code,
+                     x.is_oecd,
+                     x.is_offshore,
+                     x.currency_code,
+                     x.currency_desc,
+                     x.capital,
+                     kkb.kkb_code,
+                     t.country_iso_3166_alfa_3_codes, --Sesis:382331
+                     tcmb_country_name, -- tcmb.tcmb_country_name --SESIS 480936  CC 20180424
+                     x.crs_reporting
+                     
+                FROM ex_infra_location_country   t,
+                     rasman.pr_dm_country_ab     x,
+                     rasman.pr_kkb_country_codes kkb,
+                     rasman.pr_dm_tcmb_country   tcmb
+                     
+               WHERE T.STATUS = '1'
+                 AND x.country_code(+) = t.COUNTRY_CODE
+                 AND kkb.country_code(+) = T.COUNTRY_CODE
+                 AND t.country_code = tcmb.tcmb_country_code(+)) A;
+  
+    COMMIT;
+  
+    --sesis 551821, AO, 20181225
+    /*INSERT INTO stage.TR_DM_COUNTRY --SESIS 480936  CC 20180425
+                               (country_name, country_code)
+    SELECT DISTINCT country_long_tr AS country_name, iso_country_cd AS country_code
+      FROM FTR.FTS_WU_DAS_DEST_CURRENCY@CN_BOBJECTS_ON_PRODUX
+     WHERE iso_country_cd IN
+               (SELECT iso_country_cd
+                  FROM FTR.FTS_WU_DAS_DEST_CURRENCY@CN_BOBJECTS_ON_PRODUX
+                MINUS
+                SELECT country_code FROM tr_dm_country);*/
+  
+    INSERT INTO stage.TR_DM_COUNTRY
+      (country_code, country_name_en, country_name)
+      SELECT DISTINCT dc.iso_country_cd AS country_code,
+                      UPPER(dc.country_long) AS country_name_en,
+                      UPPER(NVL(dc.country_long_tr, dc.country_long)) AS country_name
+        FROM ftr.FTS_WU_DAS_DESTINATION_COUNTRY@CN_BOBJECTS_ON_PRODUX dc
+       WHERE dc.status = '1'
+         AND dc.iso_country_cd IN
+             (SELECT iso_country_cd
+                FROM ftr.FTS_WU_DAS_DESTINATION_COUNTRY@CN_BOBJECTS_ON_PRODUX
+              MINUS
+              SELECT country_code
+                FROM tr_dm_country);
+  
+    COMMIT;
+  
+    MERGE INTO TR_DM_COUNTRY a --SESIS 480936  CC 20180425
+    USING (SELECT ct.ROWID AS ct_rwid,
+                  orc.original_country_code,
+                  orc.original_country_name
+             FROM TR_DM_COUNTRY ct, rasman.pr_dm_original_country orc
+            WHERE ct.country_code = orc.iso_country_cd) b
+    ON (a.ROWID = b.ct_rwid)
+    WHEN MATCHED THEN
+      UPDATE
+         SET a.original_country_name = b.original_country_name,
+             a.original_country_code = b.original_country_code;
+  
+    COMMIT;
+  
+    EXECUTE IMMEDIATE 'truncate table TR_DM_COUNTRY_LAST';
+  
+    INSERT INTO TR_DM_COUNTRY_LAST
+      SELECT *
+        FROM olap.dm_country;
+  
+    COMMIT;
+  
+    ---CC 20180430 contry_code boş gelenleri mail atması için.-------------
+    SELECT COUNT(*)
+      INTO control
+      FROM tr_dm_country
+     WHERE country_code IS NULL;
+  
+    IF control >= 1
+    THEN
+      stage.mn_utility.send_mail(v_Recipient => stage.mn_utility.get_system_parameter('MAIL_EDW_IZKD_DWH'),
+                                 v_Subject   => '!!!!HATA-OLAP.DM_COUNTRY',
+                                 v_Message   => 'Country_Code bos olan kayit var.');
+    END IF;
+  
+    --------------------------------------------------------------------------
+    MN_TRANSFER.dim_transfer_stage(sname       => 'TR_DM_COUNTRY',
+                                   tname       => 'TR_DM_COUNTRY_LAST',
+                                   primary_key => 'COUNTRY_CODE');
+  
+    mn_utility.update_plog(pid => pid, success => 1, pcritical => 9);
+  EXCEPTION
+    WHEN OTHERS THEN
+      mn_utility.update_plog(pid       => pid,
+                             success   => 0,
+                             fail      => 'POSITION: ' || error_location ||
+                                          ' ERROR: ' || ABS(SQLCODE) || ':' ||
+                                          SQLERRM || ' ' ||
+                                          DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                             pcritical => pcritical_lvl);
+      ROLLBACK;
+      RAISE;
+  END;
+END MO_TR_DM_COUNTRY;
+/

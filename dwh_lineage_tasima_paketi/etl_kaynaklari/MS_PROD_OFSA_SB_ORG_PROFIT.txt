@@ -1,0 +1,1081 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_PROD_OFSA_SB_ORG_PROFIT IS
+
+      PROCEDURE MS_PROD_OFSA_SB_ORG_PROFIT IS
+
+      ERROR_LOCATION     NUMBER;
+      PID                NUMBER;
+      PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+      PDATE              DATE;
+      PASOFDATE          VARCHAR2(8);
+      YILBASI            DATE;
+      AYBASI             DATE;
+      SEGM_TARIH         DATE;
+      GERI_YUKLEME       NUMBER :=0 ;
+
+      BEGIN
+
+      ERROR_LOCATION := 1;
+      SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT), TRUNC(TO_DATE(PRM_VALUE,'yyyymmdd'),'YYYY'),TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE, YILBASI, AYBASI, SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+      
+      
+      PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_PROD_OFSA_SB_ORG_PROFIT',
+                                            PSUBMODULE   => 'PROD_OFSA_SB_ORG_PROFIT',
+                                            PROJECT_NAME => 'OFSA_SB',
+                                            PASOFDATE    => PDATE,
+                                            PCRITICAL    => PCRITICAL_LVL);
+
+      OFSA_SB.MN_UTILITY.PARTITION_CREATE(towner         => 'OFSA_SB', --Partion oluşturma işlemi yapılıyor
+                                          tname          => 'PROD_ORG_PROFIT',
+                                          partition_date => pdate );
+
+
+   /*****************************************************************************************************************/
+      SELECT CASE WHEN COUNT(1)>0 THEN 1 ELSE 0 END --Geriye dönük yüklemelerde o tarihte veri olmasını knt ediyor.
+      INTO GERI_YUKLEME
+      FROM OFSA_SB.PROD_ORG_PROFIT
+      WHERE AS_OF_DATE=PDATE;
+      
+      
+    --EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+      DELETE
+      FROM OFSA_SB.PROD_ORG_PROFIT
+      WHERE AS_OF_DATE = PDATE;
+      COMMIT;
+
+  /*****************************************************************************************************************/
+
+
+
+      EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+      INSERT /*+ parallel(16)*/
+      INTO OFSA_SB.PROD_ORG_PROFIT
+      (
+          AS_OF_DATE,
+          CREATE_DATE,
+          ISKOLU,
+          SEGMENT,
+          BOLGE_KODU,
+          BOLGE_ADI,
+          SUBE_KODU,
+          SUBE_ADI,
+          FAIZ_DISI_GELIR_BHG,
+          FAIZ_DISI_GELIR_KREDI,
+          FAIZ_DISI_GELIR_KK,
+          FAIZ_DISI_GELIR_DIGER,
+          FX_KAR_ZARAR,
+          POS_KOM_GEL_ISYERI_BEDELI,
+          POS_KOM_GEL_KIRA_BEDELI,
+          POS_KOM_GEL_UYE_IS_KATKI,
+          POS_KOM_GEL_SERVIS_BEDELI,
+          POS_KOM_GEL_TOPLAM,
+          SKYATIRIM_HALKA_ARZ_KOM,
+          SKYATIRIM_FON_VERIM,
+          SKYATIRIM_HISSE_KOM,
+          SKYATIRIM_SGMK_VERIM,
+          SKYATIRIM_SWEET_KOM,
+          SKYATIRIM_VOB_KOM,
+          SKYATIRIM_TOPLAM,
+          TOPLAM_FAIZ_DISI_GELIR,
+          FAIZ_DISI_GIDER_AMORTISTMAN,
+          FAIZ_DISI_GIDER_DAVA_MHK,
+          FAIZ_DISI_GIDER_ISLETME,
+          FAIZ_DISI_GIDER_PERSONEL,
+          FAIZ_DISI_GIDER_VERGI,
+          FAIZ_DISI_GIDER_VERILEN_KOM,
+          FAIZ_DISI_GIDER_DESMER,
+          POS_KOM_GIDERI,
+          SUBE_KIRA_BEDELI,
+          TOPLAM_FAIZ_DISI_GIDER,
+          FAIZ_GELIRI_IRR_KK,
+          FAIZ_GELIRI_IRR_KREDI,
+          TOPLAM_FAIZ_GELIRI_IRR,
+          FAIZ_GELIRI_LINEER_KK,
+          FAIZ_GELIRI_LINEER_KREDI,
+          TOPLAM_FAIZ_GELIRI_LINEER,
+          FAIZ_GIDERI_DIGER,
+          FAIZ_GIDERI_GM_BILANCO,
+          FAIZ_GIDERI_LINEER_MEVD,
+          FAIZ_GIDERI_IRR_MEVD,
+          FONLAMA_GETIRI_MEVD_BLOKE,
+          FONLAMA_GETIRI_GM_BILANCO,
+          POS_BLOKE_GELIRI,
+          TOPLAM_FONLAMA_GETIRI,
+          FONLAMA_MALIYETI_KK,
+          FONLAMA_MALIYETI_KREDI,
+          TOPLAM_FONLAMA_MALIYETI,
+          KASA_FONLAMA_TL,
+          KASA_FONLAMA_YP,
+          AYRILAN_KARS_SEPET2,
+          AYRILAN_KARS_SEPET3,
+          AYRILAN_KARS_TOPLAM,
+          VADE_BOZUM_KAR_ZARAR,
+          MUNZAM_MALIYETI,
+          SKYATIRIM_SUBE_KULL_PAYI,
+          GM_MASRAF_PAYI,
+          KARSILIK_ONCESI_NET_KAR_LNR,
+          KARSILIK_ONCESI_NET_KAR_IRR,
+          FAALIYET_KARI_LINEER,
+          FAALIYET_KARI_IRR,
+          HAZINE_BONO_PRIMLERI,
+          VADESIZ_MEVDUAT_PRIM,
+          SEKERKUR_ALT_FW_DCD_PRIM,
+          VADELI_MEV_PRIM,
+          SKLEASING_ISLEM_YON_KOM,
+          DIS_TICARET_PRIM,
+          NAKIT_YONETIM_PRIM,
+          KUL_KAY_HATALI_ISL_MALIYET,
+          EFT_KAP_SAATI_SON_EK_UCRETI,
+          KULLANILMAYAN_IZIN_MALIYETI,
+          YATIRIM_EKSTRE_UCRETI,
+          FON_YON_FX_ISLEM_IPTAL_CEZA,
+          HATALI_ISLEM_MALIYETI,
+          GMENKUL_PRIMI,
+          SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+          GECICI_GOREV_MALIYETI,
+          PASIF_TEKLIF_ORANI_CEZASI,
+          PASIF_BAYI_ORANI_CEZASI,
+          SEKAR,
+          EK_ALAN_6,
+          INAKTIF_POS_MALIYETI,
+          PERFORMANS_KARI_LINEER,
+          PERFORMANS_KARI_IRR,
+          AYLIK_KRSLK_ONCS_NET_KAR_LNR,
+          AYLIK_KRSLK_ONCS_NET_KAR_IRR,
+          AYLIK_FAALIYET_KARI_LINEER,
+          AYLIK_FAALIYET_KARI_IRR,
+          AYLIK_PERFORMANS_KARI_LINEER,
+          AYLIK_PERFORMANS_KARI_IRR,
+          ayrilan_kars_sepet1,
+          BAKIYE,
+          KARLILIK_DURUM,
+          FAIZ_GELIRI_SORUNLU_KRD,     
+          FAIZ_GIDERI_SORUNLU_KRD,
+          FAIZ_DISI_GELIR_ATM,
+          FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+          FAIZ_GIDERI_LINEER_SORUNLU_KRD,
+          FONLAMA_GETIRI_KK_ALACAK_BKY,
+          HASAT_POS_BLOKE_GELIRI,
+          PRIVATE_BRANCH_FLAG,
+          GOLGE_FLAG
+          )
+     (
+       SELECT /*+ PARALLEL(A,8) PARALLEL(B,8) */
+          PDATE AS AS_OF_DATE,
+          SYSDATE AS CREATE_DATE,
+          A.ISKOLU AS ISKOLU,
+          NVL(SEG.BUSINESS_SEGMENT, 'Diger Ticari') AS SEGMENT,
+          ORG.BOLGE_KODU AS BOLGE_KODU,
+          ORG.BOLGE_ADI AS BOLGE_ADI, 
+          A.SUBE AS SUBE_KODU,
+          ORG.SUBE_ADI AS SUBE_ADI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GELIR_BHG ELSE 0 END) AS FAIZ_DISI_GELIR_BHG,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GELIR_KREDI ELSE 0 END) AS FAIZ_DISI_GELIR_KREDI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GELIR_KREDI_KARTI ELSE 0 END)  AS FAIZ_DISI_GELIR_KK,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GELIR_DIGER ELSE 0 END)  AS FAIZ_DISI_GELIR_DIGER,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FX_KAR_ZARAR ELSE 0 END) AS FX_KAR_ZARAR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOM_GEL_ISYERI_BEDELI ELSE 0 END) AS POS_KOM_GEL_ISYERI_BEDELI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOM_GEL_KIRA_BEDELI ELSE 0 END) AS POS_KOM_GEL_KIRA_BEDELI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOM_GEL_UYE_ISYERI_KATKI ELSE 0 END) AS POS_KOM_GEL_UYE_IS_KATKI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOM_GEL_SERVIS_BEDELI ELSE 0 END) AS POS_KOM_GEL_SERVIS_BEDELI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOM_GEL_TOPLAM ELSE 0 END) AS POS_KOM_GEL_TOPLAM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI ELSE 0 END) AS SKYATIRIM_HALKA_ARZ_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_FON_VERIM ELSE 0 END) AS SKYATIRIM_FON_VERIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_HS_KOM_TUTARI ELSE 0 END) AS SKYATIRIM_HISSE_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_SGMK_VERIM ELSE 0 END) AS SKYATIRIM_SGMK_VERIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_SWEET_KOM_TUTARI ELSE 0 END) AS SKYATIRIM_SWEET_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_VOB_KOM_TUTARI ELSE 0 END) AS SKYATIRIM_VOB_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI+
+                                                          A.SKYATIRIM_HS_KOM_TUTARI+
+                                                          A.SKYATIRIM_SGMK_VERIM+
+                                                          A.SKYATIRIM_SWEET_KOM_TUTARI+
+                                                          A.SKYATIRIM_VOB_KOM_TUTARI+
+                                                          A.SKYATIRIM_FON_VERIM+
+                                                          A.SKYATIRIM_SUBE_KULL_PAYI
+                                                          ) ELSE 0 END) AS SKYATIRIM_TOPLAM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FAIZ_DISI_GELIR_BHG+
+                                                          A.FAIZ_DISI_GELIR_DIGER+
+                                                          A.FAIZ_DISI_GELIR_KREDI+
+                                                          A.FAIZ_DISI_GELIR_KREDI_KARTI+
+                                                          A.FAIZ_DISI_GELIR_ATM+
+                                                          A.POS_KOM_GEL_TOPLAM+
+                                                          A.FX_KAR_ZARAR+
+                                                          A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI+
+                                                          A.SKYATIRIM_HS_KOM_TUTARI+
+                                                          A.SKYATIRIM_SGMK_VERIM+
+                                                          A.SKYATIRIM_SWEET_KOM_TUTARI+
+                                                          A.SKYATIRIM_VOB_KOM_TUTARI+
+                                                          A.SKYATIRIM_FON_VERIM+
+                                                          A.SKYATIRIM_SUBE_KULL_PAYI
+                                                         ) ELSE 0 END) AS TOPLAM_FAIZ_DISI_GELIR ,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_AMORTISMAN ELSE 0 END) AS FAIZ_DISI_GIDER_AMORTISTMAN,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_DAVA ELSE 0 END) AS FAIZ_DISI_GIDER_DAVA_MHK,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_ISLETME ELSE 0 END) AS FAIZ_DISI_GIDER_ISLETME,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_PERSONEL ELSE 0 END) AS FAIZ_DISI_GIDER_PERSONEL,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_VERGI ELSE 0 END) AS FAIZ_DISI_GIDER_VERGI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_VERILEN_KOM ELSE 0 END) AS FAIZ_DISI_GIDER_VERILEN_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_DISI_GIDER_DESMER ELSE 0 END) AS FAIZ_DISI_GIDER_DESMER,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_KOMISYON_GIDER ELSE 0 END) AS POS_KOM_GIDERI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SUBE_KIRA ELSE 0 END) AS SUBE_KIRA_BEDELI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FAIZ_DISI_GIDER_AMORTISMAN+
+                                                          A.FAIZ_DISI_GIDER_DAVA+
+                                                          A.FAIZ_DISI_GIDER_ISLETME+
+                                                          A.FAIZ_DISI_GIDER_PERSONEL+
+                                                          A.FAIZ_DISI_GIDER_VERGI+
+                                                          A.FAIZ_DISI_GIDER_VERILEN_KOM+
+                                                          A.FAIZ_DISI_GIDER_DESMER+
+                                                          A.POS_KOMISYON_GIDER+
+                                                          A.SUBE_KIRA
+                                                         ) ELSE 0 END)  AS TOPLAM_FAIZ_DISI_GIDER,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GELIRI_KREDI_KARTI ELSE 0 END) AS FAIZ_GELIRI_IRR_KK,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GELIRI_KREDILER ELSE 0 END) AS FAIZ_GELIRI_IRR_KREDI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FAIZ_GELIRI_KREDI_KARTI+
+                                                          A.FAIZ_GELIRI_KREDILER
+                                                          +(A.FAIZ_GELIRI_SORUNLU_KRD)
+                                                         ) ELSE 0 END) AS TOPLAM_FAIZ_GELIRI_IRR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GELIRI_LINEER_KK ELSE 0 END) AS FAIZ_GELIRI_LINEER_KK,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GELIRI_LINEER_KRD ELSE 0 END) AS FAIZ_GELIRI_LINEER_KREDI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FAIZ_GELIRI_LINEER_KK+
+                                                          A.FAIZ_GELIRI_LINEER_KRD
+                                                         ) ELSE 0 END) AS TOPLAM_FAIZ_GELIRI_LINEER,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GIDERI_DIGER ELSE 0 END) AS FAIZ_GIDERI_DIGER,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GIDERI_GM_BILANCO ELSE 0 END) AS FAIZ_GIDERI_GM_BILANCO,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GIDERI_LINEER ELSE 0 END) AS FAIZ_GIDERI_LINEER_MEVD,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FAIZ_GIDERI_MEVDUAT ELSE 0 END) AS FAIZ_GIDERI_IRR_MEVD,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FONLAMA_GETIRI_MEVD_BLOKE ELSE 0 END) AS FONLAMA_GETIRI_MEVD_BLOKE,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FONLAMA_GETIRI_GM_BILANCO ELSE 0 END) AS FONLAMA_GETIRI_GM_BILANCO,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.POS_BLOKE_GELIR ELSE 0 END) AS POS_BLOKE_GELIRI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FONLAMA_GETIRI_MEVD_BLOKE+
+                                                          A.FONLAMA_GETIRI_GM_BILANCO+
+                                                          A.POS_BLOKE_GELIR+NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                         (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0))
+                                                         ) ELSE 0 END) AS TOPLAM_FONLAMA_GETIRI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FONLAMA_MALIYETI_KK ELSE 0 END) AS FONLAMA_MALIYETI_KK,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FONLAMA_MALIYETI_KREDI ELSE 0 END) AS FONLAMA_MALIYETI_KREDI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (A.FONLAMA_MALIYETI_KK+
+                                                          A.FONLAMA_MALIYETI_KREDI+
+                                                          A.VADE_BOZUM_KAR_ZARAR+
+                                                          A.KASA_FONLAMA_TL+
+                                                          A.KASA_FONLAMA_YP
+                                                         ) ELSE 0 END)  AS TOPLAM_FONLAMA_MALIYETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.KASA_FONLAMA_TL ELSE 0 END) AS KASA_FONLAMA_TL,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.KASA_FONLAMA_YP ELSE 0 END) AS KASA_FONLAMA_YP,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SEPET_2_AYRILAN_KARSILIK ELSE 0 END) AS AYRILAN_KARS_SEPET2,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SEPET_3_AYRILAN_KARSILIK ELSE 0 END) AS AYRILAN_KARS_SEPET3,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN
+                                                         (
+                                                          CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN A.SEPET_1_AYRILAN_KARSILIK ELSE 0 END+
+                                                          A.SEPET_2_AYRILAN_KARSILIK+
+                                                          A.SEPET_3_AYRILAN_KARSILIK
+                                                         ) ELSE 0 END) AS AYRILAN_KARS_TOPLAM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.VADE_BOZUM_KAR_ZARAR ELSE 0 END) AS VADE_BOZUM_KAR_ZARAR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.MUNZAM_MALIYETI ELSE 0 END) AS MUNZAM_MALIYETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKYATIRIM_SUBE_KULL_PAYI ELSE 0 END) AS SKYATIRIM_SUBE_KULL_PAYI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.GM_MASRAF_PAYI ELSE 0 END) AS GM_MASRAF_PAYI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN  (A.FAIZ_DISI_GELIR_BHG+
+                                                                      A.FAIZ_DISI_GELIR_DIGER+
+                                                                      A.FAIZ_DISI_GELIR_KREDI+
+                                                                      A.FAIZ_DISI_GELIR_KREDI_KARTI+
+                                                                      A.FAIZ_DISI_GELIR_ATM+
+                                                                      A.POS_KOM_GEL_TOPLAM+
+                                                                      A.FX_KAR_ZARAR+
+                                                                      A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI+
+                                                                      A.SKYATIRIM_HS_KOM_TUTARI+
+                                                                      A.SKYATIRIM_SGMK_VERIM+
+                                                                      A.SKYATIRIM_SWEET_KOM_TUTARI+
+                                                                      A.SKYATIRIM_VOB_KOM_TUTARI+
+                                                                      A.SKYATIRIM_FON_VERIM+
+                                                                      A.SKYATIRIM_SUBE_KULL_PAYI+
+                                                                      -----------------------
+                                                                      A.FAIZ_DISI_GIDER_AMORTISMAN+
+                                                                      A.FAIZ_DISI_GIDER_DAVA+
+                                                                      A.FAIZ_DISI_GIDER_ISLETME+
+                                                                      A.FAIZ_DISI_GIDER_PERSONEL+
+                                                                      A.FAIZ_DISI_GIDER_VERGI+
+                                                                      A.FAIZ_DISI_GIDER_VERILEN_KOM+
+                                                                      A.FAIZ_DISI_GIDER_DESMER+
+                                                                      A.POS_KOMISYON_GIDER+
+                                                                      A.SUBE_KIRA+
+                                                                      ------------------------
+                                                                      A.FAIZ_GELIRI_LINEER_KK+
+                                                                      A.FAIZ_GELIRI_LINEER_KRD+
+                                                                      A.FAIZ_GELIRI_SORUNLU_KRD+
+                                                                      ------------------------
+                                                                      A.FONLAMA_GETIRI_MEVD_BLOKE+
+                                                                      A.FONLAMA_GETIRI_GM_BILANCO+
+                                                                      A.POS_BLOKE_GELIR+
+                                                                      NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                      A.FONLAMA_MALIYETI_KK+                                        
+                                                                      A.FONLAMA_MALIYETI_KREDI+
+                                                                      A.KASA_FONLAMA_TL+
+                                                                      A.KASA_FONLAMA_YP+
+                                                                      A.VADE_BOZUM_KAR_ZARAR+
+                                                                      ------------------------
+                                                                      A.FAIZ_GIDERI_LINEER+
+                                                                      A.FAIZ_GIDERI_GM_BILANCO+
+                                                                      A.FAIZ_GIDERI_SORUNLU_KRD+
+                                                                      A.FAIZ_GIDERI_DIGER+
+                                                                      (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)))  ELSE 0 END) KARSILIK_ONCESI_NET_KAR_LNR,
+-------------------------------
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN  (A.FAIZ_DISI_GELIR_BHG+
+                                                                      A.FAIZ_DISI_GELIR_DIGER+
+                                                                      A.FAIZ_DISI_GELIR_KREDI+
+                                                                      A.FAIZ_DISI_GELIR_KREDI_KARTI+
+                                                                      A.FAIZ_DISI_GELIR_ATM+
+                                                                      A.POS_KOM_GEL_TOPLAM+
+                                                                      A.FX_KAR_ZARAR+
+                                                                      A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI+
+                                                                      A.SKYATIRIM_HS_KOM_TUTARI+
+                                                                      A.SKYATIRIM_SGMK_VERIM+
+                                                                      A.SKYATIRIM_SWEET_KOM_TUTARI+
+                                                                      A.SKYATIRIM_VOB_KOM_TUTARI+
+                                                                      A.SKYATIRIM_FON_VERIM+
+                                                                      A.SKYATIRIM_SUBE_KULL_PAYI+
+                                                                      -----------------------
+                                                                      A.FAIZ_DISI_GIDER_AMORTISMAN+
+                                                                      A.FAIZ_DISI_GIDER_DAVA+
+                                                                      A.FAIZ_DISI_GIDER_ISLETME+
+                                                                      A.FAIZ_DISI_GIDER_PERSONEL+
+                                                                      A.FAIZ_DISI_GIDER_VERGI+
+                                                                      A.FAIZ_DISI_GIDER_VERILEN_KOM+
+                                                                      A.FAIZ_DISI_GIDER_DESMER+
+                                                                      A.POS_KOMISYON_GIDER+
+                                                                      A.SUBE_KIRA+
+                                                                      ------------------------
+                                                                      A.FAIZ_GELIRI_KREDI_KARTI+
+                                                                      A.FAIZ_GELIRI_KREDILER+
+                                                                      A.FAIZ_GELIRI_SORUNLU_KRD+
+                                                                      ------------------------    
+                                                                      A.FONLAMA_GETIRI_MEVD_BLOKE+
+                                                                      A.FONLAMA_GETIRI_GM_BILANCO+
+                                                                      A.POS_BLOKE_GELIR+
+                                                                      NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                      A.FONLAMA_MALIYETI_KK+                                        
+                                                                      A.FONLAMA_MALIYETI_KREDI+
+                                                                      A.KASA_FONLAMA_TL+
+                                                                      A.KASA_FONLAMA_YP+
+                                                                      A.VADE_BOZUM_KAR_ZARAR+
+                                                                      ------------------------
+                                                                      A.FAIZ_GIDERI_DIGER+
+                                                                      A.FAIZ_GIDERI_MEVDUAT+
+                                                                      A.FAIZ_GIDERI_SORUNLU_KRD+
+                                                                      A.FAIZ_GIDERI_GM_BILANCO+
+                                                                      (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)))  ELSE 0 END) KARSILIK_ONCESI_NET_KAR_IRR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN ((A.FAIZ_DISI_GELIR_BHG)+
+                                                                      (A.FAIZ_DISI_GELIR_DIGER)+
+                                                                      (A.FAIZ_DISI_GELIR_KREDI)+
+                                                                      (A.FAIZ_DISI_GELIR_KREDI_KARTI)+
+                                                                      (A.FAIZ_DISI_GELIR_ATM)+
+                                                                      (A.POS_KOM_GEL_TOPLAM)+
+                                                                      (A.FX_KAR_ZARAR)+
+                                                                      (A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI)+
+                                                                      (A.SKYATIRIM_HS_KOM_TUTARI)+
+                                                                      (A.SKYATIRIM_SGMK_VERIM)+
+                                                                      (A.SKYATIRIM_SWEET_KOM_TUTARI)+
+                                                                      (A.SKYATIRIM_VOB_KOM_TUTARI)+
+                                                                      (A.SKYATIRIM_FON_VERIM)+
+                                                                      (A.SKYATIRIM_SUBE_KULL_PAYI)+
+                                                                      -----------------------
+                                                                      (A.FAIZ_DISI_GIDER_AMORTISMAN)+
+                                                                      (A.FAIZ_DISI_GIDER_DAVA)+
+                                                                      (A.FAIZ_DISI_GIDER_ISLETME)+
+                                                                      (A.FAIZ_DISI_GIDER_PERSONEL)+
+                                                                      (A.FAIZ_DISI_GIDER_VERGI)+
+                                                                      (A.FAIZ_DISI_GIDER_VERILEN_KOM)+
+                                                                      (A.FAIZ_DISI_GIDER_DESMER)+
+                                                                      (A.POS_KOMISYON_GIDER)+
+                                                                      (A.SUBE_KIRA)+
+                                                                      ------------------------
+                                                                      (A.FAIZ_GELIRI_LINEER_KK)+
+                                                                      (A.FAIZ_GELIRI_LINEER_KRD)+
+                                                                      (FAIZ_GELIRI_SORUNLU_KRD)+
+                                                                      -----------------------                                   
+                                                                      (A.FONLAMA_GETIRI_MEVD_BLOKE)+
+                                                                      (A.FONLAMA_GETIRI_GM_BILANCO)+
+                                                                      (A.POS_BLOKE_GELIR)+
+                                                                      NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                      (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0))+
+                                                                      (A.FONLAMA_MALIYETI_KK)+                                        
+                                                                      (A.FONLAMA_MALIYETI_KREDI)+
+                                                                      ------------------------
+                                                                      (A.FAIZ_GIDERI_LINEER)+
+                                                                      (A.FAIZ_GIDERI_GM_BILANCO)+
+                                                                      (A.FAIZ_GIDERI_SORUNLU_KRD)+
+                                                                      (A.FAIZ_GIDERI_DIGER)+
+                                                                      -----------------------
+                                                                      (A.GM_MASRAF_PAYI)+
+                                                                      (A.VADE_BOZUM_KAR_ZARAR)+
+                                                                      (A.KASA_FONLAMA_TL)+
+                                                                      (A.KASA_FONLAMA_YP)+
+                                                                      (A.SEPET_2_AYRILAN_KARSILIK)+
+                                                                      (A.SEPET_3_AYRILAN_KARSILIK)+
+                                                                      (CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN A.SEPET_1_AYRILAN_KARSILIK ELSE 0 END))  ELSE 0 END) AS FAALIYET_KARI_LINEER,
+----------------
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN ((A.FAIZ_DISI_GELIR_BHG)+
+                                                                       (A.FAIZ_DISI_GELIR_DIGER)+
+                                                                       (A.FAIZ_DISI_GELIR_KREDI)+
+                                                                       (A.FAIZ_DISI_GELIR_KREDI_KARTI)+
+                                                                       (A.FAIZ_DISI_GELIR_ATM)+
+                                                                       (A.POS_KOM_GEL_TOPLAM)+
+                                                                       (A.FX_KAR_ZARAR)+
+                                                                       (A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI)+
+                                                                       (A.SKYATIRIM_HS_KOM_TUTARI)+
+                                                                       (A.SKYATIRIM_SGMK_VERIM)+
+                                                                       (A.SKYATIRIM_SWEET_KOM_TUTARI)+
+                                                                       (A.SKYATIRIM_VOB_KOM_TUTARI)+
+                                                                       (A.SKYATIRIM_FON_VERIM)+
+                                                                       (A.SKYATIRIM_SUBE_KULL_PAYI)+
+                                                                       -----------------------
+                                                                       (A.FAIZ_DISI_GIDER_AMORTISMAN)+
+                                                                       (A.FAIZ_DISI_GIDER_DAVA)+
+                                                                       (A.FAIZ_DISI_GIDER_ISLETME)+
+                                                                       (A.FAIZ_DISI_GIDER_PERSONEL)+
+                                                                       (A.FAIZ_DISI_GIDER_VERGI)+
+                                                                       (A.FAIZ_DISI_GIDER_VERILEN_KOM)+
+                                                                       (A.FAIZ_DISI_GIDER_DESMER)+
+                                                                       (A.POS_KOMISYON_GIDER)+
+                                                                       (A.SUBE_KIRA)+
+                                                                       ------------------------
+                                                                       (A.FAIZ_GELIRI_KREDI_KARTI)+
+                                                                       (A.FAIZ_GELIRI_KREDILER)+
+                                                                       (FAIZ_GELIRI_SORUNLU_KRD)+ 
+                                                                       ------------------------                           
+                                                                       (A.FONLAMA_GETIRI_MEVD_BLOKE)+
+                                                                       (A.FONLAMA_GETIRI_GM_BILANCO)+
+                                                                       (A.POS_BLOKE_GELIR)+
+                                                                        NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                       (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0))+
+                                                                       (A.FONLAMA_MALIYETI_KK)+                                        
+                                                                       (A.FONLAMA_MALIYETI_KREDI)+
+                                                                       ------------------------                                                                       
+                                                                       (A.FAIZ_GIDERI_DIGER)+
+                                                                       (A.FAIZ_GIDERI_MEVDUAT)+
+                                                                       (A.FAIZ_GIDERI_SORUNLU_KRD)+
+                                                                       (A.FAIZ_GIDERI_GM_BILANCO)+
+                                                                       ------------------------
+                                                                       (A.GM_MASRAF_PAYI)+
+                                                                       (A.VADE_BOZUM_KAR_ZARAR)+
+                                                                       (A.KASA_FONLAMA_TL)+
+                                                                       (A.KASA_FONLAMA_YP)+
+                                                                       (A.SEPET_2_AYRILAN_KARSILIK)+
+                                                                       (A.SEPET_3_AYRILAN_KARSILIK)+
+                                                                       (CASE WHEN A.AS_OF_DATE BETWEEN  AYBASI AND PDATE THEN (A.SEPET_1_AYRILAN_KARSILIK) ELSE 0 END)) ELSE 0 END) AS FAALIYET_KARI_IRR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.HAZINE_BONO_PRIMLERI ELSE 0 END)  AS HAZINE_BONO_PRIMLERI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.VADESIZ_MEVDUAT_PRIM ELSE 0 END)  AS VADESIZ_MEVDUAT_PRIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SEKERKUR_ALT_FW_DCD_PRIM ELSE 0 END)  AS SEKERKUR_ALT_FW_DCD_PRIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.VADELI_MEV_PRIM ELSE 0 END)       AS VADELI_MEV_PRIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SKLEASING_ISLEM_YON_KOM ELSE 0 END)   AS SKLEASING_ISLEM_YON_KOM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.DIS_TICARET_PRIM ELSE 0 END)  AS DIS_TICARET_PRIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.NAKIT_YONETIM_PRIM ELSE 0 END) AS NAKIT_YONETIM_PRIM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.KUL_KAY_HATALI_ISL_MALIYET ELSE 0 END) AS KUL_KAY_HATALI_ISL_MALIYET,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.EFT_KAP_SAATI_SON_EK_UCRETI ELSE 0 END) AS EFT_KAP_SAATI_SON_EK_UCRETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.KULLANILMAYAN_IZIN_MALIYETI ELSE 0 END) AS KULLANILMAYAN_IZIN_MALIYETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.YATIRIM_EKSTRE_UCRETI ELSE 0 END) AS YATIRIM_EKSTRE_UCRETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.FON_YON_FX_ISLEM_IPTAL_CEZA ELSE 0 END) AS FON_YON_FX_ISLEM_IPTAL_CEZA,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.HATALI_ISLEM_MALIYETI ELSE 0 END) AS HATALI_ISLEM_MALIYETI, --02.06.2023 tarihi itibariyle eklenmiştir.
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.GMENKUL_PRIMI ELSE 0 END) AS GMENKUL_PRIMI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR ELSE 0 END) AS SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN GECICI_GOREV_MALIYETI ELSE 0 END) AS GECICI_GOREV_MALIYETI,
+          SUM(CASE WHEN A.AS_OF_DATE = PDATE THEN PASIF_TEKLIF_ORANI_CEZASI ELSE 0 END) AS PASIF_TEKLIF_ORANI_CEZASI,
+          SUM(CASE WHEN A.AS_OF_DATE = PDATE THEN PASIF_BAYI_ORANI_CEZASI ELSE 0 END) AS PASIF_BAYI_ORANI_CEZASI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(SEKAR,0) ELSE 0 END) AS SEKAR,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN (EK_ALAN_6) ELSE 0 END) AS EK_ALAN_6,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN (INAKTIF_POS_MALIYETI) ELSE 0 END) AS INAKTIF_POS_MALIYETI,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN ( NVL(A.FAIZ_DISI_GELIR_BHG,0)+
+
+                                                                      NVL(A.FAIZ_DISI_GELIR_DIGER,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_KREDI,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0)+
+                                                                      NVL(A.POS_KOM_GEL_TOPLAM,0)+
+                                                                      NVL(A.FX_KAR_ZARAR,0)+
+                                                                      NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_HS_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_SGMK_VERIM,0)+
+                                                                      NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_FON_VERIM,0)+
+                                                                      NVL(A.SKYATIRIM_SUBE_KULL_PAYI,0)+
+                                                                      -----------------------
+                                                                      NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_DAVA,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_ISLETME,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_PERSONEL,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_VERGI,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_DESMER,0)+
+                                                                      NVL(A.POS_KOMISYON_GIDER,0)+
+                                                                      NVL(A.SUBE_KIRA,0)+
+                                                                      NVL(A.GM_MASRAF_PAYI,0)+
+                                                                      ------------------------
+                                                                      NVL(A.FAIZ_GELIRI_LINEER_KK,0)+ 
+                                                                      NVL(A.FAIZ_GELIRI_LINEER_KRD,0)+
+                                                                     ------------------------
+                                                                      NVL(A.FAIZ_GIDERI_LINEER,0)+
+                                                                      NVL(A.FAIZ_GIDERI_GM_BILANCO,0)+
+                                                                      NVL(A.FAIZ_GIDERI_DIGER,0)+
+                                                                      -----------------------
+                                                                      NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0)+
+                                                                      NVL(A.FONLAMA_GETIRI_GM_BILANCO,0)+
+                                                                      NVL(A.POS_BLOKE_GELIR,0)+
+                                                                      NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                      NVL(A.FONLAMA_MALIYETI_KK,0)+                                        
+                                                                      NVL(A.FONLAMA_MALIYETI_KREDI,0)+
+                                                                      -----------------------
+                                                                      NVL(A.VADE_BOZUM_KAR_ZARAR,0)+
+                                                                      NVL(A.MUNZAM_MALIYETI,0)+
+                                                                      NVL(A.KASA_FONLAMA_TL,0)+
+                                                                      NVL(A.KASA_FONLAMA_YP,0)+
+                                                                      NVL(A.SEPET_2_AYRILAN_KARSILIK,0)+
+                                                                      NVL(A.SEPET_3_AYRILAN_KARSILIK,0)+
+                                                                      NVL(HAZINE_BONO_PRIMLERI,0)+
+                                                                      NVL(VADESIZ_MEVDUAT_PRIM,0)+
+                                                                      NVL(SEKERKUR_ALT_FW_DCD_PRIM,0)+
+                                                                      NVL(VADELI_MEV_PRIM,0)+
+                                                                      NVL(SKLEASING_ISLEM_YON_KOM,0)+
+                                                                      NVL(DIS_TICARET_PRIM,0)+
+                                                                      NVL(NAKIT_YONETIM_PRIM,0)+
+                                                                      NVL(KUL_KAY_HATALI_ISL_MALIYET,0)+
+                                                                      NVL(EFT_KAP_SAATI_SON_EK_UCRETI,0)+
+                                                                      NVL(KULLANILMAYAN_IZIN_MALIYETI,0)+
+                                                                      NVL(YATIRIM_EKSTRE_UCRETI,0)+
+                                                                      NVL(FON_YON_FX_ISLEM_IPTAL_CEZA,0)+
+                                                                      NVL(HATALI_ISLEM_MALIYETI,0)+ --Pasif teklif oranı bir günlük etkisi yansıtılmaktadır. 14.07.2023 MKÇ
+                                                                      NVL(GMENKUL_PRIMI,0)+
+                                                                      NVL(SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0)+
+                                                                      NVL(GECICI_GOREV_MALIYETI,0)+
+                                                                      NVL(SEKAR,0 )+
+                                                                      (EK_ALAN_6 )+
+                                                                      NVL(INAKTIF_POS_MALIYETI,0)+
+                                                                      NVL(FAIZ_GELIRI_LINEER_SORUNLU_KRD,0)+
+                                                                      NVL(FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)+
+                                                                      NVL(FAIZ_DISI_GELIR_ATM,0)+
+                                                                      NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)) ELSE 0 END) +
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN NVL(A.SEPET_1_AYRILAN_KARSILIK,0) ELSE 0 END)+
+          SUM(CASE WHEN A.AS_OF_DATE = PDATE THEN (NVL(A.PASIF_TEKLIF_ORANI_CEZASI,0)  +
+                                                   NVL(A.PASIF_BAYI_ORANI_CEZASI,0)) ELSE 0 END)  AS PERFORMANS_KARI_LINEER,   
+---------------                   
+         SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN  ( NVL(A.FAIZ_DISI_GELIR_BHG,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_DIGER,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_KREDI,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0)+
+                                                                      NVL(A.FAIZ_DISI_GELIR_ATM,0)+
+                                                                      NVL(A.POS_KOM_GEL_TOPLAM,0)+
+                                                                      NVL(A.FX_KAR_ZARAR,0)+
+                                                                      NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_HS_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_SGMK_VERIM,0)+
+                                                                      NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0)+
+                                                                      NVL(A.SKYATIRIM_FON_VERIM,0)+
+                                                                      NVL(A.SKYATIRIM_SUBE_KULL_PAYI,0)+ 
+                                                                      -----------------------
+                                                                      NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_DAVA,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_ISLETME,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_PERSONEL,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_VERGI,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0)+
+                                                                      NVL(A.FAIZ_DISI_GIDER_DESMER,0)+
+                                                                      NVL(A.POS_KOMISYON_GIDER,0)+
+                                                                      NVL(A.SUBE_KIRA,0)+
+                                                                      NVL(A.GM_MASRAF_PAYI,0)+
+                                                                      ------------------------
+                                                                      NVL(A.FAIZ_GELIRI_KREDI_KARTI,0)+ 
+                                                                      NVL(A.FAIZ_GELIRI_KREDILER,0)+
+                                                                      NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0)+
+                                                                      ------------------------
+                                                                      NVL(A.FAIZ_GIDERI_DIGER,0)+
+                                                                      NVL(A.FAIZ_GIDERI_MEVDUAT,0)+
+                                                                      NVL(A.FAIZ_GIDERI_GM_BILANCO,0)+
+                                                                      NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0)+
+                                                                      ------------------------
+                                                                      NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0)+
+                                                                      NVL(A.FONLAMA_GETIRI_GM_BILANCO,0)+
+                                                                      NVL(A.POS_BLOKE_GELIR,0)+
+                                                                      NVL(A.HASAT_POS_BLOKE_GELIR,0)+
+                                                                      NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)+
+                                                                      NVL(A.FONLAMA_MALIYETI_KK,0)+                                        
+                                                                      NVL(A.FONLAMA_MALIYETI_KREDI,0)+
+                                                                      ------------------------
+                                                                      NVL(A.VADE_BOZUM_KAR_ZARAR,0)+
+                                                                      NVL(A.MUNZAM_MALIYETI,0)+
+                                                                      NVL(A.KASA_FONLAMA_TL,0)+
+                                                                      NVL(A.KASA_FONLAMA_YP,0)+
+                                                                      NVL(A.SEPET_2_AYRILAN_KARSILIK,0)+
+                                                                      NVL(A.SEPET_3_AYRILAN_KARSILIK,0)+
+                                                                      NVL(HAZINE_BONO_PRIMLERI,0)+
+                                                                      NVL(VADESIZ_MEVDUAT_PRIM,0)+
+                                                                      NVL(SEKERKUR_ALT_FW_DCD_PRIM,0)+
+                                                                      NVL(VADELI_MEV_PRIM,0)+
+                                                                      NVL(SKLEASING_ISLEM_YON_KOM,0)+
+                                                                      NVL(DIS_TICARET_PRIM,0)+
+                                                                      NVL(NAKIT_YONETIM_PRIM,0)+
+                                                                      NVL(KUL_KAY_HATALI_ISL_MALIYET,0)+
+                                                                      NVL(EFT_KAP_SAATI_SON_EK_UCRETI,0)+
+                                                                      NVL(KULLANILMAYAN_IZIN_MALIYETI,0)+
+                                                                      NVL(YATIRIM_EKSTRE_UCRETI,0)+
+                                                                      NVL(FON_YON_FX_ISLEM_IPTAL_CEZA,0)+
+                                                                      NVL(A.HATALI_ISLEM_MALIYETI,0)+ --Pasif teklif oranı ile ilgili mükerrer yansıtılan sorun düzeltildi MKÇ 14.07.2023
+                                                                      NVL(GMENKUL_PRIMI,0)+
+                                                                      NVL(A.GECICI_GOREV_MALIYETI,0 )+
+                                                                      NVL(SEKAR,0)+
+                                                                      NVL(EK_ALAN_6,0 )+
+                                                                      NVL(INAKTIF_POS_MALIYETI,0 )) ELSE 0 END)+
+         SUM(CASE WHEN A.AS_OF_DATE=PDATE THEN (NVL(A.PASIF_TEKLIF_ORANI_CEZASI,0)+
+                                                NVL(A.PASIF_BAYI_ORANI_CEZASI,0)) ELSE 0 END)+
+         SUM(CASE WHEN A.AS_OF_DATE BETWEEN  AYBASI AND PDATE THEN NVL(A.SEPET_1_AYRILAN_KARSILIK,0) ELSE 0 END)  AS PERFORMANS_KARI_IRR,
+          SUM(0) AS AYLIK_KRSLK_ONCS_NET_KAR_LNR,
+          SUM(0) AS AYLIK_KRSLK_ONCS_NET_KAR_IRR,
+          SUM(0) AS AYLIK_FAALIYET_KARI_LINEER,
+          SUM(0) AS AYLIK_FAALIYET_KARI_IRR,                                                         
+          SUM(0) AS AYLIK_PERFORMANS_KARI_LINEER,  
+          SUM(0) AS AYLIK_PERFORMANS_KARI_IRR,                    
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN AYBASI AND PDATE THEN A.SEPET_1_AYRILAN_KARSILIK ELSE 0 END) AS AYRILAN_KARS_SEPET1,
+          SUM(CASE WHEN A.AS_OF_DATE = PDATE THEN A.BAKIYE ELSE 0 END) AS BAKIYE,
+          0 AS KARLILIK_DURUM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0) ELSE 0 END) AS FAIZ_GELIRI_SORUNLU_KRD, 
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0) ELSE 0 END) AS FAIZ_GIDERI_SORUNLU_KRD,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(A.FAIZ_DISI_GELIR_ATM,0) ELSE 0 END)  AS FAIZ_DISI_GELIR_ATM,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0) ELSE 0 END) AS FAIZ_GELIRI_LINEER_SORUNLU_KRD, 
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0) ELSE 0 END) AS FAIZ_GIDERI_LINEER_SORUNLU_KRD,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN (NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)) ELSE 0 END) AS FONLAMA_GETIRI_KK_ALACAK_BKY,
+          SUM(CASE WHEN A.AS_OF_DATE BETWEEN YILBASI AND PDATE THEN (NVL(A.HASAT_POS_BLOKE_GELIR,0)) ELSE 0 END) AS HASAT_POS_BLOKE_GELIRI,
+          NVL(A.PRIVATE_BRANCH_FLAG,0) AS  PRIVATE_BRANCH_FLAG,
+          NVL(A.GOLGE_FLAG,0) AS GOLGE_FLAG   
+ FROM  /*OFSA_SB.TEMP_CUST_DETAIL A*/ 
+          OFSA_SB.TEMP_CUST_DETAIL  A 
+          LEFT JOIN OLAP.DM_STAFF D 
+                 ON TO_CHAR(NVL(A.MT,888888))= TO_CHAR(D.STAFF_FILE_NO) 
+                    AND D.UPDATE_DATE IS NULL 
+                    AND D.STAFF_STATUS!='AYRILAN'
+          LEFT JOIN OLAP.FC_CUSTOMER C 
+                 ON A.MUS_NO=C.CUSTOMER_CODE 
+                    AND C.AS_OF_DATE=PDATE
+          LEFT JOIN (SELECT DISTINCT BUSINESS_SEGMENT_CODE, BUSINESS_SEGMENT 
+                       FROM OLAP.FC_CUSTOMER 
+                      WHERE AS_OF_DATE=SEGM_TARIH)SEG 
+                 ON A.SEGMENT=SEG.BUSINESS_SEGMENT_CODE 
+          LEFT JOIN OFSA_SB.BOLGELER ORG
+                 ON TO_NUMBER(A.SUBE)=ORG.SUBE_KODU
+--WHERE SUBE NOT IN (1,188,172,219,33,187)
+     WHERE     1=1
+     AND       A.MUS_NO NOT IN
+               (--52980 CAN TURIZM ASLIHAN GEMICI 27.07.2026'DA ALINAN UYGUNLUK ESASINDA BLACKLISTTEN CIKARILMISITIR--IY
+               SELECT MUS_NO
+                 FROM BLACKLIST
+                WHERE KAYNAK='PROFIT'
+               )
+     AND       A.AS_OF_DATE BETWEEN YILBASI AND PDATE
+     AND      (NVL(A.FAIZ_DISI_GELIR_BHG,0)+
+               NVL(A.FAIZ_DISI_GELIR_DIGER,0)+
+               NVL(A.FAIZ_DISI_GELIR_KREDI,0)+
+               NVL(A.FAIZ_DISI_GELIR_KREDI_KARTI,0)+
+               NVL(A.FAIZ_DISI_GIDER_AMORTISMAN,0)+
+               NVL(A.FAIZ_DISI_GIDER_DAVA,0)+
+               NVL(A.FAIZ_DISI_GIDER_ISLETME,0)+
+               NVL(A.FAIZ_DISI_GIDER_PERSONEL,0)+
+               NVL(A.FAIZ_DISI_GIDER_VERGI,0)+
+               NVL(A.FAIZ_DISI_GIDER_VERILEN_KOM,0)+
+               NVL(A.FAIZ_DISI_GIDER_DESMER,0)+
+               NVL(A.FAIZ_GELIRI_KREDI_KARTI,0)+
+               NVL(A.FAIZ_GELIRI_KREDILER,0)+
+               NVL(A.FAIZ_GELIRI_LINEER_KRD,0)+
+               NVL(A.FAIZ_GELIRI_LINEER_KK,0)+
+               NVL(A.FAIZ_GIDERI_DIGER,0)+
+               NVL(A.FAIZ_GIDERI_GM_BILANCO,0)+
+               NVL(A.FAIZ_GIDERI_LINEER,0)+
+               NVL(A.FAIZ_GIDERI_MEVDUAT,0)+
+               NVL(A.FONLAMA_GETIRI_GM_BILANCO,0)+
+               NVL(A.FONLAMA_GETIRI_MEVD_BLOKE,0)+
+               NVL(A.FONLAMA_MALIYETI_KK,0)+
+               NVL(A.FONLAMA_MALIYETI_KREDI,0)+
+               NVL(A.FX_KAR_ZARAR,0)+
+               NVL(A.SKYATIRIM_SUBE_KULL_PAYI,0)+
+               NVL(A.KASA_FONLAMA_TL,0)+
+               NVL(A.KASA_FONLAMA_YP,0)+
+               NVL(A.MUNZAM_MALIYETI,0)+
+               NVL(A.POS_BLOKE_GELIR,0)+
+               NVL(A.POS_KOM_GEL_ISYERI_BEDELI,0)+
+               NVL(A.POS_KOM_GEL_KIRA_BEDELI,0)+
+               NVL(A.POS_KOM_GEL_SERVIS_BEDELI,0)+
+               NVL(A.POS_KOM_GEL_UYE_ISYERI_KATKI,0)+
+               NVL(A.POS_KOMISYON_GIDER,0)+
+               NVL(A.SEPET_1_AYRILAN_KARSILIK,0)+
+               NVL(A.SEPET_2_AYRILAN_KARSILIK,0)+
+               NVL(A.SEPET_3_AYRILAN_KARSILIK,0)+
+               NVL(A.SKYATIRIM_FON_VERIM,0)+
+               NVL(A.SKYATIRIM_HALKA_ARZ_KOM_TUTARI,0)+
+               NVL(A.SKYATIRIM_HS_KOM_TUTARI,0)+
+               NVL(A.SKYATIRIM_SGMK_VERIM,0)+
+               NVL(A.SKYATIRIM_SWEET_KOM_TUTARI,0)+
+               NVL(A.SKYATIRIM_VOB_KOM_TUTARI,0)+
+               NVL(A.VADE_BOZUM_KAR_ZARAR,0)+
+               NVL(A.GM_MASRAF_PAYI,0)+
+               NVL(A.SUBE_KIRA,0)+
+               NVL(A.HAZINE_BONO_PRIMLERI, 0)+
+               NVL(A.VADESIZ_MEVDUAT_PRIM, 0)+
+               NVL(A.SEKERKUR_ALT_FW_DCD_PRIM, 0)+
+               NVL(A.VADELI_MEV_PRIM, 0)+
+               NVL(A.SKLEASING_ISLEM_YON_KOM, 0)+
+               NVL(A.DIS_TICARET_PRIM, 0)+
+               NVL(A.NAKIT_YONETIM_PRIM, 0)+
+               NVL(A.KUL_KAY_HATALI_ISL_MALIYET, 0)+
+               NVL(A.EFT_KAP_SAATI_SON_EK_UCRETI, 0)+
+               NVL(A.KULLANILMAYAN_IZIN_MALIYETI, 0)+
+               NVL(A.YATIRIM_EKSTRE_UCRETI, 0)+
+               NVL(A.FON_YON_FX_ISLEM_IPTAL_CEZA, 0)+
+               NVL(A.HATALI_ISLEM_MALIYETI, 0)+ 
+               NVL(A.GMENKUL_PRIMI, 0)+
+               NVL(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0)+
+               NVL(A.INAKTIF_POS_MALIYETI,0)+
+               NVL(A.BAKIYE,0)+
+               NVL(A.FAIZ_GELIRI_SORUNLU_KRD,0)+
+               NVL(A.FAIZ_GIDERI_SORUNLU_KRD,0)+
+               NVL(A.FAIZ_DISI_GELIR_ATM,0)+
+               NVL(A.FAIZ_GELIRI_LINEER_SORUNLU_KRD,0)+
+               NVL(A.FAIZ_GIDERI_LINEER_SORUNLU_KRD,0)+
+               NVL(A.FONLAMA_GETIRI_KK_ALACAK_BKY,0)+
+               NVL(A.GECICI_GOREV_MALIYETI,0)+
+               NVL(A.PASIF_TEKLIF_ORANI_CEZASI,0)+
+               NVL(A.SEKAR,0)+
+               NVL(A.PASIF_BAYI_ORANI_CEZASI,0)+
+               NVL(A.HASAT_POS_BLOKE_GELIR,0)
+               )
+                <> 0                
+   GROUP BY     
+         PDATE,
+         SYSDATE,
+         A.ISKOLU,
+         NVL(SEG.BUSINESS_SEGMENT, 'Diger Ticari'),
+         ORG.BOLGE_KODU,
+         ORG.BOLGE_ADI,
+         A.SUBE,
+         ORG.SUBE_ADI,
+         A.PRIVATE_BRANCH_FLAG,
+         NVL(A.GOLGE_FLAG,0) 
+    );
+
+      COMMIT;
+      
+      
+      /* MIS Prim Düzenlemesi:
+         
+        Kurallar:
+        Nakit yönetimi primi + Dış ticaret primi toplamı karşılık öncesi karın %5'ini;
+        Diğer primler toplamı karşılık öncesi karın %25'ini geçemez.
+        
+        KAYNAK bloğunda şubelerin olması gereken prim tutarları hesaplanıyor. 
+        org_profit te yer alan prim toplamları KAYNAKta hesaplanan toplamdan farklı ise update ile düzeltiliyor. A.Y. */
+          
+         
+
+         
+         MERGE INTO OFSA_SB.PROD_ORG_PROFIT HEDEF
+            USING(
+              SELECT AS_OF_DATE,
+                SUBE_KODU,
+                sum(case when KOK > 0 
+                      THEN LEAST( KOK25, DIGER_MIS ) 
+                          ELSE DIGER_MIS END) AS DIGER_MIS,
+                sum(case when KOK > 0 
+                      THEN LEAST( KOK5, DIS_TIC_MIS ) 
+                          ELSE 0 END) AS DIS_TIC_MIS,
+                sum(case when KOK > 0 
+                      THEN LEAST( KOK25, GMENKUL_MIS ) 
+                          ELSE 0 END) AS GMENKUL_MIS
+                  
+              FROM  
+                (
+                SELECT A.AS_OF_DATE,
+                       A.SUBE_KODU,
+                       sum(case when A.KOK < 0 then 0 ELSE A.KOK END) AS KOK,
+                       sum(case when A.KOK25 < 0 then 0 ELSE A.KOK25 END) AS KOK25,
+                       sum(case when A.KOK5 < 0 then 0 ELSE A.KOK5 END) AS KOK5,
+                       sum(B.DIGER_MIS) AS DIGER_MIS,
+                       sum(case when KOK < 0 THEN 0 ELSE B.DIS_TIC_MIS END) AS DIS_TIC_MIS,
+                       sum(case when KOK < 0 THEN 0 ELSE B.GMENKUL_MIS END) AS GMENKUL_MIS
+                FROM
+                (SELECT A.AS_OF_DATE,
+                        A.SUBE_KODU,
+                       sum(A.KARSILIK_ONCESI_NET_KAR_LNR) AS KOK,
+                       sum(A.KARSILIK_ONCESI_NET_KAR_LNR*0.25) AS KOK25,
+                       sum(A.KARSILIK_ONCESI_NET_KAR_LNR*0.05) AS KOK5               
+                FROM OFSA_SB.PROD_ORG_PROFIT A
+                WHERE AS_OF_DATE=PDATE
+                GROUP BY A.SUBE_KODU, A.AS_OF_DATE)A LEFT JOIN
+                     (
+                      SELECT A.AS_OF_DATE,
+                             A.SUBE_KODU,
+                             (SUM(NVL(A.MUNZAM_MALIYETI,0))+
+                               SUM(NVL(A.YATIRIM_EKSTRE_UCRETI,0))+
+                              SUM(NVL(A.INAKTIF_POS_MALIYETI,0)) + 
+                              SUM(NVL(A.SUBEDE_BEKLEYEN_CEK_VE_KARTLAR,0))+
+                              SUM(NVL(A.HATALI_ISLEM_MALIYETI,0))+
+                              SUM(NVL(A.GECICI_GOREV_MALIYETI,0))+
+                              SUM(NVL(A.PASIF_TEKLIF_ORANI_CEZASI,0))+
+                              SUM(NVL(A.PASIF_BAYI_ORANI_CEZASI,0))+
+                              SUM(NVL(A.FON_YON_FX_ISLEM_IPTAL_CEZA,0))+
+                              SUM(NVL(A.KULLANILMAYAN_IZIN_MALIYETI,0))+
+                              SUM(NVL(A.EFT_KAP_SAATI_SON_EK_UCRETI,0))+
+                              SUM(NVL(A.KUL_KAY_HATALI_ISL_MALIYET,0))+
+                              SUM(NVL(A.SKLEASING_ISLEM_YON_KOM,0))+
+                              SUM(NVL(A.VADELI_MEV_PRIM,0))+
+                              SUM(NVL(A.VADESIZ_MEVDUAT_PRIM,0))+
+                              SUM(NVL(A.SEKERKUR_ALT_FW_DCD_PRIM,0))+
+                              SUM(NVL(A.SEKAR,0))+
+                              SUM(NVL(A.HAZINE_BONO_PRIMLERI,0))) AS DIGER_MIS,
+                             (SUM(NVL(A.NAKIT_YONETIM_PRIM,0))+  SUM(NVL(A.DIS_TICARET_PRIM,0))) AS DIS_TIC_MIS,
+                             (SUM(NVL(A.GMENKUL_PRIMI,0))) AS GMENKUL_MIS
+                       FROM OFSA_SB.PROD_ORG_PROFIT A
+                       WHERE AS_OF_DATE=PDATE
+                       GROUP BY A.SUBE_KODU , A.AS_OF_DATE     
+                     ) B ON A.SUBE_KODU=B.SUBE_KODU  AND A.AS_OF_DATE=B.AS_OF_DATE              
+                --AND A.SUBE_KODU='174'
+                GROUP BY A.SUBE_KODU, A.AS_OF_DATE
+                )
+                GROUP BY SUBE_KODU, AS_OF_DATE
+      ) KAYNAK ON (HEDEF.AS_OF_DATE=KAYNAK.AS_OF_DATE
+                    AND HEDEF.SUBE_KODU = KAYNAK.SUBE_KODU
+                    AND HEDEF.ISKOLU='99-SUBE_HAVUZ'
+                    )
+    WHEN MATCHED THEN
+      UPDATE
+         SET HEDEF.PERFORMANS_KARI_LINEER=HEDEF.FAALIYET_KARI_LINEER+NVL(KAYNAK.DIGER_MIS,0)+NVL(KAYNAK.DIS_TIC_MIS,0)+NVL(KAYNAK.GMENKUL_MIS,0);
+
+       
+      COMMIT;
+
+     
+     
+    
+    
+      IF GERI_YUKLEME!=0 THEN
+         stage.mn_utility.send_mail(v_Recipient => 'ButceYuklemeler@sekerbank.com.tr',
+                                    v_Subject   => 'OFSA SB Guncelleme',
+                                    v_Message   => to_date(PDATE,'DD/MM/YYYY')||' tarihli raporda geriye donuk guncelleme yapilmistir.');
+       ELSE 
+         GERI_YUKLEME:=0;
+       
+     END IF;
+    /*******************************************************************************************************************/
+    
+    ---UPDATE OFSA_SB.PROD_ORG_PROFIT A
+    ---SET A.PERFORMANS_KARI_LINEER=(A.PERFORMANS_KARI_LINEER-NVL(A.FAALIYET_KARI_LINEER,0))/2 + A.FAALIYET_KARI_LINEER
+    ---WHERE A.SUBE_KODU='217' AND A.AS_OF_DATE=PDATE;
+    
+   ---   COMMIT;
+    
+    
+  /********************************************************************************************************************/
+    --Aylık sutunları hesaplatılıyor. 16.08.2023 - M.K.Ç. , U.U.
+    MERGE 
+      INTO OFSA_SB.PROD_ORG_PROFIT A
+        USING(
+                SELECT AS_OF_DATE                      ,
+                      CREATE_DATE                      ,
+                      ISKOLU                           ,
+                      SEGMENT                          ,
+                      BOLGE_KODU                       ,
+                      BOLGE_ADI                        ,
+                      SUBE_KODU                        ,
+                      SUBE_ADI                         ,
+                      MT_SICIL                         ,
+                      MT_ADI                           ,
+                      URUN_KODU                        ,
+                      URUN                             ,
+                      PARA_BIRIMI                      ,
+                      sum(FAIZ_DISI_GELIR_BHG)              ,
+                      sum(FAIZ_DISI_GELIR_KREDI )           ,
+                      sum(FAIZ_DISI_GELIR_KK    )           ,
+                      sum(FAIZ_DISI_GELIR_DIGER            ),
+                      sum(FX_KAR_ZARAR                     ),
+                      sum(POS_KOM_GEL_ISYERI_BEDELI        ),
+                      sum(POS_KOM_GEL_KIRA_BEDELI          ),
+                      sum(POS_KOM_GEL_UYE_IS_KATKI         ),
+                      sum(POS_KOM_GEL_SERVIS_BEDELI        ),
+                      sum(POS_KOM_GEL_TOPLAM               ),
+                      sum(SKYATIRIM_HALKA_ARZ_KOM          ),
+                      sum(SKYATIRIM_FON_VERIM              ),
+                      sum(SKYATIRIM_HISSE_KOM              ),
+                      sum(SKYATIRIM_SGMK_VERIM             ),
+                      sum(SKYATIRIM_SWEET_KOM              ),
+                      sum(SKYATIRIM_VOB_KOM                ),
+                      sum(SKYATIRIM_TOPLAM                 ),
+                      sum(TOPLAM_FAIZ_DISI_GELIR           ),
+                      sum(FAIZ_DISI_GIDER_AMORTISTMAN      ),
+                      sum(FAIZ_DISI_GIDER_DAVA_MHK         ),
+                      sum(FAIZ_DISI_GIDER_ISLETME          ),
+                      sum(FAIZ_DISI_GIDER_PERSONEL         ),
+                      sum(FAIZ_DISI_GIDER_VERGI            ),
+                      sum(FAIZ_DISI_GIDER_VERILEN_KOM      ),
+                      sum(FAIZ_DISI_GIDER_DESMER           ),
+                      sum(POS_KOM_GIDERI                   ),
+                      sum(SUBE_KIRA_BEDELI                 ),
+                      sum(TOPLAM_FAIZ_DISI_GIDER           ),
+                      sum(FAIZ_GELIRI_IRR_KK               ),
+                      sum(FAIZ_GELIRI_IRR_KREDI            ),
+                      sum(TOPLAM_FAIZ_GELIRI_IRR           ),
+                      sum(FAIZ_GELIRI_LINEER_KK            ),
+                      sum(FAIZ_GELIRI_LINEER_KREDI         ),
+                      sum(TOPLAM_FAIZ_GELIRI_LINEER        ),
+                      sum(FAIZ_GIDERI_DIGER                ),
+                      sum(FAIZ_GIDERI_GM_BILANCO           ),
+                      sum(FAIZ_GIDERI_LINEER_MEVD          ),
+                      sum(FAIZ_GIDERI_IRR_MEVD             ),
+                      sum(FONLAMA_GETIRI_MEVD_BLOKE        ),
+                      sum(FONLAMA_GETIRI_GM_BILANCO        ),
+                      sum(POS_BLOKE_GELIRI                 ),
+                      sum(TOPLAM_FONLAMA_GETIRI            ),
+                      sum(FONLAMA_MALIYETI_KK              ),
+                      sum(FONLAMA_MALIYETI_KREDI           ),
+                      sum(TOPLAM_FONLAMA_MALIYETI          ),
+                      sum(KASA_FONLAMA_TL                  ),
+                      sum(KASA_FONLAMA_YP                  ),
+                      sum(AYRILAN_KARS_SEPET2              ),
+                      sum(AYRILAN_KARS_SEPET3              ),
+                      sum(AYRILAN_KARS_TOPLAM              ),
+                      sum(VADE_BOZUM_KAR_ZARAR             ),
+                      sum(MUNZAM_MALIYETI                  ),
+                      sum(SKYATIRIM_SUBE_KULL_PAYI         ),
+                      sum(GM_MASRAF_PAYI                   ),
+                      sum(AYLIK_KRSLK_ONCS_NET_KAR_LNR     ),
+                      sum(KARSILIK_ONCESI_NET_KAR_LNR      ) as KARSILIK_ONCESI_NET_KAR_LNR,
+                      sum(AYLIK_KRSLK_ONCS_NET_KAR_IRR     ) as AYLIK_KRSLK_ONCS_NET_KAR_IRR,
+                      sum(KARSILIK_ONCESI_NET_KAR_IRR      ) as KARSILIK_ONCESI_NET_KAR_IRR,
+                      sum(AYLIK_FAALIYET_KARI_LINEER       ),
+                      sum(FAALIYET_KARI_LINEER             ) as FAALIYET_KARI_LINEER,
+                      sum(AYLIK_FAALIYET_KARI_IRR          ) as AYLIK_FAALIYET_KARI_IRR,
+                      sum(FAALIYET_KARI_IRR                ) as FAALIYET_KARI_IRR,
+                      sum(HAZINE_BONO_PRIMLERI             ),
+                      sum(VADESIZ_MEVDUAT_PRIM             ),
+                      sum(SEKERKUR_ALT_FW_DCD_PRIM         ),
+                      sum(VADELI_MEV_PRIM                  ),
+                      sum(SKLEASING_ISLEM_YON_KOM          ),
+                      sum(DIS_TICARET_PRIM                 ),
+                      sum(NAKIT_YONETIM_PRIM               ),
+                      sum(KUL_KAY_HATALI_ISL_MALIYET       ),
+                      sum(EFT_KAP_SAATI_SON_EK_UCRETI      ),
+                      sum(KULLANILMAYAN_IZIN_MALIYETI      ),
+                      sum(YATIRIM_EKSTRE_UCRETI            ),
+                      sum(FON_YON_FX_ISLEM_IPTAL_CEZA      ),
+                      sum(HATALI_ISLEM_MALIYETI            ),
+                      sum(GMENKUL_PRIMI                    ),
+                      sum(SUBEDE_BEKLEYEN_CEK_VE_KARTLAR   ),
+                      sum(A.GECICI_GOREV_MALIYETI          ),
+                      sum(A.PASIF_TEKLIF_ORANI_CEZASI      ),
+                      sum(A.PASIF_BAYI_ORANI_CEZASI        ),
+                      sum(SEKAR                            ),
+                      sum(EK_ALAN_6                        ),
+                      sum(INAKTIF_POS_MALIYETI             ),
+                      sum(AYLIK_PERFORMANS_KARI_LINEER     ),
+                      sum(PERFORMANS_KARI_LINEER           ) as PERFORMANS_KARI_LINEER,
+                      sum(AYLIK_PERFORMANS_KARI_IRR        ) as AYLIK_PERFORMANS_KARI_IRR,
+                      sum(PERFORMANS_KARI_IRR              ) as PERFORMANS_KARI_IRR,
+                      sum(AYRILAN_KARS_SEPET1              ),
+                      sum(BAKIYE                           ),
+                      sum(KARLILIK_DURUM                   ),
+                      sum(FAIZ_GELIRI_SORUNLU_KRD          ),
+                      sum(FAIZ_GIDERI_SORUNLU_KRD          ),
+                      sum(FAIZ_DISI_GELIR_ATM              ),
+                      sum(FAIZ_GELIRI_LINEER_SORUNLU_KRD   ),
+                      sum(FAIZ_GIDERI_LINEER_SORUNLU_KRD   ),
+                      sum(FONLAMA_GETIRI_KK_ALACAK_BKY     ),
+                      sum(HASAT_POS_BLOKE_GELIRI           ),
+                      nvl(PRIVATE_BRANCH_FLAG,0) as pbf 
+                FROM OFSA_SB.PROD_ORG_PROFIT A
+                WHERE A.AS_OF_DATE=CASE WHEN 
+                                         EXTRACT (MONTH FROM PDATE)=1 THEN PDATE
+                                        ELSE TRUNC(PDATE,'MM')-1 END
+                  AND NVL(A.PRIVATE_BRANCH_FLAG,0)<>1
+             group by AS_OF_DATE                      ,
+                      CREATE_DATE                      ,
+                      ISKOLU                           ,
+                      SEGMENT                          ,
+                      BOLGE_KODU                       ,
+                      BOLGE_ADI                        ,
+                      SUBE_KODU                        ,
+                      SUBE_ADI                         ,
+                      MT_SICIL                         ,
+                      MT_ADI                           ,
+                      URUN_KODU                        ,
+                      URUN                             ,
+                      PARA_BIRIMI   ,
+                      nvl(PRIVATE_BRANCH_FLAG,0)
+             ) B ON (A.SUBE_KODU = B.SUBE_KODU AND
+                     A.BOLGE_KODU=B.BOLGE_KODU AND
+                     A.ISKOLU=B.ISKOLU AND
+                     A.SEGMENT=B.SEGMENT AND
+                     A.BOLGE_ADI=B.BOLGE_ADI AND
+                     A.AS_OF_DATE=PDATE AND 
+                     nvl(A.PRIVATE_BRANCH_FLAG,0)=nvl(B.pbf,0) AND
+                     NVL(A.PRIVATE_BRANCH_FLAG,0)<>1                      
+                    )            WHEN MATCHED THEN
+              UPDATE SET A.AYLIK_FAALIYET_KARI_LINEER=A.FAALIYET_KARI_LINEER-NVL(B.FAALIYET_KARI_LINEER,0),
+                         A.AYLIK_KRSLK_ONCS_NET_KAR_LNR=A.KARSILIK_ONCESI_NET_KAR_LNR-NVL(B.KARSILIK_ONCESI_NET_KAR_LNR,0),
+                         A.AYLIK_KRSLK_ONCS_NET_KAR_IRR=A.KARSILIK_ONCESI_NET_KAR_IRR-NVL(B.KARSILIK_ONCESI_NET_KAR_IRR,0),
+                         A.AYLIK_FAALIYET_KARI_IRR=A.FAALIYET_KARI_IRR-NVL(B.FAALIYET_KARI_IRR,0),
+                         A.AYLIK_PERFORMANS_KARI_LINEER=A.PERFORMANS_KARI_LINEER-NVL(B.PERFORMANS_KARI_LINEER,0),
+                         A.AYLIK_PERFORMANS_KARI_IRR=A.PERFORMANS_KARI_IRR-NVL(B.PERFORMANS_KARI_IRR,0);
+      COMMIT;  
+    /*******************************************************************************************************************/
+   --Aylık sutunları hesaplatılıyor. (Özel Bankacılık) 08.10.2024 
+    MERGE 
+      INTO OFSA_SB.PROD_ORG_PROFIT A
+        USING(
+                SELECT * 
+                FROM OFSA_SB.PROD_ORG_PROFIT A
+                WHERE A.AS_OF_DATE=CASE WHEN 
+                                         EXTRACT (MONTH FROM PDATE)=1 THEN PDATE
+                                        ELSE TRUNC(PDATE,'MM')-1 END
+                  AND A.PRIVATE_BRANCH_FLAG=1
+             ) B ON (A.SUBE_KODU = B.SUBE_KODU AND
+                     A.BOLGE_KODU=B.BOLGE_KODU AND
+                     A.ISKOLU=B.ISKOLU AND
+                     A.SEGMENT=B.SEGMENT AND
+                     A.BOLGE_ADI=B.BOLGE_ADI AND
+                     A.AS_OF_DATE=PDATE AND 
+                     nvl(A.PRIVATE_BRANCH_FLAG,0)=B.PRIVATE_BRANCH_FLAG AND
+                     A.PRIVATE_BRANCH_FLAG=1
+                     AND NVL(A.GOLGE_FLAG,0) = NVL(B.GOLGE_FLAG,0)
+                    )
+
+            WHEN MATCHED THEN
+              UPDATE SET A.AYLIK_FAALIYET_KARI_LINEER=A.FAALIYET_KARI_LINEER-NVL(B.FAALIYET_KARI_LINEER,0),
+                         A.AYLIK_KRSLK_ONCS_NET_KAR_LNR=A.KARSILIK_ONCESI_NET_KAR_LNR-NVL(B.KARSILIK_ONCESI_NET_KAR_LNR,0),
+                         A.AYLIK_KRSLK_ONCS_NET_KAR_IRR=A.KARSILIK_ONCESI_NET_KAR_IRR-NVL(B.KARSILIK_ONCESI_NET_KAR_IRR,0),
+                         A.AYLIK_FAALIYET_KARI_IRR=A.FAALIYET_KARI_IRR-NVL(B.FAALIYET_KARI_IRR,0),
+                         A.AYLIK_PERFORMANS_KARI_LINEER=A.PERFORMANS_KARI_LINEER-NVL(B.PERFORMANS_KARI_LINEER,0),
+                         A.AYLIK_PERFORMANS_KARI_IRR=A.PERFORMANS_KARI_IRR-NVL(B.PERFORMANS_KARI_IRR,0);
+      COMMIT;  
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

@@ -1,0 +1,136 @@
+CREATE OR REPLACE package body STAGE.MO_TR_DM_ORG_GROUP is
+
+  PROCEDURE TR_DM_ORG_GROUP is
+    sql_text       varchar2(5000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value, prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_ORG_GROUP',
+                                  psubmodule   => 'TR_DM_ORG_GROUP',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl);
+    execute immediate 'truncate table TR_DM_ORG_GROUP';
+    insert into TR_DM_ORG_GROUP
+      select org_code,
+             min(case
+                   when org_group = 'GRP02' then
+                    org_group
+                 end) as org_group1,
+             min(case
+                   when org_group = 'GRP02' then
+                    org_group_desc
+                 end) as org_group1_desc,
+             min(case
+                   when org_group = 'GRP03' then
+                    org_group
+                 end) as org_group2,
+             min(case
+                   when org_group = 'GRP03' then
+                    org_group_desc
+                 end) as org_group2_desc,
+             min(case
+                   when org_group = 'GRP04' then
+                    org_group
+                 end) as org_group3,
+             min(case
+                   when org_group = 'GRP04' then
+                    org_group_desc
+                 end) as org_group3_desc,
+             min(case
+                   when org_group = 'GRP05' then
+                    org_group
+                 end) as org_group4,
+             min(case
+                   when org_group = 'GRP05' then
+                    org_group_desc
+                 end) as org_group4_desc,
+             min(case
+                   when org_group = 'GRP06' then
+                    org_group
+                 end) as org_group5,
+             min(case
+                   when org_group = 'GRP06' then
+                    org_group_desc
+                 end) as org_group5_desc,
+             min(case
+                   when org_group = 'GRP08' then
+                    org_group
+                 end) as org_group6,
+             min(case
+                   when org_group = 'GRP08' then
+                    org_group_desc
+                 end) as org_group6_desc,
+             min(case
+                   when org_group = 'GRP12' then
+                    org_group
+                 end) as org_group7,
+             min(case
+                   when org_group = 'GRP12' then
+                    org_group_desc
+                 end) as org_group7_desc,
+             min(case
+                   when org_group = 'GRP15' then
+                    org_group
+                 end) as org_group8,
+             min(case
+                   when org_group = 'GRP15' then
+                    org_group_desc
+                 end) as org_group8_desc,
+             min(case
+                   when org_group = 'GRP22' then
+                    org_group
+                 end) as org_group9,
+             min(case
+                   when org_group = 'GRP22' then
+                    org_group_desc
+                 end) as org_group9_desc
+        from (select o1.code       as org_code,
+                     g1.group_code as org_group,
+                     g1.group_name as org_group_desc
+                from ex_infra_admin_org_group   g1,
+                     ex_infra_admin_org_grp_mbr m1,
+                     ex_infra_admin_org_org     o1
+               where g1.group_code in ('GRP02',
+                                       'GRP03',
+                                       'GRP04',
+                                       'GRP05',
+                                       'GRP06',
+                                       'GRP08',
+                                       'GRP12',
+                                       'GRP15',
+                                       'GRP22')
+                 and g1.oid = m1.group_oid
+                 and o1.oid = m1.organization_oid
+                 and g1.status = '1'
+                 and m1.status = '1'
+                 and o1.status = '1')
+       group by org_code;
+    commit;
+  
+    mn_utility.update_plog(pid => pid, success => 1, pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid,
+                             success   => 0,
+                             fail      => 'POSITION: ' || error_location ||
+                                          ' ERROR: ' || abs(SQLCODE) || ':' ||
+                                          SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+END MO_TR_DM_ORG_GROUP;
+/

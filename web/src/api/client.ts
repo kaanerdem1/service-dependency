@@ -1,6 +1,7 @@
 /**
  * UI → Express API istemcisi.
  * Vite proxy: `/api/*` → `http://127.0.0.1:4000/api/*`
+ * Production: `VITE_API_BASE_URL=https://api.example.com`
  */
 import type {
   AffectedService,
@@ -21,8 +22,10 @@ import type {
   SnapshotClientPayload,
 } from '../types'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`/api${path}`, {
+  const res = await fetch(`${API_BASE_URL}/api${path}`, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
     ...init,
   })

@@ -1,0 +1,101 @@
+CREATE OR REPLACE PROCEDURE OFSA_DAILY.ld_order_payments_olax (pdate DATE)
+	IS
+		pid 			 NUMBER;
+		error_location	 NUMBER := 1;
+		pcritical_lvl           number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+	BEGIN
+		pid :=
+			stage.mn_utility.INSERT_PLOG(pmodule		=> 'LOAD',
+												 psubmodule 	=> 'ORDER_PAYMENTS',
+												 project_name	=> 'OFSA_DAILY',
+												 pasofdate		=> pdate,
+												 pcritical		=> 1);
+
+		DELETE FROM order_payments
+			  WHERE as_of_date = pdate;
+
+		COMMIT;
+
+		INSERT INTO order_payments(as_of_date,
+								   id_number,
+								   order_date,
+								   institution_code,
+								   institution_short_name,
+								   protocol_start_date,
+								   protocol_end_date,
+								   inst_cus_no,
+								   inst_org_code,
+								   inst_account_code,
+								   cus_no,
+								   profit_center_code,
+								   profit_segment_code,
+								   account_code,
+								   product_type,
+								   payment_amount,
+								   deduction_amount,
+								   currency_code,
+								   payment_day_of_month,
+								   blocked_day_count,
+								   blocked_day_type,
+								   updated_by,
+								   status,
+								   personnel_status,
+								   is_active,
+								   has_promotion,
+								   payment_reference_id,
+								   order_oid,
+								   REGISTER_NO,
+								   VOUCHER_DESC,
+								   payment_type_code,
+								   customer_protocol_date)
+			SELECT as_of_date,
+				   id_number,
+				   order_date,
+				   institution_code,
+				   institution_short_name,
+				   protocol_start_date,
+				   protocol_end_date,
+				   inst_cus_no,
+				   inst_org_code,
+				   inst_account_code,
+				   cus_no,
+				   profit_center_code,
+				   profit_segment_code,
+				   account_code,
+				   product_type,
+				   payment_amount,
+				   deduction_amount,
+				   currency_code,
+				   payment_day_of_month,
+				   blocked_day_count,
+				   blocked_day_type,
+				   updated_by,
+				   status,
+				   personnel_status,
+				   is_active,
+				   has_promotion,
+				   payment_reference_id,
+				   order_oid,
+				   REGISTER_NO,
+				   VOUCHER_DESC,
+				   payment_type_code,
+				   customer_protocol_date --322055
+			  FROM T_ORDER_PAYMENTS_QA;
+
+		COMMIT; 
+
+    pcritical_lvl  := 3;
+    error_location := 2;
+
+    STAGE.mn_utility.update_plog(pid => pid,success => 1,pcritical => 9);
+ exception
+    when others then
+      STAGE.mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      ROLLBACK;
+      RAISE;
+	END;
+/

@@ -1,17 +1,17 @@
 import { motion } from 'motion/react'
-import { useRef, useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { layoutSpring } from './config'
 import { MorphHoverIndicator } from './MorphHover'
 
 export type StageTabId = 'map' | 'affected' | 'overview'
 
-type TabDef = {
-  id: StageTabId
+export type StageTabDef<T extends string = StageTabId> = {
+  id: T
   label: string
-  icon: React.ReactNode
+  icon: ReactNode
 }
 
-const TABS: TabDef[] = [
+const TABS: StageTabDef<StageTabId>[] = [
   {
     id: 'map',
     label: 'Harita',
@@ -32,7 +32,7 @@ const TABS: TabDef[] = [
   },
   {
     id: 'affected',
-    label: 'İlişkiler',
+    label: 'Tablo',
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
         <circle cx="4" cy="4" r="2.25" stroke="currentColor" strokeWidth="1.25" />
@@ -53,19 +53,27 @@ const TABS: TabDef[] = [
   },
 ]
 
-type Props = {
-  tab: StageTabId
-  onSelect: (tab: StageTabId) => void
+type Props<T extends string = StageTabId> = {
+  tab: T
+  onSelect: (tab: T) => void
+  tabs?: StageTabDef<T>[]
+  ariaLabel?: string
 }
 
 /** Motion + Morphin morph hover — sekme pill + hover arka plan */
-export function StageTabs({ tab, onSelect }: Props) {
-  const hoverRef = useRef<StageTabId | null>(null)
-  const [hover, setHover] = useState<StageTabId | null>(null)
+export function StageTabs<T extends string = StageTabId>({
+  tab,
+  onSelect,
+  tabs,
+  ariaLabel = 'Görünüm',
+}: Props<T>) {
+  const items = tabs ?? (TABS as StageTabDef<T>[])
+  const hoverRef = useRef<T | null>(null)
+  const [hover, setHover] = useState<T | null>(null)
 
   return (
-    <nav className="stage-tabs" aria-label="Görünüm" data-motion="morphin-tab-nav">
-      {TABS.map((t) => {
+    <nav className="stage-tabs" aria-label={ariaLabel} data-motion="morphin-tab-nav">
+      {items.map((t) => {
         const on = tab === t.id
         const showMorph = hover === t.id && !on
         return (

@@ -1,0 +1,176 @@
+GELISTIRME ONERILERI
+====================
+
+1. Alias'siz kolonlari tek inline view cikti alias'i uzerinden cozme
+
+Problem:
+Parser, GROUP BY / SELECT / WHERE gibi alanlarda gecen alias'siz kolonlari
+birden fazla kaynak tablo varsa guvenli sekilde cozemiyor. Ornek:
+
+  SELECT SUBE, PB
+  FROM (
+    SELECT TOPLAM.ISLEM_SUBESI AS SUBE,
+           TOPLAM.CCY AS PB
+    FROM (...) TOPLAM
+  )
+  GROUP BY SUBE, PB
+
+Burada GROUP BY SUBE fiziksel bir tablo kolonu degil, inline view'in cikti
+kolonudur. Parser bunu dogrudan aday tablolarda arayinca belirsizlige dusuyor.
+
+Onerilen kural:
+Alias'siz bir kolon ayni SELECT scope'unda sadece tek bir inline view'in acik
+cikti kolonlari arasinda varsa, parser o kolonu inline view icindeki AS alias'ina
+baglamali ve kaynak zincirini iceri dogru takip etmelidir.
+
+Beklenen zincir:
+
+  GROUP BY SUBE
+  -> inline view cikti kolonu SUBE
+  -> TOPLAM.ISLEM_SUBESI AS SUBE
+  -> daha alttaki kaynak kolon
+  -> fiziksel tablo kolonu
+
+Guvenlik sartlari:
+- Kolon adi sadece tek inline view cikti listesinde bulunmali.
+- Ayni scope'taki fiziksel tablolarda ayni kolon adi birden fazla aday
+  olusturuyorsa cozum yapilmamali.
+- Inline view icindeki kaynak ifade cozulmezse belirsiz birakilmali.
+- Cozum yapilsa bile ilk asamada guven seviyesi TAHMIN olarak isaretlenebilir.
+
+Faydasi:
+Ozellikle nested SELECT
+ve GROUP BY iceren uzun ETL scriptlerinde kolon etkisi daha dogru izlenir.
+
+
+2. Alias'siz kolonlari KATALOG_KOLON metadata'si ile scope bazli cozme
+
+Problem:
+Bir SELECT scope'unda birden fazla kaynak tablo varsa alias'siz kolonlar
+belirsiz kalabiliyor. Ornek:
+
+  SELECT product_type,
+         NVL(SUM(payment_amount), 0) AS payment_amount
+  FROM e_order_payments a,
+       STAGE.EX_INFRA_CUST_CUST_CUST c
+  GROUP BY product_type
+
+Parser product_type kolonunu gorunce bunun a.product_type mi yoksa
+c.product_type mi oldugunu SQL metninden kesin anlayamaz. Ancak
+stage.katalog_kolon tablosunda kaynak tablolarin kolon metadata'si varsa bu
+belirsizlik guvenli sekilde azaltilabilir.
+
+Onerilen kural:
+Alias'siz bir kolon cozulmezse parser once sadece o kolonun gectigi SELECT
+scope'undaki dogrudan kaynak tablolara bakmali. Bu tablolar icin
+stage.katalog_kolon icinde kolon adi aranmalidir.
+
+  product_type
+  -> ayni scope kaynaklari: E_ORDER_PAYMENTS, EX_INFRA_CUST_CUST_CUST
+  -> KATALOG_KOLON'da sadece E_ORDER_PAYMENTS.PRODUCT_TYPE varsa
+  -> kaynak E_ORDER_PAYMENTS.PRODUCT_TYPE kabul edilir
+
+Oracle uyumu:
+Oracle iki kaynak tabloda da ayni alias'siz kolon varsa ilk tabloyu secmez;
+kolon belirsiz olur ve sorgu normalde ORA-00918 gibi hata verir. Bu nedenle
+parser da "ilk tabloyu sec" gibi bir kural kullanmamalidir.
+
+Guvenlik sartlari:
+- Metadata aramasi tum statement kaynaklarinda degil, once ilgili SELECT
+  scope'unun dogrudan kaynak tablolariyla yapilmali.
+- Kolon sadece 1 aday tabloda bulunursa cozulmeli.
+- Kolon 0 tabloda bulunursa belirsiz kalmali.
+- Kolon 2 veya daha fazla tabloda bulunursa belirsiz kalmali.
+- Schema eslesmesine dikkat edilmeli; OFSA_DAILY.E_ORDER_PAYMENTS ile
+  sadece E_ORDER_PAYMENTS kaydi ayni sey gibi kontrolsuz birlestirilmemeli.
+- Cozum metadata'ya dayandigi icin guven seviyesi ilk asamada TAHMIN
+  olabilir.
+
+Faydasi:
+product_type, account_code, currency_code gibi ana tablodan gelen ama SQL'de
+alias'siz yazilmis kolonlar dogru tabloya baglanabilir. Bu sayede hem
+katalog_belirsiz_kolonlar.csv azalir hem de kolon etki diyagraminda gereksiz
+kopukluklar azalir.
+
+
+UYGULAMA FONKSIYONUNA ETKI EDEN BELIRSIZLIKLER
+==============================================
+
+1. Hedef kolon metadata'sina yazilmayan sabit/literal kolonlar
+
+Ornekler:
+- E_ORDER_PAYMENTS_OLAX icindeki 'MAAS ODEMESI' product_type uretimi
+- t_order_payments_olax icindeki T_ORDER_PAYMENTS_QA.product_type akisi
+
+Uygulama etkisi:
+Bir tablo kolonunun degeri sabitten uretilse bile o kolon sonraki scriptlerde
+kaynak kolon olarak okunabilir. Hedef kolon katalog_kolon'a yazilmazsa sonraki
+adimlarda bu kolon yokmus gibi davranilir ve kolon etki diyagraminda zincir
+kopar.
+
+Onerilen cozum:
+INSERT hedef kolonlari belirlendigi anda, kaynak kolon olup olmamasina
+bakmadan tum hedef kolonlar katalog_kolon'a yazilmali. Literal ifadelerde
+lineage yazilmayabilir ama hedef kolon metadata'si mutlaka olusmali.
+
+
+2. Derived / inline view cikti kolonunun geriye dogru izlenememesi
+
+Ornekler:
+- MS_EX_OFSA_SB_KASA_FONL_MALI / SUBE
+- MS_EX_OFSA_SB_BAKIYE / PRODUCT_TYPE
+- MS_EX_OFSA_SB_FONLAMA_GETIRISI / PRODUCT_TYPE
+
+Uygulama etkisi:
+Bu kolonlar cogu zaman fiziksel tablodan dogrudan gelmiyor; ic sorgularda
+uretilip dis sorguda tekrar okunuyor. Ornek akista SUBE; TOPLAM.ISLEM_SUBESI
+AS SUBE, KASA.KARSI_SUBE AS SUBE veya RECEIVER_ORG_CODE AS SUBE gibi ara
+cikti kolonlarindan geliyor. Bu zincir kurulamazsa uygulama gercek kaynak
+kolondan hedef kolona kadar olan etki yolunu eksik gosterir.
+
+Onerilen cozum:
+Bir SELECT scope'unda tek derived/inline source varsa ve alias'siz kolon bu
+derived source'un cikti kolonlari arasinda bulunuyorsa, kolon once derived
+ciktiya, sonra onun icindeki gercek ifadeye baglanmali.
+
+
+3. UNPIVOT value kolonunun olcu kolonlarina baglanmamasi
+
+Ornek:
+- MS_EX_OFSA_GM_MASRAF_PAYI / GM_MASRAF_PAYI
+
+Uygulama etkisi:
+GM_MASRAF_PAYI fiziksel bir kaynak tablo kolonu degil, UNPIVOT isleminin
+urettigi value kolonudur:
+
+  UNPIVOT ((GM_MASRAF_PAYI) FOR (ISKOLU, SEGMENT) IN (...))
+
+Bu value kolon kaynak olcu kolonlarina baglanmazsa kolon etki haritasinda
+GM_MASRAF_PAYI'nin hangi masraf payi olcu kolonlarindan beslendigi gorunmez.
+
+Onerilen cozum:
+UNPIVOT value kolonunu, IN listesindeki olcu kolonlarina baglayan ayri bir
+kural eklenmeli. Bu ornekte GM_MASRAF_PAYI; KURUMSAL_GM_MASRAF,
+TICARI_GM_MASRAF, OBIPLUS_GM_MASRAF, KOBI_GM_MASRAF, TARIM_GM_MASRAF,
+ISLETME_GM_MASRAF, BIREYSEL_GM_MASRAF ve SUBE_HAVUZ_GM_MASRAF kaynaklarindan
+turemis kabul edilmeli.
+
+
+4. Eksik kaynak kolon metadata'si yuzunden kopan gercek lineage akislari
+
+Ornekler:
+- MO_TR_DM_CITY / region_code
+- MO_TR_DM_COUNTRY / tcmb_country_name
+- MO_TR_DM_ORG_ADDRESS / PHONE_1
+- MS_EX_OFSA_SB_AYRILAN_KARSILIK / ALM_LOSSALLOWANCE, ALM_LOANSEGMENT
+- MS_EX_OFSA_SB_SEKERYATIRIM / SKBNKMUSNO
+
+Uygulama etkisi:
+Bu kolonlar is kurali acisindan gercek veri akisi olusturuyor. Ancak SQL'de
+alias'siz yazildiklari ve ilgili kaynak tablolarda katalog_kolon metadata'si
+eksik oldugu icin kolon etkisi uygulamada eksik veya kopuk gorunuyor.
+
+Onerilen cozum:
+Oracle ALL_TAB_COLUMNS veya guvenilir DDL kaynaklarindan katalog_kolon
+metadata'si tamamlanmali. Metadata tamamlandiktan sonra scope bazli cozum
+kurali bu kolonlari tek kaynak tabloya indirebilir.

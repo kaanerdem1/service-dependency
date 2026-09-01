@@ -1,0 +1,445 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_POS_KOMISYON_GELIR IS
+
+PROCEDURE MS_EX_OFSA_POS_KOMISYON_GELIR (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PAYBASI            VARCHAR2(8);
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    SEGM_TARIH         DATE;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN,'YYYYMMDD'),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT),MONTH_BEGIN
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH,PAYBASI
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_POS_KOMISYON_GELIR',
+                                          PSUBMODULE   => 'EX_OFSA_SB_POS_KOMISYON_GELIR',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+       AYBASI:=PDATE;
+       PAYBASI:=PASOFDATE;
+    END IF;
+
+
+    EXECUTE IMMEDIATE 'alter session set "_subquery_pruning_enabled" = false'; --Bu parametre bu pakete özel eklenmiştir. Diğer paketlerde kullanılması gerekirse kaynak planlama için dbaoracle ekibiyle görüşülmesi gerekir U.U. 21.09.2020
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR
+     (
+    SELECT PDATE AS_OF_DATE,
+       A.CUSTOMER_CODE as MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+       SEG.BUSINESS_SEGMENT_CODE as SEGMENT,
+       CASE WHEN TO_NUMBER(BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END as BOLGE,
+       TO_NUMBER(BRANCH_CODE) AS SUBE,
+       NVL(B.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+       A.URUN_KODU AS URUN_KODU,
+       'POS' AS URUN,
+       /*case  when A.URUN = 'BKM Tech Pos Web Dışı' then 'BKM TECH ŞEKER POS'
+             when A.URUN = 'BKM Tech Pos Web İçi' then 'BKM TECH BONUS POS'
+             when A.URUN = 'Hasat Pos' then 'HASAT POS'
+             when A.URUN = 'Sanal Pos Web Dışı' then 'SANAL ŞEKERPOS'
+             when A.URUN = 'Sanal Pos Web İçi' then 'SANAL BONUSPOS'
+             when A.URUN = 'Standart Pos Web Dışı' then 'ŞEKERPOS'
+             when A.URUN = 'Standart Pos Web İçi' then 'BONUS POS'
+             when A.URUN = 'Yazar Kasa Hasat Pos' then 'YAZAR KASA HASAT POS'
+             when A.URUN = 'Yazar Kasa Pos Web Dışı' then 'YAZAR KASA ŞEKER POS'
+             when A.URUN = 'Yazar Kasa Pos Web İçi' then 'YAZAR KASA BONUS POS'
+                  END AS URUN,*/
+       A.PB AS PB,
+       'POS_KOMISYONLARI' AS KAYNAK,
+       SUM(KIRA_BEDELI) AS KIRA_BEDELI,
+       SUM(ISYERI_KOMISYONU) AS ISYERI_KOMISYONU,
+       SUM(UYE_ISYERI_KATKI_PAYI) AS UYE_ISYERI_KATKI_PAYI,
+       SUM(SERVIS_KOMISYONU) AS SERVIS_KOMISYONU,
+       SUM(TOPLAM_KOMISYON) AS TOPLAM_KOMISYON
+  FROM (SELECT  P.POSS_APPLICATION_TYPE_CODE URUN_KODU,
+                P.POSS_APPLICATION_TYPE URUN,
+                CASE WHEN S.CURRENCY_CODE=949 THEN 'TL' ELSE 'YP' END AS PB,
+                0 KIRA_BEDELI,
+               SUM(S.COMMISSION)+SUM(s.COMMISSION_TAX)+ SUM(S.MRC_REWARD_AMOUNT) ISYERI_KOMISYONU,
+               0 UYE_ISYERI_KATKI_PAYI,
+               0 AS SERVIS_KOMISYONU,
+               SUM(S.COMMISSION)+sum(COMMISSION_TAX) + SUM(S.MRC_REWARD_AMOUNT) + SUM(S.SERVICE_COMMISSION)  AS TOPLAM_KOMISYON,
+               S.CUST_BRANCH AS BRANCH_CODE,
+               S.CUSTOMER_CODE AS CUSTOMER_CODE
+      FROM POS.BATCH_NET_ACCOUNTING_CUM@CBRAS_PRODUX S,
+           OLAP.DM_POS P
+         WHERE S.ORG_CODE = '41'
+           AND to_number(P.POSS_NO)=S.POS_CODE
+           AND S.ACCOUNTING_DATE_COMM BETWEEN PAYBASI AND PASOFDATE
+         --  AND to_date(S.SETTLEMENT_DATE,'yyyymmdd') BETWEEN AYBASI AND PDATE
+           AND S.TRAN_TYPE IN ('IADE','TKSTIADE','IADEB','TKST','SATIS','BNSK','PUCRT')
+         GROUP BY CUST_BRANCH,
+         S.CUSTOMER_CODE,
+         P.POSS_APPLICATION_TYPE_CODE,
+         P.POSS_APPLICATION_TYPE,
+         CASE WHEN S.CURRENCY_CODE=949 THEN 'TL' ELSE 'YP' END
+         UNION ALL
+           ---HASAT POS komisyonları mizandan alınmıştır.  27.08.2021 A.Y.
+           SELECT
+           '03' AS URUN_KODU,
+           'Hasat Pos' AS URUN,
+           'TL' AS PB,
+           0 AS KIRA_BEDELI,
+           SUM(V.AMOUNT) AS ISYERI_KOMISYONU,
+           0 AS UYE_ISYERI_KATKI_PAYI,
+           0 AS SERVIS_KOMISYONU,
+           SUM(V.AMOUNT) AS TOPLAM_KOMISYON,
+           TO_NUMBER(V.BRANCH_CODE) AS BRANCH_CODE,
+           V.CONTRA_CUSTOMER_CODE AS CUSTOMER_CODE
+          FROM OLAP.FC_VOUCHER_DETAIL V--30.06.2022 tarihinde olap.dm_pos ile bağlantısı kesilmiştir. P.Y.
+          WHERE AS_OF_DATE BETWEEN AYBASI AND PDATE
+          AND SUBSTR(V.GL_CODE,1,7) = '7609999'
+          AND V.PROCESS_ID='170143'
+          AND V.OPERATION_DESC LIKE '%komisyon ödemesi%'
+          AND V.AMOUNT != 0
+         -- AND P.MERCHANT_NO=SUBSTR(V.OPERATION_DESC,1,(INSTR(V.OPERATION_DESC,' ')))
+          GROUP BY V.CONTRA_CUSTOMER_CODE, TO_NUMBER(V.BRANCH_CODE)
+         UNION ALL
+           SELECT --Bu komisyonlar yukarıdaki tabloda gelmemesi sebebiyle eklenmiştir. 23.01.2021 U.U.
+                     '01' AS URUN_KODU,
+                     'Standart Pos Web İçi' AS URUN, --Ürün ismi standardı bozmamak adına bu eklenmiştir.
+                     'TL' AS PB,
+                     0 AS KIRA_BEDELI,
+                     SUM(D.AMOUNT) AS ISYERI_KOMISYONU, --BSMV yukarıda eklendiği için mükerrer olarak buraya dahil edilmedi U.U. 15.01.2021
+                     0 AS UYE_ISYERI_KATKI_PAYI,
+                     0 AS SERVIS_KOMISYONU,
+                     SUM(D.AMOUNT) AS TOPLAM_KOMISYON,
+                     TO_NUMBER(C.MAIN_BRANCH_CODE) AS BRANCH_CODE,
+                     D.CUSTOMER_NO AS CUSTOMER_CODE
+              FROM OLAP.FC_VOUCHER_DETAIL D,OLAP.FC_CUSTOMER C
+              WHERE d.AS_OF_DATE BETWEEN AYBASI AND PDATE
+              AND C.AS_OF_DATE=D.AS_OF_DATE
+              AND C.CUSTOMER_CODE=D.CUSTOMER_NO
+              AND SUBSTR(D.GL_CODE,1,7) IN ('7601950','7611950','7601952','7611952')
+              AND NOT (SUBSTR(D.GL_CODE,1,7) IN ('7601952') AND (OPERATION_DESC LIKE '%Aidat%' OR OPERATION_DESC LIKE '%Hizmet%'))
+              AND NOT (SUBSTR(D.GL_CODE,1,7) IN ('7601950') AND 
+                   SUBSTR(D.CONTRA_GL_CODE,1,7) IN ('3909015') AND
+                   D.PROCESS_ID = '140067')
+              AND SUBSTR(D.gl_code,1,1)!='4'
+              AND D.PROCESS_ID != '140063'
+            GROUP BY  C.MAIN_BRANCH_CODE,D.CUSTOMER_NO            
+          UNION ALL          
+            SELECT --Bu komisyonlar yukarıdaki tabloda yanlış şube ve müşteri kodu gelmesi sebebiyle eklenmiştir. 21.01.2025 Y.T.
+                      '01' AS URUN_KODU,
+                     'Standart Pos Web İçi' AS URUN, --Ürün ismi standardı bozmamak adına bu eklenmiştir.
+                     'TL' AS PB,
+                     0 AS KIRA_BEDELI,
+                     SUM(D.AMOUNT) AS ISYERI_KOMISYONU,
+                     0 AS UYE_ISYERI_KATKI_PAYI,
+                     0 AS SERVIS_KOMISYONU,
+                     SUM(D.AMOUNT) AS TOPLAM_KOMISYON,
+                     TO_NUMBER(C.MAIN_BRANCH_CODE) AS BRANCH_CODE,
+                     D.CONTRA_CUSTOMER_CODE AS CUSTOMER_CODE
+              FROM OLAP.FC_VOUCHER_DETAIL D,OLAP.FC_CUSTOMER C
+              WHERE d.AS_OF_DATE BETWEEN AYBASI AND PDATE
+              AND C.AS_OF_DATE=D.AS_OF_DATE
+              AND C.CUSTOMER_CODE=D.CONTRA_CUSTOMER_CODE
+              AND SUBSTR(D.GL_CODE,1,7) IN ('7601950')
+              AND SUBSTR(D.CONTRA_GL_CODE,1,7) IN ('3909015')
+              AND SUBSTR(D.gl_code,1,1)!='4'
+              AND D.PROCESS_ID = '140067'
+            GROUP BY  C.MAIN_BRANCH_CODE,D.CONTRA_CUSTOMER_CODE
+            ------------ POS KIRA BEDELİ MİZANDAN ALINMIŞTIR. A.Y. ----------
+            UNION ALL
+            SELECT P.POSS_APPLICATION_TYPE_CODE AS URUN_KODU,
+                     P.POSS_APPLICATION_TYPE AS URUN,
+                     'TL' AS PB,
+                     SUM(V.AMOUNT) AS KIRA_BEDELI,
+                     0 AS ISYERI_KOMISYONU,
+                     0 AS UYE_ISYERI_KATKI_PAYI,
+                     0 AS SERVIS_KOMISYONU,
+                     SUM(V.AMOUNT) AS TOPLAM_KOMISYON,
+                     TO_NUMBER(V.CONTRA_BRANCH_CODE) AS BRANCH_CODE,
+                     V.CUSTOMER_NO AS CUSTOMER_CODE
+              FROM OLAP.FC_VOUCHER_DETAIL V, (SELECT DISTINCT MERCHANT_NO, P.POSS_APPLICATION_TYPE_CODE,  P.POSS_APPLICATION_TYPE FROM OLAP.DM_POS P) P
+              WHERE AS_OF_DATE BETWEEN AYBASI AND PDATE
+              AND SUBSTR(V.GL_CODE,1,7) = '7601952'
+              AND P.MERCHANT_NO=SUBSTR(V.OPERATION_DESC,1,(INSTR(V.OPERATION_DESC,' ')))
+              AND (V.PROCESS_ID!='140063' AND V.PROCESS_DESCRIPTION NOT LIKE '%Yilsonu-Islemleri%') --Yılsonu işlemleri devredışı bırakıldı
+              AND (OPERATION_DESC LIKE '%Aidat%' OR OPERATION_DESC LIKE '%Hizmet%')
+              GROUP BY CUSTOMER_NO, P.POSS_APPLICATION_TYPE_CODE,  P.POSS_APPLICATION_TYPE,TO_NUMBER(V.CONTRA_BRANCH_CODE)
+                 ) A,
+                 OLAP.DM_ORGANIZATION O,
+               OLAP.FC_CUSTOMER B,
+               OLAP.FC_CUSTOMER SEG
+               WHERE TO_CHAR(A.CUSTOMER_CODE) = B.CUSTOMER_CODE
+                AND TO_NUMBER(A.BRANCH_CODE)=TO_NUMBER(O.GL_ORG_CODE)
+                AND B.AS_OF_DATE = PDATE
+                AND SEG.AS_OF_DATE = SEGM_TARIH
+                AND TO_CHAR(A.CUSTOMER_CODE) = SEG.CUSTOMER_CODE
+                GROUP BY A.CUSTOMER_CODE,
+               OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+               SEG.BUSINESS_SEGMENT_CODE,
+               CASE WHEN TO_NUMBER(BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,
+               TO_NUMBER(BRANCH_CODE),
+               B.REPRESENTATIVE_FILE_NO,
+               A.URUN_KODU,
+               /*CASE  WHEN A.URUN = 'BKM Tech Pos Web Dışı' THEN 'BKM TECH ŞEKER POS'
+                     WHEN A.URUN = 'BKM Tech Pos Web İçi' THEN 'BKM TECH BONUS POS'
+                     WHEN A.URUN = 'Hasat Pos' THEN 'HASAT POS'
+                     WHEN A.URUN = 'Sanal Pos Web Dışı' THEN 'SANAL ŞEKERPOS'
+                     WHEN A.URUN = 'Sanal Pos Web İçi' THEN 'SANAL BONUSPOS'
+                     WHEN A.URUN = 'Standart Pos Web Dışı' THEN 'ŞEKERPOS'
+                     WHEN A.URUN = 'Standart Pos Web İçi' THEN 'BONUS POS'
+                     WHEN A.URUN = 'Yazar Kasa Hasat Pos' THEN 'YAZAR KASA HASAT POS'
+                     WHEN A.URUN = 'Yazar Kasa Pos Web Dışı' THEN 'YAZAR KASA ŞEKER POS'
+                     WHEN A.URUN = 'Yazar Kasa Pos Web İçi' THEN 'YAZAR KASA BONUS POS'
+                          END,*/
+               A.PB
+      UNION ALL
+       -------------*************************CEPOS EKLENİYOR 10.05.2021 A.Y.****************************------------------------------------------
+       SELECT PDATE AS AS_OF_DATE,
+       B.MUS_NO AS MUS_NO,
+       ISKOLU AS ISKOLU,
+       B.BUSINESS_SEGMENT_CODE as SEGMENT,
+       BOLGE AS BOLGE,
+       SUBE AS SUBE,
+       NVL(B.REPRESENTATIVE_FILE_NO, 999999) AS MT,
+       '999999999' AS URUN_KODU,
+       'POS' AS URUN,
+       /*'BONUS POS' AS URUN,*/
+       'TL' AS PB,
+       'POS_KOMISYONLARI' AS KAYNAK,
+       0 AS KIRA_BEDELI,
+       SUM(POS_KOMISYON_GELIRI) AS ISYERI_KOMISYONU,
+       0 AS UYE_ISYERI_KATKI_PAYI,
+       0 AS SERVIS_KOMISYONU,
+       SUM(POS_KOMISYON_GELIRI) AS TOPLAM_KOMISYON
+       FROM
+           (
+          SELECT C.AS_OF_DATE,
+                 M.CUSTOMER_CODE AS MUS_NO,
+                 OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+                 SEG.BUSINESS_SEGMENT_CODE AS BUSINESS_SEGMENT_CODE,
+                 CASE WHEN TO_NUMBER(M.MAIN_BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END as BOLGE,
+                 TO_NUMBER(M.MAIN_BRANCH_CODE) AS SUBE,
+                 M.REPRESENTATIVE_FILE_NO AS REPRESENTATIVE_FILE_NO,
+                 SUM(C.DAILY_BONUS_CIRO) AS CIRO,
+                 SUM(C.DAILY_BONUS_CIRO) * 0.0172 AS POS_KOMISYON_GELIRI,
+                 SUM(C.DAILY_BONUS_CIRO) * 0.0172 AS TAKAS_KOM_GIDERI
+           FROM  BI_APP.CEPOS_ODEAL C,
+                 OLAP.FC_CUSTOMER M,
+                 OLAP.FC_CUSTOMER SEG,
+                 DEPOSIT.DEPOSIT_ACCOUNT@CBRAS_PRODUX D,
+                 OLAP.DM_ORGANIZATION O
+          WHERE  ((M.TAX_NO=C.VERGI_NO) OR
+                to_number(SUBSTR(D.IBAN_NO, INSTR(D.IBAN_NO, 'TR')+2, 30))=to_number(C.IBAN))
+          AND    C.AS_OF_DATE= PDATE
+          AND    (to_number(C.IBAN)) NOT LIKE '%.%'
+          AND    C.AS_OF_DATE= M.AS_OF_DATE
+          AND    SEG.AS_OF_DATE=SEGM_TARIH
+          AND    D.CUST_CODE=M.CUSTOMER_CODE
+          AND    D.CUST_CODE=SEG.CUSTOMER_CODE
+          AND    M.MAIN_BRANCH_CODE=O.GL_ORG_CODE
+          AND    D.CURRENCY_CODE= 'TL'
+          AND    C.DAILY_BONUS_CIRO != 0
+          GROUP BY C.AS_OF_DATE,
+                 M.CUSTOMER_CODE,
+                 OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+                 SEG.BUSINESS_SEGMENT_CODE,
+                 M.REPRESENTATIVE_FILE_NO,
+                 CASE WHEN TO_NUMBER(M.MAIN_BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,
+                 TO_NUMBER(M.MAIN_BRANCH_CODE)
+                 ) B
+          group by PDATE,
+                 B.MUS_NO,
+                 ISKOLU,
+                 B.BUSINESS_SEGMENT_CODE,
+                 BOLGE,
+                 SUBE,
+                 NVL(B.REPRESENTATIVE_FILE_NO, 999999)
+
+
+
+
+     );
+
+      COMMIT;
+    
+
+     /*******************************************************************************************************************/
+/*     INSERT --2022 Yılı için Ocak Haziran dönemi hasat POS için fazla verilen hasat POS komisyonları düşülüyor. 2022 yılından sonra tablo droplanacaktır. P.Y.
+      INTO OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR
+
+     (
+      SELECT * FROM HASAT_POS_KOM_GELIR_DUZELTME A
+
+      WHERE A.AS_OF_DATE=PDATE-180
+
+     );
+     COMMIT;*/
+
+    /**********HASAT POS - HASAT KART GİDER PAYLAŞIMI KAPSAMINDA HASAT POSLARA GİDER YANSITILIYOR. TALEP NO: 200134 28.02.2025*******/
+  
+      IF PDATE = LAST_DAY(PDATE)
+      
+      THEN
+      
+      DELETE 
+        FROM OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR
+       WHERE AS_OF_DATE = PDATE
+         AND URUN = 'HASAT POS DÜZELTME';
+         
+      COMMIT;
+         
+      INSERT
+      INTO OFSA_SB.OFSA_EX_POS_KOMISYON_GELIR
+
+     (      
+      SELECT 
+        PDATE AS_OF_DATE, 
+        HP.KOMISYON_CIKIS_HPOS_MUSTERI_NO as MUS_NO,
+        OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.SEGMENT) AS ISKOLU,
+        SEG.SEGMENT as SEGMENT,
+        CASE WHEN TO_NUMBER(SEG.BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.BOLGE_KODU) END as BOLGE,
+        TO_NUMBER(SEG.BRANCH_CODE) AS SUBE,
+        999999 AS MT,
+        999999999 AS URUN_KODU,
+        'HASAT POS DÜZELTME' AS URUN,
+        'TL' AS PB,
+        'POS_KOMISYONLARI' AS KAYNAK,
+        0 AS KIRA_BEDELI,
+        SUM(TARIM_KOMISYON)*-1 AS ISYERI_KOMISYONU,
+        0 AS UYE_ISYERI_KATKI_PAYI,
+        0 AS SERVIS_KOMISYONU,
+        SUM(TARIM_KOMISYON)*-1 AS TOPLAM_KOMISYON         
+  FROM (
+        SELECT  MUSTERI_NO          AS KOMISYON_GIRIS_HK_MUSTERI_NO,
+                FIRMA_MUSTERI_NO    AS KOMISYON_CIKIS_HPOS_MUSTERI_NO,
+                MIZAN_KOMISYON,
+                AMOUNT,
+                ROUND(CASE WHEN (TARIM_KOMISYON_KONTROL - 0.005) < 0
+                        THEN 0
+                            ELSE (TARIM_KOMISYON_KONTROL - 0.005)
+                END,2) 
+                    AS TARIM_KOMISYON_ORAN,
+                ROUND(( CASE WHEN (TARIM_KOMISYON_KONTROL - 0.005) < 0
+                                THEN 0
+                                    ELSE (TARIM_KOMISYON_KONTROL - 0.005)
+                        END) * AMOUNT,2) 
+                    AS TARIM_KOMISYON
+          FROM (
+                SELECT HK.MUSTERI_NO,
+                       HK.FIRMA_MUSTERI_NO,
+                       AMT.CUST_CODE,
+                       SUM(HK.ISLEM_TUTARI) AS AMOUNT,
+                       SUM(AMT.KOMISYON)    AS MIZAN_KOMISYON,
+                       SUM(AMT.KOMISYON) / SUM(HK.ISLEM_TUTARI) AS TARIM_KOMISYON_KONTROL
+                  FROM
+                      (
+                       SELECT RTRIM(SUBSTR(LINE_DESC, (INSTR(LINE_DESC,',')+1),7)) AS PROVIZYON_NO, SUM(NVL(AMT,0)) AS KOMISYON, D.CUST_CODE
+                         FROM DW.VCHR_DTL@QADATA_LINK D
+                        WHERE D.GL_ACC_NO    = '7609999'
+                          AND D.PROCESS_CODE = '170143'
+                          AND D.ACC_DATE BETWEEN TRUNC(PDATE,'MM') AND PDATE
+                        --  AND CUST_CODE='9803194'
+                        GROUP BY RTRIM(SUBSTR(LINE_DESC, (INSTR(LINE_DESC,',')+1),7)), D.CUST_CODE
+                       )AMT,
+                      (
+                       SELECT 
+                           DISTINCT
+                           DW.CMRCL_CARD_FWD_TXN_DTL.PRVN_NO             AS PROVIZYON_NO,
+                           DW.CMRCL_CARD_SUPLR.SPLR_GRUP_NO              AS GRUP_NO,
+                           DW.CMRCL_CARD_SUPLR.CUST_TITLE                AS GRUP_ADI,
+                           DW.CMRCL_CARD_SUPLR.FIRM_NO                   AS FIRMA_NO,
+                           DW.CMRCL_CARD_SUPLR.SPLR_BRANCH_CODE          AS FIRMA_SUBE_KODU,
+                           DW.CMRCL_CARD_SUPLR.CUST_NO                   AS FIRMA_MUSTERI_NO,                    
+                           DW.CMRCL_CARD_SUPLR.SPLR_TITLE                AS FIRMA_UNVAN,
+                           C.CUSTOMER_CODE                               AS MUSTERI_NO,
+                           DW.CMRCL_CARD_FWD_TXN_DTL.CARD_NO             AS KART_NO,
+                           C.BRANCH_CODE                        AS SUBE_KODU_MUSTERI,                           
+                           NVL(DW.CMRCL_CARD_FWD_TXN.AMT,0)              AS ISLEM_TUTARI,
+                           DW.CMRCL_CARD_FWD_TXN.TXN_DATE                AS ISLEM_TARIHI,
+                           DW.CMRCL_CARD_FWD_TXN.BILL_NO                 AS FATURA_NO
+                      FROM DW.CMRCL_CARD_SUPLR@QADATA_LINK,            --  SEKERSIRKET.CMRCL_CARD_SUPPLIER
+                           ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER@QADATA_LINK, --  SEKERSIRKET.CMRCL_CARD_CUSTOMER
+                           ODS_SEKERSIRKET.CMRCL_CARD@QADATA_LINK,
+                           DW.CMRCL_CARD_FWD_TXN_DTL@QADATA_LINK, --  SEKERSIRKET.CMRCL_FRWRD_TRNSCTIONS_DETAIL
+                           DW.CMRCL_CARD_FWD_TXN@QADATA_LINK,    -- SEKERSIRKET.CMRCL_FORWARD_TRANSACTIONS
+                           BI_APP.VW_DM_DIM_CUSTOMER_HISTORY C
+                     WHERE     1 = 1
+                       AND ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                           ODS_SEKERSIRKET.CMRCL_CARD.CUSTOMER_NO
+                       AND (    DW.CMRCL_CARD_FWD_TXN.CUST_CODE =
+                                DW.CMRCL_CARD_FWD_TXN_DTL.CUST_CODE
+                            AND DW.CMRCL_CARD_FWD_TXN.TXN_DATE =
+                                DW.CMRCL_CARD_FWD_TXN_DTL.TXN_DATE
+                            AND DW.CMRCL_CARD_FWD_TXN.PRVN_NO =
+                                DW.CMRCL_CARD_FWD_TXN_DTL.PRVN_NO)
+                       AND (TO_NUMBER(TRIM(DW.CMRCL_CARD_FWD_TXN.FIRM_CODE)) =TO_NUMBER(TRIM(DW.CMRCL_CARD_SUPLR.FIRM_NO)))
+                       AND (ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                            DW.CMRCL_CARD_FWD_TXN.CUST_CODE)
+                       AND (ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                            C.CUSTOMER_CODE(+))
+                       AND DW.CMRCL_CARD_FWD_TXN.AMT <> 0
+                        --   AND ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =  '36945005'
+                        --   AND DW.CMRCL_CARD_SUPLR.CUST_NO='30805778'
+                         --  AND DW.CMRCL_CARD_FWD_TXN_DTL.DUE_DATE =TO_DATE ('20250127', 'yyyymmdd')
+                       AND DW.CMRCL_CARD_FWD_TXN.TXN_DATE BETWEEN TRUNC(PDATE,'MM') AND PDATE 
+                       AND C.AS_OF_DATE = PDATE
+                       )HK
+                 WHERE AMT.PROVIZYON_NO = HK.PROVIZYON_NO      
+                 GROUP BY 
+                       HK.MUSTERI_NO,
+                       HK.FIRMA_MUSTERI_NO,
+                       AMT.CUST_CODE
+                HAVING SUM(HK.ISLEM_TUTARI) <>0
+                )            
+        )HP,
+        BI_APP.VW_DM_DIM_CUSTOMER_HISTORY SEG,
+        OFSA_SB.BOLGELER ORG
+--   WHERE KOMISYON_CIKIS_HPOS_MUSTERI_NO ='4505501'
+  WHERE 1=1 
+    AND SEG.AS_OF_DATE = SEGM_TARIH
+    AND HP.KOMISYON_CIKIS_HPOS_MUSTERI_NO   = 
+        SEG.CUSTOMER_CODE
+    AND TO_NUMBER(SEG.BRANCH_CODE) = 
+        ORG.SUBE_KODU
+  GROUP BY 
+        KOMISYON_CIKIS_HPOS_MUSTERI_NO,
+        OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.SEGMENT),
+        SEG.SEGMENT,
+        CASE WHEN TO_NUMBER(SEG.BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.BOLGE_KODU) END,
+        TO_NUMBER(SEG.BRANCH_CODE));
+  
+  COMMIT;
+  
+  END IF;
+
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

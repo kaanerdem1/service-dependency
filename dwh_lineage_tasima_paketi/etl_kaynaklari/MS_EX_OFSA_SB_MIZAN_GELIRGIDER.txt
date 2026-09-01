@@ -1,0 +1,731 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_MIZAN_GELIRGIDER IS
+
+
+
+PROCEDURE MS_EX_OFSA_SB_MIZAN_GELIRGIDER (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH         DATE;
+    READY              NUMBER;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, 'YYYYMMDD'),TO_DATE(MONTH_BEGIN, 'YYYYMMDD'),TO_DATE(LAST_SEGM_DATE, 'YYYYMMDD')
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --SEGMENTASYON ATAMASI
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_MIZAN_GELIRGIDER',
+                                        PSUBMODULE   => 'EX_OFSA_SB_MIZAN_GELIRGIDER',
+                                        PROJECT_NAME => 'OFSA_SB',
+                                        PASOFDATE    => PDATE,
+                                        PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+    Loop
+        SELECT count(*)
+        into READY
+        FROM OFSA_DAILY.OFSA_D_CLEARING_REPORT@QADATA_LINK
+        where as_of_date=PDATE;
+        exit when READY>4000;
+        sleep(300000);--5dk
+        end loop;
+  /*****************************************************************************************************************************/
+    Loop
+        SELECT count(*)
+        into READY
+        FROM BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK
+        where as_of_date=PDATE;
+        exit when READY>3300000;
+        sleep(300000);--5dk
+        end loop;
+  /*****************************************************************************************************************************/
+    Loop
+        SELECT count(*)
+        into READY
+        FROM DM.FACT_COMMISSION@QADATA_LINK
+        where as_of_date=PDATE;
+        exit when READY>15000;
+        sleep(300000);--5dk
+        end loop;
+  /*****************************************************************************************************************************/
+    Loop
+        SELECT count(*)
+        into READY
+        FROM OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER
+        where as_of_date=PDATE;
+        exit when READY>500;
+        sleep(300000);--5dk
+        end loop;
+/*****************************************************************************************************************************/
+  
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+    AYBASI:=PDATE ;
+    END IF; 
+   
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_TEMP_MIZAN_GELIRGIDER';
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+--    EXECUTE IMMEDIATE 'ALTER session set nls_date_format= '||'yyyymmdd'||''; 
+
+    
+     INSERT INTO OFSA_SB.OFSA_TEMP_MIZAN_GELIRGIDER 
+     (        
+                  SELECT
+                      PDATE AS TARIH,
+                      A.CUSTOMER_NO AS MUS_NO,
+                      TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) AS SUBE,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                      nvl(card.product_code,(nvl(ast.product_type, A.PRODUCT_TYPE))) AS URUN_KODU,
+                      NVL(card.PRODUCT_NAME, nvl(AST.PRODUCT_NAME, NVL(PRD.PRODUCT_DESCRIPTION,NVL(PRD.PRODUCT_NAME, 'DIGER URUNLER')))) AS URUN_ADI,
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE) AS PB,
+                      CASE 
+                          WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012') THEN  SEG.BUSINESS_SEGMENT_CODE
+                          WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE NOT IN ('00000','00009','00012') THEN  '99999'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE     IN ('20203','20206','20204','20207','20511', '20512') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('20203','20206','20204','20207','20511', '20512') THEN '99998'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE     IN ('40205','40304','40305','40306','40308','40309') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('40205','40304','40305','40306','40308','40309') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012') AND  SUBSTR(A.GL_CODE,1,5)  IN ('76000','76100','76001','76101','76002','76102','76018','76118') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,7)  IN  ('7609991','7609993','7619991','7619993') THEN '99997'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE     IN ('50044','50041','50042','50043') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('50044','50041','50042','50043') THEN '99996'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,3) IN ('748','749') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,2)='76' THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,1) IN ('5','6') AND NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999'
+                          WHEN SUBSTR(A.GL_CODE,1,1) IN '8' AND c.main_establishment_type='SK' THEN NULL --Giderler şube havuzuna yansıtılacak U.U. 13.08.2020
+                        ELSE SEG.BUSINESS_SEGMENT_CODE END SEGM,
+                        --CASE  
+                        --WHEN GL.TARGET IS NOT NULL THEN TO_CHAR(GL.TARGET)
+                    
+                          /* WHEN A.GL_CODE LIKE '5%' AND A.AMOUNT <> 0 AND (A.PROCESS_DESCRIPTION LIKE 'KTS%' OR
+                           A.OPERATION_DESC LIKE '%GECİKME%' OR A.PROCESS_DESCRIPTION LIKE '%Kur Farkı Reeskontu%') 
+                           THEN 'Faiz Gelirleri - Takipten Tahsilat' --TAKİPTEN TAHSİLAT*/--P.Y.20220105
+                           
+                         --  WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                         --  WHEN SUBSTR(A.GL_CODE,1,1)='5' AND  TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Gelirleri - Krediler'
+                          
+                           /*WHEN SUBSTR(A.GL_CODE, 1, 1) ='6'AND A.AMOUNT <> 0 AND A.PROCESS_ID != '140063' --ŞUBELERIN 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                           AND (SUBSTR(A.PRODUCT_TYPE, 1, 5) = '13020' --SADECE VADELILERI ALIR
+                           OR
+                           A.OPERATION_DESC LIKE
+                           'TAKIP ANAPARA BAK. KAPANANLARIN TAKIP REESKONT,TAHAKKUK VE VERGI HESAPLARINDAKI BAKIYELERIN IPTALI%') THEN 'Faiz Giderleri - Takip'--takibe gidince oluşan faiz giderleri
+                           */--P.Y.20220105  
+                         --  WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) IN ('188','1','219','172') THEN 'Faiz Giderleri - GM Bilanço'
+                         --  WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Giderleri - Mevduat'
+                        
+                           
+                         --  WHEN SUBSTR(A.GL_CODE,1,1)='6' THEN 'Diger Faiz_Gider' 
+                         --  WHEN (SUBSTR(A.GL_CODE,1,6) IN ('760199','761199','760190','761190','7140050',/*'760192','761192','760193','761193',*/'760194','761194') OR
+                         --                                           SUBSTR(A.GL_CODE,1,7) IN ('7601980', '7609950', '7611980','7609992','7609995' )) THEN 'Kredi Kartı Komisyonları'  /*7609950 gl kk komisyonları altında talep edilmiştir. sesıs 393054 A.Y.K 09.04.2026 */
+                         --  WHEN SUBSTR(A.GL_CODE,1,2)='76' AND  SUBSTR(A.GL_CODE,1,7) NOT IN ('7609950', '7609999') AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188')  THEN 'Bankacılık Hizmet Gelirleri'--09.09.2022 DE 7609999 NOLU GL HASAT POS KOM. DAHİL EDİLDİĞİ İÇİN ELENMİŞTİR.
+                         --  WHEN (SUBSTR(A.GL_CODE,1,3) BETWEEN '700' AND '746' OR SUBSTR(A.GL_CODE,1,3) IN ('748','749'))  THEN 'Kredi Komisyon Gelirleri'
+                         --  WHEN (SUBSTR(A.GL_CODE,1,1)='7' or SUBSTR(A.GL_CODE,1,2) in ('86', '87' )) THEN 'Diğer Faiz Dışı Gelirler' /*86 ve 87'li gl code'larda yapılan işlemlerin 7'li hesaplarda karşılığı olduğu için diğer faiz dışı gelirler kalemine dahil edilmiştir. A.Y. */
+                         --  WHEN SUBSTR(A.GL_CODE,1,3)='810' and SUBSTR(A.GL_CODE,1,7) not in ('8100871','8100870') THEN 'Personel Giderleri'/*2.06.2022 mailine istinaden--subject:OFSA_SB Kıdem ihbar tazminatı hk. P.Y. */
+                         --  WHEN SUBSTR(A.GL_CODE,1,3)='830' THEN 'Vergi Resim Harçlar ve Fonlar'
+                         --  WHEN (SUBSTR(A.GL_CODE,1,3)='840' AND SUBSTR(A.GL_CODE,1,7)  != '8400290') THEN 'Verilen Ücret ve Komisyonlar'
+                         --  WHEN SUBSTR(A.GL_CODE,1,3)='850' AND SUBSTR(A.GL_CODE,1,6)!='850061' THEN 'Amortisman Gideri'
+                         --  WHEN SUBSTR(A.GL_CODE,1,6)='850061' THEN 'Amortisman Gideri-IFRS'
+                         --  WHEN SUBSTR(A.GL_CODE,1,6)='880150' THEN 'Şube Dava Giderleri'
+                         --  WHEN SUBSTR(A.GL_CODE,1,6)='880992' THEN 'Şube Desmer'
+                      --  ELSE 'Şube İşletme Giderleri' END AS SINIF,
+                      CASE  
+                        WHEN GL.TARGET IS NOT NULL THEN TO_CHAR(GL.TARGET)
+                        WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND  TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) IN ('188','1','219','172') THEN 'Faiz Giderleri - GM Bilanço'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Giderleri - Mevduat'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' THEN 'Diger Faiz_Gider' 
+                           WHEN (SUBSTR(A.GL_CODE,1,6) IN ('760199','761199','760190','761190',/*'760192','761192','760193','761193',*/'760194','761194') OR
+                                                                    SUBSTR(A.GL_CODE,1,7) IN ('7140050', '7601980','7611980','7609992','7609995' ) OR
+                                                                    (SUBSTR(A.GL_CODE,1,7) = '7609950' AND A.PROCESS_ID = '160059')) THEN 'Kredi Kartı Komisyonları'  /*7609950 gl kk komisyonları altında talep edilmiştir. sesıs 393054 A.Y.K 09.04.2026 */
+                           WHEN (SUBSTR(A.GL_CODE,1,2)='76' AND  SUBSTR(A.GL_CODE,1,7) <>  '7609999' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188') OR
+                                  SUBSTR(A.GL_CODE,1,7) =  '7609950' AND A.PROCESS_ID <> '160059') THEN 'Bankacılık Hizmet Gelirleri'--09.09.2022 DE 7609999 NOLU GL HASAT POS KOM. DAHİL EDİLDİĞİ İÇİN ELENMİŞTİR.
+                           WHEN (SUBSTR(A.GL_CODE,1,3) BETWEEN '700' AND '746' OR SUBSTR(A.GL_CODE,1,3) IN ('748','749'))  THEN 'Kredi Komisyon Gelirleri'
+                           WHEN (SUBSTR(A.GL_CODE,1,1)='7' or SUBSTR(A.GL_CODE,1,2) in ('86', '87' )) THEN 'Diğer Faiz Dışı Gelirler' /*86 ve 87'li gl code'larda yapılan işlemlerin 7'li hesaplarda karşılığı olduğu için diğer faiz dışı gelirler kalemine dahil edilmiştir. A.Y. */
+                           WHEN SUBSTR(A.GL_CODE,1,3)='810' and SUBSTR(A.GL_CODE,1,7) not in ('8100871','8100870') THEN 'Personel Giderleri'/*2.06.2022 mailine istinaden--subject:OFSA_SB Kıdem ihbar tazminatı hk. P.Y. */
+                           WHEN SUBSTR(A.GL_CODE,1,3)='830' THEN 'Vergi Resim Harçlar ve Fonlar'
+                           WHEN (SUBSTR(A.GL_CODE,1,3)='840' AND SUBSTR(A.GL_CODE,1,7)  != '8400290') THEN 'Verilen Ücret ve Komisyonlar'
+                           WHEN SUBSTR(A.GL_CODE,1,3)='850' AND SUBSTR(A.GL_CODE,1,6)!='850061' THEN 'Amortisman Gideri'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='850061' THEN 'Amortisman Gideri-IFRS'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='880150' THEN 'Şube Dava Giderleri'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='880992' THEN 'Şube Desmer'
+                        ELSE 'Şube İşletme Giderleri' END AS SINIF,
+                      SUM(A.AMOUNT) AS BAKIYE,
+                      SUBSTR(A.GL_CODE,1,7) AS GL
+                 FROM  OLAP.FC_CUSTOMER C, 
+                       OLAP.FC_CUSTOMER SEG,
+                       OLAP.DM_ORGANIZATION ORG, 
+                       OLAP.FC_VOUCHER_DETAIL A                 
+                       LEFT JOIN 
+                       (
+                       select distinct ACCOUNT_NO, a.PRODUCT_CODE, PRODUCT_NAME 
+                       FROM CARD.CMS_ACCOUNT@CBRAS_PRODUX a,
+                       INFRA.PROD_PRODUCT_NEW@CBRAS_PRODUX p
+                       WHERE a.PRODUCT_CODE=p.PRODUCT_CODE  
+                       AND a.PRODUCT_GROUP_CODE=p.GROUP_CODE  
+                       AND p.MAIN_GROUP_CODE='01'  
+                       AND a.STATUS=1 
+                       ) card on substr(a.operation_desc,1,16) = to_char(card.ACCOUNT_NO)
+                       LEFT JOIN OLAP.DT_PRODUCT_SET PRD ON PRD.SET_PRODUCT_CODE=A.PRODUCT_TYPE
+                       LEFT JOIN SUMMARY_PROD.GL_ASSET AST ON (CASE WHEN nvl(ast.module,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN  substr(A.ACCOUNT_NO,6,7)
+                                                                                               --WHEN nvl(ast.module,'XX') IN ('KK') THEN SUBSTR(TRIM(A.OPERATION_DESC),1,16) --KK ürün yakalaması için eklenmiştir 
+                                                                                                ELSE A.ACCOUNT_NO  END) = ast.account_no --BKS kredilerinin hesap numarasında loglama farklı olması sebebiyle eklenmiştir. U.U. 22/10/2020
+                                                            AND ast.As_Of_Date BETWEEN AYBASI and  PDATE
+                                                            AND a.as_of_date = ast.As_Of_Date
+                                                            AND NVL(ast.usage_type,'XX') IN ('2','3','4') --2=Spot,3=İskonto,4=TTK
+                                                            AND A.CUSTOMER_NO=AST.CUSTOMER_CODE
+                        LEFT JOIN OFSA_SB.OFSA_GL_PRIORITY GL ON GL.GL_CODE=A.GL_CODE                                                            
+                  WHERE A.AS_OF_DATE BETWEEN AYBASI and  PDATE
+                      AND SUBSTR(A.GL_CODE,1,1) IN ('5','6','7','8')
+                      AND TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END)=TO_NUMBER(ORG.GL_ORG_CODE)
+                      --AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('1','33','172','219')
+                      AND SUBSTR(A.GL_CODE,1,7) not in ('8100871','8100870')--/*2.06.2022 mailine istinaden--subject:OFSA_SB Kıdem ihbar tazminatı hk. P.Y. */
+                      AND C.CUSTOMER_CODE=A.CUSTOMER_NO
+                      AND SEG.CUSTOMER_CODE=A.CUSTOMER_NO
+                      --AND SUBSTR(A.GL_CODE,1,7) NOT IN ('7601950','7611950','7601952','7611952') --POS Komisyon gelir paketinde eklenmesi sebebiyle elendi. 11.01.2021 U.U-S.A.
+                      AND A.AMOUNT<>0
+                      AND A.ACCOUNT_NO NOT IN (SELECT A.CREDIT_NO AS ACCOUNT_NO --Peşin Komisyonlu Kredilerin verileri buradan çıkartılıyor. 10.10.2024 Y.T.
+                                                FROM BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK A,
+                                                     OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER PS
+                                               WHERE A.AS_OF_DATE=PDATE
+                                                 AND PS.AS_OF_DATE = PDATE  
+                                                 AND A.CREDIT_CLOSE_DATE IS NULL                                              
+                                                 AND A.CREDIT_NO=PS.CREDIT_NO
+                                               )        
+                      AND A.PROCESS_ID not in ('140063', '140060')
+                      AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.
+                      AND SUBSTR(A.GL_CODE,1,7) != '6440012' ---- IFRS16 Sozlesme Finansman GİDERİ ÇIKARILIYOR (ŞUBE KİRALARI İLE İLGİLİ BİR KALEM, KİRALAR FARKLI ŞEKİLDE YÜKLENİYOR) A.Y.
+                      AND A.OPERATION_DESC NOT LIKE '%IFRS%'
+                      AND C.AS_OF_DATE= PDATE
+                      AND SEG.AS_OF_DATE= SEGM_TARIH
+                      GROUP BY PDATE ,
+                     A.CUSTOMER_NO ,
+                      TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END),
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999),
+                      nvl(card.product_code,(nvl(ast.product_type, A.PRODUCT_TYPE))),
+                      NVL(card.PRODUCT_NAME, nvl(AST.PRODUCT_NAME, NVL(PRD.PRODUCT_DESCRIPTION,NVL(PRD.PRODUCT_NAME, 'DIGER URUNLER')))),
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE),
+                      CASE
+                          WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012') THEN  SEG.BUSINESS_SEGMENT_CODE
+                          WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE NOT IN ('00000','00009','00012') THEN  '99999'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE     IN ('20203','20206','20204','20207','20511', '20512') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('20203','20206','20204','20207','20511', '20512') THEN '99998'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE     IN ('40205','40304','40305','40306','40308','40309') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('40205','40304','40305','40306','40308','40309') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012') AND  SUBSTR(A.GL_CODE,1,5)  IN ('76000','76100','76001','76101','76002','76102','76018','76118') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,7)  IN  ('7609991','7609993','7619991','7619993') THEN '99997'
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE     IN ('50044','50041','50042','50043') THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('50044','50041','50042','50043') THEN '99996'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,3) IN ('748','749') THEN '99997'
+                          WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012')  AND SUBSTR(A.GL_CODE,1,2)='76' THEN SEG.BUSINESS_SEGMENT_CODE
+                          WHEN SUBSTR(A.GL_CODE,1,1) IN ('5','6') AND NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999'
+                          WHEN SUBSTR(A.GL_CODE,1,1) IN '8' AND c.main_establishment_type='SK' THEN NULL --Giderler şube havuzuna yansıtılacak U.U. 13.08.2020
+                        ELSE SEG.BUSINESS_SEGMENT_CODE END,
+                        CASE  
+                        WHEN GL.TARGET IS NOT NULL THEN TO_CHAR(GL.TARGET)
+                        WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND  TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) IN ('188','1','219','172') THEN 'Faiz Giderleri - GM Bilanço'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Giderleri - Mevduat'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6' THEN 'Diger Faiz_Gider' 
+                           WHEN (SUBSTR(A.GL_CODE,1,6) IN ('760199','761199','760190','761190',/*'760192','761192','760193','761193',*/'760194','761194') OR
+                                                                    SUBSTR(A.GL_CODE,1,7) IN ('7140050', '7601980','7611980','7609992','7609995' ) OR
+                                                                    (SUBSTR(A.GL_CODE,1,7) = '7609950' AND A.PROCESS_ID = '160059')) THEN 'Kredi Kartı Komisyonları'  /*7609950 gl kk komisyonları altında talep edilmiştir. sesıs 393054 A.Y.K 09.04.2026 */
+                           WHEN (SUBSTR(A.GL_CODE,1,2)='76' AND  SUBSTR(A.GL_CODE,1,7) <>  '7609999' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188') OR
+                                  SUBSTR(A.GL_CODE,1,7) =  '7609950' AND A.PROCESS_ID <> '160059') THEN 'Bankacılık Hizmet Gelirleri'--09.09.2022 DE 7609999 NOLU GL HASAT POS KOM. DAHİL EDİLDİĞİ İÇİN ELENMİŞTİR.
+                           WHEN (SUBSTR(A.GL_CODE,1,3) BETWEEN '700' AND '746' OR SUBSTR(A.GL_CODE,1,3) IN ('748','749'))  THEN 'Kredi Komisyon Gelirleri'
+                           WHEN (SUBSTR(A.GL_CODE,1,1)='7' or SUBSTR(A.GL_CODE,1,2) in ('86', '87' )) THEN 'Diğer Faiz Dışı Gelirler' /*86 ve 87'li gl code'larda yapılan işlemlerin 7'li hesaplarda karşılığı olduğu için diğer faiz dışı gelirler kalemine dahil edilmiştir. A.Y. */
+                           WHEN SUBSTR(A.GL_CODE,1,3)='810' and SUBSTR(A.GL_CODE,1,7) not in ('8100871','8100870') THEN 'Personel Giderleri'/*2.06.2022 mailine istinaden--subject:OFSA_SB Kıdem ihbar tazminatı hk. P.Y. */
+                           WHEN SUBSTR(A.GL_CODE,1,3)='830' THEN 'Vergi Resim Harçlar ve Fonlar'
+                           WHEN (SUBSTR(A.GL_CODE,1,3)='840' AND SUBSTR(A.GL_CODE,1,7)  != '8400290') THEN 'Verilen Ücret ve Komisyonlar'
+                           WHEN SUBSTR(A.GL_CODE,1,3)='850' AND SUBSTR(A.GL_CODE,1,6)!='850061' THEN 'Amortisman Gideri'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='850061' THEN 'Amortisman Gideri-IFRS'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='880150' THEN 'Şube Dava Giderleri'
+                           WHEN SUBSTR(A.GL_CODE,1,6)='880992' THEN 'Şube Desmer'
+                        ELSE 'Şube İşletme Giderleri' END,
+                       SUBSTR(A.GL_CODE,1,7)
+                     ---------- 
+                    UNION ALL
+                    --ATM DEBIT KART KOMISYONLARI IÇIN EKLENMEKTEDIR.
+                    SELECT
+                         PDATE AS TARIH,
+                         A.CUSTOMER_NO AS MUS_NO,
+                         TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) AS SUBE,
+                         CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                         NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                         A.PRODUCT_TYPE AS URUN_KODU,
+                        'DIGER URUNLER' AS URUN_ADI,
+                         A.CURRENCY_CODE AS PB,
+                         SEG.BUSINESS_SEGMENT_CODE  SEGM,
+                          'Kredi Kartı Komisyonları' AS SINIF,--'Debit Kartı Komisyonları(ATM)' AS SINIF,
+                         SUM(A.AMOUNT*-1) AS BAKIYE,
+                         SUBSTR(A.CONTRA_GL_CODE,1,7) AS gl
+                      FROM   OLAP.FC_CUSTOMER C,
+                             OLAP.FC_CUSTOMER SEG,
+                             OLAP.DM_ORGANIZATION ORG,
+                             OLAP.FC_VOUCHER_DETAIL A /* LEFT JOIN SUMMARY_PROD.GL_ASSET AST 
+                                                                     ON (CASE WHEN nvl(ast.module,'XX') IN ('KK') THEN SUBSTR(TRIM(A.OPERATION_DESC),1,16) --KK ürün yakalaması için eklenmiştir 
+                                                                                    ELSE A.ACCOUNT_NO  END) = ast.account_no --BKS kredilerinin hesap numarasında loglama farklı olması sebebiyle eklenmiştir. U.U. 22/10/2020
+                                                            AND ast.As_Of_Date BETWEEN AYBASI and  PDATE
+                                                            AND a.as_of_date = ast.As_Of_Date
+                                                            AND NVL(AST.MODULE,'XX') IN ('KK')
+                                                            AND A.CUSTOMER_NO=AST.CUSTOMER_CODE*/
+                                                     
+                      WHERE A.AS_OF_DATE BETWEEN AYBASI and  PDATE 
+                      AND TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END)=TO_NUMBER(ORG.GL_ORG_CODE)
+                      AND SUBSTR(A.CONTRA_GL_CODE,1,7)='7609992'
+                      AND A.CUSTOMER_NO=C.CUSTOMER_CODE
+                      AND C.AS_OF_DATE= PDATE
+                      AND A.CUSTOMER_NO=SEG.CUSTOMER_CODE
+                      AND SEG.AS_OF_DATE= SEGM_TARIH
+                      AND A.AMOUNT<>0
+                      AND SUBSTR(A.CONTRA_GL_CODE,1,8)!='76099922'
+                      AND SUBSTR(A.GL_CODE,1,1) NOT IN ('4','5','6','7','8')                      
+                GROUP BY 
+                      PDATE ,A.CUSTOMER_NO ,TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END),
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END ,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999),
+                      A.PRODUCT_TYPE,
+                      A.CURRENCY_CODE ,
+                      SEG.BUSINESS_SEGMENT_CODE,SUBSTR(A.CONTRA_GL_CODE,1,7)                 
+    ----------------------------------------
+                      UNION ALL
+                      --Peşin Komisyonlu Kredilerin Faiz Geliri ekleniyor. 10.10.2024 Y.T.
+                      SELECT
+                              PDATE AS TARIH,
+                              A.CUSTOMER_NO AS MUS_NO,
+                              TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) AS SUBE,
+                              CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                              NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                              nvl(card.product_code,(nvl(ast.product_type, A.PRODUCT_TYPE))) AS URUN_KODU,
+                              NVL(card.PRODUCT_NAME, nvl(AST.PRODUCT_NAME, NVL(PRD.PRODUCT_DESCRIPTION, NVL(PRD.PRODUCT_NAME, 'DIGER URUNLER')))) AS URUN_ADI,
+                              NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE) AS PB,
+                              CASE
+                                  WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012','00014') THEN  SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE NOT IN ('00000','00009','00012','00014') THEN  '99999'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE     IN ('20203','20206','20204','20207','20511', '20512') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('20203','20206','20204','20207','20511', '20512') THEN '99998'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE     IN ('40205','40304','40305','40306','40308','40309') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('40205','40304','40305','40306','40308','40309') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012','00014') AND  SUBSTR(A.GL_CODE,1,5)  IN ('76000','76100','76001','76101','76002','76102','76018','76118') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,7)  IN  ('7609991','7609993','7619991','7619993') THEN '99997'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE     IN ('50044','50041','50042','50043') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('50044','50041','50042','50043') THEN '99996'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,3) IN ('748','749') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,2)='76' THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,1) IN ('5','6') AND NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999'
+                                  WHEN SUBSTR(A.GL_CODE,1,1) IN '8' AND c.main_establishment_type='SK' THEN NULL --Giderler şube havuzuna yansıtılacak U.U. 13.08.2020
+                                ELSE SEG.BUSINESS_SEGMENT_CODE END SEGM,
+                                CASE  
+                                WHEN GL.TARGET IS NOT NULL THEN TO_CHAR(GL.TARGET)
+                                WHEN SUBSTR(A.GL_CODE,1,1)='5' AND  TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Gelirleri - Krediler'
+                                   END AS SINIF,
+                              SUM(A.AMOUNT) AS BAKIYE,
+                              SUBSTR(A.GL_CODE,1,7) AS GL
+                        FROM  OLAP.FC_CUSTOMER C, 
+                              OLAP.FC_CUSTOMER SEG, 
+                              OLAP.DM_ORGANIZATION ORG, 
+                              OLAP.FC_VOUCHER_DETAIL A                 
+                              LEFT JOIN 
+                                       (
+                                       select distinct ACCOUNT_NO, a.PRODUCT_CODE, PRODUCT_NAME 
+                                       FROM CARD.CMS_ACCOUNT@CBRAS_PRODUX a,
+                                       INFRA.PROD_PRODUCT_NEW@CBRAS_PRODUX p
+                                       WHERE a.PRODUCT_CODE=p.PRODUCT_CODE  
+                                       AND a.PRODUCT_GROUP_CODE=p.GROUP_CODE  
+                                       AND p.MAIN_GROUP_CODE='01'  
+                                       AND a.STATUS=1 
+                                       ) card 
+                                     ON substr(a.operation_desc,1,16) = to_char(card.ACCOUNT_NO)
+                              LEFT JOIN OLAP.DT_PRODUCT_SET PRD 
+                                     ON PRD.SET_PRODUCT_CODE=A.PRODUCT_TYPE
+                              LEFT JOIN SUMMARY_PROD.GL_ASSET AST 
+                                     ON (CASE WHEN nvl(ast.module,'XX') IN ('BKS','TOKİ','SFN_BRY') 
+                                                THEN  substr(A.ACCOUNT_NO,6,7)
+                                                   --WHEN nvl(ast.module,'XX') IN ('KK') THEN SUBSTR(TRIM(A.OPERATION_DESC),1,16) --KK ürün yakalaması için eklenmiştir 
+                                                  ELSE A.ACCOUNT_NO  END) = ast.account_no --BKS kredilerinin hesap numarasında loglama farklı olması sebebiyle eklenmiştir. U.U. 22/10/2020
+                                         AND ast.As_Of_Date BETWEEN AYBASI and  PDATE
+                                         AND a.as_of_date = ast.As_Of_Date
+                                         AND NVL(ast.usage_type,'XX') IN ('2','3','4') --2=Spot,3=İskonto,4=TTK
+                                         AND A.CUSTOMER_NO=AST.CUSTOMER_CODE
+                        LEFT JOIN OFSA_SB.OFSA_GL_PRIORITY GL ON GL.GL_CODE=A.GL_CODE                                                            
+                  WHERE A.AS_OF_DATE BETWEEN AYBASI and  PDATE
+                    AND SUBSTR(A.GL_CODE,1,1) IN ('5')
+                    AND TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END)=TO_NUMBER(ORG.GL_ORG_CODE)
+                    AND C.CUSTOMER_CODE=A.CUSTOMER_NO
+                    AND SEG.CUSTOMER_CODE=A.CUSTOMER_NO
+                    AND A.AMOUNT<>0
+                    AND a.account_no in  (
+                                           select a.credit_no as account_no
+                                             from BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK a
+                                            where a.as_of_date=PDATE
+                                              and a.credit_close_date is null
+                                              and a.credit_no in
+                                                         (SELECT CREDIT_NO
+                                                            FROM OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER
+                                                         )                                                               
+                                         )
+                    AND A.PROCESS_ID not in ('140063', '140060')
+                    AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.
+                    AND SUBSTR(A.GL_CODE,1,7) != '6440012' ---- IFRS16 Sozlesme Finansman GİDERİ ÇIKARILIYOR (ŞUBE KİRALARI İLE İLGİLİ BİR KALEM, KİRALAR FARKLI ŞEKİLDE YÜKLENİYOR) A.Y.
+                    AND A.OPERATION_DESC NOT LIKE '%IFRS%'
+                    AND C.AS_OF_DATE= PDATE
+                    AND SEG.AS_OF_DATE= SEGM_TARIH
+                  GROUP BY 
+                        PDATE ,
+                        A.CUSTOMER_NO ,
+                        TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END),
+                        CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+                        NVL(C.REPRESENTATIVE_FILE_NO,999999),
+                        NVL(card.product_code,(nvl(ast.product_type, A.PRODUCT_TYPE))),
+                        NVL(card.PRODUCT_NAME, nvl(AST.PRODUCT_NAME, NVL(PRD.PRODUCT_DESCRIPTION, NVL(PRD.PRODUCT_NAME, 'DIGER URUNLER')))),
+                        NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE),
+                        CASE
+                                  WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012','00014') THEN  SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN (SUBSTR(A.GL_CODE,1,6)  IN  ('760052','761052','760220','761220','760041','761041','760171','761171') OR SUBSTR(A.GL_CODE,1,7) IN ('7609990','7619990','7609994','7619994','7600701','7610701','7609972','7609973','7609974','7609951')) AND  SEG.BUSINESS_SEGMENT_CODE NOT IN ('00000','00009','00012','00014') THEN  '99999'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE     IN ('20203','20206','20204','20207','20511', '20512') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600704','7610704') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('20203','20206','20204','20207','20511', '20512') THEN '99998'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE     IN ('40205','40304','40305','40306','40308','40309') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600702','7610702') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('40205','40304','40305','40306','40308','40309') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000','00009','00012','00014') AND  SUBSTR(A.GL_CODE,1,5)  IN ('76000','76100','76001','76101','76002','76102','76018','76118') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,7)  IN  ('7609991','7609993','7619991','7619993') THEN '99997'
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE     IN ('50044','50041','50042','50043') THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,7)   IN  ('7600703','7610703') AND SEG.BUSINESS_SEGMENT_CODE NOT IN ('50044','50041','50042','50043') THEN '99996'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,3) IN ('748','749') THEN '99997'
+                                  WHEN SEG.BUSINESS_SEGMENT_CODE    IN ('00000','00009','00012','00014')  AND SUBSTR(A.GL_CODE,1,2)='76' THEN SEG.BUSINESS_SEGMENT_CODE
+                                  WHEN SUBSTR(A.GL_CODE,1,1) IN ('5','6') AND NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999'
+                                  WHEN SUBSTR(A.GL_CODE,1,1) IN '8' AND c.main_establishment_type='SK' THEN NULL --Giderler şube havuzuna yansıtılacak U.U. 13.08.2020
+                                ELSE SEG.BUSINESS_SEGMENT_CODE END,
+                        CASE WHEN GL.TARGET IS NOT NULL THEN TO_CHAR(GL.TARGET)                       
+                             WHEN SUBSTR(A.GL_CODE,1,1)='5' AND  TO_NUMBER(A.BRANCH_CODE) NOT IN ('188','1','219','172') THEN 'Faiz Gelirleri - Krediler' END,
+                        SUBSTR(A.GL_CODE,1,7)
+     
+     );
+     COMMIT;
+    
+   
+   /*****************************************************************************************************************************/ 
+    
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_MIZAN_GELIRGIDER';
+
+ 
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_MIZAN_GELIRGIDER
+
+     (
+      SELECT
+          TARIH,
+          MUS_NO,
+          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEGM) AS ISKOLU,
+          SEGM AS SEGMENT,
+          BOLGE,
+          SUBE,
+          MT,
+          URUN_KODU,
+          URUN_ADI,
+          PB,
+          'MIZAN_GELIR_GIDER' AS KAYNAK,
+          SUM(CASE WHEN SINIF='Faiz Gelirleri - Krediler' THEN BAKIYE ELSE 0 END) FAIZ_GELIRI_KREDILER,
+          SUM(CASE WHEN SINIF='Faiz Gelirleri - Kredi Kartı' THEN BAKIYE ELSE 0 END) FAIZ_GELIRI_KREDI_KARTI,
+          SUM(CASE WHEN SINIF='Faiz Giderleri - GM Bilanço' THEN BAKIYE ELSE 0 END) FAIZ_GIDERI_GM_BILANCO,
+          SUM(CASE WHEN SINIF='Faiz Giderleri - Mevduat' THEN BAKIYE ELSE 0 END) FAIZ_GIDERI_MEVDUAT,
+          SUM(CASE WHEN SINIF='Diger Faiz_Gider' THEN BAKIYE ELSE 0 END) FAIZ_GIDERI_DIGER,
+          SUM(CASE WHEN SINIF='Kredi Kartı Komisyonları' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GELIR_KREDI_KARTI,
+          SUM(CASE WHEN SINIF='Bankacılık Hizmet Gelirleri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GELIR_BHG,
+          SUM(CASE WHEN SINIF='Kredi Komisyon Gelirleri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GELIR_KREDI,
+          SUM(CASE WHEN SINIF='Diğer Faiz Dışı Gelirler' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GELIR_DIGER,
+          SUM(CASE WHEN SINIF='Personel Giderleri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_PERSONEL,
+          SUM(CASE WHEN SINIF='Şube İşletme Giderleri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_ISLETME,
+          SUM(CASE WHEN SINIF='Vergi Resim Harçlar ve Fonlar' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_VERGI,
+          SUM(CASE WHEN SINIF='Verilen Ücret ve Komisyonlar' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_VERILEN_KOM,
+          SUM(CASE WHEN SINIF='Amortisman Gideri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_AMORTISMAN,
+          SUM(CASE WHEN SINIF='Şube Dava Giderleri' THEN BAKIYE ELSE 0 END) FAIZ_DISI_GIDER_DAVA,
+          SUM(CASE WHEN SINIF='Şube Desmer' THEN BAKIYE ELSE 0 END) FAIZ_GELIRI_KREDI_DESMER,          
+          ---EKLENDİ---
+          /*SUM(CASE WHEN SINIF='Faiz Gelirleri - Sorunlu Kredi' THEN BAKIYE ELSE 0 END)*/  0 AS FAIZ_GELIRI_SORUNLU_KRD,
+          /*SUM(CASE WHEN SINIF='Faiz Giderleri - Sorunlu Kredi' THEN BAKIYE ELSE 0 END) */ 0 AS FAIZ_GIDERI_SORUNLU_KRD,
+          /*SUM(CASE WHEN SINIF='Debit Kartı Komisyonları(ATM)' THEN BAKIYE ELSE 0 END) */  0 AS FAIZ_DISI_GELIR_ATM
+       FROM (SELECT *
+             FROM  OFSA_SB.OFSA_TEMP_MIZAN_GELIRGIDER C
+             WHERE C.THP NOT IN ('7601950','7611950','7601952','7611952','7601959','76019590') --POS gl kodları pos paketinde işlenmesi sebebiyle burada eleniyor.
+             )                
+       GROUP BY TARIH,
+          MUS_NO,
+          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEGM),
+          SEGM,
+          BOLGE,
+          SUBE,
+          MT,
+          URUN_KODU,
+          URUN_ADI,
+          PB          
+          UNION ALL          
+       SELECT  
+          AS_OF_DATE AS TARIH,
+          NVL(to_char(MUS_NO),'999999999') AS MUS_NO,
+          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU  (BUSINESS_SEGMENT_CODE) AS ISKOLU,
+          BUSINESS_SEGMENT_CODE AS SEGMENT,
+          BOLGE AS BOLGE,
+          MUSTERI_SUBE AS SUBE,
+          MT AS MT,
+          URUN_KODU AS URUN_KODU,
+          URUN_ADI  AS URUN_ADI,
+          'TL' AS PB,
+          'KK_TAKAS_KOMISYONU' AS KAYNAK,
+          0 AS FAIZ_GELIRI_KREDILER,
+          0 AS FAIZ_GELIRI_KREDI_KARTI,
+          0 AS FAIZ_GIDERI_GM_BILANCO,
+          0 AS FAIZ_GIDERI_MEVDUAT,
+          0 AS FAIZ_GIDERI_DIGER,
+          SUM(CASE WHEN THP IN ('760192', '761192', '760193', '761193') THEN KOMISYON ELSE 0 END) AS FAIZ_DISI_GELIR_KREDI_KARTI,
+          0 AS FAIZ_DISI_GELIR_BHG,
+          0 AS FAIZ_DISI_GELIR_KREDI,
+          0 AS FAIZ_DISI_GELIR_DIGER,
+          0 AS FAIZ_DISI_GIDER_PERSONEL,
+          0 AS FAIZ_DISI_GIDER_ISLETME,
+          0 AS FAIZ_DISI_GIDER_VERGI,
+          SUM(CASE WHEN THP = '8400290' THEN KOMISYON ELSE 0 END) AS FAIZ_DISI_GIDER_VERILEN_KOM,
+          0 AS FAIZ_DISI_GIDER_AMORTISMAN,
+          0 AS FAIZ_DISI_GIDER_DAVA,
+          0 AS FAIZ_GELIRI_KREDI_DESMER,
+          ----EKLENDİ----
+          0 AS FAIZ_GELIRI_SORUNLU_KRD,
+          0 AS FAIZ_GIDERI_SORUNLU_KRD,
+          0 AS FAIZ_DISI_GELIR_ATM
+     FROM 
+             (
+                SELECT    case when t.ORIG_CURR_CODE='949' then A.GELIR_GIDER else t.TRAN_AMOUNT*A.ORAN/100 END AS KOMISYON,--25.05.2022 TARİHİNDE ORAN KISMINI YÜZDEYE ÇEVİRMEK AMACIYLA /100 EKLENMİŞTİR.P.Y.
+                          A.THP_NO AS THP,
+                          PDATE AS AS_OF_DATE,
+                          NVL(A.MUSTERI_NO,'999999999') AS MUS_NO,
+                          TO_NUMBER(A.MUSTERI_SUBE) AS MUSTERI_SUBE,              
+                          nvl(ASSET.URUN_KODU,A.URUN_KODU) AS URUN_KODU,
+                          nvl(ASSET.PRODUCT_NAME,A.KART_TURU)  AS URUN_ADI,
+                          NVL(C.REPRESENTATIVE_FILE_NO,'999999') AS MT,
+                          A.URUN_NO AS URUN_NO,
+                          A.TUTAR,
+                          CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.MUSTERI_SUBE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.MUSTERI_SUBE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                          A.URUN_SUBESI,
+                          A.ISLEM_KANALI,                          
+                          A.ISLEM_KODU,
+                          A.KART_TURU,
+                          SEG.BUSINESS_SEGMENT_CODE
+                             FROM  CARD.CMS_TRANSACTIONS@CBRAS_PRODUX t, OFSA_DAILY.OFSA_D_CLEARING_REPORT@QADATA_LINK A  LEFT JOIN (SELECT DISTINCT AS_OF_DATE AS TARIH,
+                                                                                        ACCOUNT_NO KART_NO, 
+                                                                                        CUSTOMER_CODE MUS_NO,
+                                                                                        ASSET.PRODUCT_TYPE AS URUN_KODU,
+                                                                                        ASSET.PRODUCT_NAME AS PRODUCT_NAME
+                                                                                   FROM SUMMARY_PROD.GL_ASSET ASSET
+                                                                                  WHERE AS_OF_DATE BETWEEN AYBASI and  PDATE    
+                                                                                    AND asset.module='KK'
+                                                                                 ) ASSET ON to_number(ASSET.MUS_NO)=A.MUSTERI_NO AND ASSET.KART_NO=A.URUN_NO AND asset.TARIH=A.AS_OF_DATE
+                                                                      LEFT JOIN OLAP.FC_CUSTOMER C ON A.MUSTERI_NO=C.CUSTOMER_CODE AND C.AS_OF_DATE = PDATE
+                                                                      LEFT JOIN OLAP.FC_CUSTOMER SEG ON A.MUSTERI_NO=SEG.CUSTOMER_CODE AND SEG.AS_OF_DATE = SEGM_TARIH
+                                                                      LEFT JOIN OLAP.DM_ORGANIZATION ORG ON TO_NUMBER(ORG.GL_ORG_CODE)=TO_NUMBER(A.MUSTERI_SUBE)
+        WHERE  A.AS_OF_DATE BETWEEN AYBASI and  PDATE 
+          AND A.THP_NO IN ('760192', '761192', '760193', '761193', '8400290')
+          AND t.COMMON_INPUT_OID=a.oid
+          AND t.TRAN_DATE = to_char(A.ISLEM_TARIHI, 'yyyymmdd')
+     )
+     GROUP BY
+     AS_OF_DATE,
+     NVL(to_char(MUS_NO),'999999999'),
+     OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU  (BUSINESS_SEGMENT_CODE),
+     BUSINESS_SEGMENT_CODE,
+     BOLGE,
+     MUSTERI_SUBE,
+     MT,
+     URUN_KODU,
+     URUN_ADI  
+     );
+
+    COMMIT;
+      
+   IF PDATE = LAST_DAY(PDATE)
+    
+    THEN
+    
+    DELETE 
+      FROM OFSA_SB.OFSA_EX_MIZAN_GELIRGIDER
+     WHERE AS_OF_DATE = PDATE
+       AND URUN = 'HASAT KART DÜZELTME';
+       
+    COMMIT;
+    
+       
+    INSERT
+      INTO OFSA_SB.OFSA_EX_MIZAN_GELIRGIDER
+     (
+    SELECT 
+        PDATE AS_OF_DATE, 
+        HP.KOMISYON_GIRIS_HK_MUSTERI_NO as MUS_NO,
+        OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.SEGMENT) AS ISKOLU,
+        SEG.SEGMENT as SEGMENT,
+        CASE WHEN TO_NUMBER(SEG.BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.BOLGE_KODU) END as BOLGE,
+        TO_NUMBER(SEG.BRANCH_CODE) AS SUBE,
+        999999 AS MT,
+        999999999 AS URUN_KODU,
+        'HASAT KART DÜZELTME' AS URUN,
+        'TL' AS PB,
+        'POS_KOMISYONLARI' AS KAYNAK,
+        0 AS FAIZ_GELIRI_KREDILER,
+        0 AS FAIZ_GELIRI_KREDI_KARTI,
+        0 AS FAIZ_GIDERI_GM_BILANCO,
+        0 AS FAIZ_GIDERI_MEVDUAT,
+        0 AS FAIZ_GIDERI_DIGER,
+        0 AS FAIZ_DISI_GELIR_KREDI_KARTI,
+        0 AS FAIZ_DISI_GELIR_BHG,
+        0 AS FAIZ_DISI_GELIR_KREDI,
+        SUM(TARIM_KOMISYON) AS FAIZ_DISI_GELIR_DIGER,
+        0 AS FAIZ_DISI_GIDER_PERSONEL,
+        0 AS FAIZ_DISI_GIDER_ISLETME,
+        0 AS FAIZ_DISI_GIDER_VERGI,
+        0 AS FAIZ_DISI_GIDER_VERILEN_KOM,
+        0 AS FAIZ_DISI_GIDER_AMORTISMAN,
+        0 AS FAIZ_DISI_GIDER_DAVA,
+        0 AS FAIZ_DISI_GIDER_DESMER,
+        0 AS FAIZ_GELIRI_SORUNLU_KRD,
+        0 AS FAIZ_GIDERI_SORUNLU_KRD,
+        0 AS FAIZ_DISI_GELIR_ATM
+  FROM (
+        SELECT  MUSTERI_NO          AS KOMISYON_GIRIS_HK_MUSTERI_NO,
+                FIRMA_MUSTERI_NO    AS KOMISYON_CIKIS_HPOS_MUSTERI_NO,
+                MIZAN_KOMISYON,
+                AMOUNT,
+                ROUND(CASE WHEN (TARIM_KOMISYON_KONTROL - 0.005) < 0
+                        THEN 0
+                            ELSE (TARIM_KOMISYON_KONTROL - 0.005)
+                END,2) 
+                    AS TARIM_KOMISYON_ORAN,
+                ROUND(( CASE WHEN (TARIM_KOMISYON_KONTROL - 0.005) < 0
+                                THEN 0
+                                    ELSE (TARIM_KOMISYON_KONTROL - 0.005)
+                        END) * AMOUNT,2) 
+                    AS TARIM_KOMISYON
+          FROM (
+                SELECT HK.MUSTERI_NO,
+                       HK.FIRMA_MUSTERI_NO,
+                       AMT.CUST_CODE,
+                       SUM(HK.ISLEM_TUTARI) AS AMOUNT,
+                       SUM(AMT.KOMISYON)    AS MIZAN_KOMISYON,
+                       SUM(AMT.KOMISYON) / SUM(HK.ISLEM_TUTARI) AS TARIM_KOMISYON_KONTROL
+                  FROM
+                      (
+                       SELECT RTRIM(SUBSTR(LINE_DESC, (INSTR(LINE_DESC,',')+1),7)) AS PROVIZYON_NO, SUM(NVL(AMT,0)) AS KOMISYON, D.CUST_CODE
+                         FROM DW.VCHR_DTL@QADATA_LINK D
+                        WHERE D.GL_ACC_NO    = '7609999'
+                          AND D.PROCESS_CODE = '170143'
+                          AND D.ACC_DATE BETWEEN TRUNC(PDATE,'MM') AND PDATE 
+                        --  AND CUST_CODE='9803194'
+                        GROUP BY RTRIM(SUBSTR(LINE_DESC, (INSTR(LINE_DESC,',')+1),7)), D.CUST_CODE
+                       )AMT,
+                      (
+                       SELECT 
+                           DISTINCT
+                           DW.CMRCL_CARD_FWD_TXN_DTL.PRVN_NO             AS PROVIZYON_NO,
+                           DW.CMRCL_CARD_SUPLR.SPLR_GRUP_NO              AS GRUP_NO,
+                           DW.CMRCL_CARD_SUPLR.CUST_TITLE                AS GRUP_ADI,
+                           DW.CMRCL_CARD_SUPLR.FIRM_NO                   AS FIRMA_NO,
+                           DW.CMRCL_CARD_SUPLR.SPLR_BRANCH_CODE          AS FIRMA_SUBE_KODU,
+                           DW.CMRCL_CARD_SUPLR.CUST_NO                   AS FIRMA_MUSTERI_NO,                    
+                           DW.CMRCL_CARD_SUPLR.SPLR_TITLE                AS FIRMA_UNVAN,
+                           C.CUSTOMER_CODE                               AS MUSTERI_NO,
+                           DW.CMRCL_CARD_FWD_TXN_DTL.CARD_NO             AS KART_NO,
+                           C.BRANCH_CODE                                 AS SUBE_KODU_MUSTERI,                           
+                           NVL(DW.CMRCL_CARD_FWD_TXN.AMT,0)              AS ISLEM_TUTARI,
+                           DW.CMRCL_CARD_FWD_TXN.TXN_DATE                AS ISLEM_TARIHI,
+                           DW.CMRCL_CARD_FWD_TXN.BILL_NO                 AS FATURA_NO
+                      FROM DW.CMRCL_CARD_SUPLR@QADATA_LINK,            --  SEKERSIRKET.CMRCL_CARD_SUPPLIER
+                           ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER@QADATA_LINK, --  SEKERSIRKET.CMRCL_CARD_CUSTOMER
+                           ODS_SEKERSIRKET.CMRCL_CARD@QADATA_LINK,
+                           DW.CMRCL_CARD_FWD_TXN_DTL@QADATA_LINK, --  SEKERSIRKET.CMRCL_FRWRD_TRNSCTIONS_DETAIL
+                           DW.CMRCL_CARD_FWD_TXN@QADATA_LINK,    -- SEKERSIRKET.CMRCL_FORWARD_TRANSACTIONS
+                           BI_APP.VW_DM_DIM_CUSTOMER_HISTORY C
+                     WHERE     1 = 1
+                           AND ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                               ODS_SEKERSIRKET.CMRCL_CARD.CUSTOMER_NO
+                           AND (    DW.CMRCL_CARD_FWD_TXN.CUST_CODE =
+                                    DW.CMRCL_CARD_FWD_TXN_DTL.CUST_CODE
+                                AND DW.CMRCL_CARD_FWD_TXN.TXN_DATE =
+                                    DW.CMRCL_CARD_FWD_TXN_DTL.TXN_DATE
+                                AND DW.CMRCL_CARD_FWD_TXN.PRVN_NO =
+                                    DW.CMRCL_CARD_FWD_TXN_DTL.PRVN_NO)
+                           AND (TO_NUMBER(TRIM(DW.CMRCL_CARD_FWD_TXN.FIRM_CODE)) = TO_NUMBER(TRIM(DW.CMRCL_CARD_SUPLR.FIRM_NO)))
+                           AND (ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                                DW.CMRCL_CARD_FWD_TXN.CUST_CODE)
+                           AND (ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =
+                                C.CUSTOMER_CODE(+))
+                           AND DW.CMRCL_CARD_FWD_TXN.AMT <> 0
+                        --   AND ODS_SEKERSIRKET.CMRCL_CARD_CUSTOMER.CUSTOMER_NO =  '36945005'
+                        --   AND DW.CMRCL_CARD_SUPLR.CUST_NO='30805778'
+                         --  AND DW.CMRCL_CARD_FWD_TXN_DTL.DUE_DATE =TO_DATE ('20250127', 'yyyymmdd')
+                           AND DW.CMRCL_CARD_FWD_TXN.TXN_DATE BETWEEN TRUNC(PDATE,'MM') AND PDATE 
+                           AND C.AS_OF_DATE = PDATE
+                       )HK
+                 WHERE AMT.PROVIZYON_NO = HK.PROVIZYON_NO      
+                 GROUP BY 
+                       HK.MUSTERI_NO,
+                       HK.FIRMA_MUSTERI_NO,
+                       AMT.CUST_CODE
+                HAVING SUM(HK.ISLEM_TUTARI) <>0
+                )            
+        )HP,
+        BI_APP.VW_DM_DIM_CUSTOMER_HISTORY SEG,
+        OFSA_SB.BOLGELER ORG
+--   WHERE KOMISYON_CIKIS_HPOS_MUSTERI_NO ='4505501'
+  WHERE SEG.AS_OF_DATE = SEGM_TARIH
+    AND HP.KOMISYON_GIRIS_HK_MUSTERI_NO   = 
+        SEG.CUSTOMER_CODE
+    AND TO_NUMBER(SEG.BRANCH_CODE) = 
+        ORG.SUBE_KODU
+  GROUP BY HP.KOMISYON_GIRIS_HK_MUSTERI_NO,
+        OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.SEGMENT),
+        SEG.SEGMENT,
+        CASE WHEN TO_NUMBER(SEG.BRANCH_CODE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.BOLGE_KODU) END,
+        TO_NUMBER(SEG.BRANCH_CODE)
+    );
+    
+    COMMIT;
+    
+    END IF;
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+       IF ABS(SQLCODE) = '08103'
+         OR ABS(SQLCODE) = '12801'     
+                               
+      THEN
+        ROLLBACK;
+--        DBMS_LOCK.SLEEP(180);
+          OFSA_SB.MS_EX_OFSA_SB_MIZAN_GELIRGIDER.MS_EX_OFSA_SB_MIZAN_GELIRGIDER(0);
+      ELSE
+      ROLLBACK;
+        RAISE;
+        END IF;
+  END;
+
+END;
+/

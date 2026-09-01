@@ -59,10 +59,17 @@
 }
 
 .app-brand .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   flex-shrink: 0;
+}
+
+.app-brand .brand-logo {
+  display: block;
+  object-fit: contain;
+  background: transparent;
+  color: inherit;
 }
 
 .app-brand-copy {
@@ -95,6 +102,50 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+}
+
+.app-surface-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--shell-topbar-btn-border);
+  border-radius: 10px;
+  background: var(--shell-topbar-btn-bg);
+}
+
+.app-surface-switch button {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--shell-topbar-btn-fg);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.app-surface-switch button:hover {
+  background: var(--shell-topbar-btn-hover-bg);
+  color: var(--shell-topbar-btn-hover-fg);
+}
+
+.app-surface-switch button.is-active {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.app-frame.is-dwh-surface.sidebar-panel-open .workspace-column {
+  padding-left: 0;
+}
+
+.dwh-workspace-column {
+  padding-left: 0;
+}
+
+.app-frame.is-dwh-surface .workspace {
+  border-radius: 0;
 }
 
 .app-masthead-actions .btn.ghost {
@@ -132,16 +183,16 @@
 .theme-switch-wrap {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  margin-right: 12px;
+  gap: 6px;
+  margin-right: 4px;
   flex-shrink: 0;
 }
 
 .theme-switch-mark {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -151,8 +202,13 @@
   place-items: center;
 }
 
+.theme-switch-mark-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
 .theme-switch-wrap:not(.is-light) .theme-switch-mark {
-  border-radius: 8px;
+  border-radius: 7px;
   background: rgba(255, 255, 255, 0.1);
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.14),
@@ -160,7 +216,7 @@
 }
 
 .theme-switch-wrap.is-light .theme-switch-mark {
-  border-radius: 8px;
+  border-radius: 7px;
   background: rgba(251, 191, 36, 0.12);
   box-shadow:
     0 0 0 1px rgba(251, 191, 36, 0.22),
@@ -170,8 +226,8 @@
 .theme-switch {
   flex-shrink: 0;
   position: relative;
-  width: 76px;
-  height: 42px;
+  width: 50px;
+  height: 28px;
   margin-right: 0;
   padding: 0;
   border: 0;
@@ -202,11 +258,11 @@
 
 .theme-switch-thumb {
   position: absolute;
-  top: 4px;
-  left: 4px;
+  top: 3px;
+  left: 3px;
   z-index: 2;
-  width: 34px;
-  height: 34px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #fff;
   box-shadow:
@@ -216,7 +272,7 @@
 }
 
 .theme-switch.is-light .theme-switch-thumb {
-  transform: translateX(34px);
+  transform: translateX(22px);
 }
 
 [data-theme='white'] .app-frame {
@@ -594,6 +650,42 @@
 
 .module-sidebar:not(.is-expanded) .module-sidebar-inner .module-sidebar-body {
   content-visibility: hidden;
+}
+
+.module-sidebar-resize {
+  position: absolute;
+  top: 0;
+  left: calc(var(--sidebar-panel-width, 272px) - 5px);
+  bottom: 0;
+  z-index: 20;
+  width: 10px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: col-resize;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.module-sidebar.is-expanded .module-sidebar-resize {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.module-sidebar-resize::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  right: 4px;
+  bottom: 18px;
+  width: 2px;
+  border-radius: 999px;
+  background: transparent;
+  transition: background 0.16s ease;
+}
+
+.module-sidebar-resize:hover::after {
+  background: color-mix(in srgb, var(--shell-sidebar-fg) 32%, transparent);
 }
 
 .module-sidebar-rail {
@@ -1347,6 +1439,23 @@
   font-weight: 500;
   letter-spacing: -0.012em;
   font-variant-numeric: tabular-nums;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.module-sidebar .tree-row.kind-project .tree-label,
+.module-sidebar .tree-row.kind-package .tree-label,
+.module-sidebar .tree-row.kind-service .tree-label,
+.module-sidebar .tree-row.kind-method .tree-label {
+  display: block;
+  min-width: 0;
+  max-height: none;
+  overflow: hidden;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
 }
 
 .main {
@@ -1798,6 +1907,7 @@
 .stage-panels {
   display: flex;
   width: 300%;
+  --stage-tab-count: 3;
   height: 100%;
   min-height: 0;
   flex: 1;
@@ -1815,7 +1925,7 @@
 }
 
 .stage-panel {
-  width: calc(100% / 3);
+  width: calc(100% / var(--stage-tab-count, 3));
   flex-shrink: 0;
   min-height: 0;
   display: flex;

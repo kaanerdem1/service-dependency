@@ -1,0 +1,174 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_GM_MASRAF_PAYI IS
+
+PROCEDURE MS_EX_OFSA_GM_MASRAF_PAYI IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    SEGM_TARIH         DATE;
+    ORG_LAST_DATE      DATE;
+    ONCEKIAYSONU       DATE;
+    BUAYSONU           DATE;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT),TO_DATE(TO_CHAR(TRUNC(TO_DATE(PRM_VALUE,'YYYYMMDD'),'MM')-1,'YYYYMMDD'),'YYYYMMDD'),TO_DATE(to_char(TM.CALENDAR_MONTH_END,'YYYYMMDD'),'YYYYMMDD')
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH,ONCEKIAYSONU,BUAYSONU
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T, OLAP.DM_TIME TM
+      WHERE PARAMETER = 'OFSA_SB_DATE'
+      AND T.PRM_VALUE=TO_CHAR(TM.CALENDAR_DATE,'YYYYMMDD');
+
+     SELECT MAX(A.AS_OF_DATE)
+       INTO ORG_LAST_DATE
+     FROM OFSA_SB.PROD_ORG_PROFIT A;   
+    
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_GM_MASRAF_PAYI',
+                                        PSUBMODULE   => 'EX_OFSA_GM_MASRAF_PAYI',
+                                        PROJECT_NAME => 'OFSA_SB',
+                                        PASOFDATE    => PDATE,
+                                        PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+   /*
+   - Oranı değiştirmemiz gerekiyor.
+   - GM Masraf payı konusunun yansımamasıyla ilgili düzenleme yapacağız.
+   - GM masraf paylarında paylaşım yapılan giderlerin içerisinde kıdem tazminatları ('810087','810088','810089'),verilen komisyonlar,vergiler,pos komisyon giderleri elenecek
+   - 
+   */ 
+   
+   /*
+   Genel müdürlük ve bölgede yer alan personel,işletme ve amortisman giderlerinde ilgili ayda gerçekleşen toplam gider alınır. 
+   Çıkan bu toplam gider bankanın kredili aktifler oranı ile (şubat ayında en son bunu güncelledik yıllık güncelliyoruz :%51,6) küçültülür.
+   Nihai değer ise şubelerin giderleri oranında şubelere dağıtılır. Şube giderleri alınırken kıdem ihbar tazminatları,verilen komisyonlar vb. göz ardı edilerek hesaplanmaktadır. 
+   Kredili aktif oranı değeri ise şubelerin doğrudan etkilediği düşüncesiyle üst yönetimle istişare edilerek belirlenmiştir.
+   */
+       EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_GM_MASRAF_PAYI';
+ 
+    IF PDATE=BUAYSONU THEN
+     
+     EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+     INSERT
+      INTO OFSA_SB.OFSA_EX_GM_MASRAF_PAYI
+
+         SELECT PDATE AS TARIH,
+             '999999999' AS MUS_NO,
+             ISKOLU,
+             SEGMENT,
+             BOLGE,
+             SUBE_KODU,
+             '999999' AS MT,
+             '88888888' AS URUN_KODU,
+             'GM MASRAF PAYI' AS URUN_ADI,
+             'TL' AS PB,
+             'GM_MASRAF_PAYI' AS kaynak,
+             '0' AS TOPLAM_FAIZ_DISI_GIDER,
+             FAIZ_DISI_GIDER_ORAN AS KATSAYI,
+             GM_MASRAF_PAYI
+
+      FROM
+           (SELECT CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('6', '220', '372', '122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END AS BOLGE,
+                  A.BRANCH_CODE AS SUBE_KODU,
+                  ROUND(RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER(),3) AS FAIZ_DISI_GIDER_ORAN, --Şubenin toplam içinden aldığı payı ifade eder
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.KURUMSAL,0)    AS KURUMSAL_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.TICARI,0)      AS TICARI_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.OBIPLUS,0)     AS OBIPLUS_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.KOBI,0)        AS KOBI_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.TARIM,0)       AS TARIM_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.ISLETME,0)     AS ISLETME_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.BIREYSEL,0)    AS BIREYSEL_GM_MASRAF,
+                  (RATIO_TO_REPORT(SUM(A.AMOUNT)) OVER())*GM.GM_MASRAF*NVL(D.SUBE_HAVUZ,1)  AS SUBE_HAVUZ_GM_MASRAF
+             FROM
+              (
+               SELECT PDATE AS as_of_Date,to_number(a.branch_code) AS BRANCH_CODE,SUM(a.amount) AMOUNT      
+               FROM OLAP.FC_VOUCHER_DETAIL A 
+               WHERE A.AS_OF_DATE between AYBASI  and  PDATE 
+               AND A.BRANCH_CODE NOT IN (1,33,164,172,187,188,219)
+               AND SUBSTR(A.GL_CODE,1,1) IN ('8')
+               AND SUBSTR(A.GL_CODE,1,6) NOT IN ('810087','810088','810089','850061') --Kıdem tazminatları ve IFRS amortisman eleniyor
+               AND SUBSTR(A.GL_CODE,1,2) NOT IN ('86','87') -- Hazine kaynaklı giderler eleniyor.
+               AND SUBSTR(A.GL_CODE,1,3) NOT IN ('830','840') --Verilen komisyonlar ve vergiler eleniyor.
+               AND SUBSTR(A.GL_CODE,1,8) NOT IN ('84002502') --POS Takas komisyonu eleniyor.
+               AND SUBSTR(A.GL_CODE,1,6) NOT IN ('880991','881991') --POS VE PLASTİK KART İŞLEM GİDERLERİ eleniyor.
+               --AND NOT (SUBSTR(A.GL_CODE,1,6) IN ('882074') AND A.BRANCH_CODE=258) --Maslak Şube Paket 23.01.2024 te yansıyan masraf iadesi işletme gideri içerisinden eleniyor. Y.T.
+               AND A.AMOUNT<>0
+               AND A.PROCESS_ID != '140063'
+               AND NOT (A.AS_OF_DATE= to_date('20250410','yyyymmdd') AND SUBSTR(A.GL_CODE,1,1) IN ('8') AND A.BRANCH_CODE=263 AND a.reference_no='27104999421')--Latif Bey'in onayı ile Beypazarı şubeye yansıyan kira gideri işletme giderinden çıkartılmıştır. 30.04.2025
+               AND NOT (A.AS_OF_DATE=to_date('20250701','yyyymmdd') AND SUBSTR (A.GL_CODE,1,1) IN ('8') AND A.BRANCH_CODE=332 AND A.REFERENCE_NO='27606264059')--Ahu Hanım onayı ile Gebze Organize şubeye yansıtılan kira gideri işletme giderinden çıkarılmıştır. 31.07.2025
+               AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.
+               AND SUBSTR(A.GL_CODE,1,7) != '6440012' ---- IFRS16 Sozlesme Finansman GİDERİ ÇIKARILIYOR (ŞUBE KİRALARI İLE İLGİLİ BİR KALEM, KİRALAR FARKLI ŞEKİLDE YÜKLENİYOR) A.Y.
+               --AND NOT (SUBSTR(A.GL_CODE,1,6) IN ('880130') and A.AS_OF_DATE= to_date('20230801','yyyymmdd')) --- Mehtap Hanım'ın onayı ile Ağustos ayındaki vergi yapılandırması sebebiyle ödenen yüklü miktar bu ay için dışarıda tutulmuştur D.K. 13.09.2023
+               --AND NOT (SUBSTR(A.GL_CODE,1,6) IN ('880150') and A.BRANCH_CODE=246)--Mehtap Hanımın onayı ile yıl sonuna kadar şubenin dava giderleri GM masraf payı içerisinden çıkartılacaktır. 15.03.2024 Y.T.
+               GROUP BY PDATE,branch_code
+               
+               UNION ALL
+               
+               SELECT K.AS_OF_DATE,to_number(K.SUBE),SUM(K.YANSITILACAK_TUTAR) AS AMOUNT
+               FROM OFSA_SB.OFSA_EX_SUBE_KIRA K
+               WHERE K.AS_OF_DATE=PDATE
+               GROUP BY K.AS_OF_DATE,K.SUBE
+               
+               ) A LEFT JOIN OFSA_SB.OFSA_SB_DAGITIM_KATSAYI D ON D.AS_OF_DATE=BUAYSONU AND D.SUBE_KODU=TO_NUMBER(A.BRANCH_CODE),
+            OLAP.DM_ORGANIZATION O,
+            (/*[Krediler/Toplam aktifler(Eylül 2020)=%57,6 ] */
+                SELECT ((A.GUNCEL_TOPLAM)-(B.ONCEKI_TOPLAM))*0.516 AS GM_MASRAF--22.02.2022 tarihinde %51,6 olarak değiştirildi.
+                  FROM
+                        (SELECT  NVL(SUM(G.GL_LCL_BALN),0) AS ONCEKI_TOPLAM
+                                FROM SUMMARY_PROD.GL_CUSTOMER G
+                                WHERE G.AS_OF_DATE=CASE WHEN ONCEKIAYSONU=TRUNC(PDATE,'YYYY')-1 THEN AYBASI ELSE ONCEKIAYSONU END
+                                AND TO_NUMBER(G.ORG_CODE) IN (1,33,164,172,187,188,219)
+                                AND SUBSTR(G.GL_NO,1,3) IN ('810','880','881','850','851') ) B   ,
+                        (SELECT  SUM(G.GL_LCL_BALN) AS GUNCEL_TOPLAM
+                                FROM SUMMARY_PROD.GL_CUSTOMER G
+                                WHERE G.AS_OF_DATE=PDATE
+                                AND TO_NUMBER(G.ORG_CODE) IN (1,33,164,172,187,188,219)
+                                AND SUBSTR(G.GL_NO,1,3) IN ('810','880','881','850','851')
+                                AND NOT (SUBSTR(G.GL_NO,1,6) IN ('880130') and G.AS_OF_DATE=to_date('20230831','yyyymmdd')  ) ) A ) GM --- Mehtap Hanım'ın onayı ile Ağustos ayındaki vergi yapılandırması sebebiyle ödenen yüklü miktar bu ay için dışarıda tutulmuştur D.K. 13.09.2023
+           
+      WHERE TO_NUMBER(A.BRANCH_CODE)=TO_NUMBER(O.ORG_CODE)        
+      GROUP BY CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('6', '220', '372', '122') THEN -1 ELSE TO_NUMBER(O.PARENT_CODE) END,
+               A.BRANCH_CODE ,GM_MASRAF,D.KURUMSAL,D.TICARI,D.OBIPLUS,D.KOBI,D.TARIM,D.ISLETME,D.BIREYSEL,D.SUBE_HAVUZ)
+      UNPIVOT INCLUDE NULLS
+           ((GM_MASRAF_PAYI) FOR (ISKOLU, SEGMENT) IN (
+            (KURUMSAL_GM_MASRAF) AS ('1-KURUMSAL', '99998'),
+            (TICARI_GM_MASRAF)   AS ('2-TICARI', '99998'),
+            (OBIPLUS_GM_MASRAF)  AS ('3-OBİ+', '99998'),
+            (KOBI_GM_MASRAF)     AS ('4-KOBI', '88888'),
+            (TARIM_GM_MASRAF)    AS ('5-TARIM', '99996'),
+            (ISLETME_GM_MASRAF)  AS ('6-ISLETME', '99997'),
+            (BIREYSEL_GM_MASRAF) AS ('7-BIREYSEL', '99999'),
+            (SUBE_HAVUZ_GM_MASRAF) AS ('99-SUBE_HAVUZ', '88888')))
+      ;
+
+      COMMIT;
+   
+  
+   
+    END IF;
+
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

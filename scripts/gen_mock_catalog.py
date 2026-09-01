@@ -53,6 +53,16 @@ A = {
 
 methods: list[tuple[str, str, str, str]] = []
 edges: list[tuple[str, str, str, str, str, str]] = []
+jar_methods = [
+    ("proj-commerce", "pkg-payments", "PaymentsSharedContractValidator", "validatePaymentContractEnvelope", "(PaymentContract): ValidationResult"),
+    ("proj-commerce", "pkg-orders", "CheckoutOrderEventSchema", "normalizeCheckoutOrderEvent", "(OrderEvent): NormalizedOrderEvent"),
+]
+jar_edge_lines = [
+    "  { callerId: idOf(pay, 'RealtimePaymentAuthorizationFacade', 'executeCardPaymentSettlement'), calleeId: idOfJar(pkgPayments, 'PaymentsSharedContractValidator', 'validatePaymentContractEnvelope') },",
+    "  { callerId: idOfJar(pkgPayments, 'PaymentsSharedContractValidator', 'validatePaymentContractEnvelope'), calleeId: idOf(pay, 'PaymentIdempotencyGuardStore', 'beginIdempotentPaymentOperation') },",
+    "  { callerId: idOf(chk, 'RetailCheckoutOrchestrationFacade', 'placeConfirmedCustomerOrder'), calleeId: idOfJar(pkgOrders, 'CheckoutOrderEventSchema', 'normalizeCheckoutOrderEvent') },",
+    "  { callerId: idOfJar(pkgOrders, 'CheckoutOrderEventSchema', 'normalizeCheckoutOrderEvent'), calleeId: idOf(chk, 'CheckoutOrderQueryService', 'getOrderByReference') },",
+]
 
 
 def add(alias: str, cls: str, name: str, sig: str = "(): void") -> None:
@@ -485,11 +495,13 @@ def emit_methods_ts(import_path: str) -> str:
         " * Mock method kataloğu + call-graph (üretici: scripts/gen_mock_catalog.py).",
         " * Tutarlılık: çapraz servis çağrı ⇒ callee değişince caller affectsEdges’te olmalı.",
         " */",
-        f"import {{ affectsEdges, services }} from '{import_path}'",
+        f"import {{ affectsEdges, moduleTree, services }} from '{import_path}'",
         "",
         "export type MethodDef = {",
         "  id: string",
-        "  serviceId: string",
+        "  serviceId?: string",
+        "  projectId: string",
+        "  packageId: string",
         "  className: string",
         "  name: string",
         "  signature: string",
@@ -504,7 +516,27 @@ def emit_methods_ts(import_path: str) -> str:
         "  signature: string,",
         "): MethodDef {",
         "  const id = `m-${serviceId.replace(/^svc-/, '')}-${className}-${name}`",
-        "  return { id, serviceId, className, name, signature }",
+        "  const service = services[serviceId]",
+        "  return {",
+        "    id,",
+        "    serviceId,",
+        "    projectId: service?.projectId ?? 'unknown-project',",
+        "    packageId: service?.packageId ?? 'unknown-package',",
+        "    className,",
+        "    name,",
+        "    signature,",
+        "  }",
+        "}",
+        "",
+        "function jm(",
+        "  projectId: string,",
+        "  packageId: string,",
+        "  className: string,",
+        "  name: string,",
+        "  signature: string,",
+        "): MethodDef {",
+        "  const id = `m-${packageId.replace(/^pkg-/, 'jar-')}-${className}-${name}`",
+        "  return { id, projectId, packageId, className, name, signature }",
         "}",
         "",
         "const pay = 'svc-payment'",
@@ -520,9 +552,13 @@ def emit_methods_ts(import_path: str) -> str:
         "const sup = 'svc-support-desk'",
         "const care = 'svc-customer-care'",
         "const tix = 'svc-ticket-analytics'",
+        "const pkgPayments = 'pkg-payments'",
+        "const pkgOrders = 'pkg-orders'",
         "",
         "export const methods: MethodDef[] = [",
     ]
+    for project, package, cls, name, sig in jar_methods:
+        lines.append(f"  jm('{project}', '{package}', '{cls}', '{name}', '{sig}'),")
     for alias, cls, name, sig in methods:
         lines.append(f"  m({alias}, '{cls}', '{name}', '{sig}'),")
     lines += [
@@ -534,8 +570,13 @@ def emit_methods_ts(import_path: str) -> str:
         "  return m(serviceId, className, name, '').id",
         "}",
         "",
+        "function idOfJar(packageId: string, className: string, name: string) {",
+        "  return `m-${packageId.replace(/^pkg-/, 'jar-')}-${className}-${name}`",
+        "}",
+        "",
         "export const callEdges: CallEdge[] = [",
     ]
+    lines.extend(jar_edge_lines)
     for a, c, n, a2, c2, n2 in edges:
         lines.append(
             f"  {{ callerId: idOf({a}, '{c}', '{n}'), calleeId: idOf({a2}, '{c2}', '{n2}') }},"

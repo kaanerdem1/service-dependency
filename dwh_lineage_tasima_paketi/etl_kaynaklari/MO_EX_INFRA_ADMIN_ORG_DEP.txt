@@ -1,0 +1,48 @@
+CREATE OR REPLACE package body STAGE.MO_EX_INFRA_ADMIN_ORG_DEP is
+
+  PROCEDURE EX_INFRA_ADMIN_ORG_DEP is
+    sql_text       varchar2(1000);
+    tname          varchar2(30) := 'EX_INFRA_ADMIN_ORG_DEP';
+    sname          varchar2(40) := 'INFRA.ADMIN_ORG_DEPENDENCE';
+    dblink         varchar2(30) := 'CN_CB_ON_PRODUX';
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+            
+  BEGIN
+    error_location := 1;
+    
+    select to_date(prm_value,prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+     
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_EX_INFRA_ADMIN_ORG_DEP',
+                                  psubmodule   => 'EX_INFRA_ADMIN_ORG_DEP',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl
+                                 );
+
+    sql_text:=  'select /*+ parallel(a,8) */ * from '||sname||'@'||dblink||' a';
+
+    mn_utility.drop_table('TY_'||tname);
+    mn_utility.create_table('TY_'||tname,SQL_TEXT);
+    mn_utility.replace_table('TY_'||tname,tname);
+  
+    mn_utility.update_plog(pid => pid,
+                           success => 1,
+                           pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+  END;
+end MO_EX_INFRA_ADMIN_ORG_DEP;
+/

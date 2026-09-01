@@ -1,0 +1,66 @@
+CREATE OR REPLACE package body STAGE.MO_EX_INFRA_LOCATION_COUNTRY is
+
+  PROCEDURE EX_INFRA_LOCATION_COUNTRY is
+    sql_text       varchar2(1000);
+    tname          varchar2(30) := 'EX_INFRA_LOCATION_COUNTRY';
+    sname          varchar2(40) := 'INFRA.LOCATION_COUNTRY';
+    dblink         varchar2(30) := 'CN_CB_ON_PRODUX';
+    owner          varchar2(30) := 'STAGE';
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+    
+  begin
+    error_location := 1;
+    
+    select to_date(prm_value,prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+     
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_EX_INFRA_LOCATION_COUNTRY',
+                                  psubmodule   => 'EX_INFRA_LOCATION_COUNTRY',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl
+                                 ); 
+
+    sql_text:=  'select /*+ parallel(a,8) */ * from '||sname||'@'||dblink||' a';
+
+
+    mn_utility.create_table('TY_'||substr(sname,7),SQL_TEXT);
+    mn_utility.replace_table('TY_'||substr(sname,7),tname);
+    
+    execute immediate 'UPDATE ' || tname || ' SET status = ''1'' where country_code = ''EU''';
+    
+    error_location := 2;
+    pcritical_lvl  := 3;
+    
+    mn_utility.create_index('IN_EX_INFRA_LOCATION_COUNTRY',owner,tname,'COUNTRY_CODE');
+    
+    error_location := 3;
+    
+    mn_utility.create_unique_index('IN_EX_INFRA_LOCATION_COUNTRY2',owner,tname,'OID');
+    
+    error_location := 4;
+    
+    mn_utility.create_index('IN_EX_INFRA_LOCATION_COUNTRY3',owner,tname,'COUNTRY_NUMBERPLATE');
+  
+    mn_utility.update_plog(pid => pid,
+                           success => 1,
+                           pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+  
+end MO_EX_INFRA_LOCATION_COUNTRY;
+/

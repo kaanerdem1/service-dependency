@@ -1,0 +1,86 @@
+CREATE OR REPLACE package body STAGE.MO_TR_DM_ORG_ADDRESS is
+
+    PROCEDURE TR_DM_ORG_ADDRESS is
+    sql_text       varchar2(5000);
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+    
+  begin
+    error_location := 1;
+    
+    select to_date(prm_value,prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+     
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_ORG_ADDRESS',
+                                  psubmodule   => 'TR_DM_ORG_ADDRESS',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl
+                                 ); 
+  execute immediate 'truncate table TR_DM_ORG_ADDRESS';
+  insert into TR_DM_ORG_ADDRESS
+	select
+      ORGANIZATION_OID   as ORGANIZATION_OID,
+      ORG_CITY_OID as ORG_CITY_OID,
+      ORG_CITY_CODE as ORG_CITY_CODE,
+      ORG_CITY_NAME as ORG_CITY_NAME,
+      ORG_COUNTY_OID as ORG_COUNTY_OID,
+      ORG_COUNTY_CODE as ORG_COUNTY_CODE,
+      ORG_COUNTY_NAME as ORG_COUNTY_NAME,
+      ORG_ADDRESS as ORG_ADDRESS,
+      ORG_TEL as ORG_TEL,
+      PHONE2 as PHONE2,
+      EMAIL as EMAIL
+
+    from
+    (
+    				SELECT 
+                 Y.ORGANIZATION_OID,
+    						 B.OID as ORG_CITY_OID,
+    						 Y.CITY_OID as ORG_CITY_CODE,
+    						 R.CITY_NAME as ORG_CITY_NAME,
+    						 A.OID as ORG_COUNTY_OID,
+    						 Y.COUNTY_OID as ORG_COUNTY_CODE,
+    						 A.COUNTY_NAME as ORG_COUNTY_NAME,
+    						 LTRIM(RTRIM(Y.ADDRESS_1 || ' ' || Y.ADDRESS_2 || ' ' ||
+    												 Y.ADDRESS_3 || ' ' || Y.ADDRESS_4 || ' ' ||
+    												 Y.POSTAL_CODE)) ORG_ADDRESS,
+    						 PHONE_1 ORG_TEL,
+    						 Y.PHONE2,
+                 y.email
+    				FROM EX_INFRA_ADMIN_ORG_ADDRESS Y,
+    						 EX_INFRA_LOCATION_CITY         R,
+    						 EX_INFRA_LOCATION_COUNTY       Q,
+    						 TR_DM_CITY_LAST                B,
+    						 TR_DM_COUNTY_LAST              A
+    			 WHERE Y.CITY_OID = R.CITY_NUMBERPLATE
+    						 AND Y.COUNTY_OID = Q.COUNTY_CODE
+    						 AND R.STATUS = 1
+    						 AND Q.STATUS = 1
+    						 AND A.STATUS = 1
+    						 AND B.STATUS = 1
+    						 AND A.COUNTY_CODE = Q.COUNTY_CODE
+    						 AND B.CITY_CODE = R.CITY_NUMBERPLATE);
+                 commit;
+   
+    mn_utility.update_plog(pid => pid,
+                           success => 1,
+                           pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+  
+end MO_TR_DM_ORG_ADDRESS;
+/

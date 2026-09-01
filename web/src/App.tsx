@@ -9,7 +9,15 @@
  * - tab              → 'map' | 'affected' | 'overview'
  * Harita: gelişmiş React Flow (basit etki yolu kaldırıldı).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { AnimatePresence } from 'motion/react'
 import { MotionListItem } from './motion/MotionList'
 import { MorphHoverButton } from './motion/MorphHoverButton'
@@ -34,6 +42,7 @@ import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SearchHitsPortal } from './components/SearchHitsPortal'
 import { RequestDetailModal } from './components/RequestDetailModal'
+import { DwhPage } from './dwh/DwhPage'
 import {
   APP_THEME_KEY,
   readAppTheme,
@@ -109,6 +118,7 @@ function SidebarLockIcon({ locked }: { locked: boolean }) {
 }
 
 type Tab = 'affected' | 'map' | 'overview'
+type AppSurface = 'services' | 'dwh'
 
 /** Pivot geçmişi + o ziyarette açık bırakılan katman görünümü */
 type VisitEntry = {
@@ -192,10 +202,15 @@ export default function App() {
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
+  const [surface, setSurface] = useState<AppSurface>('services')
   const [navHover, setNavHover] = useState(true)
   const [navPinned, setNavPinned] = useState(true)
+  const [navWidth, setNavWidth] = useState(272)
   const [allowNavCollapse, setAllowNavCollapse] = useState(false)
   const navExpanded = navPinned || navHover || !allowNavCollapse
+  const appFrameStyle = {
+    '--sidebar-panel-width': `${navWidth}px`,
+  } as CSSProperties
   const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
     null,
   )
@@ -235,6 +250,28 @@ export default function App() {
       return next
     })
   }, [trail])
+
+  const startNavResize = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      const startX = event.clientX
+      const startWidth = navWidth
+      const handleMove = (moveEvent: PointerEvent) => {
+        const nextWidth = Math.max(
+          272,
+          Math.min(460, startWidth + moveEvent.clientX - startX),
+        )
+        setNavWidth(nextWidth)
+      }
+      const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove)
+        window.removeEventListener('pointerup', handleUp)
+      }
+      window.addEventListener('pointermove', handleMove)
+      window.addEventListener('pointerup', handleUp)
+    },
+    [navWidth],
+  )
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme
@@ -654,21 +691,40 @@ export default function App() {
       </div>
 
       <div
-        className={`app-frame${navExpanded ? ' sidebar-panel-open' : ' is-nav-collapsed'}`}
+        className={`app-frame${navExpanded ? ' sidebar-panel-open' : ' is-nav-collapsed'}${surface === 'dwh' ? ' is-dwh-surface' : ''}`}
+        style={appFrameStyle}
       >
         <header className="app-masthead">
           <div className="app-masthead-brand-wrap">
             <div className="app-brand">
-              <span className="brand-mark">SD</span>
+              <img className="brand-mark brand-logo" src="/dwh-logo.png" alt="" aria-hidden />
               <div className="app-brand-copy">
-                <strong>Service Dependency</strong>
+                <strong>{surface === 'dwh' ? 'DWH Katalog' : 'Service Dependency'}</strong>
                 <span className="brand-tagline">
-                  Servis bağımlılıkları ve değişiklik etkisi
+                  {surface === 'dwh'
+                    ? 'Tablo, kolon ve rapor lineage kataloğu'
+                    : 'Servis bağımlılıkları ve değişiklik etkisi'}
                 </span>
               </div>
             </div>
           </div>
           <div className="app-masthead-actions">
+            <div className="app-surface-switch" role="group" aria-label="Uygulama alanı">
+              <button
+                type="button"
+                className={surface === 'services' ? 'is-active' : undefined}
+                onClick={() => setSurface('services')}
+              >
+                Servis
+              </button>
+              <button
+                type="button"
+                className={surface === 'dwh' ? 'is-active' : undefined}
+                onClick={() => setSurface('dwh')}
+              >
+                DWH
+              </button>
+            </div>
             <ThemeSwitch
               theme={appTheme}
               onChange={(next) => {
@@ -680,7 +736,7 @@ export default function App() {
                 setAppTheme(next)
               }}
             />
-            {session ? (
+            {surface === 'services' && session ? (
               <button
                 type="button"
                 className="btn ghost"
@@ -694,6 +750,14 @@ export default function App() {
         </header>
 
         <div className="app-frame-body">
+        {surface === 'dwh' ? (
+          <div className="workspace-column dwh-workspace-column">
+            <div className="workspace">
+              <DwhPage />
+            </div>
+          </div>
+        ) : (
+        <>
         <aside
           className={`module-sidebar${navExpanded ? ' is-expanded' : ''}${navPinned ? ' is-pinned' : ''}`}
           data-motion="sidebar-overlay"
@@ -855,6 +919,13 @@ export default function App() {
             />
           </div>
           </div>
+          <button
+            type="button"
+            className="module-sidebar-resize"
+            aria-label="Modül panel genişliğini ayarla"
+            title="Panel genişliğini ayarla"
+            onPointerDown={startNavResize}
+          />
         </aside>
 
         <div className="workspace-column">
@@ -903,7 +974,7 @@ export default function App() {
                       return
                     }
                     if (next === 'affected') {
-                      trail.record('tab_change', undefined, 'İlişkiler sekmesine geçildi')
+                      trail.record('tab_change', undefined, 'Tablo sekmesine geçildi')
                       setMapExpanded(false)
                       setTab('affected')
                       return
@@ -1023,7 +1094,7 @@ export default function App() {
                   <section
                     className="stage-panel stage-panel-affected"
                     aria-hidden={tab !== 'affected'}
-                    aria-label="İlişkiler"
+                    aria-label="Tablo"
                   >
                     <div className="relations-nav">
                       <div
@@ -1087,6 +1158,8 @@ export default function App() {
         </main>
           </div>
         </div>
+        </>
+        )}
         </div>
       </div>
 

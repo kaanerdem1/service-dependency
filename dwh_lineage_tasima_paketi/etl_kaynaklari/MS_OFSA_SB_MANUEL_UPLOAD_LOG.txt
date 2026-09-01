@@ -1,0 +1,89 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_OFSA_SB_MANUEL_UPLOAD_LOG IS
+
+PROCEDURE MS_OFSA_SB_MANUEL_UPLOAD_LOG IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    SEGM_TARIH         DATE;
+    VERI_KONTROL       NUMBER;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+     SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_CHAR(TRUNC(TO_DATE(PRM_VALUE,'YYYYMMDD'),'MM')),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+      
+      SELECT COUNT(1) 
+       INTO VERI_KONTROL
+      FROM OFSA_SB.OFSA_MANUEL_UPLOAD;
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_OFSA_SB_MANUEL_UPLOAD_LOG',
+                                          PSUBMODULE   => 'OFSA_SB_MANUEL_UPLOAD_LOG',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+
+     /*************************************************************************************************************/
+     EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.PRIVATE_BRANCH_LIST';
+      COMMIT;
+     
+     INSERT INTO OFSA_SB.PRIVATE_BRANCH_LIST
+     (
+     SELECT DISTINCT MAIN_BRANCH_CODE 
+       FROM OLAP.FC_CUSTOMER
+      WHERE AS_OF_DATE=PDATE
+        AND PRIVATE_BRANCH_FLAG=1
+        AND BRANCH_TRANSFER_DATE IS NOT NULL
+     );
+
+COMMIT;
+ 
+     IF VERI_KONTROL<>0 THEN
+      INSERT
+        INTO ofsa_sb.ofsa_manuel_upload_log
+      (
+      SELECT A.AS_OF_DATE,
+          NVL(A.MUS_NO,999999999) MUS_NO,
+          A.BOLGE,
+          A.SUBE,
+          A.MT,
+          A.SINIF,
+          A.BAKIYE,
+          'HAYIR' AS YANSITILMA_DURUMU,
+          SYSDATE,
+          A.OPR_ACIKLAMA
+      FROM ofsa_sb.ofsa_manuel_upload A
+      );
+      COMMIT;
+     /*************************************************************************************************************/
+      EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_MANUEL_UPLOAD';
+      COMMIT;
+     END IF;
+     /*************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

@@ -1,0 +1,460 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_KASA_FONL_MALI IS
+
+PROCEDURE MS_EX_OFSA_SB_KASA_FONL_MALI (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_KASA_FONL_MALI',
+                                          PSUBMODULE   => 'EX_OFSA_SB_KASA_FONL_MALI',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_KASA_FONLAMA_MALIYETI';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+    AYBASI:=PDATE;
+    END IF; 
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_KASA_FONLAMA_MALIYETI
+
+     (
+
+       
+     SELECT
+        AS_OF_DATE,
+        '999999999' AS MUS_NO,
+        '99-SUBE_HAVUZ' AS ISKOLU,
+        '99998' AS SEGMENT,
+        CASE WHEN TO_NUMBER(KASA.SUBE) IN ('6','122','220','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+        TO_NUMBER(KASA.SUBE) AS SUBE,
+        '999999' AS MT,
+        '88888888' AS URUN_KODU,
+        'KASA_FONLAMA_MALIYETI' AS URUN,
+        KASA.CCY AS PB,
+        'KASA_FONLAMA_MALIYETI' AS KAYNAK,
+        SUM(CASE WHEN KASA.CCY='TL' AND MALIYET < 0 THEN MALIYET ELSE 0 END) AS TL_BAKIYE,
+        SUM(CASE WHEN KASA.CCY!='TL' AND MALIYET < 0 THEN MALIYET ELSE 0 END) AS YP_BAKIYE
+
+        FROM OLAP.DM_ORGANIZATION ORG,
+        (
+            --Kasa Fonlama Maliyeti-1
+         SELECT PDATE  AS AS_OF_DATE,
+                SUBE,PB AS CCY,
+                SUM(SUBE_TL_MALIYET) + SUM(SUBE_YP_MALIYET) AS MALIYET
+            FROM (SELECT TOPLAM.TARIH AS TARIH,
+                    TOPLAM.İSLEM_SUBESI AS SUBE,
+                    TOPLAM.CCY AS PB,
+                    TOPLAM.HAVUZ,
+                    TOPLAM.RATE,
+                    TOPLAM.USD_RATE,
+                    TOPLAM.GUN,
+                    TOPLAM.KASA_TL_LIMITI,
+                    TOPLAM.KASA_USD_LIMITI,
+                    TOPLAM.EOD_KASA_BAKIYE,
+                    SUM(TOPLAM.DIGER_SUBENIN_BAKIYE) AS DIGER_SUBENIN_BAKIYE,
+                    SUM(TOPLAM.TL_KASA_FAZLASI) AS TL_KASA_FAZLASI,
+                    SUM(TOPLAM.YP_KASA_FAZLASI) AS YP_KASA_FAZLASI,
+
+                    CASE WHEN TOPLAM.TARIH>TO_DATE('20250205','YYYYMMDD') AND TOPLAM.İSLEM_SUBESI = '372' AND  TOPLAM.CCY = 'TL' --Gülşen Erkoç'un 05.02.2025 tarihli mailine istinaden Merkez şube için güncelleme gerçekleştirilmiştir. Y.T., İ.Y. 05.02.2025
+                      THEN ROUND(SUM(TOPLAM.TL_KASA_FAZLASI) *(TOPLAM.HAVUZ * TOPLAM.GUN) / 36000,1)*-1
+                         ELSE
+                           ROUND((CASE --Bu alan 04/04/2016 Genelge 11'e göre eklenmiştir.--https://www.ebanka.net/circular/detail/59c07d38-d422-4714-4371-08d9010ba881?mode=edit
+                              WHEN TOPLAM.CCY = 'TL' AND SUM(TOPLAM.TL_KASA_FAZLASI) BETWEEN 0 AND 500000 THEN
+                              SUM(TOPLAM.TL_KASA_FAZLASI) *(TOPLAM.HAVUZ * TOPLAM.GUN) / 36000
+                              WHEN TOPLAM.CCY = 'TL' AND SUM(TOPLAM.TL_KASA_FAZLASI)> 500000.01 THEN
+                              SUM(TOPLAM.TL_KASA_FAZLASI) * (TOPLAM.HAVUZ * 2) *TOPLAM.GUN / 36000
+/*                              WHEN TOPLAM.CCY = 'TL' AND SUM(TOPLAM.TL_KASA_FAZLASI) BETWEEN 60000.01 AND 120000 THEN
+                              SUM(TOPLAM.TL_KASA_FAZLASI) * (TOPLAM.HAVUZ * 3) *TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY = 'TL' AND SUM(TOPLAM.TL_KASA_FAZLASI) BETWEEN 120000.01 AND 240000 THEN
+                              SUM(TOPLAM.TL_KASA_FAZLASI) * (TOPLAM.HAVUZ * 4) * TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY = 'TL' AND SUM(TOPLAM.TL_KASA_FAZLASI) > 240000 THEN
+                              SUM(TOPLAM.TL_KASA_FAZLASI) * (TOPLAM.HAVUZ * 5) *TOPLAM.GUN / 36000 --Gülşen Erkoç'un 23.10.2024 tarihli mailine istinaden bu aralıklarda bulunan tutarlar değiştirilmiştir. */
+                              ELSE    0 END),1) * -1 END AS SUBE_TL_MALIYET,
+
+                      CASE WHEN TOPLAM.TARIH>TO_DATE('20250205','YYYYMMDD') AND TOPLAM.İSLEM_SUBESI = '372' AND TOPLAM.CCY != 'TL' --Gülşen Erkoç'un 05.02.2025 tarihli mailine istinaden Merkez şube için güncelleme gerçekleştirilmiştir. Y.T., İ.Y. 05.02.2025
+                        THEN ROUND(SUM(TOPLAM.YP_KASA_FAZLASI) *(TOPLAM.HAVUZ * TOPLAM.GUN) / 36000,1)* TOPLAM.USD_RATE*-1
+                           ELSE
+                             ROUND((CASE
+                              WHEN TOPLAM.CCY != 'TL' AND SUM(TOPLAM.YP_KASA_FAZLASI) BETWEEN 0 AND 10000 THEN
+                                SUM(TOPLAM.YP_KASA_FAZLASI) * TOPLAM.HAVUZ *TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY != 'TL' AND SUM(TOPLAM.YP_KASA_FAZLASI) BETWEEN 10000.01 AND 15000 THEN
+                                SUM(TOPLAM.YP_KASA_FAZLASI) * (TOPLAM.HAVUZ * 2) *  TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY != 'TL' AND SUM(TOPLAM.YP_KASA_FAZLASI) BETWEEN 15000.01 AND 20000 THEN
+                                SUM(TOPLAM.YP_KASA_FAZLASI) * (TOPLAM.HAVUZ * 3) * TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY != 'TL' AND SUM(TOPLAM.YP_KASA_FAZLASI) BETWEEN 20000.01 AND 25000 THEN
+                                SUM(TOPLAM.YP_KASA_FAZLASI) * (TOPLAM.HAVUZ * 4) *  TOPLAM.GUN / 36000
+                              WHEN TOPLAM.CCY != 'TL' AND SUM(TOPLAM.YP_KASA_FAZLASI) > 25000.01 THEN
+                                SUM(TOPLAM.YP_KASA_FAZLASI) * (TOPLAM.HAVUZ * 5) *  TOPLAM.GUN / 36000
+                              ELSE 0 END),1) * TOPLAM.USD_RATE * -1 END AS SUBE_YP_MALIYET --YP maliyetin TL ye çevrilmiş hali
+                     FROM (SELECT KASA.TARIH,KASA.İSLEM_SUBESI,KASA.CCY,
+                                  KASA.RATE,KASA.USD_RATE,KASA.KASA_TL_LIMITI,
+                                  KASA.KASA_USD_LIMITI,EOD_KASA.EOD_KASA_BAKIYE,
+                                  SUM(KASA.DIGER_SUBENIN_BAKIYE) AS DIGER_SUBENIN_BAKIYE,
+                                  POOL.ACTIVE_RATE AS HAVUZ,GUN.GUN,
+  
+                                  (CASE WHEN KASA.CCY = 'TL' AND ((EOD_KASA.EOD_KASA_BAKIYE -SUM(KASA.DIGER_SUBENIN_BAKIYE)) - KASA.KASA_TL_LIMITI) > 0 THEN 
+                                  EOD_KASA.EOD_KASA_BAKIYE - SUM(KASA.DIGER_SUBENIN_BAKIYE) - KASA.KASA_TL_LIMITI ELSE 0 END) AS TL_KASA_FAZLASI,                                  
+                                  (CASE WHEN KASA.CCY != 'TL' AND ((EOD_KASA.EOD_KASA_BAKIYE-SUM(KASA.DIGER_SUBENIN_BAKIYE))-KASA.KASA_USD_LIMITI) > 0 THEN
+                                  EOD_KASA.EOD_KASA_BAKIYE -SUM(KASA.DIGER_SUBENIN_BAKIYE) - KASA.KASA_USD_LIMITI ELSE 0 END) AS YP_KASA_FAZLASI
+
+
+                          FROM (
+                                (
+                                SELECT TARIH,
+                                       İSLEM_SUBESI,
+                                       THP_KASA,
+                                       CCY,
+                                       RATE,
+                                       USD_RATE,
+                                       SUM(DIGER_SUBENIN_BAKIYE) AS DIGER_SUBENIN_BAKIYE,
+                                       SUM(KASA_TL_LIMITI) AS KASA_TL_LIMITI,
+                                       SUM(KASA_USD_LIMITI) AS KASA_USD_LIMITI
+                             FROM          
+                                (
+                                SELECT
+                                A.AS_OF_DATE AS TARIH,
+                                A.TRANSACTION_BRANCH_CODE AS İSLEM_SUBESI,
+                                A.GL_CODE AS THP_KASA,
+                                A.CURRENCY_CODE       AS CCY,
+                                C.EVALUATION_BUY_RATE AS RATE,
+                                E.EVALUATION_BUY_RATE AS USD_RATE,
+                                ROUND(((CASE WHEN A.CURRENCY_CODE != 'TL' THEN ((SUM(A.AMOUNT * -1) * C.EVALUATION_BUY_RATE) / E.EVALUATION_BUY_RATE)
+                                      ELSE SUM(A.AMOUNT * -1)  END)), 2) AS DIGER_SUBENIN_BAKIYE, -- YP bakiyeler usd ye çevrildi.
+                                CASE WHEN M.TL_MUAFIYET_BITIS <= PDATE THEN M.LIMITTL ELSE T.LIMITTL END AS KASA_TL_LIMITI,
+                                CASE WHEN M.USD_MUAFIYET_BITIS <= PDATE THEN M.LIMITUSD ELSE T.LIMITUSD END AS KASA_USD_LIMITI
+
+                                  FROM OLAP.FC_VOUCHER_DETAIL                  A,
+                                       OLAP.FC_EVALUATION_RATES                C,
+                                       SUBE_KASA_LIMIT                         T,
+                                       SUBE_KASA_LIMIT_MUAFIYET                M,
+                                       OLAP.FC_EVALUATION_RATES                E
+                                WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                  AND SUBSTR(A.GL_CODE, 1, 3) IN ('010', '011')
+                                  AND SUBSTR(A.PROCESS_ID, 1, 3) NOT IN
+                                ('182', '160', '850')
+                                  AND A.DIRECTION = 'B'
+                                  AND A.BRANCH_CODE != A.CONTRA_BRANCH_CODE
+                                  AND ABS(A.AMOUNT) > 1000
+                                  AND A.CURRENCY_CODE = C.CURRENCY_CODE
+                                  AND A.AS_OF_DATE = C.AS_OF_DATE
+                                  AND A.AS_OF_DATE = E.AS_OF_DATE
+                                  AND E.CURRENCY_CODE = 'USD'
+                                  AND A.TRANSACTION_BRANCH_CODE = T.SUBE * 1
+                                  AND T.SUBE=M.SUBE
+                                  AND A.CONTRA_BRANCH_CODE NOT IN ('008', '326')
+
+                               GROUP BY A.AS_OF_DATE,
+                                        A.TRANSACTION_BRANCH_CODE,
+                                        A.GL_CODE,
+                                        A.CURRENCY_CODE,
+                                        C.EVALUATION_BUY_RATE,
+                                        E.EVALUATION_BUY_RATE,
+                                        CASE WHEN M.TL_MUAFIYET_BITIS <= PDATE THEN M.LIMITTL ELSE T.LIMITTL END,
+                                        CASE WHEN M.USD_MUAFIYET_BITIS <= PDATE THEN M.LIMITUSD ELSE T.LIMITUSD END
+                           
+                           UNION ALL
+                           
+                           /***********TEMERKÜZ ŞUBE OLAN KAVACIK ŞUBEDEN ALBARA ve KUVETTÜRK'ÜN İŞLEMLERİ ELENİYOR. A.Y. 28.11.2020 *****/
+                           
+                                SELECT
+                                A.AS_OF_DATE AS TARIH,
+                                A.TRANSACTION_BRANCH_CODE AS İSLEM_SUBESI,
+                                A.GL_CODE AS THP_KASA,
+                                A.CURRENCY_CODE       AS CCY,
+                                C.EVALUATION_BUY_RATE AS RATE,
+                                E.EVALUATION_BUY_RATE AS USD_RATE,
+                                ROUND(((CASE WHEN A.CURRENCY_CODE != 'TL' THEN ((SUM(A.AMOUNT * -1) * C.EVALUATION_BUY_RATE) / E.EVALUATION_BUY_RATE)
+                                      ELSE SUM(A.AMOUNT * -1)  END)), 2) AS DIGER_SUBENIN_BAKIYE, -- YP bakiyeler usd ye çevrildi.
+                                0 AS KASA_TL_LIMITI,
+                                0 AS KASA_USD_LIMITI
+
+                                  FROM OLAP.FC_VOUCHER_DETAIL                  A,
+                                       OLAP.FC_EVALUATION_RATES                C,
+                                       OLAP.FC_EVALUATION_RATES                E
+                                WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                  AND (UPPER(A.OPERATION_DESC) LIKE '%ALBARAKA%' OR UPPER(A.OPERATION_DESC) LIKE '%KUVEYTT%' )
+                                  AND A.DIRECTION = 'B'  
+                                  AND A.TRANSACTION_BRANCH_CODE=260                                
+                                  AND ABS(A.AMOUNT) > 1000
+                                  AND A.CURRENCY_CODE = C.CURRENCY_CODE
+                                  AND A.AS_OF_DATE = C.AS_OF_DATE
+                                  AND A.AS_OF_DATE = E.AS_OF_DATE
+                                  AND E.CURRENCY_CODE = 'USD'
+
+                               GROUP BY A.AS_OF_DATE,
+                                        A.TRANSACTION_BRANCH_CODE,
+                                        A.GL_CODE,
+                                        A.CURRENCY_CODE,
+                                        C.EVALUATION_BUY_RATE,
+                                        E.EVALUATION_BUY_RATE
+                                        )
+                                  GROUP BY TARIH,
+                                       İSLEM_SUBESI,
+                                       THP_KASA,
+                                       CCY,
+                                       RATE,
+                                       USD_RATE
+                           
+
+                                ) KASA),
+                          ((SELECT T.AS_OF_DATE,
+                          T.ORG_CODE,
+                          T.CURRENCY_CODE,
+                          ROUND(SUM(CASE
+                                WHEN T.CURRENCY_CODE != 'TL' THEN (T.GL_LCL_BALN * -1 / P.EVALUATION_BUY_RATE) ELSE T.GL_LCL_BALN * -1 END), 2) AS EOD_KASA_BAKIYE -- yp bakiyeler usd ye çevrildi.
+
+                            FROM SUMMARY_PROD.GL_CUSTOMER T,
+                                 OLAP.FC_EVALUATION_RATES P
+                          WHERE T.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                            AND SUBSTR(T.GL_NO, 1, 3) IN ('010', '011')
+                            AND T.AS_OF_DATE = P.AS_OF_DATE
+                            AND P.CURRENCY_CODE = 'USD'
+                          GROUP BY T.AS_OF_DATE,
+                            T.ORG_CODE,
+                            T.CURRENCY_CODE) EOD_KASA
+
+                          ),
+
+                          (SELECT *
+                          FROM (SELECT A.DAY_INT_OID, A.CURRENCY_CODE,A.VALOR,A.ACT_DATE,A.ACT_TIME,A.ACTIVE_RATE,A.PASSIVE_RATE,A.MARGIN,
+                          ROW_NUMBER() OVER(PARTITION BY A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.ACT_DATE DESC, A.ACT_TIME DESC,A.LASTUPDATED DESC) ROW_NO
+                          FROM BFX.PR_POOL_RATES@CBRAS_PRODUX A
+                          WHERE A.DAY_INT_OID IN ('0001_0006_GUNLUK')
+                          AND TO_DATE(A.ACT_DATE,'YYYYMMDD') <=PDATE)
+                          WHERE ROW_NO = 1) POOL,
+
+                          (SELECT CALENDAR_DATE,
+                          NEXT_WORKING_DAY - BW_WORKING_DATE AS GUN
+                          FROM OLAP.DM_TIME X
+                          WHERE X.CALENDAR_DATE BETWEEN AYBASI AND PDATE) GUN
+
+                          WHERE POOL.CURRENCY_CODE = KASA.CCY
+                            AND EOD_KASA.CURRENCY_CODE = KASA.CCY
+                            AND EOD_KASA.ORG_CODE = KASA.İSLEM_SUBESI
+                            AND KASA.TARIH(+) = GUN.CALENDAR_DATE
+                            AND EOD_KASA.AS_OF_DATE(+) = GUN.CALENDAR_DATE
+
+                 GROUP BY KASA.TARIH,
+                          KASA.İSLEM_SUBESI,
+                          KASA.CCY,
+                          KASA.RATE,
+                          KASA.USD_RATE,
+                          KASA.KASA_TL_LIMITI,
+                          KASA.KASA_USD_LIMITI,
+                          EOD_KASA.EOD_KASA_BAKIYE,
+                          POOL.ACTIVE_RATE,
+                          GUN.GUN,
+
+                          (CASE WHEN KASA.CCY = 'TL' AND EOD_KASA.EOD_KASA_BAKIYE - KASA.DIGER_SUBENIN_BAKIYE - KASA.KASA_TL_LIMITI > 0 THEN 
+                             EOD_KASA.EOD_KASA_BAKIYE - KASA.KASA_TL_LIMITI ELSE 0 END),
+                          (CASE WHEN KASA.CCY != 'TL' AND EOD_KASA.EOD_KASA_BAKIYE - KASA.DIGER_SUBENIN_BAKIYE - KASA.KASA_USD_LIMITI > 0 THEN
+                             EOD_KASA.EOD_KASA_BAKIYE - KASA.KASA_USD_LIMITI ELSE 0 END)
+                              ) TOPLAM
+                          GROUP BY TOPLAM.TARIH ,
+                                   TOPLAM.İSLEM_SUBESI ,
+                                   TOPLAM.CCY ,
+                                   TOPLAM.HAVUZ,
+                                   TOPLAM.RATE,
+                                   TOPLAM.USD_RATE,
+                                   TOPLAM.GUN,
+                                   TOPLAM.KASA_TL_LIMITI,
+                                   TOPLAM.KASA_USD_LIMITI,
+                                   TOPLAM.EOD_KASA_BAKIYE
+                                   )
+                                GROUP BY SUBE,PB, PDATE
+
+            ----KASA FONLAMA 1 BİTİYOR-------------------
+             UNION ALL
+            --KASA FONLAMA 2 BAŞLIYOR---------------------
+            SELECT PDATE, SUBE,CCY,  SUM(case when nvl(MALIYET_TL_KARSILIK,0) < 0 then nvl(MALIYET_TL_KARSILIK,0) ELSE 0 END) MALIYET            
+            
+            FROM (
+
+                SELECT KASA.TARIH AS TARIH,
+                    --kasa.İslem_Subesi,
+                    KASA.KARSI_SUBE AS SUBE,
+                    KASA.CCY,
+                    KASA.RATE,
+                    KASA.USD_RATE,
+                    SUM(KASA.DIGER_SUBENIN_BAKIYE) AS DIGER_SUBENIN_BAKIYE,
+                    ROUND(SUM(CASE WHEN KASA.CCY != 'TL' THEN ((KASA.DIGER_SUBENIN_BAKIYE * POOL.ACTIVE_RATE *(X.NEXT_WORKING_DAY - X.BW_WORKING_DATE) / 36000) * KASA.USD_RATE)
+                                     ELSE((KASA.DIGER_SUBENIN_BAKIYE * POOL.ACTIVE_RATE) *(X.NEXT_WORKING_DAY - X.BW_WORKING_DATE) / 36000) END),3) * -1 AS MALIYET_TL_KARSILIK,
+                    POOL.ACTIVE_RATE AS HAVUZ
+
+                FROM OLAP.DM_TIME X,
+                   (SELECT * FROM (
+                    
+                    SELECT
+                    A.AS_OF_DATE AS TARIH,
+                    A.CONTRA_BRANCH_CODE AS KARSI_SUBE,
+                    A.GL_CODE            AS THP_KASA,
+                    A.CURRENCY_CODE       AS CCY,
+                    C.EVALUATION_BUY_RATE AS RATE,
+                    E.EVALUATION_BUY_RATE AS USD_RATE,
+                    ROUND((CASE WHEN A.CONTRA_BRANCH_CODE IN('187', '260', '033','008','326','078','122','359','277','018','015','017', '091','129', '032','116',
+                    '031','131','157','170','056','087','007','167','237','194','119', '147','161','014','138','169','369','136','163','324','133','072') AND
+                        SUBSTR(A.CONTRA_GL_CODE, 1, 3) IN ('012', '013', '010', '011', '308') THEN   0 /*TEMERKÜZ ŞUBELERİN İŞLEMLERİ ELENİYOR. A.Y. 28.11.2020 */
+                      ELSE (CASE WHEN A.CURRENCY_CODE != 'TL' THEN ((SUM(A.AMOUNT * -1) * C.EVALUATION_BUY_RATE) / E.EVALUATION_BUY_RATE)
+                      ELSE SUM(A.AMOUNT * -1) END) END), 2) AS DIGER_SUBENIN_BAKIYE,
+                                    CASE WHEN M.TL_MUAFIYET_BITIS >= PDATE THEN M.LIMITTL ELSE T.LIMITTL END AS KASA_TL_LIMITI,
+                                    CASE WHEN M.USD_MUAFIYET_BITIS >= PDATE THEN M.LIMITUSD ELSE T.LIMITUSD END AS KASA_USD_LIMITI,
+                                    CASE WHEN A.CONTRA_BRANCH_CODE=('220') AND UPPER(A.OPERATION_DESC) LIKE '%REFERANS%' --BİRLEŞİK ÖDEMELER ALTUNİZADE ŞUBEDEN ÇIKARTILMIŞTIR.GÜLŞEN ERKOÇ'TAN UYGUNLUK ALINMIŞTIR. Y.T. 05.06.2024
+                                              OR (A.CONTRA_BRANCH_CODE=('212') AND UPPER(A.OPERATION_DESC) LIKE 'KÖMÜRCÜLER MARAŞ%')--Temerküz şubelerin para yatırma maliyeti Gülşen Erkoç'un mailine istinaden düzeltilmiştir. Y.T., İ.Y. 11.02.2025
+                                              OR (A.CONTRA_BRANCH_CODE=('072') AND UPPER(A.OPERATION_DESC) LIKE '%AÇI TUTUN%')
+                                              OR (A.CONTRA_BRANCH_CODE=('133') AND UPPER(A.OPERATION_DESC) LIKE '%PAMUK GIDA%')
+                                              OR (A.CONTRA_BRANCH_CODE=('258') AND UPPER(A.OPERATION_DESC) LIKE '%BILETIX%')
+                                              OR (A.CONTRA_BRANCH_CODE=('131') AND UPPER(A.OPERATION_DESC) LIKE 'TREND RESTORAN%')
+                     THEN 0 ELSE 1 END AS HESAP_DISI
+
+                   FROM OLAP.FC_VOUCHER_DETAIL                 A,
+                        OLAP.FC_EVALUATION_RATES               C,
+                        SUBE_KASA_LIMIT                        T,
+                        SUBE_KASA_LIMIT_MUAFIYET               M,
+                        OLAP.FC_EVALUATION_RATES               E
+                  WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                    AND SUBSTR(A.GL_CODE, 1, 3) IN ('010', '011')
+                    AND SUBSTR(A.PROCESS_ID, 1, 3) NOT IN('182', '160', '850')
+                    AND A.DIRECTION = 'B'
+                    AND A.BRANCH_CODE != A.CONTRA_BRANCH_CODE
+                    AND ABS(A.AMOUNT) > 1000
+                    AND A.CURRENCY_CODE = C.CURRENCY_CODE
+                    AND A.AS_OF_DATE = C.AS_OF_DATE
+                    AND A.AS_OF_DATE = E.AS_OF_DATE
+                    AND E.CURRENCY_CODE = 'USD'
+                    AND A.TRANSACTION_BRANCH_CODE = T.SUBE * 1
+                    AND T.SUBE=M.SUBE
+                    AND A.CONTRA_BRANCH_CODE NOT IN ('008', '326')
+                    AND A.TRANSACTION_BRANCH_CODE NOT IN('033', '187', '725', '726')
+                    AND (UPPER(A.OPERATION_DESC) NOT LIKE '%TEDİ%' AND UPPER(A.OPERATION_DESC) NOT LIKE '%TEDI%'
+                    AND UPPER(A.OPERATION_DESC) NOT LIKE '%KUVEYT%' )--TEDİ, KUVEYT TÜRK ÇIKARTILMIŞTIR.GÜLŞEN ERKOÇ'TAN UYGUNLUK ALINMIŞTIR. Y.T. 05.06.2024
+                    GROUP BY A.AS_OF_DATE,
+                      A.CONTRA_BRANCH_CODE,
+                      A.GL_CODE,
+                      A.CONTRA_GL_CODE,
+                      A.CURRENCY_CODE,
+                      C.EVALUATION_BUY_RATE,
+                      E.EVALUATION_BUY_RATE,
+                      CASE WHEN M.TL_MUAFIYET_BITIS >= PDATE THEN M.LIMITTL ELSE T.LIMITTL END,
+                      CASE WHEN M.USD_MUAFIYET_BITIS >= PDATE THEN M.LIMITUSD ELSE T.LIMITUSD END,
+                      CASE WHEN A.CONTRA_BRANCH_CODE=('220') AND UPPER(A.OPERATION_DESC) LIKE '%REFERANS%' 
+                                OR (A.CONTRA_BRANCH_CODE=('212') AND UPPER(A.OPERATION_DESC) LIKE 'KÖMÜRCÜLER MARAŞ%')--Temerküz şubelerin para yatırma maliyeti Gülşen Erkoç'un mailine istinaden düzeltilmiştir. Y.T., İ.Y. 11.02.2025
+                                OR (A.CONTRA_BRANCH_CODE=('072') AND UPPER(A.OPERATION_DESC) LIKE '%AÇI TUTUN%')
+                                OR (A.CONTRA_BRANCH_CODE=('133') AND UPPER(A.OPERATION_DESC) LIKE '%PAMUK GIDA%')
+                                OR (A.CONTRA_BRANCH_CODE=('258') AND UPPER(A.OPERATION_DESC) LIKE '%BILETIX%')
+                                OR (A.CONTRA_BRANCH_CODE=('131') AND UPPER(A.OPERATION_DESC) LIKE 'TREND RESTORAN%')
+                     THEN 0 ELSE 1 END 
+                        ) WHERE 1=1
+                        
+                      AND HESAP_DISI=1
+
+                    ) KASA,
+
+                    (SELECT *
+                      FROM (SELECT A.DAY_INT_OID,A.CURRENCY_CODE,A.VALOR,A.ACT_DATE,A.ACT_TIME,A.ACTIVE_RATE,A.PASSIVE_RATE,A.MARGIN,
+                          ROW_NUMBER() OVER(PARTITION BY A.DAY_INT_OID, A.CURRENCY_CODE ORDER BY A.ACT_DATE DESC, A.ACT_TIME DESC, A.LASTUPDATED DESC) ROW_NO
+                          FROM BFX.PR_POOL_RATES@CBRAS_PRODUX A
+                          WHERE A.DAY_INT_OID IN ('0001_0006_GUNLUK')
+                          AND TO_DATE(A.ACT_DATE,'YYYYMMDD') <= PDATE
+                    )
+                    WHERE ROW_NO = 1) POOL
+
+                WHERE POOL.CURRENCY_CODE = KASA.CCY
+                  AND X.CALENDAR_DATE = KASA.TARIH
+
+                GROUP BY KASA.TARIH,
+                      --kasa.İslem_Subesi,
+                      KASA.KARSI_SUBE,
+                      KASA.CCY,
+                      KASA.RATE,
+                      KASA.USD_RATE,
+                      --pool.currency_code,
+                      POOL.ACTIVE_RATE)
+            GROUP BY SUBE,CCY, PDATE
+
+            ---KASA FONLAMA 2 BİTİYOR----------
+           UNION ALL
+            --Kasa fonlama 3:Efektif maliyeti
+            SELECT PDATE, RECEIVER_ORG_CODE AS SUBE ,CURRENCY_CODE AS CCY, SUM (case when MALIYET < 0 then MALIYET else 0 end)  MALIYET
+            FROM (SELECT A.SENDER_ORG_CODE,
+                    A.SEND_DATE,
+                    A.RECEIVER_ORG_CODE AS RECEIVER_ORG_CODE,
+                    A.RECEIVE_DATE AS RECEIVE_DATE,
+                    A.CURRENCY_CODE AS CURRENCY_CODE,
+                    A.RECEIVED_AMOUNT,
+                    A.RECEIVE_STATUS,
+                    SUM(A.SEND_AMOUNT) AS REAL_AMOUNT,
+                    SUM(A.SEND_AMOUNT - 40000) AS AMOUNT,
+                    
+                    SUM(((CASE WHEN NVL(M.USD_MUAFIYET_BITIS,TRUNC(SYSDATE)) <= PDATE THEN M.LIMITUSD ELSE T.LIMITUSD END) - 
+                    (A.SEND_AMOUNT - 40000)) * C.EVALUATION_BUY_RATE *  0.0022) AS MALIYET ----TL ye çevrilmiş hali
+                            
+            
+                FROM DEPOSIT.CGM_CASH_GROUP_TRANSFER@CBRAS_PRODUX A,
+                     OLAP.FC_EVALUATION_RATES                     C,
+                     SUBE_KASA_LIMIT                              T,
+                     SUBE_KASA_LIMIT_MUAFIYET                     M
+                WHERE A.CURRENCY_CODE = C.CURRENCY_CODE
+                  AND A.RECEIVER_ORG_CODE = T.SUBE * 1
+                  AND T.SUBE = M.SUBE
+                  AND C.AS_OF_DATE = TO_DATE(A.SEND_DATE,'YYYYMMDD')
+                  AND A.SENDER_ORG_CODE IN ('726', '725', '765', '764')
+                  AND TO_DATE(A.SEND_DATE,'YYYYMMDD') BETWEEN AYBASI AND PDATE
+                  AND NVL(A.RECEIVE_STATUS, 0) = '1'
+                  AND A.CURRENCY_CODE != 'TL'
+                  AND C.CURRENCY_CODE != 'TL'
+                  AND A.RECEIVED_AMOUNT > 40000
+                GROUP BY A.SENDER_ORG_CODE,
+                    A.SEND_DATE,
+                    A.RECEIVER_ORG_CODE,
+                    A.RECEIVE_DATE,
+                    A.CURRENCY_CODE,
+                    A.RECEIVED_AMOUNT,
+                    A.RECEIVE_STATUS)
+            GROUP BY RECEIVER_ORG_CODE,CURRENCY_CODE
+            
+            ) KASA
+
+            WHERE TO_NUMBER(ORG.GL_ORG_CODE)=TO_NUMBER(KASA.SUBE)
+            GROUP BY
+            AS_OF_DATE,
+            CASE WHEN TO_NUMBER(KASA.SUBE) IN ('6','122', '220','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END ,
+            TO_NUMBER(KASA.SUBE),
+            KASA.CCY
+     );
+
+      COMMIT;
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

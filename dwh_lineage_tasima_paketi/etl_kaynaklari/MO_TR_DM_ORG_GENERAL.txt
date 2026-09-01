@@ -1,0 +1,175 @@
+CREATE OR REPLACE package body STAGE.MO_TR_DM_ORG_GENERAL is
+
+  PROCEDURE TR_DM_ORG_GENERAL is
+    error_location number;
+    pid            number;
+    pasofdate      date;
+    pcritical_lvl  number := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+  
+  begin
+    error_location := 1;
+  
+    select to_date(prm_value, prm_format)
+      into pasofdate
+      from rasman.sy_system_parameters t
+     where parameter = 'DIM_DATE';
+  
+    pid := mn_utility.INSERT_PLOG(pmodule      => 'MO_TR_DM_ORG_GENERAL',
+                                  psubmodule   => 'TR_DM_ORG_GENERAL',
+                                  project_name => 'EDW',
+                                  pasofdate    => pasofdate,
+                                  pcritical    => pcritical_lvl);
+  
+    execute immediate 'truncate table TR_DM_ORG_GENERAL';
+    insert into TR_DM_ORG_GENERAL
+    
+      SELECT OID          AS OID,
+             ORG_CODE     AS ORG_CODE,
+             GL_ORG_CODE  AS GL_ORG_CODE,
+             ORG_TYPE     AS ORG_TYPE,
+             ORG_NAME     AS ORG_NAME,
+             PARENT_CODE  AS PARENT_CODE,
+             PARENT_NAME  AS PARENT_NAME,
+             OPEN_DATE    AS OPEN_DATE,
+             ADDRESS      AS ADDRESS,
+             COUNTRY_CODE AS COUNTRY_CODE,
+             COUNTRY_NAME AS COUNTRY_NAME,
+             SS_OID       AS SS_OID
+        FROM (SELECT OID,
+                     CASE
+                       WHEN LENGTH(BIRIM_KODU) < 3 THEN
+                        LPAD(BIRIM_KODU, 3, '0')
+                       ELSE
+                        TO_CHAR(BIRIM_KODU)
+                     END ORG_CODE,
+                     DECODE(BIRIM_KODU,
+                            753,
+                            1,
+                            726,
+                            33,
+                            765,
+                            164,
+                            754,
+                            172,
+                            725,
+                            187,
+                            712,
+                            188,
+                            752,
+                            219,
+                            TO_NUMBER(BIRIM_KODU)) GL_ORG_CODE,
+                     
+                     CASE ORG_TYPE
+                       WHEN '10' THEN
+                        '1'
+                       WHEN '15' THEN
+                        '3'
+                       WHEN '20' THEN
+                        '5'
+                       WHEN '50' THEN
+                        '4'
+                       ELSE
+                        '2'
+                     END ORG_TYPE,
+                     BIRIM_ADI ORG_NAME,
+                     CASE
+                       WHEN ORG_TYPE = '20' THEN
+                        TO_NUMBER(BOLGE_KODU)
+                       ELSE
+                        BAGLI_BIRIM_KODU
+                     END PARENT_CODE,
+                     CASE
+                       WHEN ORG_TYPE = '20' THEN
+                        BOLGE_ADI
+                       ELSE
+                        BAGLI_BIRIM_ADI
+                     END PARENT_NAME,
+                     ACILIS_TARIHI OPEN_DATE,
+                     ADRES ADDRESS,
+                     'TR' COUNTRY_CODE,
+                     'TÜRKIYE' COUNTRY_NAME,
+                     ss_oid as SS_OID
+                FROM (SELECT T.OID,
+                             TO_NUMBER(T.CODE) BIRIM_KODU,
+                             CASE
+                               WHEN T.CODE IN ('001',
+                                               '033',
+                                               '172',
+                                               '187',
+                                               '188',
+                                               '219',
+                                               '90001',
+                                               '90008',
+                                               '99999') THEN
+                                '10'
+                               ELSE
+                                CASE
+                                  WHEN T.CODE IN ('781',
+                                                  '791',
+                                                  '782',
+                                                  '783',
+                                                  '784',
+                                                  '785',
+                                                  '786',
+                                                  '787',
+                                                  '788',
+                                                  '792',
+                                                  '793') THEN
+                                   '15'
+                                  ELSE
+                                   CASE
+                                     WHEN T.CODE IN ('705',
+                                                     '713',
+                                                     '716',
+                                                     '720',
+                                                     '722',
+                                                     '727',
+                                                     '730',
+                                                     '738',
+                                                     '744',
+                                                     '749',
+                                                     '751',
+                                                     '755',
+                                                     '780') THEN
+                                      '05'
+                                     ELSE
+                                      T.ORG_TYPE
+                                   END
+                                END
+                             END ORG_TYPE,
+                             T.NAME BIRIM_ADI,
+                             TO_NUMBER(X.CODE) BAGLI_BIRIM_KODU,
+                             X.NAME BAGLI_BIRIM_ADI,
+                             Y.BOLGE_KODU,
+                             Y.BOLGE_ADI,
+                             to_date(T.ORG_OPENING_DATE, 'YYYYMMDD') as ACILIS_TARIHI,
+                             Y.ADRES,
+                             t.oid as ss_oid
+                        FROM EX_INFRA_ADMIN_ORG_ORG T,
+                             EX_INFRA_ADMIN_ORG_ORG X,
+                             TR_DM_ORG_BOLGE        Y
+                       WHERE T.STATUS = '1'
+                         AND T.CODE NOT IN
+                             ('001', '033', '172', '187', '188', '219')
+                         AND X.STATUS(+) = '1'
+                         AND T.PARENT_OID = X.OID(+)
+                         AND t.IS_CLOSED='0'
+                         AND TO_NUMBER(T.CODE) = Y.SUBE_KODU(+)));
+                         commit;
+  
+    mn_utility.update_plog(pid => pid, success => 1, pcritical => 9);
+  exception
+    when others then
+      mn_utility.update_plog(pid       => pid,
+                             success   => 0,
+                             fail      => 'POSITION: ' || error_location ||
+                                          ' ERROR: ' || abs(SQLCODE) || ':' ||
+                                          SQLERRM,
+                             pcritical => pcritical_lvl);
+      rollback;
+      raise;
+    
+  end;
+
+end MO_TR_DM_ORG_GENERAL;
+/

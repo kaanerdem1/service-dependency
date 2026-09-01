@@ -1,0 +1,105 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_MUNZAM_MALIYETI IS
+
+PROCEDURE MS_EX_OFSA_SB_MUNZAM_MALIYETI (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    SEGM_TARIH         DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+   
+BEGIN
+
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --Segmentasyon ataması
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF; 
+
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_MUNZAM_MALIYETI',
+                                          PSUBMODULE   => 'EX_OFSA_SB_MUNZAM_MALIYETI',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_MUNZAM_MALIYETI';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+    
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+    AYBASI:=PDATE;
+    END IF; 
+
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_MUNZAM_MALIYETI
+
+     (
+     SELECT
+        PDATE AS AS_OF_DATE,
+        CUSTOMER_CODE AS MUS_NO,
+        '7-BIREYSEL' AS ISKOLU,
+        CASE WHEN SEGM NOT IN ('00000','00009','00012','00014') THEN '99999' ELSE SEGM END SEGMENT,
+        CASE WHEN TO_NUMBER(KRD.SUBE) IN ('6','122', '220','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+        SUBE,
+        NVL(MT,999999) AS MT,
+        URUN_KODU,
+        URUN_ADI,
+        PB,
+        'MUNZAM_MALIYETI' AS KAYNAK,
+       ROUND(ROUND(BAKIYE / GUN, 0) * 1.12 * GUN / 36500, 0) AS MUNZAM_MALIYETI
+       FROM OLAP.DM_ORGANIZATION ORG,
+       (SELECT A.BRANCH_CODE AS SUBE,
+               A.CUSTOMER_CODE,
+               C.BUSINESS_SEGMENT_CODE AS SEGM,
+               A.PRODUCT_TYPE AS URUN_KODU,
+               A.PRODUCT_NAME AS URUN_ADI,
+               A.REPRESENTATIVE_FILE_NO AS MT,
+               A.CURRENCY_CODE AS PB,
+               SUM(NVL(A.MAIN_BALANCE, 0) + NVL(A.REDISCOUNT_350059, 0))  BAKIYE,
+               TO_NUMBER(PDATE-AYBASI+1) AS GUN
+          FROM SUMMARY_PROD.GL_ASSET A, OLAP.FC_CUSTOMER C
+         WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+           AND C.CUSTOMER_CODE=A.CUSTOMER_CODE
+           AND C.AS_OF_DATE=SEGM_TARIH
+           AND A.OPEN_DATE <= TO_DATE('20101231', 'yyyymmdd') -- sadece 2010 ve öncesi
+           AND A.MAIN_BALANCE_ORG <> 0
+           AND A.MODULE IN ('BKS', 'KYS') -- sadece bks ve kys
+           AND A.USAGE_TYPE = '4' -- sadece taksitliler
+           AND A.MAIN_GL_NO LIKE '1%'
+           AND A.MAIN_GL_NO NOT LIKE '17%'
+           AND A.CUSTOMER_CODE NOT IN  ('31454334', '31069597', '30718177', '20101183', '20101181') -- iştirakler hariç
+         GROUP BY A.BRANCH_CODE,A.CUSTOMER_CODE,C.BUSINESS_SEGMENT_CODE,A.PRODUCT_TYPE,A.PRODUCT_NAME,A.REPRESENTATIVE_FILE_NO, A.CURRENCY_CODE
+         ) KRD
+         WHERE TO_NUMBER(ORG.GL_ORG_CODE)=TO_NUMBER(KRD.SUBE)
+     );
+
+      COMMIT;
+
+    /*******************************************************************************************************************/
+
+   OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+    RAISE;
+  END;
+
+END;
+/

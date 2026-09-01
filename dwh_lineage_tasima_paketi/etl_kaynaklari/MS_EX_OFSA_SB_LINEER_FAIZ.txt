@@ -1,0 +1,825 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_LINEER_FAIZ IS
+
+PROCEDURE MS_EX_OFSA_SB_LINEER_FAIZ (SECIM NUMBER) IS
+
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:BLOCKER,2:CRITICAL,3:TRIVIAL,9:NO PROBLEM
+    SEGM_TARIH         DATE;
+    READY              NUMBER;
+BEGIN
+
+    ERROR_LOCATION := 1;
+
+    SELECT PRM_VALUE, TO_DATE(PRM_VALUE, PRM_FORMAT),TO_DATE(MONTH_BEGIN, PRM_FORMAT),TO_DATE(LAST_SEGM_DATE, PRM_FORMAT)
+      INTO PASOFDATE, PDATE,AYBASI,SEGM_TARIH
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+      WHERE PARAMETER = 'OFSA_SB_DATE';
+
+      IF PDATE<=SEGM_TARIH THEN --SEGMENTASYON ATAMASI
+      SEGM_TARIH:=SEGM_TARIH;
+      ELSE
+      SEGM_TARIH:=PDATE;
+      END IF;
+
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_LINEER_FAIZ',
+                                        PSUBMODULE   => 'EX_OFSA_SB_LINEER_FAIZ',
+                                        PROJECT_NAME => 'OFSA_SB',
+                                        PASOFDATE    => PDATE,
+                                        PCRITICAL    => PCRITICAL_LVL);
+   /*****************************************************************************************************************************/
+        Loop
+        SELECT count(*)
+        into READY
+        FROM BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK
+        where as_of_date=PDATE;
+        exit when READY>3300000;
+        sleep(300000);--5dk
+        end loop;
+  /*****************************************************************************************************************************/
+    Loop
+        SELECT count(*)
+        into READY
+        FROM DM.FACT_COMMISSION@QADATA_LINK
+        where as_of_date=PDATE;
+        exit when READY>15000;
+        sleep(300000);--5dk
+        end loop;
+  /*****************************************************************************************************************************/
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_TEMP_CRD_UTL_REDISCOUNT';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    IF SECIM=0 THEN --Eger 0 seçilirse günlük,0 dışında bir veri seçilirse aylık yükler
+    AYBASI:=PDATE;
+    END IF; 
+
+    INSERT INTO OFSA_SB.OFSA_TEMP_CRD_UTL_REDISCOUNT 
+    (
+    SELECT * FROM  CCS.CRD_UTL_REDISCOUNT@CBRAS_PRODUX A
+    WHERE A.REDISCOUNT_DATE  BETWEEN to_char(aybasi-1,'yyyymmdd') AND to_char(pdate,'yyyymmdd')
+    );
+    COMMIT;   
+    
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER';
+    
+    INSERT INTO OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER
+(
+select a.credit_no as account_no, PDATE AS AS_OF_DATE
+  from BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK a
+ where a.as_of_date=PDATE
+   and a.credit_no in
+      (select credit_no
+         FROM --DM.FACT_LOAN_CONTRACT@QADATA_LINK lc,
+              BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK lc,
+              DW.CORP_LOAN_CTR_OPRN@QADATA_LINK OP,
+              DM.FACT_COMMISSION@QADATA_LINK K
+        WHERE LC.AS_OF_DATE BETWEEN to_date('20231228','yyyymmdd') AND PDATE
+          AND lc.MODULE = 'KYS'
+          AND K.AS_OF_DATE(+)=LC.AS_OF_DATE
+          AND K.TRX_CUSTOMER_CODE(+)=LC.CUSTOMER_CODE
+          AND K.TRX_ACCOUNT_NO(+)=LC.CREDIT_NO
+          AND K.MAIN_PROCESS_ID (+) IN ( '105111','105127','105131','105138','107120','105120' )
+          AND K.COMM_PROCESS_ID <> '130811'
+          AND (lc.CASH_COMM_TOT_TL_AMT<>0 OR k.COMM_AMOUNT<>0)
+          AND (OP.PCS_NO IN  ('105111',
+                              '105127',
+                              '105131',
+                              '105138',
+                              '107120',
+                              '105120',
+                              '105650',
+                              '105651'))
+          AND OP.OPRN_STATE_VLD_FLAG <> '0'
+          AND LC.CONTRACT_ID = OP.CORP_LOAN_CTR_ID
+          AND lc.AS_OF_DATE = OP.OPRN_DATE
+          and OP.OPRN_DATE BETWEEN to_date('20231228','yyyymmdd') AND PDATE
+          and lc.product_code in ('023','020','038')
+          and lc.product_main_group_code='08'
+          and lc.product_group_code='01'
+      )                                            
+and a.credit_close_date is null
+UNION ALL
+SELECT D.ACCOUNT_NO, PDATE AS AS_OF_DATE 
+FROM SUMMARY_PROD.GL_ASSET D
+WHERE D.AS_OF_DATE=PDATE
+--AND D.CAMPAIGN_NAME='KATKI PAYLI TARIM İŞLETME KREDİ KAMPANYASI'
+AND D.CAMPAIGN_NAME IN ('KATKI PAYLI TARIM İŞLETME KREDİ KAMPANYASI','KATKI PAYLI TARIM EKİPMANLARI KREDİSİ')  --24.06.2026 A.Y
+AND D.PRODUCT_TYPE NOT IN (0801023,0801020,0801038)
+);
+
+COMMIT;
+    
+   /*****************************************************************************************************************************/    
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_LINEER_FAIZ';
+
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+
+    INSERT
+      INTO OFSA_SB.OFSA_EX_LINEER_FAIZ
+     (
+     SELECT Z.TARIH AS TARIH,
+       Z.MUS_NO AS MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => Z.SEGM) AS ISKOLU,
+       Z.SEGM AS SEGMENT,
+       Z.BOLGE,
+       Z.SUBE,
+       NVL(Z.MT,'999999') AS MT,
+       NVL(Z.URUN_KODU,88888888) AS URUN_KODU,
+       Z.URUN AS URUN_ADI,
+       Z.PB AS PB,
+       'FAIZ_GELIR_GIDER_LINEER' AS KAYNAK,
+       ROUND(SUM(CASE WHEN Z.SINIF IN ('Faiz Gelirleri - Kredi Kartı') THEN BAKIYE ELSE 0 END), 2) AS FAIZ_GELIRI_LINEER_KK,
+       ROUND(SUM(CASE WHEN Z.SINIF IN ('Faiz Gelirleri - Krediler') THEN BAKIYE ELSE 0 END), 2) AS FAIZ_GELIRI_LINEER_KRD,
+       0 AS FAIZ_GIDERI_LINEER,
+       Z.HESAP_NO,
+       /* ROUND(SUM(CASE WHEN Z.SINIF IN ('FAIZ_GELIRI_SORUNLU_KRD') THEN BAKIYE ELSE 0 END), 2)*/ 0 AS FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+       /*ROUND(SUM(CASE WHEN Z.SINIF IN ('FAIZ_GIDERI_SORUNLU_KRD') THEN BAKIYE ELSE 0 END), 2)*/ 0 AS FAIZ_GIDERI_LINEER_SORUNLU_KRD
+   FROM 
+       (
+               SELECT --TTK HARIÇ
+                      PDATE AS TARIH,
+                      A.CUSTOMER_NO AS MUS_NO,
+                      NVL(AST.ACCOUNT_NO,A.ACCOUNT_NO) as HESAP_NO,
+                      CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END AS SUBE,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220','122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                      NVL(PRD2.PRODUCT_TYPE,NVL(AST.PRODUCT_TYPE,A.PRODUCT_TYPE)) AS URUN_KODU,
+                      NVL(PRD2.PRODUCT_NAME,NVL(AST.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,nvl(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER')))) AS URUN,
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE) AS PB,
+                      CASE WHEN NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999' ELSE SEG.BUSINESS_SEGMENT_CODE END AS SEGM,
+                      CASE /*----EKLENDİ---
+                           WHEN A.GL_CODE LIKE '5%' AND A.AMOUNT <> 0 AND (A.PROCESS_DESCRIPTION LIKE 'KTS%' OR
+                           A.OPERATION_DESC LIKE '%GECİKME%'\* OR A.PROCESS_DESCRIPTION LIKE '%Kur Farkı Reeskontu%'*\) 
+                           THEN 'FAIZ_GELIRI_SORUNLU_KRD' --TAKİPTEN TAHSİLAT--P.Y.20220105
+                         ------   */                          
+                          /*   ----EKLENDİ---
+                           WHEN SUBSTR(A.GL_CODE, 1, 1) ='6'AND A.AMOUNT <> 0 AND A.PROCESS_ID != '140063' --ŞUBELERIN 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                           AND (SUBSTR(A.PRODUCT_TYPE, 1, 5) = '13020' --SADECE VADELILERI ALIR
+                           OR
+                           A.OPERATION_DESC LIKE
+                           'TAKIP ANAPARA BAK. KAPANANLARIN TAKIP REESKONT,TAHAKKUK VE VERGI HESAPLARINDAKI BAKIYELERIN IPTALI%') THEN 'FAIZ_GIDERI_SORUNLU_KRD'--takibe gidince oluşan faiz giderleri
+                           --P.Y.20220105
+                           -------*/
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188'/*,'1','219','172'*/) AND NVL(AST.is_indexed,0) <> '1' --DEK KREDİLERİ ÇIKARILIYOR
+                             THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6'  THEN 'Faiz Gelirleri - Toplam' --IRR/LINEER AYRIMI SADECE FAIZ GELIRINDE OLMASI SEBEBIYLE GIDER KISMINDA TOPLAM ALINDI U.U. 07/07/2020
+                        ELSE 'HATA' END AS SINIF,
+                      SUM(A.AMOUNT) AS BAKIYE
+                FROM  OLAP.FC_CUSTOMER C,OLAP.FC_CUSTOMER SEG,OLAP.DM_ORGANIZATION ORG, OLAP.FC_VOUCHER_DETAIL A
+                      LEFT JOIN OLAP.DT_PRODUCT_SET PRD 
+                             ON PRD.SET_PRODUCT_CODE=A.PRODUCT_TYPE
+                      LEFT JOIN (SELECT distinct ast.as_of_date,
+                                       ast.customer_code,
+                                       ast.account_no,
+                                       ast.module,
+                                       AST.PRODUCT_TYPE,
+                                       ast.usage_type,
+                                       AST.currency_code,
+                                       AST.index_currency,
+                                       AST.is_indexed,
+                                       AST.PRODUCT_NAME
+                                  FROM summary_prod.gl_asset ast
+                                 WHERE ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                                )AST 
+                             ON (CASE WHEN nvl(ast.module,'XX') IN ('BKS','TOKİ','SFN_BRY') 
+                                        THEN  substr(A.ACCOUNT_NO,6,7)
+                                          ELSE A.ACCOUNT_NO  END) = CASE WHEN nvl(ast.module,'XX') IN ('HK') 
+                                                                              AND NVL(AST.PRODUCT_TYPE,'XX')='0801044' 
+                                                                           THEN AST.CUSTOMER_CODE 
+                                                                              ELSE ast.account_no 
+                                                                    END
+                                 AND ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                                 AND ast.as_of_date= a.as_of_date
+                                 -- and a.Contra_Product_Reference=ast.product_reference_no
+                                 AND NVL(ast.usage_type,'XX') IN ('2','3','4','XX') --2=Spot,3=İskonto,4=TTK
+                                 AND AST.CUSTOMER_CODE=A.customer_no
+                      LEFT JOIN
+                             (SELECT DISTINCT AST.PRODUCT_TYPE,
+                                       AST.PRODUCT_NAME,
+                                       ACCOUNT_NO,
+                                       AS_OF_DATE
+                                FROM summary_prod.gl_asset ast
+                               WHERE ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                                -- AND AST.CUSTOMER_CODE='37032075'
+                                 AND AST.MODULE='KK')PRD2
+                                    ON PRD2.ACCOUNT_NO = SUBSTR(A.OPERATION_DESC,1,16)   
+                                        AND PRD2.AS_OF_DATE=A.AS_OF_DATE              
+                WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                  AND SUBSTR(A.GL_CODE,1,1) IN ('5')
+                  AND CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END=TO_NUMBER(ORG.GL_ORG_CODE)
+                  AND C.CUSTOMER_CODE=A.CUSTOMER_NO
+                  AND SEG.CUSTOMER_CODE=A.CUSTOMER_NO
+                  AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.
+                  AND A.AMOUNT<>0 
+                  --AND a.customer_no='mus'
+                  AND ast.account_no IS NULL
+                  AND SUBSTR(A.GL_CODE,1,7) != '6440012' --IFRS FİNANSMAN GİDERİ ELENİYOR 
+                  AND A.PROCESS_ID != '140063' --şubelerin 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                  AND C.AS_OF_DATE=PDATE
+                  AND SEG.AS_OF_DATE=SEGM_TARIH
+                GROUP BY 
+                      PDATE ,
+                      A.CUSTOMER_NO,
+                      NVL(AST.ACCOUNT_NO,A.ACCOUNT_NO),
+                      CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220','122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE)END,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999),
+                      NVL(PRD2.PRODUCT_TYPE,NVL(AST.PRODUCT_TYPE,A.PRODUCT_TYPE)),
+                      NVL(PRD2.PRODUCT_NAME,NVL(AST.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,nvl(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER')))),
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE),
+                      CASE WHEN NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999' ELSE SEG.BUSINESS_SEGMENT_CODE END,
+                      CASE WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188'/*,'1','219','172'*/) AND NVL(AST.is_indexed,0) <> '1' --DEK KREDİLERİ ÇIKARILIYOR
+                             THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6'  THEN 'Faiz Gelirleri - Toplam' --IRR/LINEER AYRIMI SADECE FAIZ GELIRINDE OLMASI SEBEBIYLE GIDER KISMINDA TOPLAM ALINDI U.U. 07/07/2020
+                        ELSE 'HATA' END
+               --=================================================================--   
+               UNION ALL --SPOT,İSKONTO VE TTK ÜRÜNLERI EKLENIYOR
+               --=================================================================--    
+               SELECT --SPOT,İSKONTO VE TTK DAHIL                    
+                      PDATE AS TARIH,
+                      A.CUSTOMER_NO AS MUS_NO,
+                      NVL(AST.ACCOUNT_NO,A.ACCOUNT_NO) AS HESAP_NO,
+                      CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END AS SUBE,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                      AST.PRODUCT_TYPE AS URUN_KODU,
+                      NVL(AST.PRODUCT_NAME,'DIGER URUNLER') AS URUN,
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE) AS PB,
+                      CASE WHEN NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999' ELSE SEG.BUSINESS_SEGMENT_CODE END AS SEGM,
+                      CASE 
+                         /*----EKLENDİ---
+                           WHEN A.GL_CODE LIKE '5%' AND A.AMOUNT <> 0 AND (A.PROCESS_DESCRIPTION LIKE 'KTS%' OR
+                           A.OPERATION_DESC LIKE '%GECİKME%'\* OR A.PROCESS_DESCRIPTION LIKE '%Kur Farkı Reeskontu%'*\) 
+                           THEN 'FAIZ_GELIRI_SORUNLU_KRD' --TAKİPTEN TAHSİLAT--P.Y.20220105
+                         ------   */                          
+                          /*   ----EKLENDİ---
+                           WHEN SUBSTR(A.GL_CODE, 1, 1) ='6'AND A.AMOUNT <> 0 AND A.PROCESS_ID != '140063' --ŞUBELERIN 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                           AND (SUBSTR(A.PRODUCT_TYPE, 1, 5) = '13020' --SADECE VADELILERI ALIR
+                           OR
+                           A.OPERATION_DESC LIKE
+                           'TAKIP ANAPARA BAK. KAPANANLARIN TAKIP REESKONT,TAHAKKUK VE VERGI HESAPLARINDAKI BAKIYELERIN IPTALI%') THEN 'FAIZ_GIDERI_SORUNLU_KRD'--takibe gidince oluşan faiz giderleri
+                           --P.Y.20220105
+                           -------*/
+                         WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188'/*,'1','219','172'*/) AND NVL(AST.is_indexed,0) <> '1' --DEK KREDİLERİ ÇIKARILIYOR
+                             THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6'  THEN 'Faiz Gelirleri - Toplam' --IRR/LINEER AYRIMI SADECE FAIZ GELIRINDE OLMASI SEBEBIYLE GIDER KISMINDA TOPLAM ALINDI U.U. 07/07/2020
+                        ELSE 'HATA' END AS SINIF,
+                      SUM(CASE WHEN SUBSTR(A.GL_CODE,1,1)='5' AND ((A.PROCESS_ID IN ('105427','105508') --FC_VOUCHER_DETAIL'de bu prosesler reeskonta denk gelmektedir. Aynı kredinin reeskont dışında kur kaynaklı gelir/gideri de olması sebebiyle kısıtlanmıştır. U.U. 07.07.2020
+                               AND to_number(A.BRANCH_CODE) NOT IN ('188','1','219','172')) OR 
+                               (A.PROCESS_ID IN ('140067','140069') AND to_number(A.TRANSACTION_BRANCH_CODE) IN ('1') AND A.USER_NO!='BATCH')) --GM'de kesilen toplu fişler sebebiyle etkilenmektedir. 
+                               THEN NVL(CRD.LINEER_DAILY_TL,0)
+                          ELSE NVL(A.AMOUNT,0) END) AS BAKIYE 
+                 FROM OLAP.FC_CUSTOMER C,
+                      OLAP.FC_CUSTOMER SEG,
+                      OLAP.DM_ORGANIZATION ORG, 
+                      OLAP.FC_VOUCHER_DETAIL A 
+                      LEFT JOIN OFSA_SB.OFSA_TEMP_CRD_UTL_REDISCOUNT  CRD 
+                             ON CRD.REFERENCE_ID=A.REFERENCE_NO 
+                                AND A.AS_OF_DATE=TO_DATE(CRD.REDISCOUNT_DATE,'YYYYMMDD')
+                      LEFT JOIN (SELECT distinct 
+                                        ast.as_of_date,
+                                        ast.customer_code,
+                                        ast.account_no,
+                                        ast.module,
+                                        AST.PRODUCT_TYPE,
+                                        ast.usage_type,
+                                        AST.currency_code,
+                                        AST.index_currency,
+                                        AST.is_indexed,
+                                        AST.PRODUCT_NAME
+                                   FROM summary_prod.gl_asset ast
+                                  WHERE ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                           --  ================================================================--
+                                   and ast.account_no not in 
+                                       --Peşin Komisyonlu Kredilerin Faiz Geliri hesabı buradan çıkartılıyor. 10.10.2024 Y.T.
+                                                   (
+                                                   select a.credit_no as account_no
+                                                     from BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK a,
+                                                          OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER PS
+                                                    where a.as_of_date=PDATE
+                                                      AND PS.AS_OF_DATE=PDATE
+                                                      and a.credit_close_date is null
+                                                      and a.credit_no = PS.CREDIT_NO                                                              
+                                                   )
+                               )AST 
+                              --=================================================================--
+                             ON (CASE WHEN nvl(ast.module,'XX') IN ('BKS','TOKİ','SFN_BRY') 
+                                         THEN  substr(A.ACCOUNT_NO,6,7)
+                                           ELSE A.ACCOUNT_NO  
+                                 END) = CASE WHEN nvl(ast.module,'XX') IN ('HK') 
+                                                  AND NVL(AST.PRODUCT_TYPE,'XX')='0801044' 
+                                               THEN AST.CUSTOMER_CODE 
+                                                  ELSE ast.account_no 
+                                        END
+                                 AND ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                                 AND ast.as_of_date=a.as_of_date                                                     
+                                 AND NVL(ast.usage_type,'XX') IN ('2','3','4','XX') --2=Spot,3=İskonto,4=TTK
+                                 AND A.CUSTOMER_NO=AST.CUSTOMER_CODE                                                                                      
+                WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                  AND SUBSTR(A.GL_CODE,1,1) IN ('5')
+                  AND CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END=TO_NUMBER(ORG.GL_ORG_CODE)
+                  AND C.CUSTOMER_CODE=A.CUSTOMER_NO
+                  AND SEG.CUSTOMER_CODE=A.CUSTOMER_NO
+                  AND A.AMOUNT<>0
+                  --AND a.customer_no='mus'
+                  AND A.Account_No != 'U2021081300387' ---- 13.08.2021 TARİHLİ NİHAL TAŞOLUK'UN MAILINE ISTINADEN
+                  AND SUBSTR(A.GL_CODE,1,7) != '6440012' --IFRS FİNANSMAN GİDERİ ELENİYOR 
+                  AND NOT (a.operation_desc LIKE '%Ters bakiye düzeltme%' AND a.branch_code!=a.contra_branch_code and a.process_id='140069') --Şube devirlerinde geri valörlü fiş kesiminden kaynaklı sorun oluşuyordu. Bunlar eleniyor U.U. 20200922
+                  AND ast.account_no IS NOT NULL
+                  AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.                   
+                  AND A.PROCESS_ID != '140063' --şubelerin 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                  AND C.AS_OF_DATE=PDATE
+                  AND SEG.AS_OF_DATE=SEGM_TARIH
+                GROUP BY 
+                      PDATE ,
+                      A.CUSTOMER_NO,
+                      NVL(AST.ACCOUNT_NO,A.ACCOUNT_NO),
+                      CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END ,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999),
+                      AST.PRODUCT_TYPE,
+                      NVL(AST.PRODUCT_NAME,'DIGER URUNLER'),
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE),
+                      CASE WHEN NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999' ELSE SEG.BUSINESS_SEGMENT_CODE END  ,
+                       CASE WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) IN ('188') THEN 'Faiz Gelirleri - Kredi Kartı'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='5' AND TO_NUMBER(A.BRANCH_CODE) NOT IN ('188'/*,'1','219','172'*/) AND NVL(AST.is_indexed,0) <> '1'
+                             THEN 'Faiz Gelirleri - Krediler'
+                           WHEN SUBSTR(A.GL_CODE,1,1)='6'  THEN 'Faiz Gelirleri - Toplam' --IRR/LINEER AYRIMI SADECE FAIZ GELIRINDE OLMASI SEBEBIYLE GIDER KISMINDA TOPLAM ALINDI U.U. 07/07/2020
+                        ELSE 'HATA' END                   
+                   --=================================================================--   
+               UNION ALL --PEŞİN KOMİSYONLU KREDİ ÜRÜNLERI EKLENIYOR
+               --=================================================================--    
+               SELECT --TRAKTÖR VE EKİPMAN KREDİLERİ              
+                      DISTINCT --Peşin Komisyonlu kredilerin faiz geliri etkin faiz oranı ile hesaplanıp sisteme eklenmektedir. Y.T. 10.10.2024
+                      --to_date(PDATE,'yyyymmdd')
+                      PDATE AS TARIH,
+                      AST.CUSTOMER_CODE AS MUS_NO,
+                      NVL(AST.ACCOUNT_NO,A.ACCOUNT_NO) AS HESAP_NO,
+                      CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END AS SUBE,
+                      CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('6','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+                      NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+                      AST.PRODUCT_TYPE AS URUN_KODU,
+                      NVL(AST.PRODUCT_NAME,'DIGER URUNLER') AS URUN_ADI,
+                      NVL((CASE WHEN AST.is_indexed = '1' THEN AST.index_currency ELSE AST.currency_code END),A.CURRENCY_CODE) AS PB,
+                      CASE WHEN NVL(AST.MODULE,'XX') IN ('BKS','TOKİ','SFN_BRY') THEN '99999' ELSE SEG.BUSINESS_SEGMENT_CODE END AS SEGM,
+                       'Faiz Gelirleri - Krediler' AS SINIF,
+                      (AST.ORT_BAKIYE * AST.HAVUZ * AST.GUN / 36000) AS BAKIYE
+                FROM  OLAP.FC_CUSTOMER C,
+                      OLAP.FC_CUSTOMER SEG,
+                      OLAP.DM_ORGANIZATION ORG, 
+                      OLAP.FC_VOUCHER_DETAIL A 
+                      LEFT JOIN (SELECT distinct 
+                                        ast.as_of_date,
+                                        ast.customer_code,
+                                        ast.account_no,
+                                        ast.module,
+                                        AST.PRODUCT_TYPE,
+                                        ast.usage_type,
+                                        AST.currency_code,
+                                        AST.index_currency,
+                                        AST.is_indexed,
+                                        AST.PRODUCT_NAME,
+                                        (TO_NUMBER(PDATE -
+                                        AYBASI) + 1) AS GUN,
+                                        ROUND(SUM((NVL(AST.MAIN_BALANCE, 0) ) * NVL(AST.EFFECTIVE_INTEREST, 0)) /
+                                             (SUM((NVL(AST.MAIN_BALANCE, 0))) + 0.001),3) AS HAVUZ,
+                                        ROUND(SUM((NVL(AST.MAIN_BALANCE, 0) ) /
+                                       (TO_NUMBER(PDATE -AYBASI) + 1) ) * -1,2) AS ORT_BAKIYE
+                                   FROM SUMMARY_PROD.GL_ASSET AST
+                                  WHERE ast.As_Of_Date BETWEEN AYBASI AND PDATE
+                                    AND AST.ACCOUNT_NO IN (
+                                                           select a.credit_no as account_no
+                                                             from BI_APP.VW_OFSA_FACT_LOAN_CONTRACT@QADATA_LINK a,
+                                                                  OFSA_SB.TEMP_PESIN_KOMISYONLU_KREDILER PS
+                                                            where a.as_of_date=PDATE
+                                                              AND PS.AS_OF_DATE=PDATE
+                                                              and a.credit_close_date is null
+                                                              and a.credit_no = PS.CREDIT_NO                                                              
+                                                           )
+                                  GROUP BY 
+                                        ast.as_of_date,
+                                         ast.customer_code,
+                                         ast.account_no,
+                                         ast.module,
+                                         AST.PRODUCT_TYPE,
+                                         ast.usage_type,
+                                         AST.currency_code,
+                                         AST.index_currency,
+                                         AST.is_indexed,
+                                         AST.PRODUCT_NAME
+                                )AST 
+                             ON A.CUSTOMER_NO=AST.CUSTOMER_CODE 
+                                AND A.ACCOUNT_NO=AST.ACCOUNT_NO                                                                                       
+                WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                  and A.CUSTOMER_NO=AST.CUSTOMER_CODE AND A.ACCOUNT_NO=AST.ACCOUNT_NO 
+                  and ast.as_of_date=a.as_of_date
+                      AND CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END=TO_NUMBER(ORG.GL_ORG_CODE)
+                      AND AST.CUSTOMER_CODE=A.CUSTOMER_NO
+                      AND A.CUSTOMER_NO=C.CUSTOMER_CODE
+                      AND A.CUSTOMER_NO=SEG.CUSTOMER_CODE
+                      AND AST.ACCOUNT_NO=A.ACCOUNT_NO
+                      AND A.AMOUNT<>0
+                      AND A.Account_No != 'U2021081300387' ---- 13.08.2021 TARİHLİ NİHAL TAŞOLUK'UN MAILINE ISTINADEN
+                      AND SUBSTR(A.GL_CODE,1,7) != '6440012' --IFRS FİNANSMAN GİDERİ ELENİYOR 
+                      AND NOT (a.operation_desc LIKE '%Ters bakiye düzeltme%' AND a.branch_code!=a.contra_branch_code and a.process_id='140069') --Şube devirlerinde geri valörlü fiş kesiminden kaynaklı sorun oluşuyordu. Bunlar eleniyor U.U. 20200922
+                      AND ast.account_no IS NOT NULL
+                      AND NOT (a.process_id='105424' AND substr(a.gl_code,1,1)=6) --Exim kredilerinin mevduat etkisi çıkarılıyor U.U.                   
+                      AND A.PROCESS_ID != '140063' --şubelerin 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                      AND C.AS_OF_DATE=PDATE
+                      AND SEG.AS_OF_DATE=SEGM_TARIH
+ --=================================================================-- 
+        )Z
+  GROUP BY 
+        Z.TARIH,
+        Z.MUS_NO,
+        OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => Z.SEGM),
+        Z.SEGM,
+        Z.BOLGE,
+        Z.SUBE,
+        NVL(Z.MT,'999999') ,
+        NVL(Z.URUN_KODU,88888888) ,
+        Z.URUN ,
+        Z.PB,
+        Z.HESAP_NO
+     --=================================================================================================== MEVDUAT İÇİN LİNEER FAİZ GİDERİ EKLENİYOR 20.10.2020 A.Y.
+UNION ALL     
+SELECT Z.TARIH AS TARIH,
+       Z.MUS_NO AS MUS_NO,
+       OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => Z.SEGM) AS ISKOLU,
+       Z.SEGM AS SEGMENT,
+       Z.BOLGE,
+       Z.SUBE,
+       NVL(Z.MT,'999999') AS MT,
+       NVL(Z.URUN_KODU,88888888) AS URUN_KODU,
+       Z.URUN_ADI AS URUN_ADI,
+       Z.PB AS PB,
+       'FAIZ_GELIR_GIDER_LINEER' AS KAYNAK,
+       0 AS FAIZ_GELIRI_LINEER_KK,
+       0 AS FAIZ_GELIRI_LINEER_KRD,
+       ROUND(SUM(NIHAI_LINEER_FAIZ_GIDERI), 2) AS FAIZ_GIDERI_LINEER,
+       Z.HESAP_NO,
+       0 AS FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+       0 AS FAIZ_GIDERI_LINEER_SORUNLU_KRD
+  FROM 
+      (     
+       SELECT 
+             PDATE AS TARIH,
+             A.CUSTOMER_NO AS MUS_NO,
+             A.ACCOUNT_NO AS HESAP_NO,
+             OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE) AS ISKOLU,
+             SEG.BUSINESS_SEGMENT_CODE AS SEGM,
+             CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('006','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+             CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END SUBE,
+             NVL(C.REPRESENTATIVE_FILE_NO,999999) AS MT,
+             A.URUN_KODU,
+             A.URUN_ADI,
+             NVL(L.CURRENCY_CODE,A.CURRENCY_CODE) AS PB, 
+             --ACCOUNT_NO,
+             --SUM(NVL(IRR_FAIZ_GID_OLAP,0)),
+             --SUM(NVL(IRR_BUGUN,0)-NVL(IRR_ONCEKI,0)),
+             --SUM(NVL(LINEER_BUGUN,0)-NVL(LINEER_ONCEKI,0)),
+             SUM(A.LINEER) AS NIHAI_LINEER_FAIZ_GIDERI
+        FROM OLAP.DM_ORGANIZATION ORG,
+             OLAP.FC_CUSTOMER C,
+             OLAP.FC_CUSTOMER SEG,
+            (SELECT C.AS_OF_DATE,
+                    C.CUSTOMER_NO,
+                    C.CURRENCY_CODE,
+                    C.PRODUCT_TYPE AS URUN_KODU,
+                    C.BRANCH_CODE,
+                    NVL(C.PRODUCT_DESCRIPTION,'DIGER URUNLER') AS URUN_ADI,
+                    C.ACCOUNT_NO,
+                    SUM(C.AMOUNT) AS IRR_FAIZ_GID_OLAP,
+                    SUM(-1*IRR_GID) IRR_BUGUN,
+                    SUM(-1*ONCEKI_GUN_IRR) IRR_ONCEKI,
+                    SUM(-1*LINEER_GID) LINEER_BUGUN,
+                    SUM(-1*ONCEKI_GUN_LINEER) LINEER_ONCEKI,
+                    -----------------
+                    CASE WHEN ROUND(SUM(C.AMOUNT),0)=ROUND((SUM(IRR_GID*-1))-(SUM(-1*ONCEKI_GUN_IRR)),0) THEN
+                    SUM(LINEER_GID)*-1-SUM(-1*ONCEKI_GUN_LINEER)
+                    ELSE SUM(C.AMOUNT) END LINEER
+               FROM 
+                   (SELECT D.AS_OF_DATE,
+                           D.CUSTOMER_NO,
+                           D.ACCOUNT_NO,
+                           D.CURRENCY_CODE,
+                           D.BRANCH_CODE,
+                           D.PRODUCT_TYPE,
+                           D.AMOUNT, 
+                           D.LINEER_GID, 
+                           D.IRR_GID,
+                           D.PRODUCT_DESCRIPTION,
+                           D.ONCEKI_GUN_LINEER,D.ONCEKI_GUN_IRR
+                      FROM 
+                          (
+                           SELECT C.AS_OF_DATE,
+                                  C.CUSTOMER_NO,
+                                  C.ACCOUNT_NO,
+                                  C.CURRENCY_CODE,
+                                  C.BRANCH_CODE,
+                                  SUM(C.AMOUNT) AS AMOUNT,
+                                  NVL(REES.LINEER_GID,0) AS LINEER_GID,
+                                  NVL(REES.IRR_GID,0) AS IRR_GID,
+                                  C.PRODUCT_TYPE AS PRODUCT_TYPE ,
+                                  NVL(PRD.PRODUCT_NAME,
+                                  NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))  AS PRODUCT_DESCRIPTION,
+                      	          NVL(LEAD(REES.LINEER_GID) OVER (PARTITION BY C.CUSTOMER_NO,C.BRANCH_CODE,C.ACCOUNT_NO ORDER BY C.AS_OF_DATE DESC),0) AS ONCEKI_GUN_LINEER,
+                                  NVL(LEAD(REES.IRR_GID) OVER (PARTITION BY C.CUSTOMER_NO,C.BRANCH_CODE,C.ACCOUNT_NO ORDER BY C.AS_OF_DATE DESC),0) AS ONCEKI_GUN_IRR
+                             FROM 
+                                (SELECT C.AS_OF_DATE,
+                                        C.CUSTOMER_NO,
+                                        C.ACCOUNT_NO,
+                                        C.CURRENCY_CODE,
+                                        L.BRANCH_CODE,
+                                        CASE WHEN (c.operation_desc LIKE 'Takip Anapara bak. Kapananların Takip  Reeskont,Tahakkuk ve Vergi hesaplarındaki bakiyelerin iptali%' 
+                                                   OR c.operation_desc LIKE '%ters bakiye düzeltme%')                                 
+                                               THEN L.BRANCH_CODE 
+                                                 ELSE NVL(LEAD(L.BRANCH_CODE) OVER (PARTITION BY C.CUSTOMER_NO,C.ACCOUNT_NO ORDER BY C.AS_OF_DATE DESC ), L.BRANCH_CODE)  
+                                        END ONCEKI_GUN_SUBE,
+                                              /*müşteri devirlerinde faiz giderinin devir gününde farklı şubelere yazmasını engellemek için düzenleme yapılmıştır. 09.11.2020 U.U.*/
+                                        C.PRODUCT_TYPE AS PRODUCT_TYPE , 
+                                        SUM(C.AMOUNT) as AMOUNT
+                                   FROM OLAP.FC_VOUCHER_DETAIL C,
+                                        SUMMARY_PROD.GL_LIABILITY L
+                                  WHERE C.AS_OF_DATE BETWEEN AYBASI-1 AND PDATE
+                                    AND L.AS_OF_DATE  = PDATE
+                                    AND C.ACCOUNT_NO = L.ACCOUNT_NO
+                                    AND L.MODULE = 'VDL'
+                                    AND SUBSTR(C.GL_CODE,1,1)=6
+                                    AND C.AMOUNT<>0
+                                        --  AND C.ACCOUNT_NO='334012624'
+                                    AND (
+                                        (C.PROCESS_ID != '140063' --şubelerin 440'lı hesaplara gelir/gider aktarımı çıkarılıyor. A.Y.
+                                            AND SUBSTR(C.PRODUCT_TYPE,1,5) = '13020') --SADECE VADELILERI ALIR
+                                         OR 
+                                         C.OPERATION_DESC LIKE 'Takip Anapara bak. Kapananların Takip  Reeskont,Tahakkuk ve Vergi hesaplarındaki bakiyelerin iptali%' 
+                                         OR 
+                                         C.OPERATION_DESC LIKE '%ters bakiye düzeltme%'                                    
+                                         )
+                                  GROUP BY  
+                                        C.CUSTOMER_NO,
+                                        C.ACCOUNT_NO,
+                                        C.CURRENCY_CODE,
+                                        C.AS_OF_DATE,
+                                        L.BRANCH_CODE,
+                                        C.PRODUCT_TYPE,
+                                        C.OPERATION_DESC)C 
+                                LEFT JOIN ( SELECT TO_CHAR(D.ACC_CODE) AS ACC_CODE,
+                                                   TO_DATE(A.REESKONT_DATE,'YYYYMMDD') AS REESKONT_DATE,
+                                                   A.STATUS,
+                                                   A.INT_RATE_LINEAR_AMOUNT*A.EXCHANGE_RATE AS LINEER_GID,
+                                                   A.INT_RATE_IRR_AMOUNT*A.EXCHANGE_RATE AS IRR_GID
+                                              FROM DEPOSIT.TIMEDEP_REESKONT@CBRAS_PRODUX A 
+                                                   LEFT JOIN (SELECT DISTINCT D.ACC_CODE,
+                                                                     D.DEP_ACC_OID 
+                                                                FROM DEPOSIT.TIMEDEP_ACCOUNT_LOG@CBRAS_PRODUX D
+                                                              )D 
+                                                          ON A.DEP_ACC_OID = D.DEP_ACC_OID
+                                              WHERE TO_DATE(A.REESKONT_DATE, 'yyyymmdd') BETWEEN AYBASI -1 AND  PDATE
+                                          ) REES
+                                       ON REES.REESKONT_DATE=C.AS_OF_DATE 
+                                          AND TO_CHAR(REES.ACC_CODE)=TO_CHAR(C.ACCOUNT_NO)
+                                LEFT JOIN OLAP.DT_PRODUCT_SET PRD 
+                                       ON PRD.SET_PRODUCT_CODE=C.PRODUCT_TYPE                              
+                              WHERE c.branch_code=c.onceki_gun_sube
+                              GROUP BY C.AS_OF_DATE,C.CUSTOMER_NO,C.ACCOUNT_NO,C.CURRENCY_CODE,C.BRANCH_CODE,
+                                       REES.LINEER_GID,REES.IRR_GID,C.PRODUCT_TYPE ,
+                                       NVL(PRD.PRODUCT_NAME,NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))
+                       ) D
+                 WHERE D.AS_OF_DATE BETWEEN AYBASI AND PDATE 
+                    ) C
+            GROUP BY C.AS_OF_DATE,
+                    C.CUSTOMER_NO,
+                    C.CURRENCY_CODE,
+                    C.BRANCH_CODE,
+                    C.PRODUCT_TYPE,
+                    NVL(C.PRODUCT_DESCRIPTION,'DIGER URUNLER'),
+                    C.ACCOUNT_NO
+                      )A
+           LEFT JOIN SUMMARY_PROD.GL_LIABILITY L ON TO_CHAR(L.ACCOUNT_NO)=TO_CHAR(A.ACCOUNT_NO)
+                                            AND L.AS_OF_DATE BETWEEN AYBASI AND PDATE
+                                            AND L.AS_OF_DATE=A.AS_OF_DATE  
+                                            AND A.CUSTOMER_NO=L.CUSTOMER_CODE                                      
+      WHERE CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END=TO_NUMBER(ORG.GL_ORG_CODE)
+             AND C.CUSTOMER_CODE=A.CUSTOMER_NO
+             AND C.AS_OF_DATE=PDATE
+             AND SEG.CUSTOMER_CODE=A.CUSTOMER_NO
+             AND SEG.AS_OF_DATE=SEGM_TARIH
+      GROUP BY PDATE,
+              A.CUSTOMER_NO,
+              A.ACCOUNT_NO,
+              OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => SEG.BUSINESS_SEGMENT_CODE),
+              SEG.BUSINESS_SEGMENT_CODE,
+              CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN TO_NUMBER(C.MAIN_BRANCH_CODE) ELSE TO_NUMBER(A.BRANCH_CODE) END,
+              CASE WHEN TO_NUMBER(CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188'/*,'1','219','172'*/) THEN C.MAIN_BRANCH_CODE ELSE A.BRANCH_CODE END) IN ('006','220', '122','372') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+              NVL(C.REPRESENTATIVE_FILE_NO,999999) ,
+              A.URUN_KODU,
+              A.URUN_ADI,
+              NVL(L.CURRENCY_CODE,A.CURRENCY_CODE)     
+        )Z
+    GROUP BY 
+          Z.TARIH,
+          Z.MUS_NO,
+          Z.HESAP_NO,
+          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU (BUSINESS_SEGMENT_CODE   => Z.SEGM),
+          Z.SEGM,
+          Z.BOLGE,
+          Z.SUBE,
+          NVL(Z.MT,'999999'),
+          NVL(Z.URUN_KODU,88888888),
+          Z.URUN_ADI,
+          Z.PB,
+          'FAIZ_GELIR_GIDER_LINEER'  
+          );
+
+      COMMIT;
+      
+      ---DEK KREDİLERİ FAİZ GELİRİ EKLENİYOR. 19.03.2026 TALEP NO: 394143 A.Y.K.
+      
+       INSERT
+      INTO OFSA_SB.OFSA_EX_LINEER_FAIZ
+      SELECT KRD.TARIH AS AS_OF_DATE,
+         KRD.MUS_NO AS MUS_NO,
+         OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU  (KRD.segm) AS ISKOLU,
+         KRD.SEGM AS SEGMENT,
+         CASE WHEN TO_NUMBER(KRD.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END BOLGE,
+         TO_NUMBER(KRD.SUBE) AS SUBE,
+         NVL(KRD.OFF_CODE, 999999) AS MT,
+         KRD.PRODUCT_TYPE AS URUN_KODU,
+         KRD.PRODUCT_NAME AS URUN_ADI,
+         KRD.CURRENCY AS PB,
+         'FAIZ_GELIR_GIDER_LINEER' AS KAYNAK,
+         0 AS FAIZ_GELIRI_LINEER_KK,
+         ROUND(CASE WHEN KRD.TUR='Faiz Gelirleri - Krediler'  then sum(KRD.ORT_BAKIYE * KRD.FAIZ * KRD.GUN / 36000)  ELSE 0 END, 2)  AS FAIZ_GELIRI_LINEER_KRD,
+         0 AS FAIZ_GIDERI_LINEER,
+         KRD.HESAP_NO AS HESAP_NO ,
+         0 AS FAIZ_GELIRI_LINEER_SORUNLU_KRD,
+         0 AS FAIZ_GIDERI_LINEER_SORUNLU_KRD        
+      FROM OLAP.DM_ORGANIZATION ORG,
+             (SELECT --Ticari krediler -- KK Hariç
+               PDATE AS TARIH,
+               'TICARI_KREDILER' AS SINIF,
+               CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188', '1', '219') THEN TO_NUMBER(C.MAIN_BRANCH_CODE)
+                    ELSE  TO_NUMBER(A.BRANCH_CODE)  END AS SUBE,
+               'Faiz Gelirleri - Krediler' AS TUR,
+               A.CUSTOMER_CODE AS MUS_NO,
+               A.ACCOUNT_NO AS HESAP_NO,
+               A.REPRESENTATIVE_FILE_NO AS OFF_CODE,
+               CASE WHEN A.MODULE IN ('SS','KK') THEN SEG.BUSINESS_SEGMENT_CODE
+                    WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012') 
+                      THEN '40304'
+                        ELSE SEG.BUSINESS_SEGMENT_CODE  END SEGM,
+               (TO_NUMBER(PDATE - AYBASI) + 1) AS GUN,
+               CASE  WHEN NVL(A.IS_INDEXED, '0') = '1' THEN A.INDEX_CURRENCY
+                             ELSE A.CURRENCY_CODE END AS CURRENCY,
+               NVL(A.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))) AS PRODUCT_NAME,
+               A.PRODUCT_TYPE,
+               ROUND(SUM(((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END )  ) * NVL(A.INTEREST_RATE, 0)) /
+                     (SUM(((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END ) )) + 0.001),3) AS FAIZ,
+               ROUND(SUM(/*case when to_number(v.sube)=to_number(a.branch_code) then */((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END )   ) /
+                         (TO_NUMBER(PDATE -
+                                    AYBASI) + 1) /*else 0 end*/) * -1,
+                     2) AS ORT_BAKIYE
+          FROM OLAP.FC_CUSTOMER C, OLAP.FC_CUSTOMER SEG, SUMMARY_PROD.GL_ASSET A LEFT JOIN OLAP.DT_PRODUCT_SET PRD ON PRD.SET_PRODUCT_CODE=A.PRODUCT_TYPE 
+                                                           /*left join (SELECT SUBE, ACCOUNT_NO,deposit_account_no, sum(AMOUNT )AMOUNT
+                                                                       FROM (SELECT V.AS_OF_DATE, TO_NUMBER(V.BRANCH_CODE) SUBE, V.ACCOUNT_NO ACCOUNT_NO,v.deposit_account_no, SUM(AMOUNT) AMOUNT
+                                                                              FROM OLAP.FC_VOUCHER_DETAIL V
+                                                                              WHERE SUBSTR(V.GL_CODE,1,1)='5'
+                                                                              AND AS_OF_DATE BETWEEN TO_DATE('20260101', 'YYYYMMDD') AND TO_DATE('20260131', 'YYYYMMDD') 
+                                                                              GROUP BY V.AS_OF_DATE, ACCOUNT_NO, TO_NUMBER(V.BRANCH_CODE), V.ACCOUNT_NO,v.deposit_account_no)
+                                                                              WHERE AMOUNT > 0                                                                              
+                                                                              GROUP BY SUBE, ACCOUNT_NO,deposit_account_no
+                                                                       ) V on TO_NUMBER(V.SUBE)  = TO_NUMBER(A.BRANCH_CODE) and NVL(V.DEPOSIT_ACCOUNT_NO,V.ACCOUNT_NO) = A.ACCOUNT_NO*/
+         WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE -- HER AYIN İLK VE SON GÜNÜ
+           AND A.MAIN_GL_NO LIKE '1%'
+           AND A.CUSTOMER_CODE = C.CUSTOMER_CODE
+           AND C.AS_OF_DATE = PDATE
+           AND A.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+           AND SEG.AS_OF_DATE =  SEGM_TARIH
+           AND A.Account_No != 'U2021081300387' --- 13.08.2021 TARİHLİ NİHAL TAŞOLUK'UN MAILINE ISTINADEN
+           AND A.MAIN_GL_NO NOT LIKE '17%'
+           AND NVL(A.MODULE, 'XX') NOT IN ('BKS', 'TOKI', 'SFN_BRY', 'SFN-KYS') 
+           AND NOT (NVL(A.MODULE, 'XX') IN ('KRM', 'ITFA', 'BMA') AND C.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012'))
+           AND NVL(A.POOL_RATE, 0) != 0
+           AND NVL(A.PRODUCT_TYPE, '999') NOT IN ('0803002', '0903002', '0801003')
+           AND (NVL(A.MAIN_BALANCE, 0) + NVL(A.REDISCOUNT_102, 0) +
+               NVL(A.REDISCOUNT_103, 0) + NVL(A.REDISCOUNT_350059, 0) +
+               NVL(A.REDISCOUNT_35040, 0)) <> 0
+           AND A.MODULE NOT IN ('SS', 'KK')  
+           --AND NVL(A.IS_INDEXED, '0') = '1'  
+         --  AND A.CUSTOMER_CODE IN ('601315', '32200344')   
+           AND NVL(A.IS_INDEXED, '0') = '1'     
+         GROUP BY CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188', '1', '219') THEN TO_NUMBER(C.MAIN_BRANCH_CODE)
+                    ELSE  TO_NUMBER(A.BRANCH_CODE)  END ,
+                  A.REPRESENTATIVE_FILE_NO,
+               A.CUSTOMER_CODE ,
+               A.ACCOUNT_NO,
+               CASE WHEN A.MODULE IN ('SS','KK') THEN SEG.BUSINESS_SEGMENT_CODE
+                    WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012') 
+                      THEN '40304'
+                        ELSE SEG.BUSINESS_SEGMENT_CODE  END,
+               CASE  WHEN NVL(A.IS_INDEXED, '0') = '1' THEN A.INDEX_CURRENCY
+                             ELSE A.CURRENCY_CODE END,
+               NVL(A.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))),
+               A.PRODUCT_TYPE
+        UNION ALL
+        SELECT --Bireysel krediler
+                 PDATE AS TARIH,
+                 'BIREYSEL_KREDILER' AS SINIF,
+                  CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188', '1', '219') THEN TO_NUMBER(C.MAIN_BRANCH_CODE)
+                       ELSE TO_NUMBER(A.BRANCH_CODE) END AS SUBE,
+                  'Faiz Gelirleri - Krediler' AS TUR,
+                  A.CUSTOMER_CODE AS MUS_NO,
+                  A.ACCOUNT_NO AS HESAP_NO,
+                  A.REPRESENTATIVE_FILE_NO AS OFF_CODE,
+                  CASE WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012') THEN SEG.BUSINESS_SEGMENT_CODE
+                       ELSE '99999' END SEGM,
+                  (TO_NUMBER(PDATE - AYBASI) + 1) AS GUN,
+                  CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN A.INDEX_CURRENCY
+                            ELSE A.CURRENCY_CODE END AS SINIF,
+                   NVL(A.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))) AS PRODUCT_NAME,
+                  A.PRODUCT_TYPE,
+                  ROUND(SUM(((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END )  ) * NVL(A.INTEREST_RATE, 0)) /
+                        (SUM(((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END )  )) + 0.001),3) AS FAIZ,
+                  ROUND(SUM(case when to_number(v.sube)=to_number(a.branch_code) then ((CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN NVL(A.MAIN_BALANCE_ORG, 0)*A.INDEX_EVALUATION_RATE ELSE NVL(A.MAIN_BALANCE, 0) END )  ) /(TO_NUMBER(PDATE - AYBASI) + 1) else 0 end) * -1,
+                        2) AS ORT_BAKIYE
+          FROM OLAP.FC_CUSTOMER C, OLAP.FC_CUSTOMER SEG, SUMMARY_PROD.GL_ASSET A LEFT JOIN OLAP.DT_PRODUCT_SET PRD ON PRD.SET_PRODUCT_CODE=A.PRODUCT_TYPE 
+                                                           left join (SELECT SUBE, ACCOUNT_NO,deposit_account_no, sum(AMOUNT )AMOUNT
+                                                                       FROM (SELECT V.AS_OF_DATE, TO_NUMBER(V.BRANCH_CODE) SUBE, V.ACCOUNT_NO ACCOUNT_NO,v.deposit_account_no, SUM(AMOUNT) AMOUNT
+                                                                              FROM OLAP.FC_VOUCHER_DETAIL V
+                                                                              WHERE SUBSTR(V.GL_CODE,1,1)='5'
+                                                                              AND AS_OF_DATE BETWEEN AYBASI AND PDATE 
+                                                                              GROUP BY V.AS_OF_DATE, ACCOUNT_NO, TO_NUMBER(V.BRANCH_CODE), V.ACCOUNT_NO,v.deposit_account_no)
+                                                                              WHERE AMOUNT > 0
+                                                                              GROUP BY SUBE, ACCOUNT_NO,deposit_account_no
+                                                                       ) V on TO_NUMBER(V.SUBE)  = TO_NUMBER(A.BRANCH_CODE) and nvl(v.deposit_account_no,SUBSTR(V.ACCOUNT_NO, 6,7)) = A.ACCOUNT_NO                                                      
+         WHERE A.AS_OF_DATE BETWEEN AYBASI AND PDATE -- HER AYIN İLK VE SON GÜNÜ
+           AND A.MAIN_GL_NO LIKE '1%'
+           AND A.CUSTOMER_CODE = C.CUSTOMER_CODE
+           AND C.AS_OF_DATE = PDATE
+           AND A.CUSTOMER_CODE = SEG.CUSTOMER_CODE
+           AND SEG.AS_OF_DATE = SEGM_TARIH
+           AND A.MAIN_GL_NO NOT LIKE '17%'
+           AND ((A.MODULE IN ('BKS', /*'SFN_BRY',*/'TOKI')) OR
+                (A.MODULE IN ('KRM', 'ITFA', 'BMA') AND C.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012')))          
+           -- Mizanda faiz gelirinin müşteri bazında tutulmaması sebebiyle fonlama maliyetinden de 'SFN_BRY' kredileri elenmiştir. A.Y.           
+           AND NVL(A.PRODUCT_TYPE, '999') NOT IN ('0803002', '0903002', '0801003')
+           AND (NVL(A.MAIN_BALANCE, 0) + NVL(A.REDISCOUNT_102, 0) +
+                NVL(A.REDISCOUNT_103, 0) + NVL(A.REDISCOUNT_350059, 0) +
+                NVL(A.REDISCOUNT_35040, 0)) <> 0   
+           --AND NVL(A.IS_INDEXED, '0') = '1'
+           --AND A.CUSTOMER_CODE IN ('601315', '32200344')  
+           AND NVL(A.IS_INDEXED, '0') = '1'                
+         GROUP BY CASE WHEN TO_NUMBER(A.BRANCH_CODE) IN ('188', '1', '219') THEN TO_NUMBER(C.MAIN_BRANCH_CODE)
+                       ELSE TO_NUMBER(A.BRANCH_CODE) END,
+                  A.CUSTOMER_CODE,
+                  A.ACCOUNT_NO,
+                  A.REPRESENTATIVE_FILE_NO,
+                  CASE WHEN SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012') THEN SEG.BUSINESS_SEGMENT_CODE
+                       ELSE '99999' END,
+                  CASE WHEN NVL(A.IS_INDEXED, '0') = '1' THEN A.INDEX_CURRENCY
+                            ELSE A.CURRENCY_CODE END,
+                 NVL(A.PRODUCT_NAME,NVL(PRD.PRODUCT_NAME,NVL(PRD.PRODUCT_DESCRIPTION,'DIGER URUNLER'))),
+                 A.PRODUCT_TYPE
+                  ) KRD  
+       WHERE  TO_NUMBER(KRD.SUBE)=TO_NUMBER(ORG.GL_ORG_CODE)       
+       GROUP BY KRD.TARIH ,
+          KRD.MUS_NO,
+          KRD.HESAP_NO,
+          KRD.OFF_CODE,
+          OFSA_SB.MN_UTILITY.MAP_OFSA_ISKOLU  (KRD.segm),
+          KRD.SEGM ,
+          CASE WHEN TO_NUMBER(KRD.SUBE) IN ('6','220','372','122') THEN -1 ELSE TO_NUMBER(ORG.PARENT_CODE) END,
+          TO_NUMBER(KRD.SUBE),
+          KRD.PRODUCT_NAME,
+          KRD.PRODUCT_TYPE,
+          KRD.CURRENCY,
+          KRD.TUR
+          ;
+          
+          COMMIT;
+      
+      
+
+    /*******************************************************************************************************************/
+    OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID, SUCCESS => 1, PCRITICAL => 9);
+
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID => PID,
+                                   SUCCESS => 0,
+                                   FAIL => 'POSITION: ' || ERROR_LOCATION || ' ERROR: ' || ABS(SQLCODE) || ':' || SQLERRM || ' ' || DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                   PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/

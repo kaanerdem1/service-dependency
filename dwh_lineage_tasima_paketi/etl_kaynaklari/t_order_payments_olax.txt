@@ -1,0 +1,98 @@
+CREATE OR REPLACE PROCEDURE OFSA_DAILY.t_order_payments_olax (pdate DATE) 
+IS
+    pid              NUMBER;
+    error_location   NUMBER := 1;
+    pcritical_lvl           number       := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem 
+BEGIN
+    pid :=
+        stage.mn_utility.INSERT_PLOG (pmodule        => 'TRANSFORM',
+                                       psubmodule     => 'ORDER_PAYMENTS',
+                                       project_name   => 'OFSA_DAILY',
+                                       pasofdate      => pdate,
+                                       pcritical      => 1);
+
+    EXECUTE IMMEDIATE 'truncate table T_ORDER_PAYMENTS_QA';
+
+    INSERT INTO T_ORDER_PAYMENTS_QA
+          SELECT as_of_date,
+                 id_number,
+                 order_date,
+                 institution_code,
+                 institution_short_name,
+                 protocol_start_date,
+                 protocol_end_date,
+                 inst_cus_no,
+                 inst_org_code,
+                 inst_account_code,
+                 cus_no,
+                 c.profit_center_code,
+                 c.profit_segment_code,
+                 account_code,
+                 product_type,
+                 NVL (SUM (payment_amount), 0)       payment_amount,
+                 NVL (SUM (deduction_amount), 0)     deduction_amount,
+                 currency_code,
+                 payment_day_of_month,
+                 blocked_day_count,
+                 blocked_day_type,
+                 a.updated_by,
+                 a.status,
+                 personnel_status,
+                 is_active,
+                 has_promotion,
+                 payment_reference_id,
+                 order_oid,
+                 REGISTER_NO,
+                 VOUCHER_DESC,
+                 a.payment_type_code,
+                 customer_protocol_date                               --322055
+            FROM e_order_payments a, STAGE.EX_INFRA_CUST_CUST_CUST c
+           WHERE LTRIM (RTRIM (TO_CHAR (a.cus_no))) = c.customer_code(+)
+        GROUP BY as_of_date,
+                 id_number,
+                 order_date,
+                 institution_code,
+                 institution_short_name,
+                 protocol_start_date,
+                 protocol_end_date,
+                 inst_cus_no,
+                 inst_org_code,
+                 inst_account_code,
+                 cus_no,
+                 c.profit_center_code,
+                 c.profit_segment_code,
+                 account_code,
+                 product_type,
+                 currency_code,
+                 payment_day_of_month,
+                 blocked_day_count,
+                 blocked_day_type,
+                 a.updated_by,
+                 a.status,
+                 personnel_status,
+                 is_active,
+                 has_promotion,
+                 payment_reference_id,
+                 order_oid,
+                 REGISTER_NO,
+                 VOUCHER_DESC,
+                 a.payment_type_code,
+                 customer_protocol_date;
+
+    COMMIT;
+
+    pcritical_lvl  := 3;
+    error_location := 2;
+
+    STAGE.mn_utility.update_plog(pid => pid,success => 1,pcritical => 9);
+ exception
+    when others then
+      STAGE.mn_utility.update_plog(pid => pid,
+                             success => 0,
+                             fail => 'POSITION: ' || error_location || ' ERROR: ' 
+                                     || abs(SQLCODE) || ':' || SQLERRM,
+                             pcritical => pcritical_lvl);
+      ROLLBACK;
+      RAISE;
+END;
+/

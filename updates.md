@@ -50,3 +50,21 @@
 - `Tam ekran` satırı da beyaz kalmayacak şekilde açık gri harita yüzeyine dahil edildi.
 - Sağ bilgi kartındaki `Ana etki yolu` yeşili daha koyu ve okunaklı hale getirildi.
 - Filtre popover renkleri açık gri harita yüzeyiyle uyumlu olacak şekilde güncellendi.
+
+## Servis ve method hiyerarşisi
+
+### Eski hali
+
+- Sol modül ağacı `Proje > Jar > Servis > Method` gibi davranıyordu.
+- Method tanımı zorunlu olarak `serviceId` taşıyordu.
+- `GET /api/methods/:id` method detayını dönerken method'un bağlı olduğu servisten tekrar listeleme yapıyordu.
+
+### Yeni hali
+
+- Sol modül ağacı `Proje > Jar > Servis/Method` modeline çekildi.
+- Servis ve method aynı jar altında kardeş olabilir; ayrıca ihtiyaç olduğunda birbirinin parent/child'ı olarak da gösterilebilir.
+- Method tanımı artık `projectId` ve `packageId` taşır; `serviceId` opsiyoneldir.
+- Mock veriye jar altında doğrudan duran method örnekleri eklendi.
+- Mock ağaçta `service -> method` ve `method -> service` örnekleri eklendi.
+- Call graph mock'unda servis metodu -> jar metodu ve jar metodu -> servis metodu örnek çağrıları eklendi.
+- Method haritası, servise bağlı olmayan methodları jar adıyla gruplayabilecek şekilde güncellendi.

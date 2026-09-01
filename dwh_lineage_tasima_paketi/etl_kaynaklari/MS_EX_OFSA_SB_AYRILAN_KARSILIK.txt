@@ -1,0 +1,461 @@
+CREATE OR REPLACE PACKAGE BODY OFSA_SB.MS_EX_OFSA_SB_AYRILAN_KARSILIK IS
+
+  PROCEDURE MS_EX_OFSA_SB_AYRILAN_KARSILIK(SECIM NUMBER) IS
+  
+    ERROR_LOCATION     NUMBER;
+    PID                NUMBER;
+    PDATE              DATE;
+    AYBASI             DATE;
+    PASOFDATE          VARCHAR2(8);
+    PCRITICAL_LVL      NUMBER := 1; --1:Blocker,2:Critical,3:Trivial,9:No Problem
+    SEGM_TARIH         DATE;
+    ONCEKI_AY          DATE;
+    IKI_AY_ONCESI      DATE;
+    KARSILIK_SON_TARIH DATE; --Karşılık tablosu son tarihi alır
+    KARSILIK_ONC_TARIH DATE; --Karşılık tablosu son tarihten önceki ay sonu
+    KARSILIK_YUKLENEN  NUMBER; --ofsa_sb için ilgili tarihte karşılık yüklemesinin 0 olmasına bakılır
+    PDATE2             DATE; --Önceki ay karşılığı yüklenirken bu tarih alınır.
+    AY_SONU            DATE;
+    ONCEKI_AY_SONU     DATE;
+  
+  BEGIN
+  
+    ERROR_LOCATION := 1;
+  
+    SELECT PRM_VALUE,
+           TO_DATE(PRM_VALUE, PRM_FORMAT),
+           TO_DATE(MONTH_BEGIN, PRM_FORMAT),
+           TO_DATE(LAST_SEGM_DATE, PRM_FORMAT),
+           TRUNC(TO_DATE(PRM_VALUE, 'YYYYMMDD'), 'MM') - 1,
+           TRUNC(ADD_MONTHS(TO_DATE(PRM_VALUE, PRM_FORMAT), -1), 'MM') - 1,
+           TO_DATE(PRM_VALUE, PRM_FORMAT),
+           last_day(add_months(sysdate,-1) ),
+           last_day(add_months(sysdate,-2) ) 
+      INTO PASOFDATE,
+           PDATE,
+           AYBASI,
+           SEGM_TARIH,
+           ONCEKI_AY,
+           IKI_AY_ONCESI,
+           PDATE2,
+           AY_SONU,
+           ONCEKI_AY_SONU
+      FROM OFSA_SB.SY_SYSTEM_PARAMETERS T
+     WHERE PARAMETER = 'OFSA_SB_DATE';
+  
+    SELECT TO_DATE(TO_CHAR(MAX(A.AS_OF_DATE), 'YYYYMMDD'), 'YYYYMMDD'),
+           TO_DATE(TO_CHAR(TRUNC(MAX(A.AS_OF_DATE), 'MM') - 1, 'YYYYMMDD'),
+                   'YYYYMMDD') --Karşılık tablosu son veriler alınıyor
+      INTO KARSILIK_SON_TARIH, KARSILIK_ONC_TARIH
+      FROM FRM.IFRS_FINASTRA_CONTRACTS_RESULT A;
+  
+    IF PDATE <= SEGM_TARIH THEN
+      --Segmentasyon ataması
+      SEGM_TARIH := SEGM_TARIH;
+    ELSE
+      SEGM_TARIH := LEAST(PDATE, KARSILIK_SON_TARIH);
+    END IF;
+  
+    PID := OFSA_SB.MN_UTILITY.INSERT_PLOG(PMODULE      => 'MS_EX_OFSA_SB_AYRILAN_KARSILIK',
+                                          PSUBMODULE   => 'EX_OFSA_SB_AYRILAN_KARSILIK',
+                                          PROJECT_NAME => 'OFSA_SB',
+                                          PASOFDATE    => PDATE,
+                                          PCRITICAL    => PCRITICAL_LVL);
+    /*****************************************************************************************************************************/
+  
+    EXECUTE IMMEDIATE 'TRUNCATE TABLE OFSA_SB.OFSA_EX_AYRILAN_KARSILIK';
+  
+    EXECUTE IMMEDIATE 'ALTER SESSION ENABLE PARALLEL DML';
+  
+    IF SECIM = 1 THEN
+      --Hergün karşılık basmaması için bu alan eklenmiştir.Eğer karşılık ay sonunda yüklü değilse son ay yansıtılır. 
+        
+       /* 
+      PDATE     := to_date('20210930', 'yyyymmdd');
+      ONCEKI_AY := to_date('20210831', 'yyyymmdd');
+      */
+   
+    /* PDATE:= AY_SONU ;
+     ONCEKI_AY:= ONCEKI_AY_SONU ;*/
+     
+    
+      -------------------------------------------------------------------------------------------------------------------
+      INSERT INTO OFSA_SB.OFSA_EX_AYRILAN_KARSILIK
+      
+        (
+         
+         SELECT A.*,1 --1 katsayısı nihai karlılık olduğunu ifade eder.
+           FROM (SELECT PDATE2 AS AS_OF_DATE, 
+                          A.ALM_CUSTOMERID AS MUS_NO,
+                          CASE
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('00000', '00009', '00012', '00014', '99999') OR
+                                 A.ALM_BUSINESSSEGMENTFRM IN
+                                 ('06_BIREYSEL_KONUT',
+                                  '07_BIREYSEL_TASIT',
+                                  '10_BIREYSEL_KRM',
+                                  '08_BIREYSEL_DIGER',
+                                  '09_KREDI_KARTI') THEN
+                             '7-BIREYSEL'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('50041', '50042', '50043', '50044', '99996') THEN
+                             '5-TARIM'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('40205',
+                                  '40304',
+                                  '40305',
+                                  '40306',
+                                  '40308',
+                                  '40309'
+) THEN
+                             '4-KOBI'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ( '60501', '99997','60502','60503') THEN '6-ISLETME'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20511', '20512', '99998') THEN '2-TICARI'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20203', '20206', '20204', '20207') THEN '1-KURUMSAL'
+                            ELSE '99-SUBE_HAVUZ'
+                          END AS ISKOLU,
+                          CASE
+                            WHEN A.ALM_BUSINESSSEGMENTFRM IN
+                                 ('06_BIREYSEL_KONUT',
+                                  '07_BIREYSEL_TASIT',
+                                  '10_BIREYSEL_KRM',
+                                  '08_BIREYSEL_DIGER',
+                                  '09_KREDI_KARTI') THEN
+                             '99999'
+                            WHEN (SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('00000', '00009', '00012', '00014') AND
+                                 ALM_LOANSEGMENT != 'Bireysel') THEN
+                             '99997'
+                            ELSE
+                             SEG.BUSINESS_SEGMENT_CODE
+                          END AS SEGMENT,
+                          
+                          CASE
+                            WHEN TO_NUMBER(a.alm_branchid) IN
+                                 ('6', '220', '372', '122') THEN
+                             -1
+                            ELSE
+                             TO_NUMBER(O.PARENT_CODE)
+                          END AS BOLGE,
+                          TO_NUMBER(a.alm_branchid) AS SUBE,
+                          NVL(C.REPRESENTATIVE_FILE_NO,
+                              NVL(A.ALM_MTCODE, 999999)) AS MT,
+                          NVL(UPPER(A.ALM_PRODUCT_TYPE), 88888888) AS URUN_KODU,
+                          NVL(UPPER(A.PRODUCT_NAME), 'DIGER_URUN') AS URUN,
+                          CASE
+                            WHEN A.CURRENCY_CODE IN ('TL', 'TRY') THEN
+                             'TL'
+                            ELSE
+                             A.CURRENCY_CODE
+                          END AS PB,
+                          'AYRILAN_KARSILIK' AS KAYNAK,
+                          
+                          ROUND(SUM(CASE
+                                      WHEN (A.AS_OF_DATE = ONCEKI_AY AND
+                                           ALM_BUCKETINFORMATION = 'Bucket2') THEN
+                                       ALM_LOSSALLOWANCE
+                                      ELSE
+                                       0
+                                    END) - SUM(CASE
+                                                 WHEN (A.AS_OF_DATE = PDATE AND
+                                                      ALM_BUCKETINFORMATION = 'Bucket2') THEN
+                                                  ALM_LOSSALLOWANCE
+                                                 ELSE
+                                                  0
+                                               END),
+                                2) AS SEPET_2_AYRILAN_KARSILIK,
+                          ROUND(SUM(CASE
+                                      WHEN (A.AS_OF_DATE = ONCEKI_AY AND
+                                           ALM_BUCKETINFORMATION = 'Bucket3') THEN
+                                       ALM_LOSSALLOWANCE
+                                      ELSE
+                                       0
+                                    END) - SUM(CASE
+                                                 WHEN (A.AS_OF_DATE = PDATE AND
+                                                      ALM_BUCKETINFORMATION = 'Bucket3') THEN
+                                                  ALM_LOSSALLOWANCE
+                                                 ELSE
+                                                  0
+                                               END),
+                                2) AS SEPET_3_AYRILAN_KARSILIK,
+                          ROUND(SUM(CASE
+                                      WHEN A.AS_OF_DATE = PDATE AND A.AGING_LATE_DAY > 0 AND
+                                           ALM_BUCKETINFORMATION = 'Bucket1' THEN
+                                       ALM_LOSSALLOWANCE
+                                      ELSE
+                                       0
+                                    END) * CASE
+                                  WHEN EXTRACT(YEAR FROM PDATE) =
+                                       EXTRACT(YEAR FROM a.ALM_OPENINGDATE) THEN
+                                   EXTRACT(MONTH FROM PDATE) -
+                                   EXTRACT(MONTH FROM a.ALM_OPENINGDATE)
+                                  ELSE
+                                   EXTRACT(MONTH FROM PDATE)
+                                END / -12 / 10,
+                                2) AS SEPET_1_AYRILAN_KARSILIK --Sepet1'in sahada farkındalığını azaltmamak adına etkisi kırılmıştır.Gelecek yıllarda 1/10 katsayısı tekrar değerlendirilecektir. 27.10.2020 U.U.
+                  
+                    FROM FRM.IFRS_FINASTRA_CONTRACTS_RESULT A,
+                         OLAP.FC_CUSTOMER                   C,
+                         OLAP.FC_CUSTOMER                   SEG,
+                         OLAP.DM_ORGANIZATION               O
+                   WHERE A.AS_OF_DATE IN (ONCEKI_AY, PDATE)
+                     AND C.AS_OF_DATE = PDATE
+                     AND SEG.AS_OF_DATE = SEGM_TARIH
+                     AND A.ALM_BUCKETINFORMATION in ('Bucket1', 'Bucket2')
+                     AND A.ALM_CUSTOMERID = C.CUSTOMER_CODE
+                     AND A.ALM_CUSTOMERID = SEG.CUSTOMER_CODE
+                     AND TO_NUMBER(a.alm_branchid) = TO_NUMBER(O.GL_ORG_CODE)
+                     AND A.ALM_CUSTOMERID <> '30042219' --316224 nolu talebe istinaden müşterinin tüm karşılıkları elenmiştir. A.Y.K.
+                   GROUP BY PDATE2,
+                            A.ALM_CUSTOMERID,
+                            a.ALM_OPENINGDATE,
+                            CASE
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('00000', '00009', '00012', '00014', '99999') OR
+                                 A.ALM_BUSINESSSEGMENTFRM IN
+                                 ('06_BIREYSEL_KONUT',
+                                  '07_BIREYSEL_TASIT',
+                                  '10_BIREYSEL_KRM',
+                                  '08_BIREYSEL_DIGER',
+                                  '09_KREDI_KARTI') THEN
+                             '7-BIREYSEL'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('50041', '50042', '50043', '50044', '99996') THEN
+                             '5-TARIM'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('40205',
+                                  '40304',
+                                  '40305',
+                                  '40306',
+                                  '40308',
+                                  '40309'
+) THEN
+                             '4-KOBI'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                 ( '60501', '99997','60502','60503') THEN '6-ISLETME'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20511', '20512', '99998') THEN '2-TICARI'
+                            WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20203', '20206', '20204', '20207') THEN '1-KURUMSAL'
+                            ELSE '99-SUBE_HAVUZ'
+                          END,
+                          CASE
+                            WHEN A.ALM_BUSINESSSEGMENTFRM IN
+                                 ('06_BIREYSEL_KONUT',
+                                  '07_BIREYSEL_TASIT',
+                                  '10_BIREYSEL_KRM',
+                                  '08_BIREYSEL_DIGER',
+                                  '09_KREDI_KARTI') THEN
+                             '99999'
+                            WHEN (SEG.BUSINESS_SEGMENT_CODE IN
+                                 ('00000', '00009', '00012', '00014') AND
+                                 ALM_LOANSEGMENT != 'Bireysel') THEN
+                             '99997'
+                            ELSE
+                             SEG.BUSINESS_SEGMENT_CODE
+                          END,                        
+                            CASE
+                              WHEN TO_NUMBER(a.alm_branchid) IN
+                                   ('6', '220', '372', '122') THEN
+                               -1
+                              ELSE
+                               TO_NUMBER(O.PARENT_CODE)
+                            END,
+                            TO_NUMBER(a.alm_branchid),
+                            NVL(C.REPRESENTATIVE_FILE_NO,
+                                NVL(A.ALM_MTCODE, 999999)),
+                            NVL(UPPER(A.ALM_PRODUCT_TYPE), 88888888),
+                            NVL(UPPER(A.PRODUCT_NAME), 'DIGER_URUN'),
+                            CASE
+                              WHEN A.CURRENCY_CODE IN ('TL', 'TRY') THEN
+                               'TL'
+                              ELSE
+                               A.CURRENCY_CODE
+                            END
+                  
+                  UNION ALL
+                  
+                  SELECT PDATE2 AS AS_OF_DATE,
+                         A.ALM_CUSTOMERID AS MUS_NO,
+                         CASE WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                ('00000', '00009', '00012', '00014', '99999') OR
+                                A.ALM_BUSINESSSEGMENTFRM IN
+                                ('06_BIREYSEL_KONUT',
+                                 '07_BIREYSEL_TASIT',
+                                 '10_BIREYSEL_KRM',
+                                 '08_BIREYSEL_DIGER',
+                                 '09_KREDI_KARTI') THEN '7-BIREYSEL'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('50041', '50042', '50043', '50044', '99996') THEN '5-TARIM'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('40205', '40304', '40305', '40306', '40308','40309') THEN '4-KOBI'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('60501', '99997','60502','60503') THEN '6-ISLETME'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20511', '20512',  '99998') THEN '2-TICARI'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20203', '20206', '20204', '20207') THEN '1-KURUMSAL' ELSE '99-SUBE_HAVUZ' END AS ISKOLU,
+    CASE WHEN A.ALM_BUSINESSSEGMENTFRM IN
+                                ('06_BIREYSEL_KONUT',
+                                 '07_BIREYSEL_TASIT',
+                                 '10_BIREYSEL_KRM',
+                                 '08_BIREYSEL_DIGER',
+                                 '09_KREDI_KARTI') THEN '99999'
+                              WHEN (SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012', '00014') AND ALM_LOANSEGMENT != 'Bireysel') THEN '99997' ELSE C.BUSINESS_SEGMENT_CODE END AS SEGMENT,
+                          CASE WHEN TO_NUMBER(a.alm_branchid) IN ('6', '220', '372', '122') THEN  -1 ELSE TO_NUMBER(O.PARENT_CODE) END AS BOLGE,
+                         TO_NUMBER(a.alm_branchid) AS SUBE,
+                         NVL(C.REPRESENTATIVE_FILE_NO,
+                         NVL(A.ALM_MTCODE, 999999)) AS MT,
+                         NVL(UPPER(A.ALM_PRODUCT_TYPE), 88888888) AS URUN_KODU,
+                         NVL(UPPER(A.PRODUCT_NAME), 'DIGER_URUN') AS URUN,
+                         CASE WHEN A.CURRENCY_CODE IN ('TL', 'TRY') THEN 'TL' ELSE A.CURRENCY_CODE END AS PB,
+                         'AYRILAN_KARSILIK' AS KAYNAK,
+                          ROUND(SUM(CASE WHEN (A.AS_OF_DATE = ONCEKI_AY AND ALM_BUCKETINFORMATION = 'Bucket2') THEN ALM_LOSSALLOWANCE ELSE 0 END) - 
+                                         SUM(CASE WHEN (A.AS_OF_DATE = PDATE AND ALM_BUCKETINFORMATION = 'Bucket2') THEN ALM_LOSSALLOWANCE ELSE 0 END), 2) AS SEPET_2_AYRILAN_KARSILIK,
+                         ROUND(SUM(CASE WHEN (A.AS_OF_DATE = ONCEKI_AY AND ALM_BUCKETINFORMATION = 'Bucket3') THEN ALM_LOSSALLOWANCE ELSE 0 END) - 
+                                         SUM(CASE WHEN (A.AS_OF_DATE = PDATE AND ALM_BUCKETINFORMATION = 'Bucket3') THEN ALM_LOSSALLOWANCE ELSE 0 END), 2) AS SEPET_3_AYRILAN_KARSILIK,
+                         ROUND(SUM(CASE WHEN (A.AS_OF_DATE = ONCEKI_AY AND ALM_BUCKETINFORMATION = 'Bucket1') THEN ALM_LOSSALLOWANCE ELSE 0 END) - 
+                                         SUM(CASE WHEN (A.AS_OF_DATE = PDATE AND ALM_BUCKETINFORMATION = 'Bucket1') THEN ALM_LOSSALLOWANCE ELSE 0 END), 2) AS SEPET_1_AYRILAN_KARSILIK
+                  
+                    FROM FRM.IFRS_FINASTRA_CONTRACTS_RESULT A
+                      LEFT JOIN (SELECT DISTINCT WR.AS_OF_DATE, WR.MUS_NO
+                                FROM OFSA_SB.WRITE_OFF WR) WR
+                      ON A.ALM_CUSTOMERID = WR.MUS_NO
+                     AND WR.AS_OF_DATE BETWEEN ONCEKI_AY AND PDATE, OLAP.FC_CUSTOMER C,OLAP.FC_CUSTOMER SEG,
+                   OLAP.DM_ORGANIZATION O
+                  
+                   WHERE A.AS_OF_DATE IN (ONCEKI_AY, PDATE)
+                     AND C.AS_OF_DATE = PDATE
+                     AND SEG.AS_OF_DATE = SEGM_TARIH
+                     AND WR.MUS_NO IS NULL
+                     AND A.ALM_BUCKETINFORMATION = 'Bucket3'
+                     AND A.ALM_CUSTOMERID = C.CUSTOMER_CODE
+                     AND A.ALM_CUSTOMERID = SEG.CUSTOMER_CODE
+                     AND TO_NUMBER(a.alm_branchid) = TO_NUMBER(O.GL_ORG_CODE)
+                   --  AND NOT (A.PRODUCT_REFERENCE_NO='24846265' AND A.ALM_ACCOUNTNO='1436928' AND A.ALM_CUSTOMERID='30042219' AND A.ALM_OPENINGDATE=TO_DATE('20201221','yyyymmdd')) --09/05/2021 Subj: FW: YENİ SARP İNŞ.LTD.ŞTİ.'NİN ŞUBEMİZ KARLILIĞINA ETKİSİ HK. Latif Bey mailine istinaden elenmiştir. U.U. 12/05/2021
+                     AND A.ALM_CUSTOMERID not in
+                        /*İş birimleriyle mutabık kalınan 55 müşterinin (kapanan şubelerin müşterileridir) ayrılan karşılığı 
+                        yeni şubelerine yansıtılmamıştır. A.Y*/
+                        
+                         ('30042219', --316224 nolu talebe istinaden müşterinin tüm karşılıkları elenmiştir. A.Y.K.
+                          '31834103',
+                          '30369605',
+                          '32211851',
+                          '30426025',
+                          '30939560',
+                          '31036721',
+                          '35024969',
+                          '386161',
+                          '32508639',
+                          '25038',
+                          '33228085',
+                          '34292164',
+                          '32958183',
+                          '21700926',
+                          '32318070',
+                          '33833481',
+                          '32958183',
+                          '45471',
+                          '31315935',
+                          '32151814',
+                          '31036721',
+                          '30701441',
+                          '32862913',
+                          '33341312',
+                          '31315935',
+                          '17506067',
+                          '30714434',
+                          '33747043',
+                          '33661461',
+                          '30737777',
+                          '16802667',
+                          '31983089',
+                          '33091179',
+                          '33228085',
+                          '30760805',
+                          '6601579',
+                          '30072843',
+                          '31395801',
+                          '31316198',
+                          '30369605',
+                          '23402602',
+                          '36034529',
+                          '34992046',
+                          '35985604',
+                          '30077236',
+                          '31170474',
+                          '32442248',
+                          '23300462',
+                          '35567808',
+                          '30700252',
+                          '86959',
+                          '32197653',
+                          '30865870',
+                          '31035178',
+                          '14534')
+                   GROUP BY PDATE2,
+                            A.ALM_CUSTOMERID,
+                            CASE WHEN SEG.BUSINESS_SEGMENT_CODE IN
+                                ('00000', '00009', '00012', '00014', '99999') OR
+                                A.ALM_BUSINESSSEGMENTFRM IN
+                                ('06_BIREYSEL_KONUT',
+                                 '07_BIREYSEL_TASIT',
+                                 '10_BIREYSEL_KRM',
+                                 '08_BIREYSEL_DIGER',
+                                 '09_KREDI_KARTI') THEN '7-BIREYSEL'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('50041', '50042', '50043', '50044', '99996') THEN '5-TARIM'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('40205', '40304', '40305', '40306', '40308','40309') THEN '4-KOBI'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('60501', '99997','60502','60503') THEN '6-ISLETME'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20511', '20512',  '99998') THEN '2-TICARI'
+                              WHEN SEG.BUSINESS_SEGMENT_CODE IN ('20203', '20206', '20204', '20207') THEN '1-KURUMSAL' ELSE '99-SUBE_HAVUZ' END,
+    CASE WHEN A.ALM_BUSINESSSEGMENTFRM IN
+                                ('06_BIREYSEL_KONUT',
+                                 '07_BIREYSEL_TASIT',
+                                 '10_BIREYSEL_KRM',
+                                 '08_BIREYSEL_DIGER',
+                                 '09_KREDI_KARTI') THEN '99999'
+                              WHEN (SEG.BUSINESS_SEGMENT_CODE IN ('00000', '00009', '00012', '00014') AND ALM_LOANSEGMENT != 'Bireysel') THEN '99997' ELSE C.BUSINESS_SEGMENT_CODE END,
+                           CASE
+                              WHEN TO_NUMBER(a.alm_branchid) IN
+                                   ('6', '220', '372', '122') THEN
+                               -1
+                              ELSE
+                               TO_NUMBER(O.PARENT_CODE)
+                            END,
+                            TO_NUMBER(a.alm_branchid),
+                            NVL(C.REPRESENTATIVE_FILE_NO,
+                                NVL(A.ALM_MTCODE, 999999)),
+                            NVL(UPPER(A.ALM_PRODUCT_TYPE), 88888888),
+                            NVL(UPPER(A.PRODUCT_NAME), 'DIGER_URUN'),
+                            CASE
+                              WHEN A.CURRENCY_CODE IN ('TL', 'TRY') THEN
+                               'TL'
+                              ELSE
+                               A.CURRENCY_CODE
+                            END
+                  
+                  ) A
+         
+          WHERE A.SEPET_3_AYRILAN_KARSILIK + A.SEPET_2_AYRILAN_KARSILIK +
+                A.SEPET_1_AYRILAN_KARSILIK <> 0);
+    
+      COMMIT;
+    
+    END IF;
+  
+    /*******************************************************************************************************************/
+  
+    OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID       => PID,
+                                   SUCCESS   => 1,
+                                   PCRITICAL => 9);
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      OFSA_SB.MN_UTILITY.UPDATE_PLOG(PID       => PID,
+                                     SUCCESS   => 0,
+                                     FAIL      => 'POSITION: ' ||
+                                                  ERROR_LOCATION ||
+                                                  ' ERROR: ' || ABS(SQLCODE) || ':' ||
+                                                  SQLERRM || ' ' ||
+                                                  DBMS_UTILITY.FORMAT_ERROR_BACKTRACE,
+                                     PCRITICAL => PCRITICAL_LVL);
+      ROLLBACK;
+      RAISE;
+  END;
+
+END;
+/
