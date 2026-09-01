@@ -895,6 +895,11 @@
   overflow-y: hidden;
 }
 
+.dwh-stage-panel-impact {
+  display: flex;
+  flex-direction: column;
+}
+
 .dwh-tab-content {
   display: flex;
   flex-direction: column;
@@ -1685,23 +1690,30 @@
 .dwh-impact-content {
   display: flex;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
 .dwh-impact-workspace {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  height: 100%;
   min-height: 0;
   flex: 1 1 auto;
   overflow: hidden;
+}
+
+.dwh-impact-workspace.has-detail {
+  grid-template-columns: minmax(300px, 380px) minmax(520px, 1fr);
 }
 
 .dwh-impact-list-panel {
   display: flex;
   min-width: 0;
   min-height: 0;
+  height: 100%;
   flex-direction: column;
   gap: 14px;
   overflow: auto;
@@ -1811,22 +1823,58 @@
   display: flex;
   min-width: 0;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid #e2e5e8;
   border-radius: 8px;
   background: #fff;
   box-shadow: 0 4px 16px rgba(40, 35, 28, 0.06);
+  animation: dwh-impact-detail-enter 160ms ease-out;
+}
+
+@keyframes dwh-impact-detail-enter {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .dwh-impact-detail-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 13px 14px;
+  gap: 12px;
+  padding: 9px 12px;
   border-bottom: 1px solid #e2e5e8;
   background: #fbfcfd;
+}
+
+.dwh-impact-detail-close {
+  min-height: 26px;
+  padding: 0 10px;
+  border: 1px solid #dce2e6;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dwh-impact-detail-close:hover {
+  border-color: color-mix(in srgb, var(--accent) 30%, #dce2e6);
+  background: #f5faf7;
 }
 
 .dwh-impact-detail-head > div {
@@ -1834,10 +1882,10 @@
 }
 
 .dwh-impact-detail-head h3 {
-  margin: 2px 0 4px;
+  margin: 1px 0 2px;
   overflow: hidden;
   color: var(--ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1845,15 +1893,18 @@
 
 .dwh-impact-detail-head p {
   margin: 0;
+  overflow: hidden;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dwh-impact-detail-panel > .dwh-impact-statement-accordion {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   padding: 12px;
 }
 
@@ -1864,7 +1915,7 @@
 }
 
 .dwh-impact-statement-detail {
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid #e2e5e8;
   border-radius: 8px;
   background: #fff;
@@ -1928,8 +1979,7 @@
 
 .dwh-impact-sql pre {
   margin: 0;
-  max-height: 260px;
-  overflow: auto;
+  overflow: visible;
   padding: 10px;
   border-top: 1px solid #edf0f2;
   background: #f7f8f9;
@@ -2123,7 +2173,8 @@
     overflow: auto;
   }
 
-  .dwh-impact-workspace {
+  .dwh-impact-workspace,
+  .dwh-impact-workspace.has-detail {
     grid-template-columns: minmax(0, 1fr);
     overflow: visible;
   }

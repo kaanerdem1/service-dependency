@@ -635,7 +635,7 @@ function ImpactPanel({
 
   return (
     <div className="dwh-tab-content dwh-impact-content">
-      <div className="dwh-impact-workspace">
+      <div className={`dwh-impact-workspace${activeImpactTable ? ' has-detail' : ''}`}>
         <aside className="dwh-impact-list-panel">
           <section className="dwh-impact-section">
             <div className="dwh-section-head">
@@ -658,7 +658,7 @@ function ImpactPanel({
                             key={`${affected.id}-${affected.level}`}
                             type="button"
                             className={`dwh-impact-table-row${selected ? ' is-selected' : ''}`}
-                            onClick={() => setActiveImpactTable(affected)}
+                            onClick={() => setActiveImpactTable(selected ? undefined : affected)}
                             title={fullTableName(affected)}
                           >
                             <span className="dwh-kind-badge is-dwh-table" aria-hidden>T</span>
@@ -702,35 +702,38 @@ function ImpactPanel({
           </section>
         </aside>
 
-        <article className="dwh-impact-detail-panel">
-          {activeImpactTable ? (
-            <>
-              <div className="dwh-impact-detail-head">
-                <div>
-                  <span className="dwh-eyebrow">Etkilenen tablo</span>
-                  <h3 title={activeTableName}>{activeTableName}</h3>
-                </div>
+        {activeImpactTable ? (
+          <article className="dwh-impact-detail-panel">
+            <div className="dwh-impact-detail-head">
+              <div>
+                <span className="dwh-eyebrow">Prosedürler</span>
+                <p>{activeTableName} tablosunu etkileyen sorgular</p>
               </div>
+              <button
+                type="button"
+                className="dwh-impact-detail-close"
+                onClick={() => setActiveImpactTable(undefined)}
+              >
+                Kapat
+              </button>
+            </div>
 
-              <div className="dwh-impact-statement-accordion">
-                {activeImpactTable.statements.map((statement) => (
-                  <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
-                    <summary>
-                      <span>
-                        <strong>{impactProcedureLabel(statement)}</strong>
-                        <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
-                      </span>
-                      <DmlBadge dmlType={statement.dmlType} />
-                    </summary>
-                    <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
-                  </details>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="dwh-query-empty">Sorgu detayını görmek için soldan etkilenen tablo seçin.</div>
-          )}
-        </article>
+            <div className="dwh-impact-statement-accordion">
+              {activeImpactTable.statements.map((statement) => (
+                <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
+                  <summary>
+                    <span>
+                      <strong>{impactProcedureLabel(statement)}</strong>
+                      <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
+                    </span>
+                    <DmlBadge dmlType={statement.dmlType} />
+                  </summary>
+                  <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
+                </details>
+              ))}
+            </div>
+          </article>
+        ) : null}
       </div>
     </div>
   )
