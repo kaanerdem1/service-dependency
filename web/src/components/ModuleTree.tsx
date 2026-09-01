@@ -9,6 +9,7 @@
  */
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -18,7 +19,12 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { listMethodsForService } from '../api/client'
+import {
+  getModuleChildren,
+  getNonServiceMethods,
+  getServiceTreePath,
+  listMethodsForService,
+} from '../api/client'
 import type { MethodRef, ModuleNode } from '../types'
 import { MotionTooltip } from '../motion/MotionTooltip'
 import { SkeletonShimmer } from '../motion/SkeletonShimmer'
@@ -27,6 +33,7 @@ import { TreeAccordion } from '../motion/TreeAccordion'
 const TIP_DELAY_MS = 1000
 
 const KIND_LABEL: Record<ModuleNode['kind'], string> = {
+  group: 'grup',
   project: 'proje',
   package: 'jar',
   service: 'servis',
@@ -34,6 +41,7 @@ const KIND_LABEL: Record<ModuleNode['kind'], string> = {
 }
 
 const KIND_INITIAL: Record<ModuleNode['kind'], string> = {
+  group: 'G',
   project: 'P',
   package: 'J',
   service: 'S',
@@ -47,7 +55,14 @@ type TreeTipContextValue = {
   hideTip: () => void
 }
 
+type TreeHydrationContextValue = {
+  childMap: Map<string, ModuleNode[]>
+  registerChildren: (nodeId: string, children: ModuleNode[]) => void
+  showNonServiceMethods: boolean
+}
+
 const TreeTipContext = createContext<TreeTipContextValue | null>(null)
+const TreeHydrationContext = createContext<TreeHydrationContextValue | null>(null)
 
 function useTreeTipHandlers(text: string) {
   const ctx = useContext(TreeTipContext)
@@ -86,9 +101,17 @@ type Props = {
   onSelectMethod: (serviceId: string, methodId: string) => void
 }
 
-/** Seçili servise (ve method varsa servise) giden ataları aç. */
+function childrenOf(
+  node: ModuleNode,
+  childMap: Map<string, ModuleNode[]>,
+): ModuleNode[] | undefined {
+  return childMap.get(node.id) ?? node.children
+}
+
+/** Seçili servise giden atalar (yüklü çocuklar dahil). */
 function revealAncestorIds(
   nodes: ModuleNode[],
+  childMap: Map<string, ModuleNode[]>,
   serviceId?: string,
   methodId?: string,
 ): Set<string> {
@@ -100,7 +123,7 @@ function revealAncestorIds(
       return true
     }
     let hit = false
-    for (const child of node.children ?? []) {
+    for (const child of childrenOf(node, childMap) ?? []) {
       if (walk(child)) hit = true
     }
     if (hit) ids.add(node.id)
@@ -238,10 +261,87 @@ function MethodTreeRow({
   )
 }
 
+function isArtifactNode(node: ModuleNode): boolean {
+  return node.kind === 'package' && node.id.startsWith('art-')
+}
+
+function NonServiceMethodLeaves({
+  artifactNodeId,
+  depth,
+  selectedMethodId,
+  onSelectMethod,
+}: {
+  artifactNodeId: string
+  depth: number
+  selectedMethodId?: string
+  onSelectMethod: (serviceId: string, methodId: string) => void
+}) {
+  const [methods, setMethods] = useState<ModuleNode[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    void getNonServiceMethods(artifactNodeId)
+      .then((rows) => {
+        if (!cancelled) setMethods(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setMethods([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [artifactNodeId])
+
+  if (loading) {
+    return (
+      <div style={{ paddingLeft: 8 + depth * 12 }}>
+        <SkeletonShimmer className="tree-row skeleton" lines={2} />
+      </div>
+    )
+  }
+  if (methods.length === 0) {
+    return (
+      <p className="tree-non-service-empty" style={{ paddingLeft: 8 + depth * 12 }}>
+        Servis dışı metod yok
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <p className="tree-non-service-heading" style={{ paddingLeft: 8 + depth * 12 }}>
+        Servis dışı metodlar
+      </p>
+      {methods.map((m) =>
+        m.methodId ? (
+          <MethodTreeRow
+            key={m.id}
+            fullName={m.name}
+            className={m.methodId === selectedMethodId ? 'selected' : ''}
+            depth={depth}
+            methodId={m.methodId}
+            classNamePart={m.name.split('.')[0] ?? m.name}
+            methodName={
+              m.name.includes('.') ? m.name.split('.').slice(1).join('.') : m.name
+            }
+            onSelect={() => onSelectMethod('', m.methodId!)}
+          />
+        ) : null,
+      )}
+    </>
+  )
+}
+
 function TreeItem({
   node,
   depth,
   revealIds,
+  followGen,
   selectedServiceId,
   selectedMethodId,
   onSelectService,
@@ -250,17 +350,24 @@ function TreeItem({
   node: ModuleNode
   depth: number
   revealIds: Set<string>
+  followGen: number
   selectedServiceId?: string
   selectedMethodId?: string
   onSelectService: (serviceId: string) => void
   onSelectMethod: (serviceId: string, methodId: string) => void
 }) {
+  const hydration = useContext(TreeHydrationContext)
+  const childMap = hydration?.childMap ?? new Map<string, ModuleNode[]>()
+  const registerChildren = hydration?.registerChildren
+  const showNonServiceMethods = hydration?.showNonServiceMethods ?? false
+
   const isService = node.kind === 'service'
-  const hasStaticChildren = !!node.children?.length
-  const canExpand = hasStaticChildren || isService
-  const [open, setOpen] = useState(
-    () => (depth < 2 && !isService) || revealIds.has(node.id),
-  )
+  const resolvedChildren = childrenOf(node, childMap)
+  const hasResolvedChildren = !!resolvedChildren?.length
+  const canExpandLazy = Boolean(node.hasChildren && !hasResolvedChildren)
+  const canExpand = hasResolvedChildren || canExpandLazy || isService
+  const [open, setOpen] = useState(() => revealIds.has(node.id))
+  const [loadingChildren, setLoadingChildren] = useState(false)
   const selected =
     isService &&
     node.serviceId === selectedServiceId &&
@@ -269,13 +376,39 @@ function TreeItem({
   const tipHandlers = useTreeTipHandlers(node.name)
 
   useEffect(() => {
-    if (revealIds.has(node.id)) setOpen(true)
-  }, [revealIds, node.id])
+    if (followGen > 0 && revealIds.has(node.id)) setOpen(true)
+  }, [followGen, node.id])
 
   useLayoutEffect(() => {
-    if (!selected) return
+    if (!selected || followGen === 0) return
     rowRef.current?.scrollIntoView({ block: 'nearest' })
-  }, [selected])
+  }, [selected, followGen])
+
+  const loadChildren = async () => {
+    if (!canExpandLazy || hasResolvedChildren) return
+    setLoadingChildren(true)
+    try {
+      const children = await getModuleChildren(node.id)
+      registerChildren?.(node.id, children)
+    } catch {
+      registerChildren?.(node.id, [])
+    } finally {
+      setLoadingChildren(false)
+    }
+  }
+
+  const toggleOpen = () => {
+    void (async () => {
+      if (open) {
+        setOpen(false)
+        return
+      }
+      setOpen(true)
+      await loadChildren()
+    })()
+  }
+
+  const showChildBranch = open && (hasResolvedChildren || loadingChildren)
 
   return (
     <div className="tree-item">
@@ -291,7 +424,7 @@ function TreeItem({
             className="chev-btn"
             aria-expanded={open}
             aria-label={open ? 'Kapat' : 'Aç'}
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => void toggleOpen()}
             onMouseEnter={(e) => e.stopPropagation()}
             onMouseLeave={(e) => e.stopPropagation()}
           >
@@ -312,27 +445,42 @@ function TreeItem({
               onSelectService(node.serviceId)
               return
             }
-            if (canExpand) setOpen((v) => !v)
+            if (canExpand) {
+              void toggleOpen()
+            }
           }}
         >
           <span className="tree-label">{node.name}</span>
         </button>
       </div>
-      <TreeAccordion open={open && hasStaticChildren}>
-        {hasStaticChildren
-          ? node.children!.map((child) => (
-              <TreeItem
-                key={child.id}
-                node={child}
-                depth={depth + 1}
-                revealIds={revealIds}
-                selectedServiceId={selectedServiceId}
-                selectedMethodId={selectedMethodId}
-                onSelectService={onSelectService}
-                onSelectMethod={onSelectMethod}
-              />
-            ))
-          : null}
+      <TreeAccordion open={showChildBranch}>
+        {loadingChildren ? (
+          <div className="tree-item" style={{ paddingLeft: 8 + (depth + 1) * 12 }}>
+            <SkeletonShimmer className="tree-row skeleton" lines={1} />
+          </div>
+        ) : hasResolvedChildren ? (
+          resolvedChildren!.map((child) => (
+            <TreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              revealIds={revealIds}
+              followGen={followGen}
+              selectedServiceId={selectedServiceId}
+              selectedMethodId={selectedMethodId}
+              onSelectService={onSelectService}
+              onSelectMethod={onSelectMethod}
+            />
+          ))
+        ) : null}
+        {showNonServiceMethods && isArtifactNode(node) && hasResolvedChildren ? (
+          <NonServiceMethodLeaves
+            artifactNodeId={node.id}
+            depth={depth + 1}
+            selectedMethodId={selectedMethodId}
+            onSelectMethod={onSelectMethod}
+          />
+        ) : null}
       </TreeAccordion>
       <TreeAccordion open={open && isService && Boolean(node.serviceId)}>
         {node.serviceId ? (
@@ -358,7 +506,25 @@ export function ModuleTree({
   onSelectMethod,
 }: Props) {
   const [tip, setTip] = useState<TipState | null>(null)
+  const [childMap, setChildMap] = useState<Map<string, ModuleNode[]>>(() => new Map())
+  const [hydrateRevealIds, setHydrateRevealIds] = useState<Set<string>>(() => new Set())
+  const [followGen, setFollowGen] = useState(0)
+  const [showNonServiceMethods, setShowNonServiceMethods] = useState(false)
   const timerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
+
+  const registerChildren = useCallback((nodeId: string, children: ModuleNode[]) => {
+    setChildMap((prev) => {
+      if (prev.get(nodeId) === children) return prev
+      const next = new Map(prev)
+      next.set(nodeId, children)
+      return next
+    })
+  }, [])
+
+  const hydrationContext = useMemo<TreeHydrationContextValue>(
+    () => ({ childMap, registerChildren, showNonServiceMethods }),
+    [childMap, registerChildren, showNonServiceMethods],
+  )
 
   const tipContext = useMemo<TreeTipContextValue>(
     () => ({
@@ -381,41 +547,96 @@ export function ModuleTree({
     [],
   )
 
-  const revealIds = useMemo(
-    () => revealAncestorIds(nodes, selectedServiceId, selectedMethodId),
-    [nodes, selectedServiceId, selectedMethodId],
-  )
+  useEffect(() => {
+    if (!selectedServiceId?.startsWith('sd-')) {
+      setHydrateRevealIds(new Set())
+      return
+    }
+    let cancelled = false
+    void (async () => {
+      try {
+        const { path } = await getServiceTreePath(selectedServiceId)
+        if (cancelled || path.length === 0) return
+        const nextMap = new Map<string, ModuleNode[]>()
+        const opens = new Set<string>()
+        for (let i = 0; i < path.length - 1; i++) {
+          const seg = path[i]
+          opens.add(seg.id)
+          const kids = await getModuleChildren(seg.id)
+          nextMap.set(seg.id, kids)
+        }
+        const leaf = path[path.length - 1]
+        if (selectedMethodId && leaf?.kind === 'service') {
+          opens.add(leaf.id)
+        }
+        if (!cancelled) {
+          if (nextMap.size > 0) {
+            setChildMap((prev) => new Map([...prev, ...nextMap]))
+          }
+          setHydrateRevealIds(opens)
+          setFollowGen((g) => g + 1)
+        }
+      } catch {
+        /* mock mod veya konumsuz servis */
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedServiceId, selectedMethodId])
+
+  const revealIds = useMemo(() => {
+    const ids = revealAncestorIds(
+      nodes,
+      childMap,
+      selectedServiceId,
+      selectedMethodId,
+    )
+    for (const id of hydrateRevealIds) ids.add(id)
+    return ids
+  }, [nodes, childMap, selectedServiceId, selectedMethodId, hydrateRevealIds])
 
   useEffect(() => {
-    if (!selectedServiceId) return
+    if (!selectedServiceId || followGen === 0) return
     const sel = selectedMethodId
       ? `[data-tree-method="${CSS.escape(selectedMethodId)}"]`
       : `[data-tree-service="${CSS.escape(selectedServiceId)}"]`
     const t = window.setTimeout(() => {
       document.querySelector(sel)?.scrollIntoView({ block: 'nearest' })
-    }, 80)
+    }, 200)
     return () => window.clearTimeout(t)
-  }, [selectedServiceId, selectedMethodId, revealIds])
+  }, [followGen, selectedServiceId, selectedMethodId])
 
   useEffect(() => () => window.clearTimeout(timerRef.current), [])
 
   return (
     <TreeTipContext.Provider value={tipContext}>
-      <nav className="module-tree" aria-label="Modül ağacı">
-        {nodes.map((n) => (
-          <TreeItem
-            key={n.id}
-            node={n}
-            depth={0}
-            revealIds={revealIds}
-            selectedServiceId={selectedServiceId}
-            selectedMethodId={selectedMethodId}
-            onSelectService={onSelectService}
-            onSelectMethod={onSelectMethod}
+      <TreeHydrationContext.Provider value={hydrationContext}>
+        <label className="tree-global-non-service-toggle">
+          <input
+            type="checkbox"
+            checked={showNonServiceMethods}
+            onChange={(e) => setShowNonServiceMethods(e.target.checked)}
           />
-        ))}
-      </nav>
-      <TreeHoverTipPortal tip={tip} />
+          <span>Servis dışı metodları göster</span>
+        </label>
+        <nav className="module-tree" aria-label="Modül ağacı">
+          {nodes.map((n) => (
+            <TreeItem
+              key={n.id}
+              node={n}
+              depth={0}
+              revealIds={revealIds}
+              followGen={followGen}
+              selectedServiceId={selectedServiceId}
+              selectedMethodId={selectedMethodId}
+              onSelectService={onSelectService}
+              onSelectMethod={onSelectMethod}
+            />
+          ))}
+        </nav>
+        <TreeHoverTipPortal tip={tip} />
+      </TreeHydrationContext.Provider>
     </TreeTipContext.Provider>
   )
 }

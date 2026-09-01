@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { getServiceLocations } from '../api/client'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { EmptyState } from './EmptyState'
 import { Button, Card, Field } from '../ui'
-import type { Service } from '../types'
+import type { Service, ServiceLocation } from '../types'
 
 type Props = {
   service: Service
@@ -31,13 +32,27 @@ function exampleOperations(serviceName: string): string[] {
   ]
 }
 
+function locationProjectLabel(
+  service: Service,
+  projectLabel?: string,
+): string {
+  const parts = [service.projectGroupLabel, service.projectLabel ?? projectLabel].filter(
+    Boolean,
+  ) as string[]
+  if (parts.length) return parts.join(' › ')
+  return service.projectId
+}
+
+function locationPackageLabel(service: Service, packageLabel?: string): string {
+  return service.packageLabel ?? packageLabel ?? service.packageId
+}
 function defaultSummary(
   service: Service,
   callerCount: number,
   calleeCount: number,
   projectLabel?: string,
 ): string {
-  const project = projectLabel ?? service.projectId
+  const project = locationProjectLabel(service, projectLabel)
   const ops = exampleOperations(service.name)
   const bulletLines = ops.map((op) => `• ${op}`).join('\n')
   return [
@@ -123,6 +138,97 @@ function StatTile({
   )
 }
 
+function LocationPanel({
+  service,
+  projectLabel,
+  packageLabel,
+  locations,
+}: {
+  service: Service
+  projectLabel?: string
+  packageLabel?: string
+  locations: ServiceLocation[]
+}) {
+  const primaryProject = locationProjectLabel(service, projectLabel)
+  const primaryPackage = locationPackageLabel(service, packageLabel)
+
+  if (locations.length <= 1) {
+    return (
+      <div className="service-doc-body service-doc-columns">
+        <DocItem label="Proje">{primaryProject}</DocItem>
+        <DocItem label="Paket" mono>
+          {primaryPackage}
+        </DocItem>
+      </div>
+    )
+  }
+
+  return (
+    <div className="service-doc-body service-location-list">
+      <p className="service-location-multi-hint">
+        Bu servis {locations.length} farklı jar konumunda tanımlı.
+      </p>
+      <ul className="service-location-rows">
+        {locations.map((loc) => (
+          <li key={loc.artifactId} className="service-location-row">
+            <span className="service-location-jar">{loc.artifactLabel}</span>
+            <span className="service-location-path">
+              {loc.projectGroupLabel} › {loc.projectLabel}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LocationFields({
+  service,
+  projectLabel,
+  packageLabel,
+  locations,
+}: {
+  service: Service
+  projectLabel?: string
+  packageLabel?: string
+  locations: ServiceLocation[]
+}) {
+  if (locations.length <= 1) {
+    return (
+      <div className="service-doc-body service-doc-columns">
+        <Field
+          label="Proje"
+          value={locationProjectLabel(service, projectLabel)}
+          readOnly
+        />
+        <Field
+          label="Paket"
+          value={locationPackageLabel(service, packageLabel)}
+          readOnly
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="service-doc-body service-location-list">
+      <p className="service-location-multi-hint">
+        {locations.length} jar konumu
+      </p>
+      <ul className="service-location-rows">
+        {locations.map((loc) => (
+          <li key={loc.artifactId} className="service-location-row">
+            <strong>{loc.artifactLabel}</strong>
+            <span>
+              {loc.projectGroupLabel} › {loc.projectLabel}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
 export function ServiceOverview({
   service,
   projectLabel,
@@ -138,6 +244,25 @@ export function ServiceOverview({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(baseline)
   const [saved, setSaved] = useState<string | null>(null)
+  const [locations, setLocations] = useState<ServiceLocation[]>([])
+
+  useEffect(() => {
+    if (!service.id.startsWith('sd-')) {
+      setLocations([])
+      return
+    }
+    let cancelled = false
+    void getServiceLocations(service.id)
+      .then((rows) => {
+        if (!cancelled) setLocations(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setLocations([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [service.id])
 
   useEffect(() => {
     const stored = localStorage.getItem(summaryStorageKey(service.id))
@@ -231,18 +356,12 @@ export function ServiceOverview({
           </BentoTile>
 
           <BentoTile area="location" title="Konum">
-            <div className="service-doc-body service-doc-columns">
-              <Field
-                label="Proje"
-                value={projectLabel ?? service.projectId}
-                readOnly
-              />
-              <Field
-                label="Paket"
-                value={packageLabel ?? service.packageId}
-                readOnly
-              />
-            </div>
+            <LocationFields
+              service={service}
+              projectLabel={projectLabel}
+              packageLabel={packageLabel}
+              locations={locations}
+            />
           </BentoTile>
 
           <BentoTile area="summary" title="İşlev özeti">
@@ -298,12 +417,12 @@ export function ServiceOverview({
           </BentoTile>
 
           <BentoTile area="location" title="Konum">
-            <div className="service-doc-body service-doc-columns">
-              <DocItem label="Proje">{projectLabel ?? service.projectId}</DocItem>
-              <DocItem label="Paket" mono>
-                {packageLabel ?? service.packageId}
-              </DocItem>
-            </div>
+            <LocationPanel
+              service={service}
+              projectLabel={projectLabel}
+              packageLabel={packageLabel}
+              locations={locations}
+            />
           </BentoTile>
 
           <BentoTile area="summary" title="İşlev özeti">

@@ -16,6 +16,7 @@ import type {
   Owner,
   NoteVisibility,
   Service,
+  ServiceLocation,
   ServiceNeighbors,
   ServiceNote,
   Snapshot,
@@ -38,6 +39,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getModuleTree() {
   return request<ModuleNode[]>('/modules')
+}
+
+export function getModuleChildren(nodeId: string) {
+  return request<ModuleNode[]>(`/modules/${encodeURIComponent(nodeId)}/children`)
+}
+
+export function getNonServiceMethods(nodeId: string, limit = 50, offset = 0) {
+  const qs = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  })
+  return request<ModuleNode[]>(
+    `/modules/${encodeURIComponent(nodeId)}/non-service-methods?${qs}`,
+  )
+}
+
+export function getServiceLocations(serviceId: string) {
+  return request<ServiceLocation[]>(
+    `/services/${encodeURIComponent(serviceId)}/locations`,
+  )
+}
+
+export function getServiceTreePath(serviceId: string) {
+  return request<{ path: ModuleNode[] }>(`/services/${encodeURIComponent(serviceId)}/tree-path`)
 }
 
 export function getService(id: string) {

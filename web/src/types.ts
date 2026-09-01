@@ -22,6 +22,10 @@ export type Service = {
   name: string
   projectId: string
   packageId: string
+  projectGroupId?: string
+  projectGroupLabel?: string
+  projectLabel?: string
+  packageLabel?: string
   owner?: Owner
   /** Bu servisi çağıran sayısı (değişince etkilenenler) */
   affectedCount: number
@@ -104,6 +108,8 @@ export type ImpactGraph = {
   hopsDrawn: number
   truncated: boolean
   reason?: string
+  totalHop1?: number
+  shownHop1?: number
 }
 
 /** Servis notu (MVP) — team | all görünürlük */
@@ -257,14 +263,26 @@ export type InboxNotification = {
   createdAt: string
 }
 
+export type ServiceLocation = {
+  projectGroupId: string
+  projectGroupLabel: string
+  projectId: string
+  projectLabel: string
+  artifactId: string
+  artifactLabel: string
+}
+
 export type ModuleNode = {
   id: string
-  kind: 'project' | 'package' | 'service' | 'method'
+  /** group=project_group, project=env.project, package=artifact (jar) */
+  kind: 'group' | 'project' | 'package' | 'service' | 'method'
   name: string
   serviceId?: string
   /** kind === 'method' */
   methodId?: string
   children?: ModuleNode[]
+  /** Lazy ağaç: çocuklar henüz yüklenmedi ama expand edilebilir. */
+  hasChildren?: boolean
 }
 
 export type SnapshotType =

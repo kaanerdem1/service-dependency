@@ -109,17 +109,19 @@ export function mapLayoutForRadial(): MapLayout {
     nodeW: RADIAL_DOT_W,
     colGap: 300,
     rowGap: 112,
-    tipChars: 28,
-    minZoom: 0.45,
-    maxZoom: 1.4,
-    fitPadding: 0.22,
+    tipChars: 22,
+    minZoom: 0.08,
+    maxZoom: 1.85,
+    fitPadding: 0.12,
   }
 }
 
-const RADIAL_LABEL_MAX_W = 168
+const RADIAL_LABEL_MAX_W = 280
 const RADIAL_LABEL_CHAR_W = 6.7
 const RADIAL_LABEL_LINE_H = 15
-export const RADIAL_LABEL_GAP = 18
+export const RADIAL_LABEL_GAP = 6
+const RADIAL_ORIGIN_X = 560
+const RADIAL_ORIGIN_Y = 500
 
 function radialLabelGap(
   side: RadialLabelSide,
@@ -129,40 +131,57 @@ function radialLabelGap(
   hop = 1,
 ): number {
   let gap = RADIAL_LABEL_GAP + boost
-  if (lineCount >= 3) gap += 6
+  if (lineCount >= 3) gap += 4
   if (side === 'west') {
-    gap += 8
-    if (hop >= 2) gap += 5
-    if (hop >= 3) gap += 14
+    gap = 4 + boost
   } else if (side === 'east') {
-    gap += 3
+    gap = 6 + boost
     if (hop >= 3) gap += 4
   }
   return radialDotRadius(isCenter) + gap
 }
 
-export function wrapRadialName(name: string, maxLen = 24): string[] {
-  const parts = name.trim().split('_').filter(Boolean)
-  if (parts.length <= 1) {
-    const t = name.trim() || '·'
-    if (t.length <= maxLen) return [t]
-    const lines: string[] = []
-    for (let i = 0; i < t.length && lines.length < 4; i += maxLen) {
-      lines.push(t.slice(i, i + maxLen))
+/** `_` ile dengeli 2 satır; boşluklu metin kelime kaydırır. Kısaltma yok. */
+export function wrapRadialName(name: string, maxLen = 24, maxLines = 2): string[] {
+  const raw = name.trim() || '·'
+  const limit = Math.max(1, maxLines)
+
+  if (raw.includes('_')) {
+    const parts = raw.split('_').filter(Boolean)
+    if (parts.length <= 1) return [raw]
+    if (limit === 1) return [raw]
+    let best = Math.max(1, Math.floor(parts.length / 2))
+    let bestDiff = Number.POSITIVE_INFINITY
+    for (let i = 1; i < parts.length; i++) {
+      const left = parts.slice(0, i).join('_')
+      const right = parts.slice(i).join('_')
+      const diff = Math.abs(left.length - right.length)
+      if (diff < bestDiff) {
+        bestDiff = diff
+        best = i
+      }
     }
-    return lines
+    return [parts.slice(0, best).join('_'), parts.slice(best).join('_')]
   }
-  const lines: string[] = []
-  let cur = ''
-  for (const p of parts) {
-    const candidate = cur ? `${cur}_${p}` : p
-    if (candidate.length > maxLen && cur) {
-      lines.push(cur)
-      cur = p
-    } else cur = candidate
+
+  if (raw.includes(' ')) {
+    const words = raw.split(/\s+/).filter(Boolean)
+    const lines: string[] = []
+    let cur = ''
+    for (const w of words) {
+      const candidate = cur ? `${cur} ${w}` : w
+      if (candidate.length > maxLen && cur) {
+        lines.push(cur)
+        cur = w
+      } else cur = candidate
+    }
+    if (cur) lines.push(cur)
+    return lines.slice(0, limit)
   }
-  if (cur) lines.push(cur)
-  return lines.slice(0, 4)
+
+  if (raw.length <= maxLen || limit < 2) return [raw]
+  const mid = Math.ceil(raw.length / 2)
+  return [raw.slice(0, mid), raw.slice(mid)]
 }
 
 export function radialLabelMetrics(
@@ -368,11 +387,6 @@ export function radialViewportForCenter(
   )
   zoom = Math.max(zoom, opts.minZoom)
 
-  if (opts.fullscreen && paneW > paneH * 1.15) {
-    const fillZoom = (paneW * 0.9) / (safeW * (1 + pad * 0.55))
-    zoom = Math.min(opts.maxZoom, Math.max(zoom, fillZoom))
-  }
-
   let x = paneW / 2 - center.cx * zoom
   let y = paneH / 2 - center.cy * zoom
 
@@ -386,7 +400,7 @@ export function radialViewportForCenter(
     [bounds.x, bounds.y + bounds.height],
     [bounds.x + bounds.width, bounds.y + bounds.height],
   ]
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < 14; i++) {
     let ok = true
     for (const [fx, fy] of corners) {
       const sx = fx * zoom + x
@@ -414,6 +428,8 @@ export type RadialViewportHint = {
   width: number
   height: number
   fullscreen?: boolean
+  /** Bubble açıkken 1. halka yarıçap çarpanı */
+  spokeScale?: number
 }
 
 /** Geniş ekranda yatay elips; tam ekranda halkaları büyüt */
@@ -432,13 +448,13 @@ export function radialLayoutProfile(hint: RadialViewportHint): {
   const stretchX =
     aspect > 1.18 ? 1 + Math.min(fullscreen ? 0.22 : 0.1, (aspect - 1.18) * 0.28) : 1
   const stretchY = 1
-  const radiusScale = fullscreen ? 1.08 : 1
+  const radiusScale = fullscreen ? 1.04 : 0.92
 
   return {
     stretchX,
     stretchY,
     radiusScale,
-    compactOrigin: fullscreen,
+    compactOrigin: true,
   }
 }
 
@@ -610,10 +626,21 @@ function packRadialRingRadii(
   byHop: Map<number, { id: string; name: string }[]>,
   angles: Map<string, number>,
   radiusScale: number,
+  viewport?: RadialViewportHint,
 ): Map<number, number> {
+  const pane = Math.min(
+    Math.max(viewport?.width ?? 720, 320),
+    Math.max(viewport?.height ?? 520, 240),
+  )
+  void pane
+  const spoke = viewport?.spokeScale ?? 1
+  const ring8 = 208 * spoke
+  const ringPitch = Math.max(156, ring8 * 0.48)
+  const hop0 = hops[0] ?? 1
+
   const radiusByHop = new Map<number, number>()
   let prevR = 0
-  let prevRadial = 36
+  let prevRadial = 28
   for (const hop of hops) {
     const items = (byHop.get(hop) ?? [])
       .map((n) => ({
@@ -621,28 +648,34 @@ function packRadialRingRadii(
         angle: angles.get(n.id) ?? 0,
       }))
       .sort((a, b) => a.angle - b.angle)
-    let rNeed = 140 * radiusScale
+    const n = Math.max(items.length, 1)
+    const ringIndex = Math.max(0, hop - hop0)
+    const minR = ring8 * radiusScale + ringIndex * ringPitch
+    const thisCap = minR + 80
+    const chord = n <= 12 ? 46 : n <= 20 ? 36 : 30
+    let rNeed = minR
     if (items.length >= 2) {
       for (let i = 0; i < items.length; i++) {
         const a = items[i]!
         const b = items[(i + 1) % items.length]!
-        const d = Math.max(angDist(a.angle, b.angle), 0.1)
-        const ta = radialSlotSize(a.name, a.angle, false).tangent
-        const tb = radialSlotSize(b.name, b.angle, false).tangent
-        const half = (ta + tb) / 2 + 28
+        const d = Math.max(angDist(a.angle, b.angle), 0.12)
+        const ta = Math.min(40, radialSlotSize(a.name, a.angle, false).tangent)
+        const tb = Math.min(40, radialSlotSize(b.name, b.angle, false).tangent)
+        const half = (ta + tb) / 2 + 8
         rNeed = Math.max(rNeed, half / Math.sin(Math.min(Math.PI / 2, d / 2)))
       }
-    } else if (items.length === 1) {
-      rNeed = Math.max(rNeed, 180 * radiusScale)
+    } else {
+      rNeed = Math.max(rNeed, (chord * n) / (2 * Math.PI))
     }
-    const thisRadial = Math.max(
-      ...items.map((n) => radialSlotSize(n.name, n.angle, false).radial),
-      48,
+    const thisRadial = Math.min(
+      44,
+      Math.max(
+        ...items.map((it) => radialSlotSize(it.name, it.angle, false).radial),
+        28,
+      ),
     )
-    const fromPrev = prevR + prevRadial + thisRadial + 36
-    const hop1Floor =
-      hop === hops[0] ? Math.max(240 * radiusScale, 36 * Math.max(items.length, 1)) : 0
-    const R = Math.max(rNeed, fromPrev, hop1Floor)
+    const fromPrev = hop === hop0 ? minR : prevR + prevRadial + thisRadial + 36
+    const R = Math.min(thisCap, Math.max(rNeed, fromPrev, minR))
     radiusByHop.set(hop, R)
     prevR = R
     prevRadial = thisRadial
@@ -677,16 +710,9 @@ export function radialLabelSidePrefs(
   isCenter: boolean,
 ): RadialLabelSide[] {
   if (isCenter) return ['below', 'above', 'east', 'west']
-  const c = Math.cos(angle)
-  const s = Math.sin(angle)
-  if (c > 0.35) return ['east', 'below', 'above', 'west']
-  if (c < -0.35) {
-    return s < 0
-      ? ['west', 'above', 'below', 'east']
-      : ['west', 'below', 'above', 'east']
-  }
-  if (s >= 0) return ['below', 'east', 'west', 'above']
-  return ['above', 'east', 'west', 'below']
+  /** Sağ: tam ad doğuya; sol: ad ikona yaslı (batı) — oklarla üst üste binmesin */
+  if (Math.cos(angle) >= 0) return ['east']
+  return ['west']
 }
 
 export function radialLabelSide(
@@ -848,7 +874,7 @@ function placeRadialLabels<T extends RadialLayoutNode>(
       cx,
       cy,
       angle: d.radialAngle ?? 0,
-      name: String(d.fullLabel ?? d.label ?? n.id),
+      name: String(d.label ?? d.fullLabel ?? n.id),
       isCenter,
     })
   }
@@ -920,18 +946,12 @@ function placeRadialLabels<T extends RadialLayoutNode>(
   for (const it of items) {
     if (it.isCenter) continue
     const hop = it.hop
-    const hopLine = `${hop}. katman`
-    let prefs = radialLabelSidePrefs(it.angle, it.isCenter)
-    if (hop >= 3 && Math.cos(it.angle) < -0.25) {
-      prefs = [
-        'west',
-        ...prefs.filter((p) => p !== 'west'),
-      ] as RadialLabelSide[]
-    }
+    const hopLine = hop <= 1 ? null : `${hop}. katman`
+    const prefs = radialLabelSidePrefs(it.angle, it.isCenter)
     let side = prefs[0] ?? 'east'
     let gapBoost = 0
-    outer: for (let pass = 0; pass < 2; pass++) {
-      gapBoost = pass === 1 ? 10 : 0
+    outer: for (let pass = 0; pass < 1; pass++) {
+      gapBoost = 0
       for (const cand of prefs) {
         const box = radialLabelBox(
           it.cx,
@@ -1128,6 +1148,20 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
       return (n?.data.fullLabel ?? n?.data.label ?? id).toLowerCase()
     },
   )
+  for (const hop of hops) {
+    if (hop <= 1) continue
+    const ids = (byHop.get(hop) ?? []).map((n) => n.id)
+    if (ids.length < 2) continue
+    ids.sort((a, b) =>
+      String(idToNode.get(a)?.data.label ?? a).localeCompare(
+        String(idToNode.get(b)?.data.label ?? b),
+        'tr',
+      ),
+    )
+    ids.forEach((id, i) => {
+      angles.set(id, -Math.PI / 2 + ((i + 0.5) / ids.length) * Math.PI * 2)
+    })
+  }
 
   const hopNames = new Map<number, { id: string; name: string }[]>()
   for (const hop of hops) {
@@ -1135,12 +1169,12 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
       hop,
       (byHop.get(hop) ?? []).map((n) => ({
         id: n.id,
-        name: String(n.data.fullLabel ?? n.data.label ?? n.id),
+        name: String(n.data.label ?? n.data.fullLabel ?? n.id),
       })),
     )
   }
 
-  const radiusByHop = packRadialRingRadii(hops, hopNames, angles, radiusScale)
+  const radiusByHop = packRadialRingRadii(hops, hopNames, angles, radiusScale, viewport)
   const rings: { hop: number; radius: number }[] = hops.map((hop) => ({
     hop,
     radius: radiusByHop.get(hop) ?? 0,
@@ -1148,11 +1182,10 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
   let maxCenterDist = 0
   for (const r of rings) maxCenterDist = Math.max(maxCenterDist, r.radius)
 
-  const labelPad = compactOrigin ? 96 : 56
-  const maxRx = maxCenterDist * stretchX
   const maxRy = maxCenterDist * stretchY
-  const cx = compactOrigin ? maxRx + labelPad : originX + maxRx + 24
-  const cy = maxRy + (compactOrigin ? 52 : 72)
+  /** Sabit merkez — bubble açılınca R artsa da hub kaymasın */
+  const cx = compactOrigin ? RADIAL_ORIGIN_X : originX + RADIAL_ORIGIN_X
+  const cy = compactOrigin ? RADIAL_ORIGIN_Y : maxRy + 72
 
   const next: T[] = nodes
     .filter((n) => !n.id.startsWith('__ring-'))
@@ -1215,7 +1248,7 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
       const px = n.position.x + mid.x
       const py = n.position.y + mid.y
       const ang = d.radialAngle ?? 0
-      const name = String(d.fullLabel ?? d.label ?? n.id)
+      const name = String(d.label ?? d.fullLabel ?? n.id)
       boxes.push({
         id: n.id,
         hop: isCenter ? 0 : Math.max(1, d.hop || 1),
@@ -1259,14 +1292,24 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
     }
   }
 
-  for (let iter = 0; iter < 8; iter++) {
+  for (let iter = 0; iter < 3; iter++) {
     const hop = bumpUntilClear()
     if (!hop) break
-    placeHop(hop, (radiusByHop.get(hop) ?? 0) + 52)
+    const spoke = viewport?.spokeScale ?? 1
+    const ring8 = 208 * spoke
+    const ringPitch = Math.max(156, ring8 * 0.48)
+    const hop0 = hops[0] ?? 1
+    const ringIndex = Math.max(0, hop - hop0)
+    const cap = ring8 + ringIndex * ringPitch + 80
+    const nextR = Math.min(cap, (radiusByHop.get(hop) ?? 0) + 28)
+    if (nextR <= (radiusByHop.get(hop) ?? 0) + 1) break
+    placeHop(hop, nextR)
     let prev = 0
     for (const h of hops) {
-      const need = h === hops[0] ? 0 : prev + 88
-      const r = Math.max(radiusByHop.get(h) ?? 0, need)
+      const idx = Math.max(0, h - hop0)
+      const hCap = ring8 + idx * ringPitch + 80
+      const need = h === hop0 ? ring8 : prev + 120
+      const r = Math.min(hCap, Math.max(radiusByHop.get(h) ?? 0, need))
       if (r !== radiusByHop.get(h)) placeHop(h, r)
       prev = r
     }
@@ -1392,7 +1435,7 @@ export function autoFitMinZoom(
   visibleMaxHop: number,
 ): number {
   const hopFloor =
-    visibleMaxHop <= 1 ? 0.42 : visibleMaxHop === 2 ? 0.34 : 0.28
+    visibleMaxHop <= 1 ? 0.08 : visibleMaxHop === 2 ? 0.07 : 0.06
   return Math.min(layout.minZoom, hopFloor)
 }
 

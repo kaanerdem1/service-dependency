@@ -64,6 +64,7 @@ import {
   RADIAL_DOT_R,
   RADIAL_HIT,
   applyRadialLayout,
+  compactMapLabel,
   mapLabelNeedsTip,
   mapLayoutForDepth,
   mapLayoutForRadial,
@@ -96,6 +97,7 @@ import {
   MapInfoPanel,
   MapViewportSync,
   ProjectFilterHint,
+  MapBudgetHint,
   RadialLabelZoomSync,
 } from './ImpactChrome'
 import { saveExploreSnapshot } from '../api/client'
@@ -135,6 +137,8 @@ type Props = {
   onSnapshotSaved?: (snapshot: import('../types').Snapshot) => void
   /** Ağaç / arama ile yeni merkez → LTR'ye dön */
   forceLtrSignal?: number
+  /** Hub kırpma banner / cluster → Tablo sekmesi (opsiyonel proje filtresi) */
+  onOpenAffectedTab?: (projectId?: string) => void
 }
 
 const MAP_LAYOUT_MODE_KEY = 'sd-impact-map-layout-mode'
@@ -149,10 +153,11 @@ type ServiceNodeData = {
   fullLabel: string
   showTip: boolean
   size: MapLayout['size']
-  kind: 'center' | 'service' | 'collapsed'
+  kind: 'center' | 'service' | 'collapsed' | 'cluster'
   hop: number
   hiddenIds?: string[]
   count?: number
+  clusterKey?: string
   /** Filtre dışı ama eşleşmeye giden ara düğüm */
   bridge?: boolean
   /** Proje filtresine uyan etkilenen servis */
@@ -186,9 +191,11 @@ function radialHopLine(
   isCollapsed: boolean,
 ): string | null {
   if (isCenter) return null
+  if (data.kind === 'cluster') return null
   if (isCollapsed) return `Aç · ${data.count ?? 0} servis daha`
   if (data.bridge) return 'Ara yol · filtre dışı'
   if (data.match) return `${data.hop}. katman · eşleşen`
+  if (data.hop <= 1) return null
   return `${data.hop}. katman`
 }
 
@@ -205,7 +212,7 @@ function RingGuideView({ data }: NodeProps<RingGuideData>) {
 function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
   const reduced = useReducedMotion()
   const isCenter = data.kind === 'center'
-  const isCollapsed = data.kind === 'collapsed'
+  const isCollapsed = data.kind === 'collapsed' || data.kind === 'cluster'
   const radial = Boolean(data.radialDot)
   const liveAngle = (() => {
     if (!radial || isCenter) return data.radialAngle ?? 0
@@ -239,7 +246,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
     radial && labelSide
       ? radialLabelDomStyle(
           labelSide,
-          data.fullLabel || data.label,
+          data.label || data.fullLabel,
           isCenter,
           hopLine,
           data.radialLabelGapBoost ?? 0,
@@ -254,6 +261,7 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
     `size-${data.size}`,
     isCenter && 'center',
     isCollapsed && 'collapsed',
+    data.kind === 'cluster' && 'cluster',
     data.bridge && 'bridge',
     data.match && 'match',
     !data.bridge && !data.match && data.hop > 1 && 'indirect',
@@ -360,16 +368,20 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
               )}
             >
               <span className="dd-radial-kicker is-center-badge">Merkez</span>
-              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              {wrapRadialName(data.fullLabel || data.label, 24, 2).map(
+                (line, i) => (
                 <span key={`${i}-${line}`} className="dd-radial-label-line">
                   {line}
                 </span>
-              ))}
+              ),
+              )}
             </span>
           ) : (
             <span
               className={[
                 'dd-radial-label',
+                labelSide === 'west' && 'is-west',
+                labelSide === 'east' && 'is-east',
                 data.showTip && 'name-tip is-short',
               ]
                 .filter(Boolean)
@@ -377,10 +389,20 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
               style={radialLabelStyle}
               data-tip={data.showTip ? data.fullLabel : undefined}
             >
-              {hopLine ? (
-                <span className="dd-radial-hop">{hopLine}</span>
-              ) : null}
-              {wrapRadialName(data.fullLabel || data.label).map((line, i) => (
+              {hopLine
+                ? wrapRadialName(hopLine, 16).map((line, i) => (
+                    <span key={`hop-${i}-${line}`} className="dd-radial-hop">
+                      {line}
+                    </span>
+                  ))
+                : null}
+              {wrapRadialName(
+                data.kind === 'cluster'
+                  ? `+${data.count ?? 0} servis`
+                  : data.fullLabel || data.label,
+                labelSide === 'west' ? 18 : 36,
+                2,
+              ).map((line, i) => (
                 <span key={`${i}-${line}`} className="dd-radial-label-line">
                   {line}
                 </span>
@@ -1069,6 +1091,62 @@ function splitLayer(
   }
 }
 
+function splitRestIntoBubbles(
+  rest: ImpactNode[],
+  bubbleCount: number,
+): { key: string; label: string; nodes: ImpactNode[] }[] {
+  if (!rest.length) return []
+  const n = Math.max(1, bubbleCount)
+  const size = Math.ceil(rest.length / n)
+  const clusters: { key: string; label: string; nodes: ImpactNode[] }[] = []
+  for (let i = 0; i < n; i++) {
+    const slice = rest.slice(i * size, (i + 1) * size)
+    if (!slice.length) continue
+    clusters.push({
+      key: `b${i}`,
+      label: `+${slice.length} servis`,
+      nodes: slice,
+    })
+  }
+  return clusters
+}
+
+/**
+ * Radial hop-1: ≤8 hepsi ayrı.
+ * 9–40: 6 servis + 2 bubble (kalan yarı yarıya, 20→7+7).
+ * Daha kalabalık: 8–16 bubble (~20’lik).
+ */
+function chunkHop1Bubbles(
+  nodes: ImpactNode[],
+  expandedKey?: string,
+): { visible: ImpactNode[]; clusters: { key: string; label: string; nodes: ImpactNode[] }[] } {
+  const ringSlots = 8
+  const keepIndividual = 6
+  const overflowBubbles = 2
+  const hybridMax = 40
+  const perBubble = 20
+
+  let visible: ImpactNode[] = []
+  let clusters: { key: string; label: string; nodes: ImpactNode[] }[] = []
+
+  if (nodes.length <= ringSlots) {
+    visible = nodes
+  } else if (nodes.length <= hybridMax) {
+    visible = nodes.slice(0, keepIndividual)
+    clusters = splitRestIntoBubbles(nodes.slice(keepIndividual), overflowBubbles)
+  } else {
+    const slotCount = Math.min(16, Math.max(8, Math.ceil(nodes.length / perBubble)))
+    clusters = splitRestIntoBubbles(nodes, slotCount)
+  }
+
+  if (expandedKey) {
+    const open = clusters.find((c) => c.key === expandedKey)
+    return { visible: open?.nodes ?? [], clusters: [] }
+  }
+
+  return { visible, clusters }
+}
+
 function buildGraph(
   graph: ImpactGraph,
   expandedLayers: Set<number>,
@@ -1080,6 +1158,8 @@ function buildGraph(
   layout: MapLayout = mapLayoutForDepth(1),
   layoutMode: MapLayoutMode = 'ltr',
   radialViewport?: RadialViewportHint,
+  expandedProjectClusters: Set<string> = new Set(),
+  projectLabels: Map<string, string> = new Map(),
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
   const { nodeW, colGap, rowGap, tipChars } = layout
@@ -1099,6 +1179,10 @@ function buildGraph(
 
   for (const hop of hops) {
     if (hop > visibleMaxHop) continue
+    if (layoutMode === 'radial' && hop === 1) {
+      visibleByHop.set(hop, byHop.get(hop)!)
+      continue
+    }
     const { visible, hidden } = splitLayer(
       byHop.get(hop)!,
       forceExpandCollapsed || expandedLayers.has(hop),
@@ -1146,7 +1230,16 @@ function buildGraph(
 
   for (const hop of hops) {
     if (hop > visibleMaxHop) continue
-    const col = visibleByHop.get(hop) ?? []
+    let col = visibleByHop.get(hop) ?? []
+    const clusterNodes: { key: string; label: string; nodes: ImpactNode[] }[] = []
+
+    if (layoutMode === 'radial' && hop === 1) {
+      const expandedKey = [...expandedProjectClusters][0]
+      const grouped = chunkHop1Bubbles(col, expandedKey)
+      col = grouped.visible
+      clusterNodes.push(...grouped.clusters)
+    }
+
     col.forEach((n, i) => {
       visibleIds.add(n.service.id)
       const nodeSize =
@@ -1159,12 +1252,12 @@ function buildGraph(
         id: n.service.id,
         type: 'serviceNode',
         data: {
-          label: n.service.name,
+          label: layoutMode === 'radial' ? n.service.name : compactMapLabel(n.service.name, 18),
           fullLabel: n.service.name,
-          showTip: mapLabelNeedsTip(
-            n.service.name,
-            layoutMode === 'radial' ? 48 : tipChars,
-          ),
+          showTip:
+            layoutMode === 'radial'
+              ? false
+              : mapLabelNeedsTip(n.service.name, tipChars),
           size: nodeSize,
           kind: 'service',
           hop,
@@ -1174,6 +1267,39 @@ function buildGraph(
         position: {
           x: LEFT_X + hop * colPitch,
           y: 40 + i * rowGap,
+        },
+        style: { width: w },
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        draggable: true,
+      })
+    })
+
+    clusterNodes.forEach((cluster, i) => {
+      const collapseId = `cluster-hop-${hop}-${cluster.key}`
+      visibleIds.add(collapseId)
+      const nodeSize = layoutMode === 'radial' ? 'md' : mapNodeSizeFor('collapsed', hop, visibleMaxHop)
+      const w =
+        layoutMode === 'radial'
+          ? Math.round(layout.nodeW * 0.92)
+          : mapNodeWidth(nodeSize)
+      nodes.push({
+        id: collapseId,
+        type: 'serviceNode',
+        data: {
+          label: `+${cluster.nodes.length} servis`,
+          fullLabel: `+${cluster.nodes.length} servis`,
+          showTip: false,
+          size: nodeSize,
+          kind: 'cluster',
+          hop,
+          clusterKey: cluster.key,
+          hiddenIds: cluster.nodes.map((n) => n.service.id),
+          count: cluster.nodes.length,
+        },
+        position: {
+          x: LEFT_X + hop * colPitch,
+          y: 40 + (col.length + i) * rowGap,
         },
         style: { width: w },
         sourcePosition: Position.Right,
@@ -1226,6 +1352,14 @@ function buildGraph(
     if (!treeParent.has(e.toId)) treeParent.set(e.toId, e.fromId)
   }
 
+  const serviceToCluster = new Map<string, string>()
+  for (const n of nodes) {
+    const d = n.data as ServiceNodeData
+    if (d.kind === 'cluster' && d.hiddenIds?.length) {
+      for (const sid of d.hiddenIds) serviceToCluster.set(sid, n.id)
+    }
+  }
+
   const seen = new Set<string>()
   const edges: Edge[] = []
 
@@ -1238,14 +1372,24 @@ function buildGraph(
     let target = e.toId
 
     if (!visibleIds.has(target)) {
-      const collapseId = `collapsed-hop-${toHop}`
-      if (!nodes.some((n) => n.id === collapseId)) continue
-      target = collapseId
+      const clusterId = serviceToCluster.get(target)
+      if (clusterId) {
+        target = clusterId
+      } else {
+        const collapseId = `collapsed-hop-${toHop}`
+        if (!nodes.some((n) => n.id === collapseId)) continue
+        target = collapseId
+      }
     }
     if (!visibleIds.has(source) && source !== center.id) {
-      const collapseId = `collapsed-hop-${fromHop}`
-      if (!nodes.some((n) => n.id === collapseId)) continue
-      source = collapseId
+      const clusterId = serviceToCluster.get(source)
+      if (clusterId) {
+        source = clusterId
+      } else {
+        const collapseId = `collapsed-hop-${fromHop}`
+        if (!nodes.some((n) => n.id === collapseId)) continue
+        source = collapseId
+      }
     }
 
     if (!nodes.some((n) => n.id === source) || !nodes.some((n) => n.id === target)) {
@@ -1453,6 +1597,7 @@ export function ImpactMap({
   onBeforeSnapshot,
   onSnapshotSaved,
   forceLtrSignal = 0,
+  onOpenAffectedTab,
 }: Props) {
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
@@ -1476,6 +1621,9 @@ export function ImpactMap({
   const [expandedLayers, setExpandedLayers] = useState<Set<number>>(() => {
     return new Set(restoredView?.expandedLayers ?? [])
   })
+  const [expandedProjectClusters, setExpandedProjectClusters] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [visibleMaxHop, setVisibleMaxHop] = useState(
     () => restoredView?.visibleMaxHop ?? 1,
   )
@@ -1673,9 +1821,14 @@ export function ImpactMap({
 
   const radialViewport = useMemo((): RadialViewportHint | undefined => {
     if (layoutMode !== 'radial') return undefined
-    const w = mapPane.w || (typeof window !== 'undefined' ? window.innerWidth : 960)
-    const h = mapPane.h || (typeof window !== 'undefined' ? window.innerHeight : 640)
-    return { width: w, height: h, fullscreen: mapExpanded }
+    const w = mapPane.w > 80 ? mapPane.w : 720
+    const h = mapPane.h > 80 ? mapPane.h : 480
+    return {
+      width: w,
+      height: h,
+      fullscreen: mapExpanded,
+      spokeScale: 2.15,
+    }
   }, [layoutMode, mapPane.w, mapPane.h, mapExpanded])
 
   const layout = useMemo(() => {
@@ -1701,10 +1854,14 @@ export function ImpactMap({
         layout,
         layoutMode,
         radialViewport,
+        expandedProjectClusters,
+        projectLabels,
       ),
     [
       filteredGraph,
       expandedLayers,
+      expandedProjectClusters,
+      projectLabels,
       hasScopeFilter,
       filter.bridgeIds,
       filter.matchIds,
@@ -1829,6 +1986,7 @@ export function ImpactMap({
     setFocusEdgeId(null)
     setProjectFilters([])
     setPackageFilters([])
+    setExpandedProjectClusters(new Set())
     setShowLinkedMethods(false)
     setExpandedMethodServiceId(null)
     setNotesServiceId(null)
@@ -2268,7 +2426,7 @@ export function ImpactMap({
   )
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (event: ReactMouseEvent, node: Node) => {
       if (pivotMorphingRef.current) return
       if (nodeDragged.current) {
         nodeDragged.current = false
@@ -2284,7 +2442,20 @@ export function ImpactMap({
       }
       const data = node.data as ServiceNodeData
       if (data.kind === 'collapsed') {
+        if (data.hop === 1 && onOpenAffectedTab && graph.truncated) {
+          onOpenAffectedTab()
+          return
+        }
         setExpandedLayers((prev) => new Set(prev).add(data.hop))
+        return
+      }
+      if (data.kind === 'cluster' && data.clusterKey) {
+        if (event?.shiftKey && onOpenAffectedTab) {
+          onOpenAffectedTab(data.clusterKey)
+          return
+        }
+        setUserInteracting(false)
+        setExpandedProjectClusters(new Set([data.clusterKey]))
         return
       }
       if (node.id === graph.center.id) {
@@ -2295,7 +2466,7 @@ export function ImpactMap({
       setNotesServiceId(null)
       pivotToNode(node)
     },
-    [graph.center.id, onClearCenter, pivotToNode],
+    [graph.center.id, graph.truncated, onClearCenter, onOpenAffectedTab, pivotToNode],
   )
 
   const clearHoverFocus = useCallback(() => {
@@ -2400,9 +2571,13 @@ export function ImpactMap({
   )
 
   const handlePivotBack = useCallback(() => {
+    if (expandedProjectClusters.size > 0) {
+      setExpandedProjectClusters(new Set())
+      return
+    }
     if (!onPivotBack || !canPivotBack) return
     void slideExitThen('back', onPivotBack)
-  }, [canPivotBack, onPivotBack, slideExitThen])
+  }, [canPivotBack, expandedProjectClusters.size, onPivotBack, slideExitThen])
 
   const handlePivotForward = useCallback(() => {
     if (!onPivotForward || !canPivotForward) return
@@ -2412,7 +2587,7 @@ export function ImpactMap({
   return (
     <div
       ref={attachMapRef}
-      className={`impact-map dd-map ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
+      className={`impact-map dd-map ${!mapExpanded ? 'is-docked-view' : ''} ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -2421,13 +2596,54 @@ export function ImpactMap({
       <div className="map-canvas-row">
       <div className="map-canvas">
       <div className="path-layer-bar">
-        <div className="path-layer-left">
+        <div className="path-layer-start">
+          {graph.truncated && (graph.reason || graph.totalHop1 != null) && (
+            <MapBudgetHint
+              totalHop1={graph.totalHop1}
+              shownHop1={graph.shownHop1}
+              reason={graph.reason}
+              onOpenTable={() => onOpenAffectedTab?.()}
+            />
+          )}
+          {expandedProjectClusters.size > 0 && (
+            <div className="map-cluster-trail" role="navigation" aria-label="Açık grup">
+              {[...expandedProjectClusters].map((key) => (
+                <span key={key} className="map-cluster-crumb">
+                  <span className="map-cluster-crumb-label">Grup açık</span>
+                  <button
+                    type="button"
+                    className="map-cluster-crumb-link"
+                    onClick={() => onOpenAffectedTab?.()}
+                  >
+                    Tablo
+                  </button>
+                  <button
+                    type="button"
+                    className="map-cluster-crumb-close"
+                    aria-label="Gruplara dön"
+                    onClick={() => setExpandedProjectClusters(new Set())}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="path-layer-end">
           <button
             type="button"
             className="map-nav-btn path-layer-btn"
-            disabled={!canPivotBack || pivotMorphing}
+            disabled={
+              (expandedProjectClusters.size === 0 && !canPivotBack) ||
+              pivotMorphing
+            }
             onClick={handlePivotBack}
-            title="Önceki pivot"
+            title={
+              expandedProjectClusters.size > 0
+                ? 'Gruplara dön'
+                : 'Önceki pivot'
+            }
           >
             ← Geri
           </button>
@@ -2450,9 +2666,6 @@ export function ImpactMap({
           bridgeCount={filter.bridgeIds.size}
           hop1EmptyButDeeper={filter.hop1EmptyButDeeper}
         />
-      )}
-      {graph.truncated && graph.reason && (
-        <p className="map-budget-hint">{graph.reason}</p>
       )}
       <div className="map-canvas-dock-host">
       <ReactFlowProvider>
@@ -2492,12 +2705,12 @@ export function ImpactMap({
         proOptions={{ hideAttribution: true }}
       >
         <RadialLabelZoomSync
-          layoutTick={`${layoutMode}-${visibleMaxHop}-${tidyNonce}-${graph.center.id}-${mapExpanded}`}
+          layoutTick={`${layoutMode}-${visibleMaxHop}-${tidyNonce}-${graph.center.id}-${mapExpanded}-${[...expandedProjectClusters].sort().join(',')}`}
         />
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
-          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${mapExpanded}-${tidyNonce}-${visibleMaxHop}`}
+          layoutKey={`${showLinkedMethods}-${Object.keys(methodsByService).length}-${layout.size}-${layoutMode}-${mapExpanded}-${tidyNonce}-${visibleMaxHop}-${[...expandedProjectClusters].sort().join(',')}`}
           layout={layout}
           layoutMode={layoutMode}
           drawerOpen={infoPanelOpen}

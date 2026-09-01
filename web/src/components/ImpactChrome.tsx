@@ -112,7 +112,7 @@ export function MapViewportSync({
           cx,
           cy,
           angle,
-          name: String(d.fullLabel || d.label || ''),
+          name: String(d.label || d.fullLabel || ''),
           kind: String(d.kind ?? 'service'),
           side: d.radialLabelSide,
         },
@@ -123,8 +123,10 @@ export function MapViewportSync({
   const focusViewport = async (
     duration: number,
     mode: MapLayoutMode,
+    force = false,
   ) => {
-    if (syncingRef.current || interactingRef.current) return
+    if (syncingRef.current) return
+    if (interactingRef.current && !force) return
     syncingRef.current = true
     try {
       const padding = fitViewPaddingForChrome(layout, {
@@ -180,6 +182,12 @@ export function MapViewportSync({
     }
   }
 
+  const prevLayoutKey = useRef(layoutKey)
+  const layoutKeyChanged = prevLayoutKey.current !== layoutKey
+  prevLayoutKey.current = layoutKey
+  const forceFitRef = useRef(false)
+  if (layoutKeyChanged) forceFitRef.current = true
+
   useEffect(() => {
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
@@ -199,6 +207,7 @@ export function MapViewportSync({
     if (deferHop) return
 
     const shouldRetryHopFit = pendingHopFit.current && syncKeyChanged
+    const ignoreInteract = forceFitRef.current || syncKeyChanged
 
     const delay =
       syncKeyChanged && pendingHopFit.current
@@ -208,9 +217,9 @@ export function MapViewportSync({
           : 72
 
     const id = window.setTimeout(() => {
-      if (interactingRef.current) return
+      if (interactingRef.current && !ignoreInteract) return
       void (async () => {
-        if (interactingRef.current) return
+        if (interactingRef.current && !ignoreInteract) return
         const padding = fitViewPaddingForChrome(layout, {
           drawerOpen: drawerOpenRef.current,
           radial: layoutMode === 'radial',
@@ -240,7 +249,9 @@ export function MapViewportSync({
         await focusViewport(
           centerChanged ? 320 : pendingHopFit.current ? 360 : 280,
           layoutMode,
+          ignoreInteract,
         )
+        forceFitRef.current = false
         pendingHopFit.current = false
       })()
     }, delay)
@@ -248,8 +259,7 @@ export function MapViewportSync({
     let retryId = 0
     if (shouldRetryHopFit) {
       retryId = window.setTimeout(() => {
-        if (interactingRef.current) return
-        void focusViewport(280, layoutMode)
+        void focusViewport(280, layoutMode, true)
       }, 340)
     }
 
@@ -349,7 +359,7 @@ export function RadialLabelZoomSync({ layoutTick }: { layoutTick?: string | numb
           cx,
           cy,
           angle,
-          name: String(d.fullLabel || d.label || ''),
+          name: String(d.label || d.fullLabel || ''),
           side: d.radialLabelSide,
         },
       ]
@@ -1708,7 +1718,14 @@ export function MapCanvasBar({
                         </button>
                       ) : null}
                       <div className="map-dock-project-list" aria-label="Kapsam filtresi">
-                        <p className="map-dock-project-section">Projeler</p>
+                        {projectOptions.length === 0 && packageOptions.length === 0 ? (
+                          <p className="map-dock-project-empty">
+                            Bu haritada jar/proje bilgisi olan servis yok.
+                          </p>
+                        ) : null}
+                        {projectOptions.length > 0 ? (
+                          <p className="map-dock-project-section">Projeler</p>
+                        ) : null}
                         {projectOptions.map((project) => (
                           <button
                             key={project.id}
@@ -1724,8 +1741,10 @@ export function MapCanvasBar({
                             ) : null}
                           </button>
                         ))}
-                        <p className="map-dock-project-section">Jarlar</p>
-                        {packageOptions.length === 0 ? (
+                        {packageOptions.length > 0 ? (
+                          <p className="map-dock-project-section">Jarlar</p>
+                        ) : null}
+                        {packageOptions.length === 0 && projectOptions.length > 0 ? (
                           <p className="map-dock-project-empty">Bu etki zincirinde jar yok.</p>
                         ) : (
                           packageOptions.map((pkg) => (
@@ -1900,4 +1919,88 @@ export function ProjectFilterHint({
       {bridgeCount > 0 ? ` · ${bridgeCount} ara yol` : ''}).
     </p>
   )
+}
+
+type BudgetHintProps = {
+  totalHop1?: number
+  shownHop1?: number
+  reason?: string
+  onOpenTable?: () => void
+}
+
+/** Hub / bütçe kırpma — path-layer üst şeridinde kompakt banner */
+export function MapBudgetHint({
+  totalHop1,
+  shownHop1,
+  reason,
+  onOpenTable,
+}: BudgetHintProps) {
+  const partial =
+    totalHop1 != null &&
+    shownHop1 != null &&
+    totalHop1 > shownHop1
+
+  if (partial) {
+    return (
+      <div className="map-budget-banner" role="status">
+        <span className="map-budget-metrics">
+          <span className="map-budget-metric">
+            <strong>{totalHop1}</strong>
+            <span>doğrudan etki</span>
+          </span>
+          <span className="map-budget-metric is-map">
+            <strong>{shownHop1}</strong>
+            <span>haritada</span>
+          </span>
+        </span>
+        {onOpenTable ? (
+          <button type="button" className="map-budget-link" onClick={onOpenTable}>
+            Tam liste
+            <span className="map-budget-link-arrow" aria-hidden>
+              →
+            </span>
+          </button>
+        ) : (
+          <span className="map-budget-muted">Tam liste: Tablo sekmesi</span>
+        )}
+      </div>
+    )
+  }
+
+  if (totalHop1 != null && totalHop1 > 16) {
+    return (
+      <div className="map-budget-banner" role="status">
+        <span className="map-budget-metrics">
+          <span className="map-budget-metric">
+            <strong>{totalHop1}</strong>
+            <span>doğrudan etki</span>
+          </span>
+          <span className="map-budget-metric is-map">
+            <strong>+</strong>
+            <span>N gruplar</span>
+          </span>
+        </span>
+        {onOpenTable ? (
+          <button type="button" className="map-budget-link" onClick={onOpenTable}>
+            Tam liste
+            <span className="map-budget-link-arrow" aria-hidden>
+              →
+            </span>
+          </button>
+        ) : (
+          <span className="map-budget-muted">Tam liste: Tablo sekmesi</span>
+        )}
+      </div>
+    )
+  }
+
+  if (reason) {
+    return (
+      <div className="map-budget-banner is-generic" role="status">
+        <span className="map-budget-copy">{reason}</span>
+      </div>
+    )
+  }
+
+  return null
 }

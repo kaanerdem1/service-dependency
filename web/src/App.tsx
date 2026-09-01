@@ -201,6 +201,7 @@ export default function App() {
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
+  const [tableProjectFilter, setTableProjectFilter] = useState<string | undefined>()
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
   const [surface, setSurface] = useState<AppSurface>('services')
   const [navHover, setNavHover] = useState(true)
@@ -312,14 +313,13 @@ export default function App() {
   useEffect(() => {
     void (async () => {
       try {
-        const [modules, users, catalog] = await Promise.all([
+        const [modules, users] = await Promise.all([
           getModuleTree(),
           getSessionUsers(),
-          searchServices(''),
         ])
         setTree(modules)
         setSession(users[0])
-        setCatalogServices(catalog)
+        setCatalogServices([])
         setApiError(undefined)
       } catch {
         setApiError('API’ye bağlanılamadı. `cd server && npm run dev` ile backend’i başlatın.')
@@ -557,7 +557,7 @@ export default function App() {
       setAllowNavCollapse(true)
       setSelectedMethodId(methodId)
       setTab('map')
-      if (serviceId !== pivotId) {
+      if (serviceId && serviceId !== pivotId) {
         setHistory([visitEntry(serviceId)])
         setHistoryIndex(0)
         setPivotId(serviceId)
@@ -570,6 +570,10 @@ export default function App() {
     if (!pivotId) return
     scrollToStageTop()
   }, [pivotId, selectedMethodId, scrollToStageTop])
+
+  useEffect(() => {
+    setTableProjectFilter(undefined)
+  }, [pivotId])
 
   const clearMethodKeepService = useCallback(() => {
     setSelectedMethodId(undefined)
@@ -832,7 +836,7 @@ export default function App() {
                   aria-label="Aramayı kapat"
                   onClick={() => setQuery('')}
                 />
-                <SearchHitsPortal open anchorRef={searchRef}>
+                <SearchHitsPortal open theme={appTheme} anchorRef={searchRef}>
                 <AnimatePresence initial={false}>
                 {hits.map((s, i) => (
                   <MotionListItem key={s.id} id={s.id} index={i}>
@@ -891,8 +895,8 @@ export default function App() {
           </label>
           <div className="module-kind-legend" aria-label="Ağaç türleri">
             <span className="module-kind-key">
-              <span className="module-kind-badge is-project" aria-hidden>P</span>
-              Proje
+              <span className="module-kind-badge is-group" aria-hidden>G</span>
+              Grup
             </span>
             <span className="module-kind-key">
               <span className="module-kind-badge is-package" aria-hidden>J</span>
@@ -1041,6 +1045,18 @@ export default function App() {
                           graph={impact}
                           mapExpanded={mapExpanded}
                           forceLtrSignal={mapForceLtrSignal}
+                          onOpenAffectedTab={(projectId) => {
+                            trail.record(
+                              'tab_change',
+                              undefined,
+                              projectId
+                                ? 'Tablo sekmesine geçildi (proje filtresi)'
+                                : 'Tablo sekmesine geçildi (hub banner)',
+                            )
+                            setTableProjectFilter(projectId)
+                            setMapExpanded(false)
+                            setTab('affected')
+                          }}
                           projectOptions={impactProjectOptions}
                           packageOptions={impactPackageOptions}
                           onPivot={(id) => selectPivot(id, { source: 'map' })}
@@ -1132,6 +1148,13 @@ export default function App() {
                       onPivot={(id) => selectPivot(id)}
                       projectLabels={projectLabels}
                       projectOrder={projectOrder}
+                      projectFilter={tableProjectFilter}
+                      projectFilterLabel={
+                        tableProjectFilter
+                          ? projectLabels.get(tableProjectFilter) ?? tableProjectFilter
+                          : undefined
+                      }
+                      onClearProjectFilter={() => setTableProjectFilter(undefined)}
                     />
                   </section>
 
@@ -1143,8 +1166,16 @@ export default function App() {
                     {service && (
                       <ServiceOverview
                         service={service}
-                        projectLabel={projectLabels.get(service.projectId)}
-                        packageLabel={service.packageId}
+                        projectLabel={
+                          service.projectGroupLabel && service.projectLabel
+                            ? `${service.projectGroupLabel} › ${service.projectLabel}`
+                            : service.projectLabel ??
+                              projectLabels.get(service.projectId)
+                        }
+                        packageLabel={
+                          service.packageLabel ??
+                          packageLabels.get(service.packageId)
+                        }
                         callerCount={affected.length}
                         calleeCount={callees.length}
                         loading={loading}

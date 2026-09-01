@@ -17,6 +17,10 @@ type Props = {
   projectLabels: Map<string, string>
   /** Sol ağaçtaki proje sırası (HAZINE → MEVDUAT → KREDI) */
   projectOrder: string[]
+  /** Harita cluster / +N → Tablo proje filtresi */
+  projectFilter?: string
+  projectFilterLabel?: string
+  onClearProjectFilter?: () => void
 }
 
 type SortKey = 'name' | 'affected' | 'depends'
@@ -261,7 +265,25 @@ export function AffectedList({
   onPivot,
   projectLabels,
   projectOrder,
+  projectFilter,
+  projectFilterLabel,
+  onClearProjectFilter,
 }: Props) {
+  const scopedCallers = useMemo(
+    () =>
+      projectFilter
+        ? callers.filter((x) => x.service.projectId === projectFilter)
+        : callers,
+    [callers, projectFilter],
+  )
+  const scopedCallees = useMemo(
+    () =>
+      projectFilter
+        ? callees.filter((x) => x.service.projectId === projectFilter)
+        : callees,
+    [callees, projectFilter],
+  )
+
   if (loading) {
     return (
       <div className="neighbor-grid" data-motion="affected-skeleton">
@@ -273,13 +295,29 @@ export function AffectedList({
 
   return (
     <div className="neighbor-grid">
+      {projectFilter && projectFilterLabel ? (
+        <div className="neighbor-table-filter">
+          <span>
+            Proje filtresi: <strong>{projectFilterLabel}</strong>
+          </span>
+          {onClearProjectFilter ? (
+            <button type="button" className="btn ghost compact" onClick={onClearProjectFilter}>
+              Filtreyi kaldır
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <Column
         title="Bu Servisi Çağıranlar"
         hint="Bu servis değişirse etkilenenler"
         kind="callers"
-        items={callers}
+        items={scopedCallers}
         emptyWhat="Bu servisi çağıran başka servis yok."
-        emptyAction="Bu servis yalnızca dış sistemlerden veya doğrudan API'den tetikleniyor olabilir."
+        emptyAction={
+          scopedCallers.length === 0 && scopedCallees.length === 0
+            ? 'Cross-service etki kaydı yok. Internal metod çağrıları servis expand / metod haritasında görülebilir.'
+            : "Bu servis yalnızca dış sistemlerden veya doğrudan API'den tetikleniyor olabilir."
+        }
         onPivot={onPivot}
         projectLabels={projectLabels}
         projectOrder={projectOrder}
@@ -288,7 +326,7 @@ export function AffectedList({
         title="Bu Servisin Çağırdıkları"
         hint="Doğrudan çağırdığı servisler — değişince etkilenecek çağıran sayısı"
         kind="callees"
-        items={callees}
+        items={scopedCallees}
         emptyWhat="Bu servisin doğrudan çağırdığı servis yok."
         emptyAction="Yalnızca gelen çağrılar var; downstream bağımlılık bulunmuyor."
         onPivot={onPivot}

@@ -15,17 +15,23 @@ export type Service = {
   name: string
   projectId: string
   packageId: string
+  projectGroupId?: string
+  projectGroupLabel?: string
+  projectLabel?: string
+  packageLabel?: string
   owner?: Owner
   affectedCount: number
   dependsOnCount: number
 }
 export type ModuleNode = {
   id: string
-  kind: 'project' | 'package' | 'service' | 'method'
+  kind: 'group' | 'project' | 'package' | 'service' | 'method'
   name: string
   serviceId?: string
   methodId?: string
   children?: ModuleNode[]
+  /** Lazy ağaç: çocuklar henüz yüklenmedi ama expand edilebilir. */
+  hasChildren?: boolean
 }
 export type FlagStatus = 'accepted' | 'rejected' | 'hold_editing' | 'unseen'
 export type ImpactedFlag = {

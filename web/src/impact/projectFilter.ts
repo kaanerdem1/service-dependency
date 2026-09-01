@@ -56,20 +56,23 @@ export type ImpactScopeFilterInput = {
 /** Modül ağacından proje etiketleri */
 export function projectLabelsFromTree(tree: ModuleNode[]): Map<string, string> {
   const m = new Map<string, string>()
-  for (const n of tree) {
-    if (n.kind === 'project') {
-      // HAZINE / MEVDUAT / KREDI gibi uppercase adlar olduğu gibi
-      if (n.name && n.name === n.name.toUpperCase()) {
-        m.set(n.id, n.name)
-        continue
+  const walk = (node: ModuleNode) => {
+    if (node.kind === 'project' || node.kind === 'group') {
+      if (node.name && node.name === node.name.toUpperCase()) {
+        m.set(node.id, node.name)
+      } else if (node.kind === 'project') {
+        const nice =
+          node.name.length > 0
+            ? node.name.charAt(0).toUpperCase() + node.name.slice(1)
+            : node.id
+        m.set(node.id, nice)
+      } else {
+        m.set(node.id, node.name)
       }
-      const nice =
-        n.name.length > 0
-          ? n.name.charAt(0).toUpperCase() + n.name.slice(1)
-          : n.id
-      m.set(n.id, `${nice} Project`)
     }
+    for (const child of node.children ?? []) walk(child)
   }
+  for (const n of tree) walk(n)
   return m
 }
 
@@ -92,8 +95,15 @@ export function projectsInImpact(
   const seen = new Map<string, string>()
   for (const n of graph.nodes) {
     const id = n.service.projectId
-    if (!id || seen.has(id)) continue
-    seen.set(id, labels.get(id) ?? id)
+    if (!id || id === 'unknown') continue
+    if (seen.has(id)) continue
+    seen.set(
+      id,
+      n.service.projectLabel ||
+        n.service.projectGroupLabel ||
+        labels.get(id) ||
+        id,
+    )
   }
   return [...seen.entries()]
     .map(([id, label]) => ({ id, label }))
@@ -109,12 +119,16 @@ export function packagesInImpact(
   const seen = new Map<string, PackageOption>()
   for (const n of graph.nodes) {
     const id = n.service.packageId
-    if (!id || seen.has(id)) continue
+    if (!id || id === 'unknown' || seen.has(id)) continue
     seen.set(id, {
       id,
-      label: packageLabels.get(id) ?? id,
+      label: n.service.packageLabel ?? packageLabels.get(id) ?? id,
       projectId: n.service.projectId,
-      projectLabel: labels.get(n.service.projectId) ?? n.service.projectId,
+      projectLabel:
+        n.service.projectLabel ||
+        n.service.projectGroupLabel ||
+        labels.get(n.service.projectId) ||
+        n.service.projectId,
     })
   }
   return [...seen.values()].sort((a, b) => {
