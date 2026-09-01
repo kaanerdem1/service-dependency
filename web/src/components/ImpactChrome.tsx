@@ -84,7 +84,7 @@ export function MapViewportSync({
   const fitTargetNodes = () =>
     rf
       .getNodes()
-      .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge')
+      .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge' || n.type === 'dwhNode')
 
   const collectRadialItems = () => {
     return rf.getNodes().flatMap((n) => {

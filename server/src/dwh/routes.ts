@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { DWH_SCHEMA, query } from './db.js'
 import { buildReportLineageGraph, buildTableLineageGraph } from './graphService.js'
 import { getTableImpact } from './impactService.js'
+import { getReportMapSummary, getTableMapSummary } from './mapSummaryService.js'
 import { getReport, listReports } from './reportService.js'
 import { getStatement } from './sqlService.js'
 import { getTable, listColumns, listStatementsForTable, listTables } from './tableService.js'
@@ -115,6 +116,18 @@ dwhRouter.get('/tables/:tableId/impact', async (req, res) => {
   }
 })
 
+dwhRouter.get('/tables/:tableId/map-summary', async (req, res) => {
+  const tableId = parseId(req.params.tableId)
+  if (!tableId) return res.status(400).json({ error: 'invalid_table_id' })
+  try {
+    const summary = await getTableMapSummary(tableId)
+    if (!summary) return res.status(404).json({ error: 'not_found' })
+    res.json(summary)
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
 dwhRouter.get('/subqueries/:subqueryId/children', async (req, res) => {
   const subqueryId = parseId(req.params.subqueryId)
   if (!subqueryId) return res.status(400).json({ error: 'invalid_subquery_id' })
@@ -167,6 +180,18 @@ dwhRouter.get('/reports/:reportId/lineage-graph', async (req, res) => {
     })
     if (!graph) return res.status(404).json({ error: 'not_found' })
     res.json(graph)
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
+dwhRouter.get('/reports/:reportId/map-summary', async (req, res) => {
+  const reportId = parseId(req.params.reportId)
+  if (!reportId) return res.status(400).json({ error: 'invalid_report_id' })
+  try {
+    const summary = await getReportMapSummary(reportId)
+    if (!summary) return res.status(404).json({ error: 'not_found' })
+    res.json(summary)
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
   }

@@ -167,3 +167,31 @@ export type DwhTableImpact = {
   affectedTables: DwhImpactTable[]
   affectedReports: DwhImpactReport[]
 }
+
+export type DwhMapNodeSummary = {
+  entityKind: 'table' | 'report'
+  tableId?: number
+  reportId?: number
+  label: string
+  schemaName?: string | null
+  tableName?: string
+  reportName?: string
+  layer?: string | null
+  sourceTables: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  targetTables: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  affectedReports: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  maxSourceDepth: number
+  maxTargetDepth: number
+}

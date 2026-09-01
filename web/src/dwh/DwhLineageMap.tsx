@@ -17,6 +17,7 @@ import ReactFlow, {
   type ReactFlowInstance,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
+import { getDwhReportMapSummary, getDwhTableMapSummary } from './api'
 import {
   applyRadialLayout,
   compactMapLabel,
@@ -47,6 +48,7 @@ import type {
   DwhLineageGraph,
   DwhLineageNode,
   DwhLineageNodeKind,
+  DwhMapNodeSummary,
 } from './types'
 
 type Props = {
@@ -104,6 +106,24 @@ type DwhEdgeData = {
   ty?: number
   sr?: number
   tr?: number
+}
+
+type GraphNodeStats = {
+  sourceDirect: number
+  sourceIndirect: number
+  sourceTotal: number
+  targetDirect: number
+  targetIndirect: number
+  targetTotal: number
+}
+
+const EMPTY_GRAPH_STATS: GraphNodeStats = {
+  sourceDirect: 0,
+  sourceIndirect: 0,
+  sourceTotal: 0,
+  targetDirect: 0,
+  targetIndirect: 0,
+  targetTotal: 0,
 }
 
 function DwhRadialEdge({
@@ -277,6 +297,247 @@ const DwhFlowNodeMemo = memo(DwhFlowNode)
 
 const DWH_NODE_TYPES = {
   dwhNode: DwhFlowNodeMemo,
+}
+
+function entityLabel(kind?: DwhLineageEntityKind) {
+  if (kind === 'table') return 'Tablo'
+  if (kind === 'report') return 'Rapor'
+  if (kind === 'subquery') return 'Alt sorgu'
+  return 'Node'
+}
+
+function countReachableTables(
+  graph: DwhLineageGraph,
+  startId: string,
+  direction: 'source' | 'target',
+) {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+  const visitedNodes = new Set<string>([startId])
+  const tableLevels = new Map<string, number>()
+  const queue: { id: string; level: number }[] = [{ id: startId, level: 0 }]
+
+  while (queue.length) {
+    const current = queue.shift()
+    if (!current) break
+    const nextIds = graph.edges
+      .filter((edge) =>
+        direction === 'source'
+          ? edge.target === current.id
+          : edge.source === current.id,
+      )
+      .map((edge) => (direction === 'source' ? edge.source : edge.target))
+
+    for (const nextId of nextIds) {
+      if (visitedNodes.has(nextId)) continue
+      visitedNodes.add(nextId)
+      const level = current.level + 1
+      const node = nodeById.get(nextId)
+      if (node?.entityKind === 'table') {
+        const previous = tableLevels.get(node.entityKey)
+        if (previous === undefined || level < previous) tableLevels.set(node.entityKey, level)
+      }
+      queue.push({ id: nextId, level })
+    }
+  }
+
+  const levels = Array.from(tableLevels.values())
+  return {
+    direct: levels.filter((level) => level === 1).length,
+    indirect: levels.filter((level) => level > 1).length,
+    total: levels.length,
+  }
+}
+
+function graphStatsForNode(graph: DwhLineageGraph, nodeId: string): GraphNodeStats {
+  const source = countReachableTables(graph, nodeId, 'source')
+  const target = countReachableTables(graph, nodeId, 'target')
+  return {
+    sourceDirect: source.direct,
+    sourceIndirect: source.indirect,
+    sourceTotal: source.total,
+    targetDirect: target.direct,
+    targetIndirect: target.indirect,
+    targetTotal: target.total,
+  }
+}
+
+function DwhDrawerMetric({
+  label,
+  direct,
+  indirect,
+  total,
+}: {
+  label: string
+  direct: number
+  indirect: number
+  total: number
+}) {
+  return (
+    <div className="dwh-map-drawer-row">
+      <span>{label}</span>
+      <strong>{total}</strong>
+      <small>{direct} doğrudan · {indirect} dolaylı</small>
+    </div>
+  )
+}
+
+function DwhMapInfoDrawer({
+  open,
+  node,
+  summary,
+  graphStats,
+  loading,
+  error,
+  onOpenChange,
+  onSelectTable,
+  onSelectReport,
+}: {
+  open: boolean
+  node?: DwhLineageNode
+  summary?: DwhMapNodeSummary
+  graphStats: GraphNodeStats
+  loading: boolean
+  error?: string | null
+  onOpenChange: (open: boolean) => void
+  onSelectTable: (tableId: number) => void
+  onSelectReport: (reportId: number) => void
+}) {
+  const source = summary?.sourceTables ?? {
+    direct: graphStats.sourceDirect,
+    indirect: graphStats.sourceIndirect,
+    total: graphStats.sourceTotal,
+  }
+  const target = summary?.targetTables ?? {
+    direct: graphStats.targetDirect,
+    indirect: graphStats.targetIndirect,
+    total: graphStats.targetTotal,
+  }
+  const reports = summary?.affectedReports ?? { direct: 0, indirect: 0, total: 0 }
+  const canSelectTable = node?.entityKind === 'table' && node.tableId
+  const canSelectReport = node?.entityKind === 'report' && node.reportId
+
+  return (
+    <aside className={`dwh-map-info-drawer${open ? '' : ' is-collapsed'}`} aria-label="DWH node özeti">
+      <div className="dwh-map-info-drawer-head">
+        <h4 className="dwh-map-info-drawer-title">Node özeti</h4>
+        <button
+          type="button"
+          className={`nav-toggle dwh-map-info-toggle${open ? ' is-open' : ''}`}
+          title={open ? 'Özeti daralt' : 'Node özetini göster'}
+          aria-label={open ? 'Node özetini daralt' : 'Node özetini göster'}
+          aria-expanded={open}
+          onClick={() => onOpenChange(!open)}
+        >
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden className={`dwh-map-info-chevron${open ? '' : ' is-collapsed'}`}>
+            <path
+              d="M6 3.5 10.5 8 6 12.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          {open ? <span className="dwh-map-info-toggle-label">Daralt</span> : null}
+        </button>
+      </div>
+      <div className={`dwh-map-info-drawer-body${open ? '' : ' is-collapsed'}`}>
+        <div className="dwh-map-info-drawer-scroll" onWheel={(event) => event.stopPropagation()}>
+          {!node ? (
+            <div className="dwh-map-drawer-empty">Özet için haritada bir node seçin.</div>
+          ) : (
+            <>
+              <section className="dwh-map-info-section dwh-map-info-identity">
+                <span className={`dwh-map-kind-badge kind-${node.entityKind}`}>{entityLabel(node.entityKind)}</span>
+                <strong className="dwh-map-info-node-name" title={node.label}>
+                  {node.label}
+                </strong>
+                <span className="dwh-map-info-node-meta">
+                  {node.subtitle || node.layer || `${node.depth}. katman`}
+                </span>
+              </section>
+
+              {loading ? (
+                <div className="dwh-map-drawer-note">Özet hesaplanıyor...</div>
+              ) : null}
+              {error ? (
+                <div className="dwh-map-drawer-note is-error">{error}</div>
+              ) : null}
+
+              <section className="dwh-map-info-section">
+                <h5>Tablo etkisi</h5>
+                <DwhDrawerMetric
+                  label="Etkilendiği tablolar"
+                  direct={source.direct}
+                  indirect={source.indirect}
+                  total={source.total}
+                />
+                <DwhDrawerMetric
+                  label="Etkilediği tablolar"
+                  direct={target.direct}
+                  indirect={target.indirect}
+                  total={target.total}
+                />
+              </section>
+
+              {node.entityKind === 'table' ? (
+                <section className="dwh-map-info-section">
+                  <h5>Rapor etkisi</h5>
+                  <DwhDrawerMetric
+                    label="Etkilenen raporlar"
+                    direct={reports.direct}
+                    indirect={reports.indirect}
+                    total={reports.total}
+                  />
+                </section>
+              ) : null}
+
+              <section className="dwh-map-info-section">
+                <h5>Grafikteki konum</h5>
+                <dl className="dwh-map-info-facts">
+                  <div>
+                    <dt>Katman</dt>
+                    <dd>{node.depth}</dd>
+                  </div>
+                  <div>
+                    <dt>Tip</dt>
+                    <dd>{node.kind === node.entityKind ? entityLabel(node.entityKind) : node.kind}</dd>
+                  </div>
+                  {summary?.maxSourceDepth ? (
+                    <div>
+                      <dt>Kaynak derinliği</dt>
+                      <dd>{summary.maxSourceDepth}</dd>
+                    </div>
+                  ) : null}
+                  {summary?.maxTargetDepth ? (
+                    <div>
+                      <dt>Etki derinliği</dt>
+                      <dd>{summary.maxTargetDepth}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </section>
+
+              {canSelectTable || canSelectReport ? (
+                <section className="dwh-map-info-section">
+                  <button
+                    type="button"
+                    className="dwh-map-drawer-action"
+                    onClick={() => {
+                      if (node.entityKind === 'table' && node.tableId) onSelectTable(node.tableId)
+                      if (node.entityKind === 'report' && node.reportId) onSelectReport(node.reportId)
+                    }}
+                  >
+                    {canSelectTable ? 'Tabloyu seç' : 'Raporu seç'}
+                  </button>
+                </section>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 function splitLayer(
@@ -597,6 +858,11 @@ function DwhLineageMapInner({
   const [visibleMaxHop, setVisibleMaxHop] = useState(graphMaxHop)
   const [layoutMode, setLayoutMode] = useState<MapLayoutMode>('ltr')
   const [focusId, setFocusId] = useState<string | null>(null)
+  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(graph?.rootId ?? null)
+  const [infoPanelOpen, setInfoPanelOpen] = useState(true)
+  const [nodeSummary, setNodeSummary] = useState<DwhMapNodeSummary>()
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [tidyNonce, setTidyNonce] = useState(0)
   const [viewportSyncKey, setViewportSyncKey] = useState(0)
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 })
@@ -609,11 +875,39 @@ function DwhLineageMapInner({
   const rfInstance = useRef<ReactFlowInstance | null>(null)
 
   useEffect(() => {
+    const root = document.documentElement
+    if (!active || !graph) {
+      root.classList.remove('dwh-map-drawer-open', 'dwh-map-drawer-collapsed')
+      return
+    }
+    root.classList.toggle('dwh-map-drawer-open', infoPanelOpen)
+    root.classList.toggle('dwh-map-drawer-collapsed', !infoPanelOpen)
+    return () => {
+      root.classList.remove('dwh-map-drawer-open', 'dwh-map-drawer-collapsed')
+    }
+  }, [active, graph, infoPanelOpen])
+
+  useEffect(() => {
     setVisibleMaxHop(graphMaxHop)
     setExpandedLayers(new Set())
     setFocusId(null)
+    setInspectedNodeId(graph?.rootId ?? null)
+    setInfoPanelOpen(true)
     layoutDirtyRef.current = false
   }, [graph?.rootId, graphMaxHop])
+
+  const inspectedNode = useMemo(
+    () => graph?.nodes.find((node) => node.id === inspectedNodeId),
+    [graph?.nodes, inspectedNodeId],
+  )
+
+  const graphNodeStats = useMemo(
+    () =>
+      graph && inspectedNode
+        ? graphStatsForNode(graph, inspectedNode.id)
+        : EMPTY_GRAPH_STATS,
+    [graph, inspectedNode],
+  )
 
   const layout = useMemo(
     () => (layoutMode === 'radial' ? mapLayoutForRadial() : mapLayoutForDepth(visibleMaxHop)),
@@ -658,7 +952,60 @@ function DwhLineageMapInner({
     mapExpanded,
     mapSize.width,
     mapSize.height,
+    infoPanelOpen,
   ])
+
+  useEffect(() => {
+    if (!active || !inspectedNode) {
+      setNodeSummary(undefined)
+      setSummaryLoading(false)
+      setSummaryError(null)
+      return
+    }
+
+    if (inspectedNode.entityKind === 'subquery') {
+      setNodeSummary(undefined)
+      setSummaryLoading(false)
+      setSummaryError(null)
+      return
+    }
+
+    let alive = true
+    setNodeSummary(undefined)
+    setSummaryLoading(true)
+    setSummaryError(null)
+    const request =
+      inspectedNode.entityKind === 'table' && inspectedNode.tableId
+        ? getDwhTableMapSummary(inspectedNode.tableId)
+        : inspectedNode.entityKind === 'report' && inspectedNode.reportId
+          ? getDwhReportMapSummary(inspectedNode.reportId)
+          : undefined
+
+    if (!request) {
+      setNodeSummary(undefined)
+      setSummaryLoading(false)
+      return
+    }
+
+    request
+      .then((summary) => {
+        if (!alive) return
+        setNodeSummary(summary)
+      })
+      .catch((error: unknown) => {
+        if (!alive) return
+        setNodeSummary(undefined)
+        setSummaryError(error instanceof Error ? error.message : 'Özet alınamadı')
+      })
+      .finally(() => {
+        if (!alive) return
+        setSummaryLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [active, inspectedNode])
 
   useLayoutEffect(() => {
     if (!active) {
@@ -730,6 +1077,7 @@ function DwhLineageMapInner({
     root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
+      el.classList.toggle('dwh-node-inspected', id === inspectedNodeId)
       if (!active) return
       const on =
         id === focusId ||
@@ -752,7 +1100,7 @@ function DwhLineageMapInner({
       const on = edge && (edge.source === focusId || edge.target === focusId)
       el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
     })
-  }, [edges, focusId])
+  }, [edges, focusId, inspectedNodeId])
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<DwhNodeData>) => {
@@ -764,10 +1112,11 @@ function DwhLineageMapInner({
         setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
         return
       }
-      if (node.data.entityKind === 'table' && node.data.tableId) onSelectTable(node.data.tableId)
-      if (node.data.entityKind === 'report' && node.data.reportId) onSelectReport(node.data.reportId)
+      setInspectedNodeId(node.id)
+      setInfoPanelOpen(true)
+      setFocusId(node.id)
     },
-    [onSelectReport, onSelectTable],
+    [],
   )
 
   if (loading) {
@@ -791,12 +1140,13 @@ function DwhLineageMapInner({
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map dwh-lineage-map ${focusId ? 'is-focusing' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}`}
+      className={`impact-map dd-map dwh-lineage-map ${focusId ? 'is-focusing' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       onMouseLeave={() => setFocusId(null)}
     >
       {graph.truncated ? (
         <p className="map-budget-hint">Grafik sınır nedeniyle kısaltıldı.</p>
       ) : null}
+      <div className="dwh-map-canvas-row">
       <div className="map-canvas map-canvas-dock-host">
         {mapReady ? (
           <ReactFlowProvider>
@@ -850,6 +1200,7 @@ function DwhLineageMapInner({
                 layoutKey={`${expandedLayers.size}-${graph.rootId}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleMaxHop}-${mapExpanded}`}
                 layout={layout}
                 layoutMode={layoutMode}
+                drawerOpen={infoPanelOpen}
                 mapExpanded={mapExpanded}
                 viewportSyncKey={viewportSyncKey}
               />
@@ -864,6 +1215,7 @@ function DwhLineageMapInner({
               visibleMaxHop={visibleMaxHop}
               maxHopAvailable={graphMaxHop}
               layout={layout}
+              drawerOpen={infoPanelOpen}
               layoutMode={layoutMode}
               truncated={graph.truncated}
               onCollapseLayer={() => setVisibleMaxHop((hop) => Math.max(1, hop - 1))}
@@ -890,6 +1242,18 @@ function DwhLineageMapInner({
         ) : (
           <div className="dwh-map-empty">Lineage grafiği hazırlanıyor...</div>
         )}
+      </div>
+      <DwhMapInfoDrawer
+        open={infoPanelOpen}
+        node={inspectedNode}
+        summary={nodeSummary}
+        graphStats={graphNodeStats}
+        loading={summaryLoading}
+        error={summaryError}
+        onOpenChange={setInfoPanelOpen}
+        onSelectTable={onSelectTable}
+        onSelectReport={onSelectReport}
+      />
       </div>
     </div>
   )
