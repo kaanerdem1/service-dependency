@@ -70,6 +70,7 @@ export type DwhTableStatementsResponse = {
 
 export type DwhReportDetail = DwhReport & {
   sqlText?: string | null
+  simplifiedSql?: string | null
   sourceTables: DwhTableRef[]
   columns: DwhReportColumn[]
 }
@@ -145,4 +146,67 @@ export type DwhLineageGraph = {
   edges: DwhLineageEdge[]
   truncated: boolean
   maxDepth: number
+}
+
+export type DwhImpactTable = {
+  id: string
+  tableId: number
+  level: number
+  schemaName?: string | null
+  tableName: string
+  statements: DwhImpactStatement[]
+}
+
+export type DwhImpactStatement = {
+  id: string
+  statementId: number
+  sourceTableId: number
+  sourceTableName: string
+  packageName?: string | null
+  procedureName?: string | null
+  dmlType?: string | null
+  lineNo?: number | null
+  sqlText?: string | null
+  simplifiedSql?: string | null
+}
+
+export type DwhImpactReport = {
+  id: string
+  reportName: string
+  viaTableName: string
+}
+
+export type DwhTableImpact = {
+  tableName: string
+  schemaName?: string | null
+  affectedTables: DwhImpactTable[]
+  affectedReports: DwhImpactReport[]
+}
+
+export type DwhMapNodeSummary = {
+  entityKind: 'table' | 'report'
+  tableId?: number
+  reportId?: number
+  label: string
+  schemaName?: string | null
+  tableName?: string
+  reportName?: string
+  layer?: string | null
+  sourceTables: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  targetTables: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  affectedReports: {
+    direct: number
+    indirect: number
+    total: number
+  }
+  maxSourceDepth: number
+  maxTargetDepth: number
 }

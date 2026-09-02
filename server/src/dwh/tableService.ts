@@ -1,5 +1,6 @@
 import { query, tableName } from './db.js'
 import { columnStableId, fullTableName, statementStableId, tableStableId } from './format.js'
+import { simplifySql } from './sqlSimplify.js'
 import type { DwhColumn, DwhSqlStatement, DwhTable } from './types.js'
 
 type TableRow = {
@@ -202,7 +203,7 @@ export async function listStatementsForTable(tableId: number): Promise<DwhSqlSta
       dmlType: row.dml_tipi,
       lineNo: row.satir_no,
       sqlText: row.sql_metni,
-      simplifiedSql: null,
+      simplifiedSql: simplifySql(row.sql_metni),
       targetTable: fullTableName(row.hedef_schema, row.hedef_tablo),
       role: row.role,
       relatedTable: row.relatedTable,
@@ -210,4 +211,3 @@ export async function listStatementsForTable(tableId: number): Promise<DwhSqlSta
     })),
   )
 }
-

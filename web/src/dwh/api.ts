@@ -2,6 +2,8 @@ import type {
   DwhReport,
   DwhReportDetail,
   DwhLineageGraph,
+  DwhMapNodeSummary,
+  DwhTableImpact,
   DwhSqlStatement,
   DwhTable,
   DwhTableColumnsResponse,
@@ -59,6 +61,14 @@ export function getDwhTableLineageGraph(tableId: number, depth = 3, simple = fal
   )
 }
 
+export function getDwhTableImpact(tableId: number) {
+  return request<DwhTableImpact>(`/tables/${tableId}/impact`)
+}
+
+export function getDwhTableMapSummary(tableId: number) {
+  return request<DwhMapNodeSummary>(`/tables/${tableId}/map-summary`)
+}
+
 export function listDwhReports(q = '', limit = 100) {
   return request<DwhReport[]>(queryPath('/reports', { q, limit }))
 }
@@ -75,6 +85,10 @@ export function getDwhReportLineageGraph(reportId: number, depth = 3, simple = f
   return request<DwhLineageGraph>(
     queryPath(`/reports/${reportId}/lineage-graph`, { depth, simple: simple ? 1 : undefined }),
   )
+}
+
+export function getDwhReportMapSummary(reportId: number) {
+  return request<DwhMapNodeSummary>(`/reports/${reportId}/map-summary`)
 }
 
 export function getDwhSubqueryChildren(subqueryId: number) {

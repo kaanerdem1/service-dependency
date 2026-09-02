@@ -1,18 +1,18 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { AutoHeight } from '../motion/AutoHeight'
 import { popoverSpring } from '../motion/config'
-import type { AppTheme } from '../theme'
 
-type Props = {
+type DwhSearchHitsPortalProps = {
   open: boolean
   anchorRef: React.RefObject<HTMLElement | null>
-  theme?: AppTheme
   children: ReactNode
+  className?: string
 }
 
 /** Sidebar arama sonuçları — body portal, AutoHeight + spring açılış */
-export function SearchHitsPortal({ open, anchorRef, theme, children }: Props) {
+export function DwhSearchHitsPortal({ open, anchorRef, children, className }: DwhSearchHitsPortalProps) {
   const [style, setStyle] = useState<React.CSSProperties>({})
   const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const shellRef = useRef<HTMLDivElement>(null)
@@ -59,8 +59,7 @@ export function SearchHitsPortal({ open, anchorRef, theme, children }: Props) {
       {open ? (
         <motion.div
           ref={shellRef}
-          className="search-hits-shell search-hits-portal"
-          data-theme={theme}
+          className={['search-hits-shell search-hits-portal', className].filter(Boolean).join(' ')}
           data-motion="search-auto-height"
           data-placement={placement}
           style={style}
@@ -77,7 +76,9 @@ export function SearchHitsPortal({ open, anchorRef, theme, children }: Props) {
           }}
           transition={popoverSpring}
         >
-          <ul className="search-hits">{children}</ul>
+          <AutoHeight deps={[children]} className="search-hits-auto">
+            <ul className="search-hits">{children}</ul>
+          </AutoHeight>
         </motion.div>
       ) : null}
     </AnimatePresence>,

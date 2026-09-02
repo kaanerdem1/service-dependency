@@ -1,5 +1,6 @@
 import { query, tableName } from './db.js'
 import { fullTableName, statementStableId } from './format.js'
+import { simplifySql } from './sqlSimplify.js'
 import type { DwhSqlStatement } from './types.js'
 
 async function sourcesForStatement(statementId: number) {
@@ -49,9 +50,8 @@ export async function getStatement(statementId: number): Promise<DwhSqlStatement
     dmlType: row.dml_tipi,
     lineNo: row.satir_no,
     sqlText: row.sql_metni,
-    simplifiedSql: null,
+    simplifiedSql: simplifySql(row.sql_metni),
     targetTable: fullTableName(row.hedef_schema, row.hedef_tablo),
     sources: await sourcesForStatement(row.statement_id),
   }
 }
-

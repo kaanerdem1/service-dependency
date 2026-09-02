@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { MapStage } from '../components/MapStage'
-import { SearchHitsPortal } from '../components/SearchHitsPortal'
+import { DwhSearchHitsPortal } from './DwhSearchHitsPortal'
 import { MotionListItem } from '../motion/MotionList'
 import { StageTabPanels } from '../motion/StageTabPanels'
 import { StageTabs, type StageTabDef } from '../motion/StageTabs'
@@ -18,6 +18,7 @@ import {
   getDwhReportLineageGraph,
   getDwhTable,
   getDwhTableColumns,
+  getDwhTableImpact,
   getDwhTableLineageGraph,
   getDwhTableStatements,
   listDwhReports,
@@ -27,11 +28,13 @@ import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
 import type {
   DwhColumn,
+  DwhImpactTable,
   DwhLineageGraph,
   DwhReport,
   DwhReportDetail,
   DwhSqlStatement,
   DwhTable,
+  DwhTableImpact,
 } from './types'
 import './DwhPage.css'
 
@@ -39,9 +42,21 @@ type DwhTab = 'tables' | 'reports'
 type DwhStageTab = 'query' | 'columns' | 'lineage' | 'impact'
 type DetailKind = 'table' | 'report'
 
-const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['query', 'columns', 'lineage', 'impact']
+const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['lineage', 'query', 'columns', 'impact']
 
 const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
+  {
+    id: 'lineage',
+    label: 'Harita',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <path d="M5.8 7.2 10.2 4.8M5.8 8.8l4.4 2.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    ),
+  },
   {
     id: 'query',
     label: 'Sorgu',
@@ -58,18 +73,6 @@ const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
         <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
         <path d="M6 2.8v10.4M10 2.8v10.4M2.8 6h10.4M2.8 10h10.4" stroke="currentColor" strokeWidth="1.1" />
-      </svg>
-    ),
-  },
-  {
-    id: 'lineage',
-    label: 'Harita',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-        <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <path d="M5.8 7.2 10.2 4.8M5.8 8.8l4.4 2.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -99,6 +102,57 @@ function procedureLabel(statement: DwhSqlStatement) {
   const proc = statement.procedureName?.trim()
   if (pkg && proc) return `${pkg}.${proc}`
   return proc || pkg || 'Prosedür bilgisi yok'
+}
+
+function impactProcedureLabel(statement: DwhTableImpact['affectedTables'][number]['statements'][number]) {
+  const pkg = statement.packageName?.trim()
+  const proc = statement.procedureName?.trim()
+  if (pkg && proc) return `${pkg}.${proc}`
+  return proc || pkg || 'Prosedür bilgisi yok'
+}
+
+function ImpactSqlBlock({
+  sqlText,
+  simplifiedSql,
+}: {
+  sqlText?: string | null
+  simplifiedSql?: string | null
+}) {
+  const [view, setView] = useState<'summary' | 'full'>('full')
+  const hasSummary = Boolean(simplifiedSql)
+  const shownSql = hasSummary && view === 'summary' ? simplifiedSql : sqlText
+
+  useEffect(() => {
+    setView(hasSummary ? 'summary' : 'full')
+  }, [hasSummary, sqlText, simplifiedSql])
+
+  if (!sqlText) return <p className="dwh-empty-line">SQL metni yok.</p>
+  return (
+    <div className="dwh-impact-sql">
+      <div className="dwh-sql-view-head">
+        <h4>SQL</h4>
+        {hasSummary ? (
+          <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
+            <button
+              type="button"
+              className={view === 'summary' ? 'on' : undefined}
+              onClick={() => setView('summary')}
+            >
+              Sade
+            </button>
+            <button
+              type="button"
+              className={view === 'full' ? 'on' : undefined}
+              onClick={() => setView('full')}
+            >
+              Tam SQL
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <pre>{shownSql || compactSql(shownSql)}</pre>
+    </div>
+  )
 }
 
 function dmlClass(dmlType: string | null | undefined) {
@@ -267,7 +321,8 @@ function SqlDetailPanel({
 
   const hasSummary = Boolean(statement.simplifiedSql)
   const sqlText = hasSummary && view === 'summary' ? statement.simplifiedSql : statement.sqlText
-  const roleLabel = statement.role === 'reader' ? 'Bu tablo kaynak olarak kullanılıyor' : 'Bu tablo dolduruluyor'
+  const tableLabel = focusTable ? `${focusTable} tablosu` : 'Bu tablo'
+  const roleLabel = statement.role === 'reader' ? `${tableLabel} kaynak olarak kullanılıyor` : `${tableLabel} dolduruluyor`
   const targetTable = statement.role === 'reader' ? statement.relatedTable ?? statement.targetTable : statement.targetTable ?? focusTable
 
   return (
@@ -291,7 +346,7 @@ function SqlDetailPanel({
           {targetTable ?? '-'}
         </span>
         <span>
-          <strong>Odak</strong>
+          <strong>Kaynak</strong>
           {focusTable ?? '-'}
         </span>
       </div>
@@ -299,7 +354,7 @@ function SqlDetailPanel({
       {statement.sources.length ? (
         <details className="dwh-sql-source-details" open={statement.sources.length <= 5}>
           <summary>
-            {statement.sources.length === 1 ? 'Okuduğu kaynak tablo' : 'Okuduğu kaynak tablolar'} ({statement.sources.length})
+            {statement.sources.length === 1 ? 'Prosedürün kullandığı kaynak tablo' : 'Prosedürün kullandığı kaynak tablolar'} ({statement.sources.length})
           </summary>
           <div className="dwh-sql-source-list">
             {statement.sources.map((source) => (
@@ -385,6 +440,14 @@ function TableQueryPanel({
 }
 
 function ReportQueryPanel({ report, loading }: { report?: DwhReportDetail; loading: boolean }) {
+  const [view, setView] = useState<'summary' | 'full'>('full')
+  const hasSummary = Boolean(report?.simplifiedSql)
+  const sqlText = hasSummary && view === 'summary' ? report?.simplifiedSql : report?.sqlText
+
+  useEffect(() => {
+    setView(hasSummary ? 'summary' : 'full')
+  }, [hasSummary, report?.reportId, report?.simplifiedSql])
+
   if (loading) return <div className="dwh-detail-empty">Rapor sorgusu yükleniyor...</div>
   if (!report) return <div className="dwh-detail-empty">Bir rapor seçin.</div>
   return (
@@ -443,8 +506,26 @@ function ReportQueryPanel({ report, loading }: { report?: DwhReportDetail; loadi
 
         <div className="dwh-sql-view-head">
           <h4>SQL</h4>
+          {hasSummary ? (
+            <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
+              <button
+                type="button"
+                className={view === 'summary' ? 'on' : undefined}
+                onClick={() => setView('summary')}
+              >
+                Sade
+              </button>
+              <button
+                type="button"
+                className={view === 'full' ? 'on' : undefined}
+                onClick={() => setView('full')}
+              >
+                Tam SQL
+              </button>
+            </div>
+          ) : null}
         </div>
-        <pre className="dwh-sql-block">{report.sqlText || 'SQL metni yok'}</pre>
+        <pre className="dwh-sql-block">{sqlText || 'SQL metni yok'}</pre>
       </article>
     </div>
   )
@@ -489,9 +570,182 @@ function ReportColumnsTable({ report, loading }: { report?: DwhReportDetail; loa
   )
 }
 
+function ImpactPanel({
+  detailKind,
+  table,
+  impact,
+  loading,
+}: {
+  detailKind: DetailKind
+  table?: DwhTable
+  impact?: DwhTableImpact
+  loading: boolean
+}) {
+  const [activeImpactTable, setActiveImpactTable] = useState<DwhImpactTable>()
+
+  useEffect(() => {
+    setActiveImpactTable(undefined)
+  }, [detailKind, table?.tableId, impact])
+
+  useEffect(() => {
+    if (!activeImpactTable) return undefined
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveImpactTable(undefined)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeImpactTable])
+
+  if (detailKind === 'report') {
+    return (
+      <div className="dwh-tab-content">
+        <div className="dwh-detail-empty">
+          Raporlar lineage zincirinin son noktasıdır. Etki analizi için ağaçtan bir tablo seçin.
+        </div>
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="dwh-tab-content">
+        <div className="dwh-detail-empty">Etki listesi yükleniyor...</div>
+      </div>
+    )
+  }
+
+  if (!table) {
+    return (
+      <div className="dwh-tab-content">
+        <div className="dwh-detail-empty">Etki analizi için bir tablo seçin.</div>
+      </div>
+    )
+  }
+
+  const affectedTables = impact?.affectedTables ?? []
+  const affectedReports = impact?.affectedReports ?? []
+  const levelGroups = affectedTables.reduce<Map<number, typeof affectedTables>>((groups, item) => {
+    const existing = groups.get(item.level) ?? []
+    existing.push(item)
+    groups.set(item.level, existing)
+    return groups
+  }, new Map())
+  const levels = Array.from(levelGroups.keys()).sort((a, b) => a - b)
+
+  const activeTableName = activeImpactTable ? fullTableName(activeImpactTable) : ''
+
+  return (
+    <div className="dwh-tab-content dwh-impact-content">
+      <div className={`dwh-impact-workspace${activeImpactTable ? ' has-detail' : ''}`}>
+        <aside className="dwh-impact-list-panel">
+          <section className="dwh-impact-section">
+            <div className="dwh-section-head">
+              <div>
+                <h3>Tablo Etkisi</h3>
+                <p>{fullTableName(table)} değişirse aşağıdaki tablolar dolaylı olarak etkilenebilir.</p>
+              </div>
+            </div>
+
+            {levels.length ? (
+              <div className="dwh-impact-levels">
+                {levels.map((level) => (
+                  <section key={level} className="dwh-impact-level">
+                    <h4>Seviye {level}</h4>
+                    <div className="dwh-impact-table-list">
+                      {(levelGroups.get(level) ?? []).map((affected) => {
+                        const selected = activeImpactTable?.tableId === affected.tableId && activeImpactTable.level === affected.level
+                        return (
+                          <button
+                            key={`${affected.id}-${affected.level}`}
+                            type="button"
+                            className={`dwh-impact-table-row${selected ? ' is-selected' : ''}`}
+                            onClick={() => setActiveImpactTable(selected ? undefined : affected)}
+                            title={fullTableName(affected)}
+                          >
+                            <span className="dwh-kind-badge is-dwh-table" aria-hidden>T</span>
+                            <span className="dwh-impact-table-name">{fullTableName(affected)}</span>
+                            <span className="dwh-impact-query-count">{affected.statements.length} sorgu</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <p className="dwh-empty-line">Bu tabloyu kaynak olarak kullanan başka bir tablo bulunamadı.</p>
+            )}
+          </section>
+
+          <section className="dwh-impact-section">
+            <div className="dwh-section-head">
+              <div>
+                <h3>Etkilenen Raporlar</h3>
+                <p>Seçili tablo veya ondan etkilenen tabloları kaynak alan raporlar.</p>
+              </div>
+            </div>
+
+            {affectedReports.length ? (
+              <div className="dwh-impact-report-list">
+                {affectedReports.map((report) => (
+                  <article key={report.id} className="dwh-impact-report">
+                    <span className="dwh-kind-badge is-dwh-report" aria-hidden>R</span>
+                    <span className="dwh-impact-report-main">
+                      <strong title={report.reportName}>{report.reportName}</strong>
+                      <small title={report.viaTableName}>{report.viaTableName} üzerinden</small>
+                    </span>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="dwh-empty-line">Bu etki zincirine bağlı rapor bulunamadı.</p>
+            )}
+          </section>
+        </aside>
+
+        {activeImpactTable ? (
+          <article className="dwh-impact-detail-panel">
+            <div className="dwh-impact-detail-head">
+              <div>
+                <span className="dwh-eyebrow">Prosedürler</span>
+                <p className="dwh-impact-detail-title">
+                  <strong>{activeTableName}</strong>
+                  <span> tablosunu {fullTableName(table)} etki zincirinde değiştiren sorgular</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                className="dwh-impact-detail-close"
+                onClick={() => setActiveImpactTable(undefined)}
+              >
+                Kapat
+              </button>
+            </div>
+
+            <div className="dwh-impact-statement-accordion">
+              {activeImpactTable.statements.map((statement) => (
+                <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
+                  <summary>
+                    <span>
+                      <strong>{impactProcedureLabel(statement)}</strong>
+                      <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
+                    </span>
+                    <DmlBadge dmlType={statement.dmlType} />
+                  </summary>
+                  <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
+                </details>
+              ))}
+            </div>
+          </article>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export function DwhPage() {
   const [catalogTab, setCatalogTab] = useState<DwhTab>('tables')
-  const [stageTab, setStageTab] = useState<DwhStageTab>('query')
+  const [stageTab, setStageTab] = useState<DwhStageTab>('lineage')
   const [query, setQuery] = useState('')
   const [tables, setTables] = useState<DwhTable[]>([])
   const [reports, setReports] = useState<DwhReport[]>([])
@@ -503,6 +757,7 @@ export function DwhPage() {
   const [columns, setColumns] = useState<DwhColumn[]>([])
   const [statements, setStatements] = useState<DwhSqlStatement[]>([])
   const [selectedReport, setSelectedReport] = useState<DwhReportDetail>()
+  const [impact, setImpact] = useState<DwhTableImpact>()
   const [detailKind, setDetailKind] = useState<DetailKind>('table')
   const [simpleTree, setSimpleTree] = useState(false)
   const [lineageGraph, setLineageGraph] = useState<DwhLineageGraph>()
@@ -510,6 +765,7 @@ export function DwhPage() {
   const [loadingList, setLoadingList] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingGraph, setLoadingGraph] = useState(false)
+  const [loadingImpact, setLoadingImpact] = useState(false)
   const [error, setError] = useState<string>()
   const [sidebarPinned, setSidebarPinned] = useState(true)
   const [sidebarHover, setSidebarHover] = useState(false)
@@ -635,6 +891,31 @@ export function DwhPage() {
     }
   }, [detailKind, selectedTableId, selectedReportId, simpleTree])
 
+  useEffect(() => {
+    if (detailKind !== 'table' || !selectedTableId) {
+      setImpact(undefined)
+      setLoadingImpact(false)
+      return
+    }
+    let cancelled = false
+    setLoadingImpact(true)
+    void getDwhTableImpact(selectedTableId)
+      .then((nextImpact) => {
+        if (cancelled) return
+        setImpact(nextImpact)
+        setError(undefined)
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setError(e.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingImpact(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [detailKind, selectedTableId])
+
   const visibleCount = catalogTab === 'tables' ? tables.length : reports.length
   const heading = useMemo(
     () => (catalogTab === 'tables' ? 'Tablo kataloğu' : 'Rapor kataloğu'),
@@ -669,7 +950,7 @@ export function DwhPage() {
     setSelectedTableId(table.tableId)
     setRootReportId(undefined)
     setDetailKind('table')
-    setStageTab('query')
+    setStageTab('lineage')
     setQuery('')
   }
 
@@ -678,7 +959,7 @@ export function DwhPage() {
     setSelectedReportId(report.reportId)
     setRootTableId(undefined)
     setDetailKind('report')
-    setStageTab('query')
+    setStageTab('lineage')
     setQuery('')
   }
 
@@ -723,14 +1004,19 @@ export function DwhPage() {
             </h1>
           </div>
           <div className="dwh-header-metrics">
-            {detailKind === 'table' && selectedTable ? (
+            {stageTab === 'impact' && detailKind === 'table' && selectedTable ? (
+              <>
+                <Metric label="Etkilenen tablo" value={loadingImpact ? '...' : (impact?.affectedTables.length ?? 0)} />
+                <Metric label="Etkilenen rapor" value={loadingImpact ? '...' : (impact?.affectedReports.length ?? 0)} />
+              </>
+            ) : detailKind === 'table' && selectedTable ? (
               <>
                 <Metric label="Kolon" value={selectedTable.columnCount} />
                 <Metric label="Kaynak" value={selectedTable.sourceCount} />
                 <Metric label="Hedef" value={selectedTable.targetCount} />
               </>
             ) : null}
-            {detailKind === 'report' && selectedReport ? (
+            {stageTab !== 'impact' && detailKind === 'report' && selectedReport ? (
               <>
                 <Metric label="Kaynak" value={selectedReport.sourceCount} />
                 <Metric label="Kolon" value={selectedReport.columnCount} />
@@ -842,7 +1128,7 @@ export function DwhPage() {
                     aria-label="Aramayı kapat"
                     onClick={() => setQuery('')}
                   />
-                  <SearchHitsPortal open={searchOpen} anchorRef={searchRef}>
+                  <DwhSearchHitsPortal open={searchOpen} anchorRef={searchRef} className="dwh-search-hits-portal">
                     <AnimatePresence initial={false}>
                       {catalogTab === 'tables'
                         ? tables.map((table, i) => (
@@ -887,7 +1173,7 @@ export function DwhPage() {
                         </MotionListItem>
                       ) : null}
                     </AnimatePresence>
-                  </SearchHitsPortal>
+                  </DwhSearchHitsPortal>
                 </>
               ) : null}
             </label>
@@ -929,12 +1215,12 @@ export function DwhPage() {
                 onSelectTable={(tableId) => {
                   setSelectedTableId(tableId)
                   setDetailKind('table')
-                  setStageTab('query')
+                  setStageTab('lineage')
                 }}
                 onSelectReport={(reportId) => {
                   setSelectedReportId(reportId)
                   setDetailKind('report')
-                  setStageTab('query')
+                  setStageTab('lineage')
                 }}
               />
             </div>
@@ -954,6 +1240,34 @@ export function DwhPage() {
             tabOrder={DWH_STAGE_TAB_ORDER}
             mapOnly={stageTab === 'lineage'}
           >
+            <section
+              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-lineage"
+              aria-hidden={stageTab !== 'lineage'}
+              aria-label="Harita"
+            >
+              <MapStage
+                title={stageHeading}
+                expanded={mapExpanded}
+                onExpandedChange={setMapExpanded}
+                active={stageTab === 'lineage'}
+              >
+                <DwhLineageMap
+                  graph={lineageGraph}
+                  loading={loadingGraph}
+                  mapExpanded={mapExpanded}
+                  active={stageTab === 'lineage'}
+                  onSelectTable={(tableId) => {
+                    setSelectedTableId(tableId)
+                    setDetailKind('table')
+                  }}
+                  onSelectReport={(reportId) => {
+                    setSelectedReportId(reportId)
+                    setDetailKind('report')
+                  }}
+                />
+              </MapStage>
+            </section>
+
             <section
               className="stage-panel dwh-stage-panel dwh-stage-panel-query"
               aria-hidden={stageTab !== 'query'}
@@ -992,41 +1306,16 @@ export function DwhPage() {
             </section>
 
             <section
-              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-lineage"
-              aria-hidden={stageTab !== 'lineage'}
-              aria-label="Harita"
-            >
-              <MapStage
-                title={stageHeading}
-                expanded={mapExpanded}
-                onExpandedChange={setMapExpanded}
-                active={stageTab === 'lineage'}
-              >
-                <DwhLineageMap
-                  graph={lineageGraph}
-                  loading={loadingGraph}
-                  mapExpanded={mapExpanded}
-                  active={stageTab === 'lineage'}
-                  onSelectTable={(tableId) => {
-                    setSelectedTableId(tableId)
-                    setDetailKind('table')
-                  }}
-                  onSelectReport={(reportId) => {
-                    setSelectedReportId(reportId)
-                    setDetailKind('report')
-                  }}
-                />
-              </MapStage>
-            </section>
-
-            <section
               className="stage-panel dwh-stage-panel dwh-stage-panel-impact"
               aria-hidden={stageTab !== 'impact'}
               aria-label="Etki"
             >
-              <div className="dwh-tab-content">
-                <div className="dwh-detail-empty">Etki haritası bir sonraki fazda downstream sorgularla bağlanacak.</div>
-              </div>
+              <ImpactPanel
+                detailKind={detailKind}
+                table={selectedTable}
+                impact={impact}
+                loading={loadingImpact}
+              />
             </section>
           </StageTabPanels>
         </section>
