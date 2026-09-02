@@ -1,5 +1,6 @@
 import { motion } from 'motion/react'
 import type { ReactNode, MouseEvent } from 'react'
+import { useEffect } from 'react'
 import { modalSpring } from './config'
 
 type BackdropProps = {
@@ -8,6 +9,17 @@ type BackdropProps = {
 }
 
 export function MotionModalBackdrop({ onClose, children }: BackdropProps) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
     <motion.div
       className="modal-backdrop"

@@ -38,6 +38,8 @@ import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
+import { CommandPalette } from './components/CommandPalette'
+import { ShortcutSheet } from './components/ShortcutSheet'
 import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SearchHitsPortal } from './components/SearchHitsPortal'
@@ -66,6 +68,11 @@ import {
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
 import { snapshotHasMapImage } from './snapshot/imageUrl'
 import { sidebarOpenAtSnapshot } from './snapshot/sidebarState'
+import {
+  pushServiceRecent,
+  readServiceRecents,
+  renameServiceRecent,
+} from './serviceRecents'
 import type { SessionUser } from './mock/session'
 import type {
   AffectedService,
@@ -220,6 +227,7 @@ export default function App() {
   const mapRootRef = useRef<HTMLDivElement | null>(null)
   const workspaceRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLLabelElement>(null)
+  const sidebarBodyRef = useRef<HTMLDivElement>(null)
 
   const { trail, buildClientPayload } = useSnapshotPack()
 
@@ -236,6 +244,11 @@ export default function App() {
   const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
+  const [cmdkOpen, setCmdkOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [frequentRecents, setFrequentRecents] = useState(() =>
+    readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
+  )
 
   const toggleNavPinned = useCallback(() => {
     setNavPinned((pinned) => {
@@ -467,7 +480,20 @@ export default function App() {
     void refreshInbox()
   }, [refreshInbox])
 
-  const projectLabels = useMemo(() => projectLabelsFromTree(tree), [tree])
+  const projectLabels = useMemo(() => {
+    const m = projectLabelsFromTree(tree)
+    if (!impact) return m
+    const stamp = (s: { projectId: string; projectLabel?: string; projectGroupLabel?: string }) => {
+      if (!s.projectId || s.projectId === 'unknown') return
+      m.set(
+        s.projectId,
+        s.projectLabel || s.projectGroupLabel || m.get(s.projectId) || s.projectId,
+      )
+    }
+    stamp(impact.center)
+    for (const n of impact.nodes) stamp(n.service)
+    return m
+  }, [tree, impact])
   const packageLabels = useMemo(() => packageLabelsFromTree(tree), [tree])
   const projectOrder = useMemo(
     () => tree.filter((n) => n.kind === 'project').map((n) => n.id),
@@ -541,6 +567,9 @@ export default function App() {
         setMapExpanded(false)
         window.sessionStorage.setItem('sd-impact-map-layout-mode', 'ltr')
         setMapForceLtrSignal((n) => n + 1)
+        setFrequentRecents(
+          pushServiceRecent(id, label).map((r) => ({ id: r.id, name: r.name })),
+        )
         return
       }
       setNavDirection('forward')
@@ -548,6 +577,9 @@ export default function App() {
       setHistory(next)
       setHistoryIndex(next.length - 1)
       setPivotId(id)
+      setFrequentRecents(
+        pushServiceRecent(id, label).map((r) => ({ id: r.id, name: r.name })),
+      )
     },
     [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
   )
@@ -561,9 +593,14 @@ export default function App() {
         setHistory([visitEntry(serviceId)])
         setHistoryIndex(0)
         setPivotId(serviceId)
+        const name =
+          catalogServices.find((s) => s.id === serviceId)?.name ?? serviceId
+        setFrequentRecents(
+          pushServiceRecent(serviceId, name).map((r) => ({ id: r.id, name: r.name })),
+        )
       }
     },
-    [pivotId],
+    [pivotId, catalogServices],
   )
 
   useEffect(() => {
@@ -661,6 +698,62 @@ export default function App() {
       })),
     [breadcrumb, serviceNameById],
   )
+
+  const visitTrailForCmdk = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { id: string; name: string }[] = []
+    for (let i = history.length - 1; i >= 0; i--) {
+      const id = history[i]!.id
+      if (seen.has(id)) continue
+      seen.add(id)
+      out.push({ id, name: serviceNameById.get(id) ?? id })
+    }
+    return out
+  }, [history, serviceNameById])
+
+  useEffect(() => {
+    if (!service?.id?.startsWith('sd-') || !service.name) return
+    setFrequentRecents(
+      renameServiceRecent(service.id, service.name).map((r) => ({
+        id: r.id,
+        name: r.name,
+      })),
+    )
+  }, [service?.id, service?.name])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName
+      const typing =
+        tag === 'INPUT' ||
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        (e.target as HTMLElement | null)?.isContentEditable
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCmdkOpen(true)
+        return
+      }
+      if (e.key === 'Escape') {
+        if (shortcutsOpen) {
+          e.preventDefault()
+          setShortcutsOpen(false)
+          return
+        }
+        if (cmdkOpen) {
+          e.preventDefault()
+          setCmdkOpen(false)
+          return
+        }
+      }
+      if (e.key === '?' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        setShortcutsOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cmdkOpen, shortcutsOpen])
 
   const selectVisitIndex = useCallback(
     (i: number) => {
@@ -877,7 +970,7 @@ export default function App() {
                             {m.className}.{m.name}
                           </strong>
                         </span>
-                        <span className="hit-tag hit-tag-method">Method</span>
+                        <span className="hit-tag hit-tag-method">Metod</span>
                       </span>
                       <span
                         className="method-hit-svc name-tip is-short"
@@ -908,14 +1001,15 @@ export default function App() {
             </span>
             <span className="module-kind-key">
               <span className="module-kind-badge is-method" aria-hidden>M</span>
-              Method
+              Metod
             </span>
           </div>
-          <div className="module-sidebar-body">
+          <div className="module-sidebar-body" ref={sidebarBodyRef}>
             <ModuleTree
               nodes={tree}
               selectedServiceId={pivotId}
               selectedMethodId={selectedMethodId}
+              scrollParentRef={sidebarBodyRef}
               onSelectService={(id) =>
                 selectPivot(id, { resetHistory: true, source: 'tree' })
               }
@@ -1094,6 +1188,7 @@ export default function App() {
                                 : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
                             )
                           }}
+                          onOpenShortcuts={() => setShortcutsOpen(true)}
                         />
                       </MapStage>
                     )}
@@ -1200,6 +1295,17 @@ export default function App() {
           ×
         </button>
       </MotionToast>
+
+      <CommandPalette
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        frequent={frequentRecents}
+        visitTrail={visitTrailForCmdk}
+        onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
+        onOpenInbox={() => setInboxOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
+      />
+      <ShortcutSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <AnimatePresence>
       {crOpen && service && session && (

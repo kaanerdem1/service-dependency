@@ -50,7 +50,7 @@ async function main() {
 
   const roots = await listModuleRoots()
   const arts = await listModuleChildren(roots[0].id)
-  const jar = arts.find((a) => a.name.includes('.jar')) ?? arts[0]
+  const jar = arts.items.find((a) => a.name.includes('.jar')) ?? arts.items[0]
   const parsed = parseNodeId(jar.id)
   check('S4 group→jar skip project', parsed?.prefix === 'art', jar?.name)
   if (parsed?.prefix === 'art') {

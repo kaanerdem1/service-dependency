@@ -30,7 +30,12 @@ const PAGE = 20
 const GROUP_PAGE = 8
 
 function projectOf(s: Service, projectLabels: Map<string, string>) {
-  return projectLabels.get(s.projectId) ?? s.projectId
+  return (
+    s.projectLabel ||
+    s.projectGroupLabel ||
+    projectLabels.get(s.projectId) ||
+    s.projectId
+  )
 }
 
 function sortServices(list: Service[], sort: SortKey) {
@@ -200,7 +205,10 @@ function Column({
                       }))
                     }
                   >
-                    +{rows.length - cap} daha
+                    <span className="neighbor-more-label">
+                      +{rows.length - cap} servis daha
+                    </span>
+                    <span className="neighbor-more-action">Listeyi genişlet ↓</span>
                   </button>
                 )}
               </div>
@@ -222,7 +230,10 @@ function Column({
               className="neighbor-more"
               onClick={() => setLimit((n) => n + PAGE)}
             >
-              +{filtered.length - limit} servis daha
+              <span className="neighbor-more-label">
+                +{filtered.length - limit} servis daha
+              </span>
+              <span className="neighbor-more-action">Listeyi genişlet ↓</span>
             </button>
           )}
         </>

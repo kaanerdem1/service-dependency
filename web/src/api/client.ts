@@ -13,6 +13,7 @@ import type {
   MethodImpactGraph,
   MethodRef,
   ModuleNode,
+  ModuleChildrenResult,
   Owner,
   NoteVisibility,
   Service,
@@ -41,8 +42,24 @@ export function getModuleTree() {
   return request<ModuleNode[]>('/modules')
 }
 
-export function getModuleChildren(nodeId: string) {
-  return request<ModuleNode[]>(`/modules/${encodeURIComponent(nodeId)}/children`)
+export function getModuleChildren(
+  nodeId: string,
+  opts?: {
+    limit?: number
+    offset?: number
+    sort?: 'name' | 'degree'
+    anchorServiceId?: string
+  },
+) {
+  const qs = new URLSearchParams()
+  if (opts?.limit != null) qs.set('limit', String(opts.limit))
+  if (opts?.offset != null) qs.set('offset', String(opts.offset))
+  if (opts?.sort) qs.set('sort', opts.sort)
+  if (opts?.anchorServiceId) qs.set('anchorServiceId', opts.anchorServiceId)
+  const query = qs.toString()
+  return request<ModuleChildrenResult>(
+    `/modules/${encodeURIComponent(nodeId)}/children${query ? `?${query}` : ''}`,
+  )
 }
 
 export function getNonServiceMethods(nodeId: string, limit = 50, offset = 0) {

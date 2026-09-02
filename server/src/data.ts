@@ -32,6 +32,17 @@ export type ModuleNode = {
   children?: ModuleNode[]
   /** Lazy ağaç: çocuklar henüz yüklenmedi ama expand edilebilir. */
   hasChildren?: boolean
+  /** Jar / grup: alt servis sayısı (rozet). */
+  childCount?: number
+  /** sort=degree ile servis satırında bağlantı derecesi. */
+  degree?: number
+}
+
+export type ModuleChildrenResult = {
+  items: ModuleNode[]
+  total: number
+  limit: number
+  offset: number
 }
 export type FlagStatus = 'accepted' | 'rejected' | 'hold_editing' | 'unseen'
 export type ImpactedFlag = {

@@ -898,6 +898,7 @@ type LayerControlsProps = {
   }>
   onProjectFiltersChange?: (projectIds: string[]) => void
   onPackageFiltersChange?: (packageIds: string[]) => void
+  onOpenShortcuts?: () => void
 }
 
 function DockBtn({
@@ -1342,6 +1343,7 @@ export function MapCanvasBar({
   packageOptions = [],
   onProjectFiltersChange,
   onPackageFiltersChange,
+  onOpenShortcuts,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1836,6 +1838,13 @@ export function MapCanvasBar({
           <div className="map-dock-group">
             <span className="map-dock-group-kicker">Bilgi</span>
             <DockMagnifyRow>
+              {onOpenShortcuts ? (
+                <DockBtn label="Klavye kısayolları (?)" onClick={onOpenShortcuts}>
+                  <span className="map-dock-kbd-badge" aria-hidden>
+                    ?
+                  </span>
+                </DockBtn>
+              ) : null}
               <span className="map-dock-wrap map-dock-legend">
                 <button
                   type="button"

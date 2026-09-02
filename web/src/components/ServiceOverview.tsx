@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getServiceLocations } from '../api/client'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
+import { MotionToast } from '../motion/MotionToast'
 import { EmptyState } from './EmptyState'
 import { Button, Card, Field } from '../ui'
 import type { Service, ServiceLocation } from '../types'
@@ -245,6 +246,7 @@ export function ServiceOverview({
   const [draft, setDraft] = useState(baseline)
   const [saved, setSaved] = useState<string | null>(null)
   const [locations, setLocations] = useState<ServiceLocation[]>([])
+  const [copyToast, setCopyToast] = useState<string>()
 
   useEffect(() => {
     if (!service.id.startsWith('sd-')) {
@@ -271,6 +273,12 @@ export function ServiceOverview({
     setEditing(false)
   }, [service.id, baseline])
 
+  useEffect(() => {
+    if (!copyToast) return
+    const t = window.setTimeout(() => setCopyToast(undefined), 2200)
+    return () => window.clearTimeout(t)
+  }, [copyToast])
+
   if (loading) {
     return (
       <EmptyState
@@ -282,6 +290,16 @@ export function ServiceOverview({
 
   const summary = saved ?? baseline
   const hasOwner = Boolean(service.owner)
+  const blastRadius = service.affectedCount ?? callerCount
+
+  const copyServiceId = async () => {
+    try {
+      await navigator.clipboard.writeText(service.id)
+      setCopyToast('Servis kimliği kopyalandı')
+    } catch {
+      setCopyToast('Kopyalanamadı')
+    }
+  }
 
   const save = () => {
     const trimmed = draft.trim()
@@ -406,12 +424,23 @@ export function ServiceOverview({
           )}
         </form>
       ) : (
+        <>
+          <div className="service-metrics-strip" aria-label="Özet metrikler">
+            <StatTile label="Etki yarıçapı" value={blastRadius} hint="Değişince etkilenen" />
+            <StatTile label="Gelen çağrı" value={callerCount} />
+            <StatTile label="Giden çağrı" value={calleeCount} />
+          </div>
         <div className={`service-bento${hasOwner ? ' has-owner' : ''}`}>
           <BentoTile area="identity" title="Kimlik" spotlight>
             <div className="service-doc-body">
               <p className="service-bento-hero-name">{service.name}</p>
               <DocItem label="Servis kimliği" mono>
-                {service.id}
+                <span className="service-id-copy-row">
+                  {service.id}
+                  <button type="button" className="service-id-copy-btn" onClick={() => void copyServiceId()}>
+                    Kopyala
+                  </button>
+                </span>
               </DocItem>
             </div>
           </BentoTile>
@@ -458,15 +487,17 @@ export function ServiceOverview({
               ) : null}
             </BentoTile>
           ) : (
-            <BentoTile area="hint" title="Etki analizi">
+            <BentoTile area="ownership" title="Sahiplik">
               <p className="service-doc-hint service-bento-hint">
-                Detaylı listeler ve etki zinciri için İlişkiler ve Harita sekmelerine
-                geçin.
+                Ownership kartı F4 entegrasyonu ile eklenecek. Şimdilik İlişkiler
+                ve Harita sekmelerinden etki analizine geçin.
               </p>
             </BentoTile>
           )}
         </div>
+        </>
       )}
+      <MotionToast open={!!copyToast}>{copyToast}</MotionToast>
     </article>
   )
 }

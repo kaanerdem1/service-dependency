@@ -77,7 +77,7 @@ export function buildImpactGraphFrom(
       if (admit.length > partialHop1Cap) {
         truncated = true
         shownHop1 = admit.length
-        reason = `${totalHop1} servis doğrudan etkilenir. Haritada +N gruplara ayrıldı. Tam liste: Tablo sekmesi.`
+        reason = `${totalHop1} servis doğrudan etkilenir. LTR’de +N kutusuna tıklayın veya Radial görünüme geçin.`
       } else {
         shownHop1 = admit.length
       }

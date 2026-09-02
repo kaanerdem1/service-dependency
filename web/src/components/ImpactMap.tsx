@@ -26,8 +26,10 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   BaseEdge,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
+  MiniMap,
   Position,
   ReactFlowProvider,
   applyNodeChanges,
@@ -97,7 +99,6 @@ import {
   MapInfoPanel,
   MapViewportSync,
   ProjectFilterHint,
-  MapBudgetHint,
   RadialLabelZoomSync,
 } from './ImpactChrome'
 import { saveExploreSnapshot } from '../api/client'
@@ -139,13 +140,15 @@ type Props = {
   forceLtrSignal?: number
   /** Hub kırpma banner / cluster → Tablo sekmesi (opsiyonel proje filtresi) */
   onOpenAffectedTab?: (projectId?: string) => void
+  /** Klavye kısayol sheet */
+  onOpenShortcuts?: () => void
 }
 
 const MAP_LAYOUT_MODE_KEY = 'sd-impact-map-layout-mode'
 
 const LEFT_X = mapLeftX()
-/** LTR: ilk 4; radial 1. katman: 8, fazlası +N */
-const MAX_VISIBLE_PER_LAYER = 4
+/** LTR: ilk 8 kart; radial 1. katman ayrı (bubble). Fazlası +N → Radial. */
+const MAX_VISIBLE_PER_LAYER = 8
 const RADIAL_HOP1_CAP = 8
 const MIN_COLLAPSE_COUNT = 3
 type ServiceNodeData = {
@@ -344,8 +347,8 @@ function ServiceNodeView({ id, data, xPos, yPos }: NodeProps<ServiceNodeData>) {
               </span>
             )}
             {isCollapsed && (
-              <span className="dd-node-hop">
-                Aç · {data.count} servis daha
+              <span className="dd-node-hop dd-node-open-radial">
+                Radial&apos;da aç · +{data.count} servis
               </span>
             )}
           </>
@@ -1022,6 +1025,39 @@ function RadialEdge({
 
 const edgeTypes = { fan: memo(FanEdge), radial: memo(RadialEdge) }
 
+/** Hover/focus kenarında hop rozeti */
+function FocusEdgeHopChip({
+  edge,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+}: {
+  edge: Edge
+  sourceX: number
+  sourceY: number
+  targetX: number
+  targetY: number
+  sourcePosition?: Position
+  targetPosition?: Position
+}) {
+  const hop = (edge.data as FanEdgeData | undefined)?.hop
+  if (hop == null) return null
+  const mx = (sourceX + targetX) / 2
+  const my = (sourceY + targetY) / 2
+  const kind = (edge.data as FanEdgeData | undefined)?.kind
+  return (
+    <div
+      className={`map-edge-hop-chip${kind === 'cascade' ? ' is-cascade' : ''}`}
+      style={{
+        transform: `translate(-50%, -50%) translate(${mx}px, ${my}px)`,
+      }}
+    >
+      {hop}. katman
+    </div>
+  )
+}
+
 function assignFanIndices(
   edges: Edge[],
   hopOf: Map<string, number>,
@@ -1159,7 +1195,6 @@ function buildGraph(
   layoutMode: MapLayoutMode = 'ltr',
   radialViewport?: RadialViewportHint,
   expandedProjectClusters: Set<string> = new Set(),
-  projectLabels: Map<string, string> = new Map(),
 ): { nodes: Node<ServiceNodeData>[]; edges: Edge[]; hops: number[] } {
   const { center, nodes: impactNodes, edges: impactEdges } = graph
   const { nodeW, colGap, rowGap, tipChars } = layout
@@ -1311,7 +1346,7 @@ function buildGraph(
     const hidden = collapsedMeta.get(hop)
     if (hidden?.length) {
       const collapseId = `collapsed-hop-${hop}`
-      const collapseLabel = `+${hidden.length} servis daha`
+      const collapseLabel = `Radial'da aç · +${hidden.length} servis`
       const nodeSize =
         layoutMode === 'radial'
           ? 'md'
@@ -1598,6 +1633,7 @@ export function ImpactMap({
   onSnapshotSaved,
   forceLtrSignal = 0,
   onOpenAffectedTab,
+  onOpenShortcuts,
 }: Props) {
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
@@ -1650,6 +1686,15 @@ export function ImpactMap({
   )
   const [pivotFlash, setPivotFlash] = useState(false)
   const [pivotMorphing, setPivotMorphing] = useState(false)
+  const [focusEdgePositions, setFocusEdgePositions] = useState<{
+    edge: Edge
+    sourceX: number
+    sourceY: number
+    targetX: number
+    targetY: number
+    sourcePosition: Position
+    targetPosition: Position
+  } | null>(null)
   const mapRef = useRef<HTMLDivElement>(null)
   const [mapPane, setMapPane] = useState({ w: 0, h: 0 })
   const [userInteracting, setUserInteracting] = useState(false)
@@ -1696,12 +1741,28 @@ export function ImpactMap({
     const m = new Map<string, string>()
     for (const p of projectOptions) m.set(p.id, p.label)
     for (const n of graph.nodes) {
-      if (!m.has(n.service.projectId)) {
-        m.set(n.service.projectId, n.service.projectId)
+      const id = n.service.projectId
+      if (!id || id === 'unknown') continue
+      if (!m.has(id)) {
+        m.set(
+          id,
+          n.service.projectLabel ||
+            n.service.projectGroupLabel ||
+            id,
+        )
       }
     }
+    if (graph.center.projectId && graph.center.projectId !== 'unknown') {
+      m.set(
+        graph.center.projectId,
+        graph.center.projectLabel ||
+          graph.center.projectGroupLabel ||
+          m.get(graph.center.projectId) ||
+          graph.center.projectId,
+      )
+    }
     return m
-  }, [projectOptions, graph.nodes])
+  }, [projectOptions, graph.nodes, graph.center])
 
   const filteredGraph = useMemo((): ImpactGraph => {
     if (!hasScopeFilter) return graph
@@ -1855,7 +1916,6 @@ export function ImpactMap({
         layoutMode,
         radialViewport,
         expandedProjectClusters,
-        projectLabels,
       ),
     [
       filteredGraph,
@@ -2102,13 +2162,14 @@ export function ImpactMap({
 
     const hopExpanded =
       visibleMaxHop > prevVisibleHopRef.current && !centerChanged
+    const layoutStagger = epochChanged && !centerChanged && !hopExpanded
     const revealById = new Map<string, number>()
-    if (hopExpanded) {
+    if (hopExpanded || layoutStagger) {
       const newcomers = built.nodes.filter(
         (n) =>
           n.type === 'serviceNode' &&
-          !prevBuiltIdsRef.current.has(n.id) &&
-          n.id !== graph.center.id,
+          n.id !== graph.center.id &&
+          (layoutStagger || !prevBuiltIdsRef.current.has(n.id)),
       )
       newcomers.sort((a, b) => {
         const da = a.data as ServiceNodeData
@@ -2258,6 +2319,36 @@ export function ImpactMap({
         : edgeTouchesFocus(edge, focusId)
       el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
     })
+
+    if (focusEdgeId && rfInstance.current) {
+      const rfEdge = rfInstance.current
+        .getEdges()
+        .find((e) => e.id === focusEdgeId)
+      if (rfEdge) {
+        const src = rfInstance.current.getNode(rfEdge.source)
+        const tgt = rfInstance.current.getNode(rfEdge.target)
+        if (src && tgt) {
+          const sx = src.position.x + (src.width ?? layout.nodeW) / 2
+          const sy = src.position.y + 40
+          const tx = tgt.position.x + (tgt.width ?? layout.nodeW) / 2
+          const ty = tgt.position.y + 40
+          const builtEdge = built.edges.find((e) => e.id === focusEdgeId)
+          if (builtEdge) {
+            setFocusEdgePositions({
+              edge: builtEdge,
+              sourceX: sx,
+              sourceY: sy,
+              targetX: tx,
+              targetY: ty,
+              sourcePosition: Position.Right,
+              targetPosition: Position.Left,
+            })
+          }
+        }
+      }
+    } else {
+      setFocusEdgePositions(null)
+    }
   }, [
     egoIds,
     focusId,
@@ -2267,6 +2358,7 @@ export function ImpactMap({
     expandedMethodServiceId,
     userInteracting,
     showCascadeEdges,
+    layout.nodeW,
   ])
 
   useEffect(() => {
@@ -2425,6 +2517,14 @@ export function ImpactMap({
     [graph.center.id, layout.colGap, layout.maxZoom, layout.minZoom, layout.nodeW, onPivot, setNodes],
   )
 
+  const switchToRadialLayout = useCallback(() => {
+    trail?.record('layout_toggle', undefined, 'LTR +N → Radial')
+    layoutDirtyRef.current = false
+    setLayoutMode('radial')
+    window.sessionStorage.setItem(MAP_LAYOUT_MODE_KEY, 'radial')
+    setTidyNonce((n) => n + 1)
+  }, [trail])
+
   const onNodeClick = useCallback(
     (event: ReactMouseEvent, node: Node) => {
       if (pivotMorphingRef.current) return
@@ -2442,8 +2542,8 @@ export function ImpactMap({
       }
       const data = node.data as ServiceNodeData
       if (data.kind === 'collapsed') {
-        if (data.hop === 1 && onOpenAffectedTab && graph.truncated) {
-          onOpenAffectedTab()
+        if (layoutMode === 'ltr') {
+          switchToRadialLayout()
           return
         }
         setExpandedLayers((prev) => new Set(prev).add(data.hop))
@@ -2466,7 +2566,7 @@ export function ImpactMap({
       setNotesServiceId(null)
       pivotToNode(node)
     },
-    [graph.center.id, graph.truncated, onClearCenter, onOpenAffectedTab, pivotToNode],
+    [graph.center.id, layoutMode, onClearCenter, onOpenAffectedTab, pivotToNode, switchToRadialLayout],
   )
 
   const clearHoverFocus = useCallback(() => {
@@ -2587,7 +2687,7 @@ export function ImpactMap({
   return (
     <div
       ref={attachMapRef}
-      className={`impact-map dd-map ${!mapExpanded ? 'is-docked-view' : ''} ${focusing ? 'is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
+      className={`impact-map dd-map ${!mapExpanded ? 'is-docked-view' : ''} ${focusing ? ' is-focusing' : ''}${pivotFlash ? ' is-pivot-flash' : ''}${pivotMorphing ? ' is-pivot-morph' : ''}${navDirection === 'back' ? ' is-nav-back' : ''}${navDirection === 'forward' ? ' is-nav-forward' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       data-focus={
         expandedMethodServiceId ?? focusId ?? focusEdgeId ?? undefined
       }
@@ -2597,14 +2697,6 @@ export function ImpactMap({
       <div className="map-canvas">
       <div className="path-layer-bar">
         <div className="path-layer-start">
-          {graph.truncated && (graph.reason || graph.totalHop1 != null) && (
-            <MapBudgetHint
-              totalHop1={graph.totalHop1}
-              shownHop1={graph.shownHop1}
-              reason={graph.reason}
-              onOpenTable={() => onOpenAffectedTab?.()}
-            />
-          )}
           {expandedProjectClusters.size > 0 && (
             <div className="map-cluster-trail" role="navigation" aria-label="Açık grup">
               {[...expandedProjectClusters].map((key) => (
@@ -2684,7 +2776,7 @@ export function ImpactMap({
         selectNodesOnDrag={false}
         nodesConnectable={false}
         panOnDrag
-        onlyRenderVisibleElements={false}
+        onlyRenderVisibleElements
         minZoom={layout.minZoom}
         maxZoom={layout.maxZoom}
         onMoveStart={onMoveStart}
@@ -2707,6 +2799,24 @@ export function ImpactMap({
         <RadialLabelZoomSync
           layoutTick={`${layoutMode}-${visibleMaxHop}-${tidyNonce}-${graph.center.id}-${mapExpanded}-${[...expandedProjectClusters].sort().join(',')}`}
         />
+        <MiniMap
+          className="map-minimap"
+          aria-label="Harita özeti"
+          pannable
+          zoomable
+          nodeColor={(node) => {
+            const d = node.data as ServiceNodeData | undefined
+            if (d?.kind === 'center') return '#1e3a2f'
+            if (d?.kind === 'collapsed' || d?.kind === 'cluster') return '#6f9b86'
+            return '#3d7a60'
+          }}
+          maskColor="color-mix(in srgb, var(--map-bg, #fff) 72%, transparent)"
+        />
+        {focusEdgePositions && (
+          <EdgeLabelRenderer>
+            <FocusEdgeHopChip {...focusEdgePositions} />
+          </EdgeLabelRenderer>
+        )}
         <MapViewportSync
           centerId={graph.center.id}
           visibleMaxHop={visibleMaxHop}
@@ -2811,6 +2921,7 @@ export function ImpactMap({
           packageOptions={packageOptions}
           onProjectFiltersChange={setProjectFilters}
           onPackageFiltersChange={setPackageFilters}
+          onOpenShortcuts={onOpenShortcuts}
         />
       </ReactFlowProvider>
       </div>

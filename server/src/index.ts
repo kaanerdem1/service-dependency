@@ -163,7 +163,19 @@ app.get('/api/modules/:nodeId/children', async (req, res) => {
     return
   }
   try {
-    res.json(await listModuleChildren(req.params.nodeId))
+    const limit = Number(req.query.limit ?? 100)
+    const offset = Number(req.query.offset ?? 0)
+    const sort = req.query.sort === 'degree' ? 'degree' : 'name'
+    const anchorServiceId =
+      typeof req.query.anchorServiceId === 'string' ? req.query.anchorServiceId : undefined
+    res.json(
+      await listModuleChildren(req.params.nodeId, {
+        limit,
+        offset,
+        sort,
+        anchorServiceId,
+      }),
+    )
   } catch (e) {
     console.error('[inventory] /api/modules/:nodeId/children', e)
     res.status(500).json({ error: 'inventory_error' })

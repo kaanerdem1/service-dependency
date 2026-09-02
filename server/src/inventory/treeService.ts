@@ -1,4 +1,4 @@
-import type { ModuleNode } from '../data.js'
+import type { ModuleChildrenResult, ModuleNode } from '../data.js'
 import { query, tableName } from './db.js'
 
 const SERVICE_PAGE_SIZE = 100
@@ -6,11 +6,46 @@ const UNLOCATED_NODE_ID = 'unlocated'
 
 type NodePrefix = 'pg' | 'proj' | 'art' | 'sd'
 
+export type ListChildrenOptions = {
+  limit?: number
+  offset?: number
+  sort?: 'name' | 'degree'
+  /** Ağaç yolu hydrate: sayfa bu servisi içerecek şekilde hizalanır. */
+  anchorServiceId?: string
+}
+
 function parseNodeId(nodeId: string): { prefix: NodePrefix; id: number } | undefined {
   const m = /^(pg|proj|art|sd)-(\d+)$/.exec(nodeId)
   if (!m) return undefined
   return { prefix: m[1] as NodePrefix, id: Number(m[2]) }
 }
+
+function parseServiceDbId(serviceId: string): number | undefined {
+  const m = /^sd-(\d+)$/.exec(serviceId)
+  return m ? Number(m[1]) : undefined
+}
+
+function clampPage(limit?: number, offset?: number) {
+  const lim = Math.min(Math.max(limit ?? SERVICE_PAGE_SIZE, 1), 500)
+  const off = Math.max(offset ?? 0, 0)
+  return { limit: lim, offset: off }
+}
+
+const DEGREE_SUBQUERY = `
+  SELECT jm_callee.service_definition_id AS service_id,
+         COUNT(DISTINCT sd_caller.id)::int AS degree
+  FROM ${tableName('call_edge')} ce
+  JOIN ${tableName('java_method')} jm_caller ON jm_caller.id = ce.caller_id
+  JOIN ${tableName('java_method')} jm_callee ON jm_callee.id = ce.callee_id
+  JOIN ${tableName('service_definition')} sd_caller
+    ON sd_caller.id = jm_caller.service_definition_id
+  JOIN ${tableName('service_definition')} sd_callee
+    ON sd_callee.id = jm_callee.service_definition_id
+  WHERE sd_caller.id <> sd_callee.id
+    AND sd_caller.status = 1
+    AND sd_callee.status = 1
+  GROUP BY jm_callee.service_definition_id
+`
 
 /** Kök: project_group düğümleri (lazy — children yok). */
 export async function listModuleRoots(): Promise<ModuleNode[]> {
@@ -38,25 +73,57 @@ export async function listModuleRoots(): Promise<ModuleNode[]> {
       kind: 'group',
       name: `Konumsuz servisler (${unlocated})`,
       hasChildren: true,
+      childCount: unlocated,
     })
   }
   return roots
 }
 
-export async function listModuleChildren(nodeId: string): Promise<ModuleNode[]> {
+export async function listModuleChildren(
+  nodeId: string,
+  opts: ListChildrenOptions = {},
+): Promise<ModuleChildrenResult> {
+  const { limit, offset: rawOffset } = clampPage(opts.limit, opts.offset)
+  const sort = opts.sort === 'degree' ? 'degree' : 'name'
+
   if (nodeId === UNLOCATED_NODE_ID) {
-    return listUnlocatedServices(SERVICE_PAGE_SIZE, 0)
+    const total = await countUnlocatedServices()
+    const offset = await resolveAnchorOffset({
+      sort,
+      total,
+      limit,
+      offset: rawOffset,
+      anchorServiceId: opts.anchorServiceId,
+      scope: 'unlocated',
+    })
+    const items = await listUnlocatedServices(limit, offset, sort)
+    return { items, total, limit, offset }
   }
+
   const parsed = parseNodeId(nodeId)
-  if (!parsed) return []
+  if (!parsed) return { items: [], total: 0, limit, offset: rawOffset }
 
   if (parsed.prefix === 'pg') {
-    return listArtifactsForGroup(parsed.id)
+    const items = await listArtifactsForGroup(parsed.id)
+    return { items, total: items.length, limit: items.length, offset: 0 }
   }
+
   if (parsed.prefix === 'art') {
-    return listServicesForArtifact(parsed.id, SERVICE_PAGE_SIZE, 0)
+    const total = await countServicesForArtifact(parsed.id)
+    const offset = await resolveAnchorOffset({
+      sort,
+      total,
+      limit,
+      offset: rawOffset,
+      anchorServiceId: opts.anchorServiceId,
+      scope: 'artifact',
+      artifactId: parsed.id,
+    })
+    const items = await listServicesForArtifact(parsed.id, limit, offset, sort)
+    return { items, total, limit, offset }
   }
-  return []
+
+  return { items: [], total: 0, limit, offset: rawOffset }
 }
 
 /** Grup → jar (project katmanı atlanır: her projede pratikte tek jar). */
@@ -77,28 +144,150 @@ async function listArtifactsForGroup(groupId: number): Promise<ModuleNode[]> {
      ORDER BY a.name`,
     [groupId],
   )
-  return rows.map((row) => ({
-    id: `art-${row.id}`,
-    kind: 'package',
-    name: row.name,
-    hasChildren: Number(row.svc_count) > 0,
-  }))
+  return rows.map((row) => {
+    const count = Number(row.svc_count)
+    return {
+      id: `art-${row.id}`,
+      kind: 'package',
+      name: row.name,
+      hasChildren: count > 0,
+      childCount: count,
+    }
+  })
+}
+
+async function countServicesForArtifact(artifactId: number): Promise<number> {
+  const { rows } = await query<{ n: string }>(
+    `SELECT COUNT(DISTINCT sd.id)::text AS n
+     FROM ${tableName('service_definition')} sd
+     JOIN ${tableName('java_method')} jm ON jm.service_definition_id = sd.id
+     JOIN ${tableName('java_class')} jc ON jc.id = jm.class_id
+     WHERE jc.artifact_id = $1
+       AND sd.status = 1`,
+    [artifactId],
+  )
+  return Number(rows[0]?.n ?? 0)
+}
+
+async function resolveAnchorOffset(input: {
+  sort: 'name' | 'degree'
+  total: number
+  limit: number
+  offset: number
+  anchorServiceId?: string
+  scope: 'artifact' | 'unlocated'
+  artifactId?: number
+}): Promise<number> {
+  if (!input.anchorServiceId) return input.offset
+  const dbId = parseServiceDbId(input.anchorServiceId)
+  if (!dbId) return input.offset
+
+  if (input.sort === 'name') {
+    let rank = 0
+    if (input.scope === 'artifact' && input.artifactId != null) {
+      const { rows } = await query<{ n: string }>(
+        `SELECT COUNT(DISTINCT sd.id)::text AS n
+         FROM ${tableName('service_definition')} sd
+         JOIN ${tableName('java_method')} jm ON jm.service_definition_id = sd.id
+         JOIN ${tableName('java_class')} jc ON jc.id = jm.class_id
+         WHERE jc.artifact_id = $1
+           AND sd.status = 1
+           AND sd.service_name < (
+             SELECT service_name FROM ${tableName('service_definition')} WHERE id = $2
+           )`,
+        [input.artifactId, dbId],
+      )
+      rank = Number(rows[0]?.n ?? 0)
+    } else {
+      const { rows } = await query<{ n: string }>(
+        `SELECT COUNT(*)::text AS n
+         FROM ${tableName('service_definition')} sd
+         WHERE sd.status = 1
+           AND NOT EXISTS (
+             SELECT 1 FROM ${tableName('java_method')} jm
+             WHERE jm.service_definition_id = sd.id
+           )
+           AND sd.service_name < (
+             SELECT service_name FROM ${tableName('service_definition')} WHERE id = $1
+           )`,
+        [dbId],
+      )
+      rank = Number(rows[0]?.n ?? 0)
+    }
+    return Math.min(Math.floor(rank / input.limit) * input.limit, Math.max(0, input.total - 1))
+  }
+
+  const orderSql =
+    input.scope === 'artifact' && input.artifactId != null
+      ? `
+        WITH svc AS (
+          SELECT DISTINCT sd.id, sd.service_name
+          FROM ${tableName('service_definition')} sd
+          JOIN ${tableName('java_method')} jm ON jm.service_definition_id = sd.id
+          JOIN ${tableName('java_class')} jc ON jc.id = jm.class_id
+          WHERE jc.artifact_id = $1 AND sd.status = 1
+        ),
+        ranked AS (
+          SELECT svc.id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY COALESCE(deg.degree, 0) DESC, svc.service_name ASC
+                 ) - 1 AS zero_rank
+          FROM svc
+          LEFT JOIN (${DEGREE_SUBQUERY}) deg ON deg.service_id = svc.id
+        )
+        SELECT zero_rank::text AS n FROM ranked WHERE id = $2
+      `
+      : `
+        WITH svc AS (
+          SELECT sd.id, sd.service_name
+          FROM ${tableName('service_definition')} sd
+          WHERE sd.status = 1
+            AND NOT EXISTS (
+              SELECT 1 FROM ${tableName('java_method')} jm
+              WHERE jm.service_definition_id = sd.id
+            )
+        ),
+        ranked AS (
+          SELECT svc.id,
+                 ROW_NUMBER() OVER (
+                   ORDER BY COALESCE(deg.degree, 0) DESC, svc.service_name ASC
+                 ) - 1 AS zero_rank
+          FROM svc
+          LEFT JOIN (${DEGREE_SUBQUERY}) deg ON deg.service_id = svc.id
+        )
+        SELECT zero_rank::text AS n FROM ranked WHERE id = $1
+      `
+
+  const params =
+    input.scope === 'artifact' && input.artifactId != null
+      ? [input.artifactId, dbId]
+      : [dbId]
+  const { rows } = await query<{ n: string }>(orderSql, params)
+  const rank = Number(rows[0]?.n ?? 0)
+  return Math.min(Math.floor(rank / input.limit) * input.limit, Math.max(0, input.total - 1))
 }
 
 async function listServicesForArtifact(
   artifactId: number,
   limit: number,
   offset: number,
+  sort: 'name' | 'degree',
 ): Promise<ModuleNode[]> {
-  const { rows } = await query<{ id: string; name: string }>(
-    `SELECT DISTINCT sd.id::text AS id,
-            sd.service_name AS name
-     FROM ${tableName('service_definition')} sd
-     JOIN ${tableName('java_method')} jm ON jm.service_definition_id = sd.id
-     JOIN ${tableName('java_class')} jc ON jc.id = jm.class_id
-     WHERE jc.artifact_id = $1
-       AND sd.status = 1
-     ORDER BY sd.service_name
+  const { rows } = await query<{ id: string; name: string; degree: string }>(
+    `WITH jar_svc AS (
+       SELECT DISTINCT sd.id AS service_id, sd.service_name AS service_name
+       FROM ${tableName('service_definition')} sd
+       JOIN ${tableName('java_method')} jm ON jm.service_definition_id = sd.id
+       JOIN ${tableName('java_class')} jc ON jc.id = jm.class_id
+       WHERE jc.artifact_id = $1
+         AND sd.status = 1
+     )
+     SELECT jar_svc.service_id::text AS id,
+            jar_svc.service_name AS name,
+            COALESCE(deg.degree, 0)::text AS degree
+     FROM jar_svc
+     LEFT JOIN (${DEGREE_SUBQUERY}) deg ON deg.service_id = jar_svc.service_id
+     ORDER BY ${sort === 'degree' ? 'COALESCE(deg.degree, 0) DESC, jar_svc.service_name ASC' : 'jar_svc.service_name ASC'}
      LIMIT $2 OFFSET $3`,
     [artifactId, limit, offset],
   )
@@ -108,6 +297,7 @@ async function listServicesForArtifact(
     name: row.name,
     serviceId: `sd-${row.id}`,
     hasChildren: false,
+    degree: Number(row.degree ?? 0),
   }))
 }
 
@@ -129,18 +319,25 @@ async function countUnlocatedServices(): Promise<number> {
 export async function listUnlocatedServices(
   limit: number,
   offset: number,
+  sort: 'name' | 'degree' = 'name',
 ): Promise<ModuleNode[]> {
-  const { rows } = await query<{ id: string; name: string }>(
-    `SELECT sd.id::text AS id,
-            sd.service_name AS name
-     FROM ${tableName('service_definition')} sd
-     WHERE sd.status = 1
-       AND NOT EXISTS (
-         SELECT 1
-         FROM ${tableName('java_method')} jm
-         WHERE jm.service_definition_id = sd.id
-       )
-     ORDER BY sd.service_name
+  const { rows } = await query<{ id: string; name: string; degree: string }>(
+    `WITH unloc AS (
+       SELECT sd.id AS service_id, sd.service_name AS service_name
+       FROM ${tableName('service_definition')} sd
+       WHERE sd.status = 1
+         AND NOT EXISTS (
+           SELECT 1
+           FROM ${tableName('java_method')} jm
+           WHERE jm.service_definition_id = sd.id
+         )
+     )
+     SELECT unloc.service_id::text AS id,
+            unloc.service_name AS name,
+            COALESCE(deg.degree, 0)::text AS degree
+     FROM unloc
+     LEFT JOIN (${DEGREE_SUBQUERY}) deg ON deg.service_id = unloc.service_id
+     ORDER BY ${sort === 'degree' ? 'COALESCE(deg.degree, 0) DESC, unloc.service_name ASC' : 'unloc.service_name ASC'}
      LIMIT $1 OFFSET $2`,
     [limit, offset],
   )
@@ -150,6 +347,7 @@ export async function listUnlocatedServices(
     name: row.name,
     serviceId: `sd-${row.id}`,
     hasChildren: false,
+    degree: Number(row.degree ?? 0),
   }))
 }
 

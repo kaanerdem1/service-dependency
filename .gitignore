@@ -19,3 +19,9 @@ dist-ssr/
 *.njsproj
 *.sln
 *.sw?
+
+# Lokal notlar — push edilmez (docs/PRODUCT.md, db.md, README.md hariç)
+/ss.md
+/docs/UI +.md
+/docs/new.md
+/docs/screen-process.md
