@@ -444,6 +444,58 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   color: var(--shell-sidebar-fg);
 }
 
+.dwh-search-hits-portal {
+  overflow: hidden;
+  color: var(--shell-search-dropdown-fg, var(--shell-sidebar-fg));
+}
+
+.dwh-search-hits-portal .search-hits-auto,
+.dwh-search-hits-portal .search-hits {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.dwh-search-hits-portal .search-hits {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dwh-search-hits-portal .search-hits button {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dwh-search-hits-portal .search-hits button:hover {
+  background: #e4f0ea;
+  color: #202722;
+}
+
+.dwh-search-hits-portal .search-hits button:hover .search-hit-text strong {
+  color: #17231d;
+}
+
+.dwh-search-hits-portal .search-hits button:hover .method-hit-svc {
+  color: #53605a;
+}
+
+.dwh-search-hits-portal .search-hit-main,
+.dwh-search-hits-portal .search-hit-text {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dwh-search-hits-portal .method-hit-svc {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dwh-search-hits-portal .name-tip.is-short[data-tip]::after {
+  display: none;
+}
+
 .hit-tag-table {
   color: #1a4a36;
   background: #cfe4d8;

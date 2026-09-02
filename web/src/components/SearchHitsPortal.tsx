@@ -8,10 +8,11 @@ type Props = {
   open: boolean
   anchorRef: React.RefObject<HTMLElement | null>
   children: ReactNode
+  className?: string
 }
 
 /** Sidebar arama sonuçları — body portal, AutoHeight + spring açılış */
-export function SearchHitsPortal({ open, anchorRef, children }: Props) {
+export function SearchHitsPortal({ open, anchorRef, children, className }: Props) {
   const [style, setStyle] = useState<React.CSSProperties>({})
   const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const shellRef = useRef<HTMLDivElement>(null)
@@ -58,7 +59,7 @@ export function SearchHitsPortal({ open, anchorRef, children }: Props) {
       {open ? (
         <motion.div
           ref={shellRef}
-          className="search-hits-shell search-hits-portal"
+          className={['search-hits-shell search-hits-portal', className].filter(Boolean).join(' ')}
           data-motion="search-auto-height"
           data-placement={placement}
           style={style}

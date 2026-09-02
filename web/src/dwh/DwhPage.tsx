@@ -42,9 +42,21 @@ type DwhTab = 'tables' | 'reports'
 type DwhStageTab = 'query' | 'columns' | 'lineage' | 'impact'
 type DetailKind = 'table' | 'report'
 
-const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['query', 'columns', 'lineage', 'impact']
+const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['lineage', 'query', 'columns', 'impact']
 
 const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
+  {
+    id: 'lineage',
+    label: 'Harita',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.25" />
+        <path d="M5.8 7.2 10.2 4.8M5.8 8.8l4.4 2.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    ),
+  },
   {
     id: 'query',
     label: 'Sorgu',
@@ -61,18 +73,6 @@ const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
         <rect x="2.5" y="2.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.25" />
         <path d="M6 2.8v10.4M10 2.8v10.4M2.8 6h10.4M2.8 10h10.4" stroke="currentColor" strokeWidth="1.1" />
-      </svg>
-    ),
-  },
-  {
-    id: 'lineage',
-    label: 'Harita',
-    icon: (
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-        <circle cx="4" cy="8" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.25" />
-        <path d="M5.8 7.2 10.2 4.8M5.8 8.8l4.4 2.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -744,7 +744,7 @@ function ImpactPanel({
 
 export function DwhPage() {
   const [catalogTab, setCatalogTab] = useState<DwhTab>('tables')
-  const [stageTab, setStageTab] = useState<DwhStageTab>('query')
+  const [stageTab, setStageTab] = useState<DwhStageTab>('lineage')
   const [query, setQuery] = useState('')
   const [tables, setTables] = useState<DwhTable[]>([])
   const [reports, setReports] = useState<DwhReport[]>([])
@@ -949,7 +949,7 @@ export function DwhPage() {
     setSelectedTableId(table.tableId)
     setRootReportId(undefined)
     setDetailKind('table')
-    setStageTab('query')
+    setStageTab('lineage')
     setQuery('')
   }
 
@@ -958,7 +958,7 @@ export function DwhPage() {
     setSelectedReportId(report.reportId)
     setRootTableId(undefined)
     setDetailKind('report')
-    setStageTab('query')
+    setStageTab('lineage')
     setQuery('')
   }
 
@@ -1127,7 +1127,7 @@ export function DwhPage() {
                     aria-label="Aramayı kapat"
                     onClick={() => setQuery('')}
                   />
-                  <SearchHitsPortal open={searchOpen} anchorRef={searchRef}>
+                  <SearchHitsPortal open={searchOpen} anchorRef={searchRef} className="dwh-search-hits-portal">
                     <AnimatePresence initial={false}>
                       {catalogTab === 'tables'
                         ? tables.map((table, i) => (
@@ -1214,12 +1214,12 @@ export function DwhPage() {
                 onSelectTable={(tableId) => {
                   setSelectedTableId(tableId)
                   setDetailKind('table')
-                  setStageTab('query')
+                  setStageTab('lineage')
                 }}
                 onSelectReport={(reportId) => {
                   setSelectedReportId(reportId)
                   setDetailKind('report')
-                  setStageTab('query')
+                  setStageTab('lineage')
                 }}
               />
             </div>
@@ -1239,6 +1239,34 @@ export function DwhPage() {
             tabOrder={DWH_STAGE_TAB_ORDER}
             mapOnly={stageTab === 'lineage'}
           >
+            <section
+              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-lineage"
+              aria-hidden={stageTab !== 'lineage'}
+              aria-label="Harita"
+            >
+              <MapStage
+                title={stageHeading}
+                expanded={mapExpanded}
+                onExpandedChange={setMapExpanded}
+                active={stageTab === 'lineage'}
+              >
+                <DwhLineageMap
+                  graph={lineageGraph}
+                  loading={loadingGraph}
+                  mapExpanded={mapExpanded}
+                  active={stageTab === 'lineage'}
+                  onSelectTable={(tableId) => {
+                    setSelectedTableId(tableId)
+                    setDetailKind('table')
+                  }}
+                  onSelectReport={(reportId) => {
+                    setSelectedReportId(reportId)
+                    setDetailKind('report')
+                  }}
+                />
+              </MapStage>
+            </section>
+
             <section
               className="stage-panel dwh-stage-panel dwh-stage-panel-query"
               aria-hidden={stageTab !== 'query'}
@@ -1274,34 +1302,6 @@ export function DwhPage() {
                   )}
                 </section>
               </div>
-            </section>
-
-            <section
-              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-lineage"
-              aria-hidden={stageTab !== 'lineage'}
-              aria-label="Harita"
-            >
-              <MapStage
-                title={stageHeading}
-                expanded={mapExpanded}
-                onExpandedChange={setMapExpanded}
-                active={stageTab === 'lineage'}
-              >
-                <DwhLineageMap
-                  graph={lineageGraph}
-                  loading={loadingGraph}
-                  mapExpanded={mapExpanded}
-                  active={stageTab === 'lineage'}
-                  onSelectTable={(tableId) => {
-                    setSelectedTableId(tableId)
-                    setDetailKind('table')
-                  }}
-                  onSelectReport={(reportId) => {
-                    setSelectedReportId(reportId)
-                    setDetailKind('report')
-                  }}
-                />
-              </MapStage>
             </section>
 
             <section
