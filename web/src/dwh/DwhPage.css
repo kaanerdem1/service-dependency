@@ -1345,6 +1345,38 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font: inherit;
 }
 
+.dwh-lineage-map.is-swimlane .react-flow__background {
+  opacity: 0.45;
+}
+
+.dwh-layer-header-node {
+  pointer-events: none;
+}
+
+.dwh-layer-header-node .dd-node-body {
+  min-height: 44px;
+  border: 1px solid #cfd8dc;
+  border-radius: 8px;
+  background: rgba(245, 248, 249, 0.92);
+  color: #52625b;
+  box-shadow: none;
+}
+
+.dwh-layer-header-node .dd-node-label {
+  color: #245f46;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.dwh-layer-header-node .dd-node-hop {
+  margin-top: 2px;
+  color: #7b858e;
+  font-size: 10px;
+  font-weight: 750;
+}
+
 .dwh-map-node.kind-report .dd-node-body {
   border-color: #d9d0ec;
   background: #f6f2fb;

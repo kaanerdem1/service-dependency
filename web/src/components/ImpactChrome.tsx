@@ -866,6 +866,8 @@ type LayerControlsProps = {
   onTidyUp?: () => void
   onToggleLayoutMode?: () => void
   layoutMode?: MapLayoutMode
+  viewMode?: MapLayoutMode | 'swimlane'
+  onSetViewMode?: (mode: MapLayoutMode | 'swimlane') => void
   layout?: MapLayout
   drawerOpen?: boolean
   cascadeCount?: number
@@ -1217,6 +1219,38 @@ function IconRadial() {
   )
 }
 
+function IconTreeView() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <circle cx="3.3" cy="8" r="1.45" fill="currentColor" />
+      <circle cx="8.2" cy="5" r="1.35" fill="currentColor" />
+      <circle cx="8.2" cy="11" r="1.35" fill="currentColor" />
+      <circle cx="13" cy="3.4" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="6.6" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="9.4" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="12.6" r="1.05" fill="currentColor" />
+      <path
+        d="M4.8 8h1.6M6.4 8 7.1 6M6.4 8l.7 2M9.5 5h2M9.5 11h2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconSwimlane() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path d="M3 4h10M3 8h10M3 12h10" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+      <rect x="4" y="2.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+      <rect x="8.9" y="6.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+      <rect x="5.8" y="10.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** Ağaçtaki Method tür işaretiyle aynı renkli M ikonu. */
 function IconLinkedMethods() {
   return (
@@ -1316,6 +1350,8 @@ export function MapCanvasBar({
   onTidyUp,
   onToggleLayoutMode,
   layoutMode = 'ltr',
+  viewMode,
+  onSetViewMode,
   layout,
   drawerOpen = false,
   cascadeCount,
@@ -1340,7 +1376,14 @@ export function MapCanvasBar({
   const fitPadding = layout
     ? fitViewPaddingForChrome(layout, { drawerOpen })
     : 0.22
-  const radialOn = layoutMode === 'radial'
+  const activeViewMode = viewMode ?? layoutMode
+  const radialOn = activeViewMode === 'radial'
+  const setViewMode = (mode: MapLayoutMode | 'swimlane') => {
+    onSetViewMode?.(mode)
+    window.setTimeout(() => {
+      fitView({ padding: fitPadding, duration: 280 })
+    }, 40)
+  }
 
   const rootRef = useRef<HTMLDivElement>(null)
   const dockRef = useRef<HTMLDivElement>(null)
@@ -1562,7 +1605,7 @@ export function MapCanvasBar({
                   <IconTidy />
                 </DockBtn>
               )}
-              {onToggleLayoutMode && (
+              {onToggleLayoutMode && !onSetViewMode && (
                 <DockBtn
                   label={
                     radialOn
@@ -1580,6 +1623,31 @@ export function MapCanvasBar({
                   <IconRadial />
                 </DockBtn>
               )}
+              {onSetViewMode ? (
+                <>
+                  <DockBtn
+                    label="Ağaç görünüm"
+                    pressed={activeViewMode === 'ltr'}
+                    onClick={() => setViewMode('ltr')}
+                  >
+                    <IconTreeView />
+                  </DockBtn>
+                  <DockBtn
+                    label="Halkalı görünüm"
+                    pressed={activeViewMode === 'radial'}
+                    onClick={() => setViewMode('radial')}
+                  >
+                    <IconRadial />
+                  </DockBtn>
+                  <DockBtn
+                    label="Katmanlı görünüm"
+                    pressed={activeViewMode === 'swimlane'}
+                    onClick={() => setViewMode('swimlane')}
+                  >
+                    <IconSwimlane />
+                  </DockBtn>
+                </>
+              ) : null}
             </DockMagnifyRow>
           </div>
 
