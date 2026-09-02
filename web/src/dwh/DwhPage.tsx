@@ -321,7 +321,8 @@ function SqlDetailPanel({
 
   const hasSummary = Boolean(statement.simplifiedSql)
   const sqlText = hasSummary && view === 'summary' ? statement.simplifiedSql : statement.sqlText
-  const roleLabel = statement.role === 'reader' ? 'Bu tablo kaynak olarak kullanılıyor' : 'Bu tablo dolduruluyor'
+  const tableLabel = focusTable ? `${focusTable} tablosu` : 'Bu tablo'
+  const roleLabel = statement.role === 'reader' ? `${tableLabel} kaynak olarak kullanılıyor` : `${tableLabel} dolduruluyor`
   const targetTable = statement.role === 'reader' ? statement.relatedTable ?? statement.targetTable : statement.targetTable ?? focusTable
 
   return (
@@ -345,7 +346,7 @@ function SqlDetailPanel({
           {targetTable ?? '-'}
         </span>
         <span>
-          <strong>Odak</strong>
+          <strong>Kaynak</strong>
           {focusTable ?? '-'}
         </span>
       </div>
