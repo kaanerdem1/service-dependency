@@ -9,7 +9,7 @@ import {
 } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { MapStage } from '../components/MapStage'
-import { SearchHitsPortal } from '../components/SearchHitsPortal'
+import { DwhSearchHitsPortal } from './DwhSearchHitsPortal'
 import { MotionListItem } from '../motion/MotionList'
 import { StageTabPanels } from '../motion/StageTabPanels'
 import { StageTabs, type StageTabDef } from '../motion/StageTabs'
@@ -1128,7 +1128,7 @@ export function DwhPage() {
                     aria-label="Aramayı kapat"
                     onClick={() => setQuery('')}
                   />
-                  <SearchHitsPortal open={searchOpen} anchorRef={searchRef} className="dwh-search-hits-portal">
+                  <DwhSearchHitsPortal open={searchOpen} anchorRef={searchRef} className="dwh-search-hits-portal">
                     <AnimatePresence initial={false}>
                       {catalogTab === 'tables'
                         ? tables.map((table, i) => (
@@ -1173,7 +1173,7 @@ export function DwhPage() {
                         </MotionListItem>
                       ) : null}
                     </AnimatePresence>
-                  </SearchHitsPortal>
+                  </DwhSearchHitsPortal>
                 </>
               ) : null}
             </label>

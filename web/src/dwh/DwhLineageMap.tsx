@@ -42,7 +42,7 @@ import {
   type MapLayoutMode,
   type RadialLabelSide,
 } from '../impact/mapLayout'
-import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from '../components/ImpactChrome'
+import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from './DwhMapChrome'
 import type {
   DwhLineageEntityKind,
   DwhLineageGraph,

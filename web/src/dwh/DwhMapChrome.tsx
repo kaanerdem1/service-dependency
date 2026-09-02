@@ -26,7 +26,7 @@ import { MotionSheetBody } from '../motion/MotionSheet'
 import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
 import { layoutSpring } from '../motion/config'
-import { DockTooltipPortal } from './DockTooltipPortal'
+import { DockTooltipPortal } from '../components/DockTooltipPortal'
 
 /** Ortak lejant + filtre ipucu + path breadcrumb + blast özeti */
 
@@ -84,7 +84,7 @@ export function MapViewportSync({
   const fitTargetNodes = () =>
     rf
       .getNodes()
-      .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge')
+      .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge' || n.type === 'dwhNode')
 
   const collectRadialItems = () => {
     return rf.getNodes().flatMap((n) => {
@@ -112,7 +112,7 @@ export function MapViewportSync({
           cx,
           cy,
           angle,
-          name: String(d.label || d.fullLabel || ''),
+          name: String(d.fullLabel || d.label || ''),
           kind: String(d.kind ?? 'service'),
           side: d.radialLabelSide,
         },
@@ -123,10 +123,8 @@ export function MapViewportSync({
   const focusViewport = async (
     duration: number,
     mode: MapLayoutMode,
-    force = false,
   ) => {
-    if (syncingRef.current) return
-    if (interactingRef.current && !force) return
+    if (syncingRef.current || interactingRef.current) return
     syncingRef.current = true
     try {
       const padding = fitViewPaddingForChrome(layout, {
@@ -182,12 +180,6 @@ export function MapViewportSync({
     }
   }
 
-  const prevLayoutKey = useRef(layoutKey)
-  const layoutKeyChanged = prevLayoutKey.current !== layoutKey
-  prevLayoutKey.current = layoutKey
-  const forceFitRef = useRef(false)
-  if (layoutKeyChanged) forceFitRef.current = true
-
   useEffect(() => {
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
@@ -207,7 +199,6 @@ export function MapViewportSync({
     if (deferHop) return
 
     const shouldRetryHopFit = pendingHopFit.current && syncKeyChanged
-    const ignoreInteract = forceFitRef.current || syncKeyChanged
 
     const delay =
       syncKeyChanged && pendingHopFit.current
@@ -217,9 +208,9 @@ export function MapViewportSync({
           : 72
 
     const id = window.setTimeout(() => {
-      if (interactingRef.current && !ignoreInteract) return
+      if (interactingRef.current) return
       void (async () => {
-        if (interactingRef.current && !ignoreInteract) return
+        if (interactingRef.current) return
         const padding = fitViewPaddingForChrome(layout, {
           drawerOpen: drawerOpenRef.current,
           radial: layoutMode === 'radial',
@@ -249,9 +240,7 @@ export function MapViewportSync({
         await focusViewport(
           centerChanged ? 320 : pendingHopFit.current ? 360 : 280,
           layoutMode,
-          ignoreInteract,
         )
-        forceFitRef.current = false
         pendingHopFit.current = false
       })()
     }, delay)
@@ -259,7 +248,8 @@ export function MapViewportSync({
     let retryId = 0
     if (shouldRetryHopFit) {
       retryId = window.setTimeout(() => {
-        void focusViewport(280, layoutMode, true)
+        if (interactingRef.current) return
+        void focusViewport(280, layoutMode)
       }, 340)
     }
 
@@ -359,7 +349,7 @@ export function RadialLabelZoomSync({ layoutTick }: { layoutTick?: string | numb
           cx,
           cy,
           angle,
-          name: String(d.label || d.fullLabel || ''),
+          name: String(d.fullLabel || d.label || ''),
           side: d.radialLabelSide,
         },
       ]
@@ -876,6 +866,8 @@ type LayerControlsProps = {
   onTidyUp?: () => void
   onToggleLayoutMode?: () => void
   layoutMode?: MapLayoutMode
+  viewMode?: MapLayoutMode | 'swimlane'
+  onSetViewMode?: (mode: MapLayoutMode | 'swimlane') => void
   layout?: MapLayout
   drawerOpen?: boolean
   cascadeCount?: number
@@ -898,7 +890,6 @@ type LayerControlsProps = {
   }>
   onProjectFiltersChange?: (projectIds: string[]) => void
   onPackageFiltersChange?: (packageIds: string[]) => void
-  onOpenShortcuts?: () => void
 }
 
 function DockBtn({
@@ -1228,6 +1219,38 @@ function IconRadial() {
   )
 }
 
+function IconTreeView() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <circle cx="3.3" cy="8" r="1.45" fill="currentColor" />
+      <circle cx="8.2" cy="5" r="1.35" fill="currentColor" />
+      <circle cx="8.2" cy="11" r="1.35" fill="currentColor" />
+      <circle cx="13" cy="3.4" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="6.6" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="9.4" r="1.05" fill="currentColor" />
+      <circle cx="13" cy="12.6" r="1.05" fill="currentColor" />
+      <path
+        d="M4.8 8h1.6M6.4 8 7.1 6M6.4 8l.7 2M9.5 5h2M9.5 11h2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.1"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function IconSwimlane() {
+  return (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
+      <path d="M3 4h10M3 8h10M3 12h10" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+      <rect x="4" y="2.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+      <rect x="8.9" y="6.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+      <rect x="5.8" y="10.6" width="3.1" height="2.8" rx="0.7" fill="currentColor" />
+    </svg>
+  )
+}
+
 /** Ağaçtaki Method tür işaretiyle aynı renkli M ikonu. */
 function IconLinkedMethods() {
   return (
@@ -1327,6 +1350,8 @@ export function MapCanvasBar({
   onTidyUp,
   onToggleLayoutMode,
   layoutMode = 'ltr',
+  viewMode,
+  onSetViewMode,
   layout,
   drawerOpen = false,
   cascadeCount,
@@ -1343,7 +1368,6 @@ export function MapCanvasBar({
   packageOptions = [],
   onProjectFiltersChange,
   onPackageFiltersChange,
-  onOpenShortcuts,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1352,7 +1376,14 @@ export function MapCanvasBar({
   const fitPadding = layout
     ? fitViewPaddingForChrome(layout, { drawerOpen })
     : 0.22
-  const radialOn = layoutMode === 'radial'
+  const activeViewMode = viewMode ?? layoutMode
+  const radialOn = activeViewMode === 'radial'
+  const setViewMode = (mode: MapLayoutMode | 'swimlane') => {
+    onSetViewMode?.(mode)
+    window.setTimeout(() => {
+      fitView({ padding: fitPadding, duration: 280 })
+    }, 40)
+  }
 
   const rootRef = useRef<HTMLDivElement>(null)
   const dockRef = useRef<HTMLDivElement>(null)
@@ -1574,7 +1605,7 @@ export function MapCanvasBar({
                   <IconTidy />
                 </DockBtn>
               )}
-              {onToggleLayoutMode && (
+              {onToggleLayoutMode && !onSetViewMode && (
                 <DockBtn
                   label={
                     radialOn
@@ -1592,6 +1623,31 @@ export function MapCanvasBar({
                   <IconRadial />
                 </DockBtn>
               )}
+              {onSetViewMode ? (
+                <>
+                  <DockBtn
+                    label="Ağaç görünüm"
+                    pressed={activeViewMode === 'ltr'}
+                    onClick={() => setViewMode('ltr')}
+                  >
+                    <IconTreeView />
+                  </DockBtn>
+                  <DockBtn
+                    label="Halkalı görünüm"
+                    pressed={activeViewMode === 'radial'}
+                    onClick={() => setViewMode('radial')}
+                  >
+                    <IconRadial />
+                  </DockBtn>
+                  <DockBtn
+                    label="Katmanlı görünüm"
+                    pressed={activeViewMode === 'swimlane'}
+                    onClick={() => setViewMode('swimlane')}
+                  >
+                    <IconSwimlane />
+                  </DockBtn>
+                </>
+              ) : null}
             </DockMagnifyRow>
           </div>
 
@@ -1720,14 +1776,7 @@ export function MapCanvasBar({
                         </button>
                       ) : null}
                       <div className="map-dock-project-list" aria-label="Kapsam filtresi">
-                        {projectOptions.length === 0 && packageOptions.length === 0 ? (
-                          <p className="map-dock-project-empty">
-                            Bu haritada jar/proje bilgisi olan servis yok.
-                          </p>
-                        ) : null}
-                        {projectOptions.length > 0 ? (
-                          <p className="map-dock-project-section">Projeler</p>
-                        ) : null}
+                        <p className="map-dock-project-section">Projeler</p>
                         {projectOptions.map((project) => (
                           <button
                             key={project.id}
@@ -1743,10 +1792,8 @@ export function MapCanvasBar({
                             ) : null}
                           </button>
                         ))}
-                        {packageOptions.length > 0 ? (
-                          <p className="map-dock-project-section">Jarlar</p>
-                        ) : null}
-                        {packageOptions.length === 0 && projectOptions.length > 0 ? (
+                        <p className="map-dock-project-section">Jarlar</p>
+                        {packageOptions.length === 0 ? (
                           <p className="map-dock-project-empty">Bu etki zincirinde jar yok.</p>
                         ) : (
                           packageOptions.map((pkg) => (
@@ -1838,13 +1885,6 @@ export function MapCanvasBar({
           <div className="map-dock-group">
             <span className="map-dock-group-kicker">Bilgi</span>
             <DockMagnifyRow>
-              {onOpenShortcuts ? (
-                <DockBtn label="Klavye kısayolları (?)" onClick={onOpenShortcuts}>
-                  <span className="map-dock-kbd-badge" aria-hidden>
-                    ?
-                  </span>
-                </DockBtn>
-              ) : null}
               <span className="map-dock-wrap map-dock-legend">
                 <button
                   type="button"
@@ -1928,88 +1968,4 @@ export function ProjectFilterHint({
       {bridgeCount > 0 ? ` · ${bridgeCount} ara yol` : ''}).
     </p>
   )
-}
-
-type BudgetHintProps = {
-  totalHop1?: number
-  shownHop1?: number
-  reason?: string
-  onOpenTable?: () => void
-}
-
-/** Hub / bütçe kırpma — path-layer üst şeridinde kompakt banner */
-export function MapBudgetHint({
-  totalHop1,
-  shownHop1,
-  reason,
-  onOpenTable,
-}: BudgetHintProps) {
-  const partial =
-    totalHop1 != null &&
-    shownHop1 != null &&
-    totalHop1 > shownHop1
-
-  if (partial) {
-    return (
-      <div className="map-budget-banner" role="status">
-        <span className="map-budget-metrics">
-          <span className="map-budget-metric">
-            <strong>{totalHop1}</strong>
-            <span>doğrudan etki</span>
-          </span>
-          <span className="map-budget-metric is-map">
-            <strong>{shownHop1}</strong>
-            <span>haritada</span>
-          </span>
-        </span>
-        {onOpenTable ? (
-          <button type="button" className="map-budget-link" onClick={onOpenTable}>
-            Tam liste
-            <span className="map-budget-link-arrow" aria-hidden>
-              →
-            </span>
-          </button>
-        ) : (
-          <span className="map-budget-muted">Tam liste: Tablo sekmesi</span>
-        )}
-      </div>
-    )
-  }
-
-  if (totalHop1 != null && totalHop1 > 16) {
-    return (
-      <div className="map-budget-banner" role="status">
-        <span className="map-budget-metrics">
-          <span className="map-budget-metric">
-            <strong>{totalHop1}</strong>
-            <span>doğrudan etki</span>
-          </span>
-          <span className="map-budget-metric is-map">
-            <strong>+</strong>
-            <span>N gruplar</span>
-          </span>
-        </span>
-        {onOpenTable ? (
-          <button type="button" className="map-budget-link" onClick={onOpenTable}>
-            Tam liste
-            <span className="map-budget-link-arrow" aria-hidden>
-              →
-            </span>
-          </button>
-        ) : (
-          <span className="map-budget-muted">Tam liste: Tablo sekmesi</span>
-        )}
-      </div>
-    )
-  }
-
-  if (reason) {
-    return (
-      <div className="map-budget-banner is-generic" role="status">
-        <span className="map-budget-copy">{reason}</span>
-      </div>
-    )
-  }
-
-  return null
 }
