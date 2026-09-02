@@ -39,7 +39,6 @@ import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
 import { ModuleTree } from './components/ModuleTree'
 import { CommandPalette } from './components/CommandPalette'
-import { ShortcutSheet } from './components/ShortcutSheet'
 import { ServiceOverview } from './components/ServiceOverview'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SearchHitsPortal } from './components/SearchHitsPortal'
@@ -245,7 +244,6 @@ export default function App() {
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
   const [cmdkOpen, setCmdkOpen] = useState(false)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
@@ -723,37 +721,19 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      const typing =
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT' ||
-        (e.target as HTMLElement | null)?.isContentEditable
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setCmdkOpen(true)
         return
       }
-      if (e.key === 'Escape') {
-        if (shortcutsOpen) {
-          e.preventDefault()
-          setShortcutsOpen(false)
-          return
-        }
-        if (cmdkOpen) {
-          e.preventDefault()
-          setCmdkOpen(false)
-          return
-        }
-      }
-      if (e.key === '?' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (e.key === 'Escape' && cmdkOpen) {
         e.preventDefault()
-        setShortcutsOpen(true)
+        setCmdkOpen(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [cmdkOpen, shortcutsOpen])
+  }, [cmdkOpen])
 
   const selectVisitIndex = useCallback(
     (i: number) => {
@@ -1188,7 +1168,6 @@ export default function App() {
                                 : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
                             )
                           }}
-                          onOpenShortcuts={() => setShortcutsOpen(true)}
                         />
                       </MapStage>
                     )}
@@ -1303,9 +1282,7 @@ export default function App() {
         visitTrail={visitTrailForCmdk}
         onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
         onOpenInbox={() => setInboxOpen(true)}
-        onOpenShortcuts={() => setShortcutsOpen(true)}
       />
-      <ShortcutSheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <AnimatePresence>
       {crOpen && service && session && (

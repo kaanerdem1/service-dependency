@@ -140,8 +140,6 @@ type Props = {
   forceLtrSignal?: number
   /** Hub kırpma banner / cluster → Tablo sekmesi (opsiyonel proje filtresi) */
   onOpenAffectedTab?: (projectId?: string) => void
-  /** Klavye kısayol sheet */
-  onOpenShortcuts?: () => void
 }
 
 const MAP_LAYOUT_MODE_KEY = 'sd-impact-map-layout-mode'
@@ -1633,7 +1631,6 @@ export function ImpactMap({
   onSnapshotSaved,
   forceLtrSignal = 0,
   onOpenAffectedTab,
-  onOpenShortcuts,
 }: Props) {
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
   const [snapshotSaving, setSnapshotSaving] = useState(false)
@@ -2921,7 +2918,6 @@ export function ImpactMap({
           packageOptions={packageOptions}
           onProjectFiltersChange={setProjectFilters}
           onPackageFiltersChange={setPackageFilters}
-          onOpenShortcuts={onOpenShortcuts}
         />
       </ReactFlowProvider>
       </div>

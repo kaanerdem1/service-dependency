@@ -14,7 +14,6 @@ type Props = {
   visitTrail: RecentItem[]
   onSelectService: (serviceId: string) => void
   onOpenInbox?: () => void
-  onOpenShortcuts?: () => void
 }
 
 export function CommandPalette({
@@ -24,7 +23,6 @@ export function CommandPalette({
   visitTrail,
   onSelectService,
   onOpenInbox,
-  onOpenShortcuts,
 }: Props) {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
@@ -161,17 +159,6 @@ export function CommandPalette({
                 }}
               >
                 Gelen kutusunu aç
-              </Command.Item>
-            ) : null}
-            {onOpenShortcuts ? (
-              <Command.Item
-                value="action-shortcuts"
-                onSelect={() => {
-                  onOpenShortcuts()
-                  onOpenChange(false)
-                }}
-              >
-                Klavye kısayolları
               </Command.Item>
             ) : null}
           </Command.Group>
