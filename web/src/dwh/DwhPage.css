@@ -208,6 +208,13 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   visibility: hidden;
 }
 
+.dwh-sidebar-rail .module-sidebar-surface-host--rail {
+  width: 100%;
+  padding: 4px 0 6px;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
 .dwh-sidebar-rail-label {
   writing-mode: vertical-rl;
   transform: rotate(180deg);

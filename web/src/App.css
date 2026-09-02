@@ -105,35 +105,70 @@
 }
 
 .app-surface-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  isolation: isolate;
   padding: 3px;
-  border: 1px solid var(--shell-topbar-btn-border);
-  border-radius: 10px;
-  background: var(--shell-topbar-btn-bg);
+  border: 1px solid color-mix(in srgb, var(--shell-sidebar-fg, #fff) 16%, transparent);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.18)),
+    color-mix(in srgb, var(--shell-sidebar-bg, #1c1d20) 88%, #000);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .app-surface-switch button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
   min-height: 30px;
   padding: 5px 10px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 999px;
   background: transparent;
-  color: var(--shell-topbar-btn-fg);
+  color: color-mix(in srgb, var(--shell-topbar-btn-fg, #c8cdd3) 88%, transparent);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
 }
 
-.app-surface-switch button:hover {
-  background: var(--shell-topbar-btn-hover-bg);
-  color: var(--shell-topbar-btn-hover-fg);
+.app-surface-switch button:hover:not(.is-active) {
+  color: var(--shell-topbar-btn-hover-fg, #fff);
 }
 
 .app-surface-switch button.is-active {
-  background: var(--accent);
-  color: var(--on-accent);
+  background: transparent;
+  color: #fff;
+}
+
+.app-surface-switch-pill {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #4ea87a 0%, #2f6b50 100%);
+  box-shadow:
+    0 4px 12px rgba(47, 107, 80, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.app-surface-switch-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--shell-sidebar-fg) 12%, transparent);
+}
+
+.app-surface-switch-label {
+  position: relative;
+  z-index: 1;
 }
 
 .app-frame.is-dwh-surface.sidebar-panel-open .workspace-column {
@@ -860,18 +895,17 @@
 }
 
 .sidebar-pin-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   min-height: 28px;
-  padding: 0 9px 0 7px;
+  padding: 0;
   border: 1px solid #cfd6dc;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff 0%, #f0f4f7 100%);
   color: #2a3840;
   font: inherit;
-  font-size: 10.5px;
-  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;
@@ -884,6 +918,10 @@
     color 0.18s ease,
     box-shadow 0.18s ease,
     transform 0.2s cubic-bezier(0.25, 0.8, 0.2, 1);
+}
+
+.sidebar-pin-icon {
+  display: block;
 }
 
 .sidebar-pin-btn:hover {
@@ -917,9 +955,36 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
-.sidebar-pin-label {
-  letter-spacing: 0.01em;
-  white-space: nowrap;
+.module-sidebar-surface-host--rail {
+  width: 100%;
+  padding: 4px 0 6px;
+  box-sizing: border-box;
+  pointer-events: auto;
+}
+
+.module-sidebar-surface-host--panel {
+  flex-shrink: 0;
+  padding: 6px 2px 10px;
+}
+
+.module-sidebar-surface-switch {
+  width: 100%;
+}
+
+.module-sidebar-surface-switch button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.module-sidebar-rail .module-sidebar-surface-switch button {
+  min-height: 22px;
+  padding: 3px 2px;
+  font-size: 9.5px;
+}
+
+.module-sidebar-body .module-tree {
+  padding-top: 4px;
 }
 
 [data-theme='mixed'] .sidebar-pin-btn {
@@ -945,10 +1010,6 @@
 
 @media (max-width: 860px) {
   .app-brand .brand-tagline {
-    display: none;
-  }
-
-  .module-sidebar .sidebar-pin-label {
     display: none;
   }
 

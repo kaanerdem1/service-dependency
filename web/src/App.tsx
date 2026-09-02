@@ -18,7 +18,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, LayoutGroup } from 'motion/react'
 import { MotionListItem } from './motion/MotionList'
 import { MorphHoverButton } from './motion/MorphHoverButton'
 import { MotionBanner, MotionToast } from './motion/MotionToast'
@@ -51,6 +51,7 @@ import {
   type AppTheme,
 } from './theme'
 import { ThemeSwitch } from './components/ThemeSwitch'
+import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
 import {
   getChangeRequest,
   getImpactGraph,
@@ -85,48 +86,23 @@ import type {
 } from './types'
 import './App.css'
 
-function SidebarLockIcon({ locked }: { locked: boolean }) {
-  if (locked) {
-    return (
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-        <rect x="4.25" y="7" width="7.5" height="5.75" rx="1.2" fill="currentColor" />
-        <path
-          d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.35"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
+type Tab = 'affected' | 'map' | 'overview'
+
+function SidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-      <rect
-        x="4.25"
-        y="7"
-        width="7.5"
-        height="5.75"
-        rx="1.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-pin-icon">
       <path
-        d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
-        fill="none"
+        d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03-1 1.03 1v-7H19v-2c-1.66 0-3-1.34-3-3z"
+        fill={pinned ? 'currentColor' : 'none'}
         stroke="currentColor"
-        strokeWidth="1.25"
+        strokeWidth={pinned ? 0 : 1.5}
+        strokeLinejoin="round"
         strokeLinecap="round"
       />
     </svg>
   )
 }
 
-type Tab = 'affected' | 'map' | 'overview'
-type AppSurface = 'services' | 'dwh'
-
-/** Pivot geçmişi + o ziyarette açık bırakılan katman görünümü */
 type VisitEntry = {
   id: string
   visibleMaxHop: number
@@ -748,6 +724,7 @@ export default function App() {
   )
 
   return (
+    <LayoutGroup id="app-shell">
     <div className="app" data-theme={appTheme}>
       <MotionBanner open={!!apiError}>
         <div className="api-banner-inner">
@@ -776,7 +753,7 @@ export default function App() {
             <div className="app-brand">
               <img className="brand-mark brand-logo" src="/dwh-logo.png" alt="" aria-hidden />
               <div className="app-brand-copy">
-                <strong>{surface === 'dwh' ? 'DWH Katalog' : 'Service Dependency'}</strong>
+                <strong>{surface === 'dwh' ? 'DWH Katalog' : 'Servis Kataloğu'}</strong>
                 <span className="brand-tagline">
                   {surface === 'dwh'
                     ? 'Tablo, kolon ve rapor lineage kataloğu'
@@ -786,22 +763,6 @@ export default function App() {
             </div>
           </div>
           <div className="app-masthead-actions">
-            <div className="app-surface-switch" role="group" aria-label="Uygulama alanı">
-              <button
-                type="button"
-                className={surface === 'services' ? 'is-active' : undefined}
-                onClick={() => setSurface('services')}
-              >
-                Servis
-              </button>
-              <button
-                type="button"
-                className={surface === 'dwh' ? 'is-active' : undefined}
-                onClick={() => setSurface('dwh')}
-              >
-                DWH
-              </button>
-            </div>
             <ThemeSwitch
               theme={appTheme}
               onChange={(next) => {
@@ -830,7 +791,7 @@ export default function App() {
         {surface === 'dwh' ? (
           <div className="workspace-column dwh-workspace-column">
             <div className="workspace">
-              <DwhPage />
+              <DwhPage surface={surface} onSurfaceChange={setSurface} />
             </div>
           </div>
         ) : (
@@ -846,6 +807,13 @@ export default function App() {
           }}
         >
           <div className="module-sidebar-rail" aria-hidden={navExpanded}>
+            <div className="module-sidebar-surface-host module-sidebar-surface-host--rail">
+              <SurfaceSwitch
+                surface={surface}
+                onSurfaceChange={setSurface}
+                className="module-sidebar-surface-switch"
+              />
+            </div>
             <span className="sidebar-rail-label">Modüller</span>
             <div className="sidebar-rail-kinds" aria-hidden>
               <span className="module-kind-badge is-project">P</span>
@@ -856,6 +824,13 @@ export default function App() {
             <span className="sidebar-rail-hint">Paneli Aç</span>
           </div>
           <div className="module-sidebar-inner">
+          <div className="module-sidebar-surface-host module-sidebar-surface-host--panel">
+            <SurfaceSwitch
+              surface={surface}
+              onSurfaceChange={setSurface}
+              className="module-sidebar-surface-switch"
+            />
+          </div>
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
             <MorphHoverButton
@@ -876,10 +851,7 @@ export default function App() {
               aria-pressed={navPinned}
               onClick={toggleNavPinned}
             >
-              <SidebarLockIcon locked={navPinned} />
-              <span className="sidebar-pin-label">
-                {navPinned ? 'Sabitlemeyi Bırak' : 'Paneli Sabitle'}
-              </span>
+              <SidebarPinIcon pinned={navPinned} />
             </MorphHoverButton>
           </div>
           <label className="search" ref={searchRef}>
@@ -1341,5 +1313,6 @@ export default function App() {
       )}
       </AnimatePresence>
     </div>
+    </LayoutGroup>
   )
 }
