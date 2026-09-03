@@ -24,6 +24,8 @@ const ACTION_FALLBACK: Partial<Record<TrailAction, string>> = {
 function tabLabel(tab: UiChromeState['activeTab']): string {
   if (tab === 'affected') return 'İlişkiler sekmesi'
   if (tab === 'overview') return 'Servis işlevi sekmesi'
+  if (tab === 'screens') return 'Ekranlar sekmesi'
+  if (tab === 'processes') return 'Process sekmesi'
   return 'Harita sekmesi'
 }
 
@@ -94,7 +96,11 @@ export function formatViewStateSummary(snap: Snapshot): string {
       ? 'İlişkiler'
       : snap.uiChrome.activeTab === 'overview'
         ? 'Servis işlevi'
-        : 'Harita'
+        : snap.uiChrome.activeTab === 'screens'
+          ? 'Ekranlar'
+          : snap.uiChrome.activeTab === 'processes'
+            ? 'Process'
+            : 'Harita'
   const drawer = snap.uiChrome.drawerOpen ? 'etki özeti açık' : 'etki özeti kapalı'
   return `Son durum: ${layout} · katman ${v.visibleMaxHop}/${v.maxHopAvailable} · ${cascade} · ${tab} · ${drawer} · ${sidebarLabel(snap.uiChrome)}`
 }

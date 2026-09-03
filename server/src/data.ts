@@ -36,6 +36,8 @@ export type ModuleNode = {
   childCount?: number
   /** sort=degree ile servis satırında bağlantı derecesi. */
   degree?: number
+  /** kind === 'group' — project_group.description */
+  description?: string
 }
 
 export type ModuleChildrenResult = {

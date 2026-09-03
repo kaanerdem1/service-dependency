@@ -6,7 +6,7 @@
  * Seçim modeli:
  * - pivotId          → odak servis (geri/ileri geçmişi ile)
  * - selectedMethodId → odak metod (method haritası)
- * - tab              → 'map' | 'affected' | 'overview'
+ * - tab              → 'map' | 'affected' | 'overview' | 'screens' | 'processes'
  * Harita: gelişmiş React Flow (basit etki yolu kaldırıldı).
  */
 import {
@@ -22,7 +22,7 @@ import { AnimatePresence, LayoutGroup } from 'motion/react'
 import { MotionListItem } from './motion/MotionList'
 import { MorphHoverButton } from './motion/MorphHoverButton'
 import { MotionBanner, MotionToast } from './motion/MotionToast'
-import { StageTabs } from './motion/StageTabs'
+import { StageTabs, buildServiceStageTabs, SERVICE_STAGE_TAB_ORDER, type StageTabId } from './motion/StageTabs'
 import { StageTabPanels } from './motion/StageTabPanels'
 import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
 import {
@@ -37,9 +37,15 @@ import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
 import { MapStage } from './components/MapStage'
 import { MethodImpactMap } from './components/MethodImpactMap'
+import { CatalogEntityOverview } from './components/CatalogEntityOverview'
 import { ModuleTree } from './components/ModuleTree'
 import { CommandPalette } from './components/CommandPalette'
 import { ServiceOverview } from './components/ServiceOverview'
+import {
+  ServiceProcessesStage,
+  ServiceScreensStage,
+  useServiceCatalogLinks,
+} from './components/ServiceCatalogPanels'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { SearchHitsPortal } from './components/SearchHitsPortal'
 import { RequestDetailModal } from './components/RequestDetailModal'
@@ -52,6 +58,8 @@ import {
 } from './theme'
 import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
+import { TreeKindIcon } from './components/TreeKindIcon'
+import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import {
   getChangeRequest,
   getImpactGraph,
@@ -86,7 +94,7 @@ import type {
 } from './types'
 import './App.css'
 
-type Tab = 'affected' | 'map' | 'overview'
+type Tab = StageTabId
 
 function SidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
@@ -169,6 +177,13 @@ export default function App() {
   const [hits, setHits] = useState<Service[]>([])
   const [methodHits, setMethodHits] = useState<MethodRef[]>([])
   const [pivotId, setPivotId] = useState<string | undefined>()
+  const [catalogNode, setCatalogNode] = useState<{
+    id: string
+    kind: 'group' | 'package'
+    name: string
+  } | null>(null)
+  const [showNonServiceMethods, setShowNonServiceMethods] = useState(false)
+  const [treePinServiceId, setTreePinServiceId] = useState<string>()
   const [selectedMethodId, setSelectedMethodId] = useState<string>()
   const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
   /** Metod seçilmeden Metodlar sekmesini aç (harita +N) — saklandı; detay paneli kaldırıldı */
@@ -481,6 +496,12 @@ export default function App() {
     () => (impact ? packagesInImpact(impact, projectLabels, packageLabels) : []),
     [impact, projectLabels, packageLabels],
   )
+  const { screens, processes, loading: catalogLinksLoading } = useServiceCatalogLinks(service?.id)
+  const stageTabs = useMemo(
+    () => buildServiceStageTabs({ screens: screens.length, processes: processes.length }),
+    [screens.length, processes.length],
+  )
+  const isCatalogTab = tab === 'overview' || tab === 'screens' || tab === 'processes'
 
   const scrollToStageTop = useCallback(() => {
     const run = () => {
@@ -497,6 +518,8 @@ export default function App() {
 
   const clearSelection = useCallback(() => {
     setPivotId(undefined)
+    setCatalogNode(null)
+    setTreePinServiceId(undefined)
     setSelectedMethodId(undefined)
     setMethodImpact(undefined)
     setHistory([])
@@ -510,8 +533,36 @@ export default function App() {
     setNavHover(true)
   }, [])
 
+  const selectCatalogNode = useCallback(
+    (node: ModuleNode) => {
+      if (node.kind !== 'group' && node.kind !== 'package') return
+      if (catalogNode?.id === node.id && !pivotId) {
+        clearSelection()
+        return
+      }
+      trail.record('tree_select', {
+        level: node.kind,
+        id: node.id,
+        label: node.name,
+      }, node.kind === 'group' ? 'Gruptan katalog özeti açıldı' : 'Jar katalog özeti açıldı')
+      setPivotId(undefined)
+      setSelectedMethodId(undefined)
+      setMethodImpact(undefined)
+      setService(undefined)
+      setAffected([])
+      setCallees([])
+      setImpact(undefined)
+      setMapExpanded(false)
+      setCatalogNode({ id: node.id, kind: node.kind, name: node.name })
+      setAllowNavCollapse(true)
+    },
+    [catalogNode?.id, pivotId, clearSelection, trail],
+  )
+
   const selectPivot = useCallback(
     (id: string, opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' }) => {
+      setCatalogNode(null)
+      setTreePinServiceId(opts?.source === 'search' ? id : undefined)
       if (id === pivotId && !selectedMethodId) {
         clearSelection()
         return
@@ -656,7 +707,8 @@ export default function App() {
     historyIndex >= 0 && historyIndex < history.length
       ? history[historyIndex]
       : undefined
-  const hasSelection = !!pivotId
+  const hasSelection = !!pivotId || !!catalogNode
+  const hasServiceSelection = !!pivotId
 
   const serviceNameById = useMemo(() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
@@ -749,6 +801,9 @@ export default function App() {
         style={appFrameStyle}
       >
         <header className="app-masthead">
+          <div className="app-masthead-left">
+            <SurfaceSwitch surface={surface} onSurfaceChange={setSurface} />
+          </div>
           <div className="app-masthead-brand-wrap">
             <div className="app-brand">
               <img className="brand-mark brand-logo" src="/dwh-logo.png" alt="" aria-hidden />
@@ -807,30 +862,16 @@ export default function App() {
           }}
         >
           <div className="module-sidebar-rail" aria-hidden={navExpanded}>
-            <div className="module-sidebar-surface-host module-sidebar-surface-host--rail">
-              <SurfaceSwitch
-                surface={surface}
-                onSurfaceChange={setSurface}
-                className="module-sidebar-surface-switch"
-              />
-            </div>
             <span className="sidebar-rail-label">Modüller</span>
             <div className="sidebar-rail-kinds" aria-hidden>
-              <span className="module-kind-badge is-project">P</span>
-              <span className="module-kind-badge is-package">J</span>
-              <span className="module-kind-badge is-service">S</span>
-              <span className="module-kind-badge is-method">M</span>
+              <TreeKindIcon kind="group" size={14} />
+              <TreeKindIcon kind="package" size={14} />
+              <TreeKindIcon kind="service" size={14} />
+              <TreeKindIcon kind="method" size={14} />
             </div>
             <span className="sidebar-rail-hint">Paneli Aç</span>
           </div>
           <div className="module-sidebar-inner">
-          <div className="module-sidebar-surface-host module-sidebar-surface-host--panel">
-            <SurfaceSwitch
-              surface={surface}
-              onSurfaceChange={setSurface}
-              className="module-sidebar-surface-switch"
-            />
-          </div>
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
             <MorphHoverButton
@@ -856,8 +897,12 @@ export default function App() {
           </div>
           <label className="search" ref={searchRef}>
             <span className="sr-only">Servis veya metod ara</span>
+            <svg className="search-icon" viewBox="0 0 16 16" fill="none" aria-hidden>
+              <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.35" />
+              <path d="M10.2 10.2 13 13" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+            </svg>
             <input
-              className={query ? 'has-clear' : undefined}
+              className={[query ? 'has-clear' : 'has-shortcut'].filter(Boolean).join(' ')}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Servis veya metod ara…"
@@ -872,7 +917,17 @@ export default function App() {
               >
                 ×
               </button>
-            ) : null}
+            ) : (
+              <button
+                type="button"
+                className="search-shortcut"
+                aria-label="Komut paletini aç"
+                title="Komut paleti (⌘K)"
+                onClick={() => setCmdkOpen(true)}
+              >
+                ⌘K
+              </button>
+            )}
             {query && (hits.length > 0 || methodHits.length > 0) && (
               <>
                 <button
@@ -940,19 +995,19 @@ export default function App() {
           </label>
           <div className="module-kind-legend" aria-label="Ağaç türleri">
             <span className="module-kind-key">
-              <span className="module-kind-badge is-group" aria-hidden>G</span>
+              <TreeKindIcon kind="group" size={13} />
               Grup
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-badge is-package" aria-hidden>J</span>
+              <TreeKindIcon kind="package" size={13} />
               Jar
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-badge is-service" aria-hidden>S</span>
+              <TreeKindIcon kind="service" size={13} />
               Servis
             </span>
             <span className="module-kind-key">
-              <span className="module-kind-badge is-method" aria-hidden>M</span>
+              <TreeKindIcon kind="method" size={13} />
               Metod
             </span>
           </div>
@@ -961,11 +1016,22 @@ export default function App() {
               nodes={tree}
               selectedServiceId={pivotId}
               selectedMethodId={selectedMethodId}
+              selectedCatalogNodeId={catalogNode?.id}
               scrollParentRef={sidebarBodyRef}
+              showNonServiceMethods={showNonServiceMethods}
+              pinServiceId={treePinServiceId}
+              onClearPin={() => setTreePinServiceId(undefined)}
+              onSelectCatalogNode={selectCatalogNode}
               onSelectService={(id) =>
                 selectPivot(id, { resetHistory: true, source: 'tree' })
               }
               onSelectMethod={selectMethod}
+            />
+          </div>
+          <div className="module-sidebar-foot">
+            <TreeOptionsRadial
+              showNonServiceMethods={showNonServiceMethods}
+              onShowNonServiceMethodsChange={setShowNonServiceMethods}
             />
           </div>
           </div>
@@ -981,12 +1047,25 @@ export default function App() {
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasSelection && tab === 'map' ? ' main-map' : ''}${hasSelection && tab === 'overview' ? ' main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
+          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
           {!hasSelection && <WelcomeScreen />}
 
-          {hasSelection && (
+          {catalogNode && !pivotId ? (
+            <div className="stage-body">
+              <CatalogEntityOverview
+                nodeId={catalogNode.id}
+                kind={catalogNode.kind}
+                onSelectGroup={(id, name) => selectCatalogNode({ id, kind: 'group', name })}
+                onSelectJar={(id, name) => selectCatalogNode({ id, kind: 'package', name })}
+                onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'tree' })}
+                onDismiss={clearSelection}
+              />
+            </div>
+          ) : null}
+
+          {hasServiceSelection && (
             <>
               <div ref={stageTopRef} className="stage-top">
                 <div className="stage-head">
@@ -1017,6 +1096,7 @@ export default function App() {
                 </div>
                 <StageTabs
                   tab={tab}
+                  tabs={stageTabs}
                   onSelect={(next) => {
                     if (next === 'map') {
                       trail.record('tab_change', undefined, 'Harita sekmesine geçildi')
@@ -1027,6 +1107,18 @@ export default function App() {
                       trail.record('tab_change', undefined, 'Tablo sekmesine geçildi')
                       setMapExpanded(false)
                       setTab('affected')
+                      return
+                    }
+                    if (next === 'screens') {
+                      trail.record('tab_change', undefined, 'Ekranlar sekmesine geçildi')
+                      setMapExpanded(false)
+                      setTab('screens')
+                      return
+                    }
+                    if (next === 'processes') {
+                      trail.record('tab_change', undefined, 'Process sekmesine geçildi')
+                      setMapExpanded(false)
+                      setTab('processes')
                       return
                     }
                     trail.record('tab_change', undefined, 'Servis işlevi sekmesine geçildi')
@@ -1044,7 +1136,7 @@ export default function App() {
               </div>
 
               <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
-                <StageTabPanels tab={tab}>
+                <StageTabPanels tab={tab} tabOrder={SERVICE_STAGE_TAB_ORDER}>
                   <section
                     className="stage-panel stage-panel-map"
                     aria-hidden={tab !== 'map'}
@@ -1227,6 +1319,22 @@ export default function App() {
                         loading={loading}
                       />
                     )}
+                  </section>
+
+                  <section
+                    className="stage-panel stage-panel-catalog"
+                    aria-hidden={tab !== 'screens'}
+                    aria-label="Ekranlar"
+                  >
+                    <ServiceScreensStage screens={screens} loading={catalogLinksLoading} />
+                  </section>
+
+                  <section
+                    className="stage-panel stage-panel-catalog"
+                    aria-hidden={tab !== 'processes'}
+                    aria-label="Process"
+                  >
+                    <ServiceProcessesStage processes={processes} loading={catalogLinksLoading} />
                   </section>
                 </StageTabPanels>
               </div>

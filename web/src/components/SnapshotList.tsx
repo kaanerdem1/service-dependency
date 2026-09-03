@@ -91,7 +91,11 @@ export function SnapshotList({ requestId }: Props) {
                 ? ' · İlişkiler'
                 : snap.uiChrome.activeTab === 'overview'
                   ? ' · Servis işlevi'
-                  : ' · Harita'}
+                  : snap.uiChrome.activeTab === 'screens'
+                    ? ' · Ekranlar'
+                    : snap.uiChrome.activeTab === 'processes'
+                      ? ' · Process'
+                      : ' · Harita'}
               {snap.uiChrome.drawerOpen ? ' · özet açık' : ' · özet kapalı'}
             </p>
             <p className="snapshot-item-meta" title={hop1Title}>

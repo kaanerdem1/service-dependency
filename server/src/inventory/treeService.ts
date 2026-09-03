@@ -1,7 +1,7 @@
 import type { ModuleChildrenResult, ModuleNode } from '../data.js'
 import { query, tableName } from './db.js'
 
-const SERVICE_PAGE_SIZE = 100
+const SERVICE_PAGE_SIZE = 50
 const UNLOCATED_NODE_ID = 'unlocated'
 
 type NodePrefix = 'pg' | 'proj' | 'art' | 'sd'
@@ -49,20 +49,22 @@ const DEGREE_SUBQUERY = `
 
 /** Kök: project_group düğümleri (lazy — children yok). */
 export async function listModuleRoots(): Promise<ModuleNode[]> {
-  const { rows } = await query<{ id: string; name: string; child_count: string }>(
+  const { rows } = await query<{ id: string; name: string; description: string | null; child_count: string }>(
     `SELECT pg.id::text AS id,
             pg.project_group_name AS name,
+            pg.description,
             COUNT(a.id)::text AS child_count
      FROM ${tableName('project_group')} pg
      LEFT JOIN ${tableName('project')} p ON p.project_group_id = pg.id
      LEFT JOIN ${tableName('artifact')} a ON a.project_id = p.id
-     GROUP BY pg.id, pg.project_group_name
+     GROUP BY pg.id, pg.project_group_name, pg.description
      ORDER BY pg.project_group_name`,
   )
   const roots: ModuleNode[] = rows.map((row) => ({
     id: `pg-${row.id}`,
     kind: 'group',
     name: row.name,
+    description: row.description?.trim() || undefined,
     hasChildren: Number(row.child_count) > 0,
   }))
 
@@ -301,7 +303,7 @@ async function listServicesForArtifact(
   }))
 }
 
-async function countUnlocatedServices(): Promise<number> {
+export async function countUnlocatedServices(): Promise<number> {
   const { rows } = await query<{ n: string }>(
     `SELECT COUNT(*)::text AS n
      FROM ${tableName('service_definition')} sd

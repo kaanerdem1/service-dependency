@@ -287,6 +287,72 @@ export type ModuleNode = {
   childCount?: number
   /** sort=degree ile servis satırında bağlantı derecesi. */
   degree?: number
+  /** kind === 'group' — project_group.description */
+  description?: string
+}
+
+export type CatalogJarSummary = {
+  id: string
+  name: string
+  serviceCount: number
+}
+
+export type CatalogProjectSummary = {
+  id: string
+  name: string
+  description: string | null
+  responsibleItTeam: string | null
+  responsibleBusinessUnit: string | null
+}
+
+export type CatalogGroupDetail = {
+  id: string
+  name: string
+  description: string | null
+  jarCount: number
+  projectCount: number
+  serviceCount: number
+  jars: CatalogJarSummary[]
+  projects: CatalogProjectSummary[]
+}
+
+export type CatalogServiceSample = {
+  id: string
+  name: string
+}
+
+export type CatalogArtifactDetail = {
+  id: string
+  name: string
+  serviceCount: number
+  classCount: number
+  project: CatalogProjectSummary
+  group: {
+    id: string
+    name: string
+    description: string | null
+  }
+  sampleServices: CatalogServiceSample[]
+}
+
+export type ServiceCatalogContext = {
+  serviceDescription: string | null
+  projectGroupDescription: string | null
+  responsibleItTeam: string | null
+  responsibleBusinessUnit: string | null
+}
+
+export type ServiceScreenLink = {
+  oid: string
+  name: string
+  pageType: string
+  descriptionTr: string | null
+}
+
+export type ServiceProcessLink = {
+  oid: string
+  name: string
+  descriptionTr: string | null
 }
 
 export type ModuleChildrenResult = {
@@ -304,7 +370,7 @@ export type SnapshotType =
   | 'incident'
 
 export type UiChromeState = {
-  activeTab: 'map' | 'affected' | 'overview'
+  activeTab: 'map' | 'affected' | 'overview' | 'screens' | 'processes'
   drawerOpen: boolean
   /** Panel geniş mi (pin, hover veya ilk yükleme) */
   sidebarOpen: boolean
@@ -349,7 +415,7 @@ export type TrailAction =
 export type TrailEntry = {
   at: string
   action: TrailAction
-  target?: { level: 'service' | 'method'; id: string; label: string }
+  target?: { level: 'service' | 'method' | 'group' | 'package'; id: string; label: string }
   /** İnsan okunur açıklama (ör. "Katman açıldı", "Yan bağ kapatıldı") */
   detail?: string
   uiAfter: UiChromeState

@@ -7,9 +7,11 @@ const TAB_INDEX: Record<StageTabId, number> = {
   map: 0,
   affected: 1,
   overview: 2,
+  screens: 3,
+  processes: 4,
 }
 
-const DEFAULT_TAB_ORDER: StageTabId[] = ['map', 'affected', 'overview']
+const DEFAULT_TAB_ORDER: StageTabId[] = ['map', 'affected', 'overview', 'screens', 'processes']
 
 type Props<T extends string = StageTabId> = {
   tab: T
@@ -37,12 +39,13 @@ export function StageTabPanels<T extends string = StageTabId>({
   const prevIndex = tabIndex.get(prevTab.current) ?? (TAB_INDEX[prevTab.current as StageTabId] ?? 0)
   const direction = index - prevIndex
   prevTab.current = tab
-  const panelStyle = tabOrder
-    ? ({
-        width: `${count * 100}%`,
-        ['--stage-tab-count' as string]: count,
-      } as CSSProperties)
-    : undefined
+  // Harita sekmesinde track %100 olmalı; aksi halde inline 500% map-view CSS'ini ezer,
+  // MapStage slot ölçüleri bozulur (boş harita + stage-actions sağa kaymış gibi).
+  const isMapTab = tab === ('map' as T) || mapOnly
+  const panelStyle = ({
+    width: isMapTab ? '100%' : `${count * 100}%`,
+    ['--stage-tab-count' as string]: count,
+  } as CSSProperties)
 
   if (mapOnly) {
     return (
@@ -50,7 +53,7 @@ export function StageTabPanels<T extends string = StageTabId>({
     )
   }
 
-  const shift = `-${index * (100 / count)}%`
+  const shift = isMapTab ? '0%' : `-${index * (100 / count)}%`
 
   if (reduced) {
     return (

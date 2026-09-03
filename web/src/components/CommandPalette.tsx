@@ -81,7 +81,7 @@ export function CommandPalette({
     )
   }
 
-  const frequentFiltered = useMemo(() => filterItems(frequent).slice(0, 10), [frequent, query])
+  const frequentFiltered = useMemo(() => filterItems(frequent).slice(0, 6), [frequent, query])
 
   const visitFiltered = useMemo(() => {
     const frequentIds = new Set(frequentFiltered.map((r) => r.id))
@@ -94,6 +94,8 @@ export function CommandPalette({
     onSelectService(id)
     onOpenChange(false)
   }
+
+  const showIdleHints = query.trim().length < 2
 
   if (!open) return null
 
@@ -124,6 +126,12 @@ export function CommandPalette({
                   <span className="cmdk-item-meta">{r.id}</span>
                 </Command.Item>
               ))}
+            </Command.Group>
+          ) : showIdleHints ? (
+            <Command.Group heading="Son kullanılanlar">
+              <Command.Item value="freq-empty" disabled>
+                <span className="cmdk-item-name cmdk-item-muted">Henüz kayıt yok — servis açınca burada listelenir</span>
+              </Command.Item>
             </Command.Group>
           ) : null}
 
@@ -158,9 +166,15 @@ export function CommandPalette({
                   onOpenChange(false)
                 }}
               >
-                Gelen kutusunu aç
+                <span className="cmdk-item-name">Gelen kutusu</span>
+                <span className="cmdk-item-meta">Talepler ve güncellemeler</span>
               </Command.Item>
-            ) : null}
+            ) : (
+              <Command.Item value="action-inbox-soon" disabled>
+                <span className="cmdk-item-name cmdk-item-muted">Gelen kutusu</span>
+                <span className="cmdk-item-meta">Oturum gerekli</span>
+              </Command.Item>
+            )}
           </Command.Group>
         </Command.List>
         <footer className="cmdk-foot">

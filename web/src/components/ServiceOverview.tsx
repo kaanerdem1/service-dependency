@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { getServiceLocations } from '../api/client'
+import { getServiceCatalogContext, getServiceLocations } from '../api/client'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { MotionToast } from '../motion/MotionToast'
 import { EmptyState } from './EmptyState'
 import { Button, Card, Field } from '../ui'
-import type { Service, ServiceLocation } from '../types'
+import type {
+  Service,
+  ServiceCatalogContext,
+  ServiceLocation,
+} from '../types'
 
 type Props = {
   service: Service
@@ -47,6 +51,7 @@ function locationProjectLabel(
 function locationPackageLabel(service: Service, packageLabel?: string): string {
   return service.packageLabel ?? packageLabel ?? service.packageId
 }
+
 function defaultSummary(
   service: Service,
   callerCount: number,
@@ -144,18 +149,29 @@ function LocationPanel({
   projectLabel,
   packageLabel,
   locations,
+  catalogContext,
 }: {
   service: Service
   projectLabel?: string
   packageLabel?: string
   locations: ServiceLocation[]
+  catalogContext: ServiceCatalogContext | null
 }) {
   const primaryProject = locationProjectLabel(service, projectLabel)
   const primaryPackage = locationPackageLabel(service, packageLabel)
+  const groupDesc = catalogContext?.projectGroupDescription
 
   if (locations.length <= 1) {
     return (
       <div className="service-doc-body service-doc-columns">
+        {service.projectGroupLabel || groupDesc ? (
+          <DocItem label="Grup">
+            {service.projectGroupLabel ? (
+              <span className="service-doc-group-name">{service.projectGroupLabel}</span>
+            ) : null}
+            {groupDesc ? <span className="service-doc-sub">{groupDesc}</span> : null}
+          </DocItem>
+        ) : null}
         <DocItem label="Proje">{primaryProject}</DocItem>
         <DocItem label="Paket" mono>
           {primaryPackage}
@@ -188,15 +204,29 @@ function LocationFields({
   projectLabel,
   packageLabel,
   locations,
+  catalogContext,
 }: {
   service: Service
   projectLabel?: string
   packageLabel?: string
   locations: ServiceLocation[]
+  catalogContext: ServiceCatalogContext | null
 }) {
+  const groupDesc = catalogContext?.projectGroupDescription
+
   if (locations.length <= 1) {
     return (
       <div className="service-doc-body service-doc-columns">
+        {service.projectGroupLabel || groupDesc ? (
+          <Field
+            label="Grup"
+            value={
+              [service.projectGroupLabel, groupDesc].filter(Boolean).join(' — ') ||
+              '—'
+            }
+            readOnly
+          />
+        ) : null}
         <Field
           label="Proje"
           value={locationProjectLabel(service, projectLabel)}
@@ -230,6 +260,57 @@ function LocationFields({
   )
 }
 
+function OwnershipPanel({
+  service,
+  catalogContext,
+  locationsReady,
+  hasJarPath,
+}: {
+  service: Service
+  catalogContext: ServiceCatalogContext | null
+  locationsReady: boolean
+  hasJarPath: boolean
+}) {
+  const itTeam = catalogContext?.responsibleItTeam
+  const businessUnit = catalogContext?.responsibleBusinessUnit
+  const hasDbOwnership = Boolean(itTeam || businessUnit)
+  const hasMockOwner = Boolean(service.owner)
+  const isUnlocated = locationsReady && !hasJarPath
+
+  if (isUnlocated && !hasDbOwnership && !hasMockOwner) {
+    return (
+      <p className="service-doc-hint service-bento-hint">
+        <strong>Konumsuz servis.</strong> Jar veya entry metod bağlantısı olmadığı için IT / iş
+        birimi envanterden okunamaz (~%68 servis). Harita ve İlişkiler sekmelerinden etki
+        analizine geçin.
+      </p>
+    )
+  }
+
+  if (!hasDbOwnership && !hasMockOwner) {
+    return (
+      <p className="service-doc-hint service-bento-hint">
+        {hasJarPath
+          ? 'Jar yolu var ancak projede IT / iş birimi alanları boş. İlişkiler ve Harita sekmelerinden etki analizine geçin.'
+          : 'IT ve iş birimi sahipliği jar → proje yoluyla envanterden okunur. Bu servis için kayıt bulunamadı; İlişkiler ve Harita sekmelerinden etki analizine geçin.'}
+      </p>
+    )
+  }
+
+  return (
+    <div className="service-doc-body service-doc-columns">
+      {itTeam ? <DocItem label="IT ekibi">{itTeam}</DocItem> : null}
+      {businessUnit ? <DocItem label="İş birimi">{businessUnit}</DocItem> : null}
+      {hasMockOwner && service.owner ? (
+        <>
+          <DocItem label="Sorumlu (mock)">{service.owner.name}</DocItem>
+          <DocItem label="Ekip (mock)">{service.owner.team ?? '—'}</DocItem>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
 export function ServiceOverview({
   service,
   projectLabel,
@@ -238,40 +319,59 @@ export function ServiceOverview({
   calleeCount,
   loading,
 }: Props) {
+  const [catalogContext, setCatalogContext] = useState<ServiceCatalogContext | null>(null)
+
+  const dbSummary = catalogContext?.serviceDescription?.trim() || null
   const baseline = useMemo(
-    () => defaultSummary(service, callerCount, calleeCount, projectLabel),
-    [service, callerCount, calleeCount, projectLabel],
+    () =>
+      dbSummary ??
+      defaultSummary(service, callerCount, calleeCount, projectLabel),
+    [dbSummary, service, callerCount, calleeCount, projectLabel],
   )
+  const summaryLocked = Boolean(dbSummary)
+
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(baseline)
   const [saved, setSaved] = useState<string | null>(null)
   const [locations, setLocations] = useState<ServiceLocation[]>([])
+  const [locationsReady, setLocationsReady] = useState(false)
   const [copyToast, setCopyToast] = useState<string>()
 
+  const isInventoryService = service.id.startsWith('sd-')
+
   useEffect(() => {
-    if (!service.id.startsWith('sd-')) {
+    if (!isInventoryService) {
       setLocations([])
+      setCatalogContext(null)
+      setLocationsReady(true)
       return
     }
     let cancelled = false
-    void getServiceLocations(service.id)
-      .then((rows) => {
-        if (!cancelled) setLocations(rows)
+    setLocationsReady(false)
+    void Promise.all([getServiceLocations(service.id), getServiceCatalogContext(service.id)])
+      .then(([locRows, ctx]) => {
+        if (cancelled) return
+        setLocations(locRows)
+        setCatalogContext(ctx)
+        setLocationsReady(true)
       })
       .catch(() => {
-        if (!cancelled) setLocations([])
+        if (cancelled) return
+        setLocations([])
+        setCatalogContext(null)
+        setLocationsReady(true)
       })
     return () => {
       cancelled = true
     }
-  }, [service.id])
+  }, [service.id, isInventoryService])
 
   useEffect(() => {
-    const stored = localStorage.getItem(summaryStorageKey(service.id))
+    const stored = summaryLocked ? null : localStorage.getItem(summaryStorageKey(service.id))
     setSaved(stored)
     setDraft(stored ?? baseline)
     setEditing(false)
-  }, [service.id, baseline])
+  }, [service.id, baseline, summaryLocked])
 
   useEffect(() => {
     if (!copyToast) return
@@ -289,8 +389,11 @@ export function ServiceOverview({
   }
 
   const summary = saved ?? baseline
-  const hasOwner = Boolean(service.owner)
-  const blastRadius = service.affectedCount ?? callerCount
+  const hasDbOwnership = Boolean(
+    catalogContext?.responsibleItTeam || catalogContext?.responsibleBusinessUnit,
+  )
+  const hasOwner = Boolean(service.owner) || hasDbOwnership
+  const hasJarPath = locations.length > 0
 
   const copyServiceId = async () => {
     try {
@@ -330,173 +433,167 @@ export function ServiceOverview({
       return <p key={i}>{line}</p>
     })
 
+  const showEdit = !summaryLocked
+
   return (
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
-      <header className="service-overview-toolbar">
+      <div className="service-overview-stage">
         {editing ? (
-          <div className="service-overview-edit-actions">
-            <Button variant="ghost" compact onClick={cancel}>
-              İptal
-            </Button>
-            <Button variant="primary" compact onClick={save}>
-              Kaydet
-            </Button>
-          </div>
-        ) : (
-          <Button
-            variant="ghost"
-            compact
-            onClick={() => {
-              setDraft(saved ?? baseline)
-              setEditing(true)
+          <form
+            className={`service-bento service-bento-form${hasOwner ? ' has-owner' : ''}`}
+            aria-label="Servis işlevi düzenle"
+            onSubmit={(e) => {
+              e.preventDefault()
+              save()
             }}
           >
-            Düzenle
-          </Button>
-        )}
-      </header>
-      {editing ? (
-        <form
-          className={`service-bento service-bento-form${hasOwner ? ' has-owner' : ''}`}
-          aria-label="Servis işlevi düzenle"
-          onSubmit={(e) => {
-            e.preventDefault()
-            save()
-          }}
-        >
-          <BentoTile area="identity" title="Kimlik">
-            <div className="service-doc-body">
-              <div className="service-doc-columns service-doc-columns--meta">
-                <Field label="Servis adı" value={service.name} readOnly />
-                <Field label="Servis kimliği" value={service.id} readOnly />
-              </div>
-            </div>
-          </BentoTile>
-
-          <BentoTile area="location" title="Konum">
-            <LocationFields
-              service={service}
-              projectLabel={projectLabel}
-              packageLabel={packageLabel}
-              locations={locations}
-            />
-          </BentoTile>
-
-          <BentoTile area="summary" title="İşlev özeti">
-            <Field
-              label="İşlev özeti"
-              multiline
-              rows={8}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
-          </BentoTile>
-
-          <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
-            <Field
-              label="Bu servisi çağıran"
-              value={`${callerCount} servis`}
-              readOnly
-            />
-          </BentoTile>
-
-          <BentoTile area="callees" title="Giden çağrılar" compactHeading>
-            <Field
-              label="Çağırdığı servis"
-              value={`${calleeCount} servis`}
-              readOnly
-            />
-          </BentoTile>
-
-          {hasOwner && service.owner ? (
-            <BentoTile area="ownership" title="Sahiplik">
-              <div className="service-doc-body service-doc-columns">
-                <Field label="Sorumlu" value={service.owner.name} readOnly />
-                <Field label="Ekip" value={service.owner.team ?? '—'} readOnly />
-              </div>
-            </BentoTile>
-          ) : (
-            <BentoTile area="hint" title="Etki analizi">
-              <p className="service-doc-hint service-bento-hint">
-                Harita ve İlişkiler sekmelerinden tam bağımlılık listesine geçin.
-              </p>
-            </BentoTile>
-          )}
-        </form>
-      ) : (
-        <>
-          <div className="service-metrics-strip" aria-label="Özet metrikler">
-            <StatTile label="Etki yarıçapı" value={blastRadius} hint="Değişince etkilenen" />
-            <StatTile label="Gelen çağrı" value={callerCount} />
-            <StatTile label="Giden çağrı" value={calleeCount} />
-          </div>
-        <div className={`service-bento${hasOwner ? ' has-owner' : ''}`}>
-          <BentoTile area="identity" title="Kimlik" spotlight>
-            <div className="service-doc-body">
-              <p className="service-bento-hero-name">{service.name}</p>
-              <DocItem label="Servis kimliği" mono>
-                <span className="service-id-copy-row">
-                  {service.id}
-                  <button type="button" className="service-id-copy-btn" onClick={() => void copyServiceId()}>
-                    Kopyala
-                  </button>
-                </span>
-              </DocItem>
-            </div>
-          </BentoTile>
-
-          <BentoTile area="location" title="Konum">
-            <LocationPanel
-              service={service}
-              projectLabel={projectLabel}
-              packageLabel={packageLabel}
-              locations={locations}
-            />
-          </BentoTile>
-
-          <BentoTile area="summary" title="İşlev özeti">
-            <div className="service-doc-body service-doc-value">
-              {renderSummaryText(summary)}
-            </div>
-          </BentoTile>
-
-          <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
-            <StatTile
-              label="Bu servisi çağıran"
-              value={callerCount}
-              hint="İlişkiler sekmesinde liste"
-            />
-          </BentoTile>
-
-          <BentoTile area="callees" title="Giden çağrılar" compactHeading>
-            <StatTile label="Çağırdığı servis" value={calleeCount} />
-          </BentoTile>
-
-          {hasOwner && service.owner ? (
-            <BentoTile area="ownership" title="Sahiplik">
-              <div className="service-doc-body service-doc-columns">
-                <DocItem label="Sorumlu">{service.owner.name}</DocItem>
-                <DocItem label="Ekip">{service.owner.team ?? '—'}</DocItem>
-              </div>
-              {service.owner.role ? (
-                <div className="service-doc-body">
-                  <DocItem label="Rol">
-                    {service.owner.role === 'lead' ? 'Ekip lideri' : 'Ekip üyesi'}
-                  </DocItem>
+            <BentoTile area="identity" title="Kimlik">
+              <div className="service-doc-body">
+                <div className="service-doc-columns service-doc-columns--meta">
+                  <Field label="Servis adı" value={service.name} readOnly />
+                  <Field label="Servis kimliği" value={service.id} readOnly />
                 </div>
-              ) : null}
+              </div>
             </BentoTile>
-          ) : (
+
+            <BentoTile area="location" title="Konum">
+              <LocationFields
+                service={service}
+                projectLabel={projectLabel}
+                packageLabel={packageLabel}
+                locations={locations}
+                catalogContext={catalogContext}
+              />
+            </BentoTile>
+
+            <BentoTile area="summary" title="İşlev özeti">
+              <Field
+                label="İşlev özeti"
+                multiline
+                rows={8}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+            </BentoTile>
+
+            <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
+              <Field
+                label="Bu servisi çağıran"
+                value={`${callerCount} servis`}
+                readOnly
+              />
+            </BentoTile>
+
+            <BentoTile area="callees" title="Giden çağrılar" compactHeading>
+              <Field
+                label="Çağırdığı servis"
+                value={`${calleeCount} servis`}
+                readOnly
+              />
+            </BentoTile>
+
             <BentoTile area="ownership" title="Sahiplik">
-              <p className="service-doc-hint service-bento-hint">
-                Ownership kartı F4 entegrasyonu ile eklenecek. Şimdilik İlişkiler
-                ve Harita sekmelerinden etki analizine geçin.
-              </p>
+              <OwnershipPanel
+                service={service}
+                catalogContext={catalogContext}
+                locationsReady={locationsReady}
+                hasJarPath={hasJarPath}
+              />
             </BentoTile>
+          </form>
+        ) : (
+          <div className={`service-bento${hasOwner ? ' has-owner' : ''}`}>
+            <BentoTile area="identity" title="Kimlik" spotlight>
+              <div className="service-doc-body">
+                <p className="service-bento-hero-name">{service.name}</p>
+                <DocItem label="Servis kimliği" mono>
+                  <span className="service-id-copy-row">
+                    {service.id}
+                    <button type="button" className="service-id-copy-btn" onClick={() => void copyServiceId()}>
+                      Kopyala
+                    </button>
+                  </span>
+                </DocItem>
+              </div>
+            </BentoTile>
+
+            <BentoTile area="location" title="Konum">
+              <LocationPanel
+                service={service}
+                projectLabel={projectLabel}
+                packageLabel={packageLabel}
+                locations={locations}
+                catalogContext={catalogContext}
+              />
+            </BentoTile>
+
+            <BentoTile area="summary" title="İşlev özeti">
+              <div className="service-summary-head">
+                {summaryLocked ? (
+                  <span className="service-summary-badge">Envanter</span>
+                ) : saved ? (
+                  <span className="service-summary-badge is-local">Yerel not</span>
+                ) : (
+                  <p className="service-doc-source-hint">
+                    Envanterde kayıt yok — otomatik özet; sağ alttan Düzenle ile kaydedebilirsiniz.
+                  </p>
+                )}
+              </div>
+              <div className="service-doc-body service-doc-value">
+                {renderSummaryText(summary)}
+              </div>
+            </BentoTile>
+
+            <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
+              <StatTile
+                label="Bu servisi çağıran"
+                value={callerCount}
+                hint="İlişkiler sekmesinde liste"
+              />
+            </BentoTile>
+
+            <BentoTile area="callees" title="Giden çağrılar" compactHeading>
+              <StatTile label="Çağırdığı servis" value={calleeCount} />
+            </BentoTile>
+
+            <BentoTile area="ownership" title="Sahiplik">
+              <OwnershipPanel
+                service={service}
+                catalogContext={catalogContext}
+                locationsReady={locationsReady}
+                hasJarPath={hasJarPath}
+              />
+            </BentoTile>
+          </div>
+        )}
+      </div>
+
+      {showEdit ? (
+        <div className="service-overview-actions">
+          {editing ? (
+            <>
+              <Button variant="ghost" compact onClick={cancel}>
+                İptal
+              </Button>
+              <Button variant="primary" compact onClick={save}>
+                Kaydet
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              compact
+              onClick={() => {
+                setDraft(saved ?? baseline)
+                setEditing(true)
+              }}
+            >
+              Düzenle
+            </Button>
           )}
         </div>
-        </>
-      )}
+      ) : null}
+
       <MotionToast open={!!copyToast}>{copyToast}</MotionToast>
     </article>
   )

@@ -12,6 +12,8 @@ import type {
   MethodImpact,
   MethodImpactGraph,
   MethodRef,
+  CatalogArtifactDetail,
+  CatalogGroupDetail,
   ModuleNode,
   ModuleChildrenResult,
   Owner,
@@ -20,6 +22,9 @@ import type {
   ServiceLocation,
   ServiceNeighbors,
   ServiceNote,
+  ServiceCatalogContext,
+  ServiceScreenLink,
+  ServiceProcessLink,
   Snapshot,
   SnapshotClientPayload,
 } from '../types'
@@ -40,6 +45,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getModuleTree() {
   return request<ModuleNode[]>('/modules')
+}
+
+export function getCatalogGroupDetail(nodeId: string) {
+  return request<CatalogGroupDetail>(`/catalog/group/${encodeURIComponent(nodeId)}`)
+}
+
+export function getCatalogArtifactDetail(nodeId: string) {
+  return request<CatalogArtifactDetail>(`/catalog/artifact/${encodeURIComponent(nodeId)}`)
 }
 
 export function getModuleChildren(
@@ -75,6 +88,24 @@ export function getNonServiceMethods(nodeId: string, limit = 50, offset = 0) {
 export function getServiceLocations(serviceId: string) {
   return request<ServiceLocation[]>(
     `/services/${encodeURIComponent(serviceId)}/locations`,
+  )
+}
+
+export function getServiceCatalogContext(serviceId: string) {
+  return request<ServiceCatalogContext>(
+    `/services/${encodeURIComponent(serviceId)}/context`,
+  )
+}
+
+export function getServiceScreens(serviceId: string) {
+  return request<ServiceScreenLink[]>(
+    `/services/${encodeURIComponent(serviceId)}/screens`,
+  )
+}
+
+export function getServiceProcesses(serviceId: string) {
+  return request<ServiceProcessLink[]>(
+    `/services/${encodeURIComponent(serviceId)}/processes`,
   )
 }
 

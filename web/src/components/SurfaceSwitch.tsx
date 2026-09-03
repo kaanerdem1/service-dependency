@@ -16,7 +16,7 @@ type Props = {
   className?: string
 }
 
-/** Servis / DWH — Morphin layoutId pill (StageTabs ile aynı kalıp) */
+/** Servis / DWH — underline tab (stage sekmeleriyle aynı dil) */
 export function SurfaceSwitch({ surface, onSurfaceChange, className }: Props) {
   const hoverRef = useRef<AppSurface | null>(null)
   const [hover, setHover] = useState<AppSurface | null>(null)

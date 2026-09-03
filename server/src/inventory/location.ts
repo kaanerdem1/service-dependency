@@ -232,7 +232,16 @@ export const SEARCH_WITH_LOCATION_SQL = `
       sd.service_name ILIKE $1
       OR sd.package_name ILIKE $1
       OR sd.class_name ILIKE $1
+      OR sd.id::text ILIKE $1
+      OR ('sd-' || sd.id::text) ILIKE $1
     )
-  ORDER BY sd.service_name
+  ORDER BY
+    CASE
+      WHEN ('sd-' || sd.id::text) ILIKE $1 AND length(btrim($1, '%')) <= length('sd-' || sd.id::text) + 2
+        THEN 0
+      WHEN sd.id::text ILIKE $1 THEN 1
+      ELSE 2
+    END,
+    sd.service_name
   LIMIT $2 OFFSET $3
 `

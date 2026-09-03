@@ -26,7 +26,7 @@ import {
 } from './api'
 import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
-import { SurfaceSwitch, type AppSurface } from '../components/SurfaceSwitch'
+import { type AppSurface } from '../components/SurfaceSwitch'
 import type {
   DwhColumn,
   DwhImpactTable,
@@ -722,8 +722,8 @@ function ImpactPanel({
 }
 
 export function DwhPage({
-  surface,
-  onSurfaceChange,
+  surface: _surface,
+  onSurfaceChange: _onSurfaceChange,
 }: {
   surface: AppSurface
   onSurfaceChange: (next: AppSurface) => void
@@ -1032,13 +1032,6 @@ export function DwhPage({
           }}
         >
           <div className="dwh-sidebar-rail" aria-hidden={sidebarExpanded}>
-            <div className="module-sidebar-surface-host module-sidebar-surface-host--rail">
-              <SurfaceSwitch
-                surface={surface}
-                onSurfaceChange={onSurfaceChange}
-                className="module-sidebar-surface-switch"
-              />
-            </div>
             <span className="dwh-sidebar-rail-label">DWH</span>
             <div className="dwh-sidebar-rail-kinds" aria-hidden>
               <span className="dwh-kind-badge is-dwh-table">T</span>
@@ -1048,13 +1041,6 @@ export function DwhPage({
             <span className="dwh-sidebar-rail-hint">Paneli Aç</span>
           </div>
           <div className="dwh-sidebar-inner">
-            <div className="module-sidebar-surface-host module-sidebar-surface-host--panel">
-              <SurfaceSwitch
-                surface={surface}
-                onSurfaceChange={onSurfaceChange}
-                className="module-sidebar-surface-switch"
-              />
-            </div>
             <div className="dwh-sidebar-head">
               <h3>DWH Ağacı</h3>
               <button

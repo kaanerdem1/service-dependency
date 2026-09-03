@@ -332,3 +332,70 @@ Jar altı servis ve `Konumsuz servisler` ilk **100**; servis dışı metod ~50. 
 
 
 Onay birimi servis id kalır; F3 onay listesine girmez.
+
+---
+
+
+
+## Jar başına servis sayısı (DB)
+
+Şema: `env`. Servis ↔ jar: `java_method.service_definition_id` → `java_class.artifact_id`.
+
+```sql
+-- 1) Jar başına servis sayısı (azalan)
+SELECT a.id AS artifact_id,
+       a.name AS jar_name,
+       p.project_name,
+       pg.project_group_name,
+       COUNT(DISTINCT sd.id) AS service_count
+FROM env.artifact a
+JOIN env.project p ON p.id = a.project_id
+JOIN env.project_group pg ON pg.id = p.project_group_id
+JOIN env.java_class jc ON jc.artifact_id = a.id
+JOIN env.java_method jm ON jm.class_id = jc.id AND jm.service_definition_id IS NOT NULL
+JOIN env.service_definition sd ON sd.id = jm.service_definition_id AND sd.status = 1
+GROUP BY a.id, a.name, p.project_name, pg.project_group_name
+ORDER BY service_count DESC
+LIMIT 50;
+```
+
+```sql
+-- 2) 100+ servisli jar'lar
+SELECT a.id, a.name AS jar_name, COUNT(DISTINCT sd.id) AS n
+FROM env.artifact a
+JOIN env.java_class jc ON jc.artifact_id = a.id
+JOIN env.java_method jm ON jm.class_id = jc.id AND jm.service_definition_id IS NOT NULL
+JOIN env.service_definition sd ON sd.id = jm.service_definition_id AND sd.status = 1
+GROUP BY a.id, a.name
+HAVING COUNT(DISTINCT sd.id) > 100
+ORDER BY n DESC;
+```
+
+```sql
+-- 3) Özet istatistik
+SELECT COUNT(*) AS jar_with_services,
+       MAX(n) AS max_per_jar,
+       ROUND(AVG(n)) AS avg_per_jar,
+       SUM(CASE WHEN n > 100 THEN 1 ELSE 0 END) AS jars_over_100
+FROM (
+  SELECT a.id, COUNT(DISTINCT sd.id) AS n
+  FROM env.artifact a
+  JOIN env.java_class jc ON jc.artifact_id = a.id
+  JOIN env.java_method jm ON jm.class_id = jc.id AND jm.service_definition_id IS NOT NULL
+  JOIN env.service_definition sd ON sd.id = jm.service_definition_id AND sd.status = 1
+  GROUP BY a.id
+) t;
+```
+
+```sql
+-- 4) Tek jar detay (id yerine kendi artifact_id)
+SELECT sd.id, sd.service_name
+FROM env.service_definition sd
+JOIN env.java_method jm ON jm.service_definition_id = sd.id
+JOIN env.java_class jc ON jc.id = jm.class_id
+WHERE jc.artifact_id = :artifact_id AND sd.status = 1
+ORDER BY sd.service_name
+LIMIT 120;  -- UI şu an 100 kesiyor
+```
+
+**Jar ağacında 100+ servis:** `treeService.listServicesForArtifact` → `LIMIT 100 OFFSET 0`, `ORDER BY service_name`. 101+ servis **görünmez** (sayfalama yok). Arama global; jar içi “devamını yükle” henüz yok.

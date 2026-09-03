@@ -76,7 +76,13 @@ import {
 import { pingInventory } from './inventory/db.js'
 import { getCatalogSource, isInventoryCatalog } from './inventory/config.js'
 import { getServiceById, listServiceLocations, searchServices as searchInventoryServices } from './inventory/serviceService.js'
+import {
+  getServiceCatalogContext,
+  listServiceProcesses,
+  listServiceScreens,
+} from './inventory/contextService.js'
 import { getServiceTreePath } from './inventory/location.js'
+import { getArtifactDetail, getGroupDetail } from './inventory/catalogEntityService.js'
 import { listModuleChildren, listModuleRoots, listNonServiceMethodsForArtifact, parseNodeId } from './inventory/treeService.js'
 import type { SnapshotClientPayload } from './snapshotTypes.js'
 import type { Service } from './data.js'
@@ -163,7 +169,7 @@ app.get('/api/modules/:nodeId/children', async (req, res) => {
     return
   }
   try {
-    const limit = Number(req.query.limit ?? 100)
+    const limit = Number(req.query.limit ?? 50)
     const offset = Number(req.query.offset ?? 0)
     const sort = req.query.sort === 'degree' ? 'degree' : 'name'
     const anchorServiceId =
@@ -178,6 +184,36 @@ app.get('/api/modules/:nodeId/children', async (req, res) => {
     )
   } catch (e) {
     console.error('[inventory] /api/modules/:nodeId/children', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/catalog/group/:nodeId', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    const detail = await getGroupDetail(req.params.nodeId)
+    if (!detail) return res.status(404).json({ error: 'not_found' })
+    res.json(detail)
+  } catch (e) {
+    console.error('[inventory] /api/catalog/group/:nodeId', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/catalog/artifact/:nodeId', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    const detail = await getArtifactDetail(req.params.nodeId)
+    if (!detail) return res.status(404).json({ error: 'not_found' })
+    res.json(detail)
+  } catch (e) {
+    console.error('[inventory] /api/catalog/artifact/:nodeId', e)
     res.status(500).json({ error: 'inventory_error' })
   }
 })
@@ -258,6 +294,52 @@ app.get('/api/services/:id/locations', async (req, res) => {
     res.json(await listServiceLocations(req.params.id))
   } catch (e) {
     console.error('[inventory] /api/services/:id/locations', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/services/:id/context', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  const svc = await getCatalogService(req.params.id)
+  if (!svc) return res.status(404).json({ error: 'not_found' })
+  try {
+    const ctx = await getServiceCatalogContext(req.params.id)
+    res.json(ctx ?? {})
+  } catch (e) {
+    console.error('[inventory] /api/services/:id/context', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/services/:id/screens', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  const svc = await getCatalogService(req.params.id)
+  if (!svc) return res.status(404).json({ error: 'not_found' })
+  try {
+    res.json(await listServiceScreens(req.params.id))
+  } catch (e) {
+    console.error('[inventory] /api/services/:id/screens', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/services/:id/processes', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  const svc = await getCatalogService(req.params.id)
+  if (!svc) return res.status(404).json({ error: 'not_found' })
+  try {
+    res.json(await listServiceProcesses(req.params.id))
+  } catch (e) {
+    console.error('[inventory] /api/services/:id/processes', e)
     res.status(500).json({ error: 'inventory_error' })
   }
 })
