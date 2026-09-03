@@ -39,13 +39,16 @@ export function MapStage({
   useEffect(() => {
     if (!expanded) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onExpandedChange(false)
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      onExpandedChange(false)
     }
-    window.addEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keydown', onKey, true)
       document.body.style.overflow = prev
     }
   }, [expanded, onExpandedChange])

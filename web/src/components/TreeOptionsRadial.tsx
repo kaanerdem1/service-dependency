@@ -66,9 +66,8 @@ export function TreeOptionsRadial({
 
             <label className="tree-options-row">
               <span className="tree-options-row-copy">
-                <span className="tree-options-row-title">Servis dışı metodlar</span>
-                <span className="tree-options-row-hint">
-                  Jar altında entry olmayan metodları göster
+                <span className="tree-options-row-title">
+                  Servis olmayan metodları göster
                 </span>
               </span>
               <button

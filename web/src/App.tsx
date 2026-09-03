@@ -59,6 +59,7 @@ import {
 import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
 import { TreeKindIcon } from './components/TreeKindIcon'
+import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import {
   getChangeRequest,
@@ -95,6 +96,20 @@ import type {
 import './App.css'
 
 type Tab = StageTabId
+
+function SidebarStarIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-star-icon">
+      <path
+        d="M12 2.5l2.55 5.17 5.7.83-4.12 4.02.97 5.67L12 15.9l-5.1 2.68.97-5.67-4.12-4.02 5.7-.83L12 2.5z"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={active ? 0 : 1.4}
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
 
 function SidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
@@ -235,9 +250,14 @@ export default function App() {
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
   const [cmdkOpen, setCmdkOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
+
+  useEffect(() => {
+    if (surface !== 'services') setShortcutsOpen(false)
+  }, [surface])
 
   const toggleNavPinned = useCallback(() => {
     setNavPinned((pinned) => {
@@ -874,26 +894,39 @@ export default function App() {
           <div className="module-sidebar-inner">
           <div className="module-sidebar-head">
             <h3>Modüller</h3>
-            <MorphHoverButton
-              type="button"
-              className={`sidebar-pin-btn${navPinned ? ' is-pinned' : ''}`}
-              layoutId="sidebar-pin-hover"
-              title={
-                navPinned
-                  ? 'Sabitlemeyi bırak (fare dışına çıkınca panel kapanır)'
-                  : 'Paneli sabitle (açık kalsın)'
-              }
-              aria-label={
-                navPinned
-                  ? 'Modül paneli sabitli — sabitlemeyi bırak'
-                  : 'Modül panelini sabitle — açık kalsın'
-              }
-              aria-expanded={navExpanded}
-              aria-pressed={navPinned}
-              onClick={toggleNavPinned}
-            >
-              <SidebarPinIcon pinned={navPinned} />
-            </MorphHoverButton>
+            <div className="module-sidebar-head-actions">
+              <MorphHoverButton
+                type="button"
+                className={`sidebar-pin-btn${navPinned ? ' is-pinned' : ''}`}
+                layoutId="sidebar-pin-hover"
+                title={
+                  navPinned
+                    ? 'Sabitlemeyi bırak (fare dışına çıkınca panel kapanır)'
+                    : 'Paneli sabitle (açık kalsın)'
+                }
+                aria-label={
+                  navPinned
+                    ? 'Modül paneli sabitli — sabitlemeyi bırak'
+                    : 'Modül panelini sabitle — açık kalsın'
+                }
+                aria-expanded={navExpanded}
+                aria-pressed={navPinned}
+                onClick={toggleNavPinned}
+              >
+                <SidebarPinIcon pinned={navPinned} />
+              </MorphHoverButton>
+              <MorphHoverButton
+                type="button"
+                className={`sidebar-star-btn${shortcutsOpen ? ' is-active' : ''}`}
+                layoutId="sidebar-star-hover"
+                title={shortcutsOpen ? 'Favorileri gizle' : 'Favorilerim'}
+                aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
+                aria-expanded={shortcutsOpen}
+                onClick={() => setShortcutsOpen((v) => !v)}
+              >
+                <SidebarStarIcon active={shortcutsOpen} />
+              </MorphHoverButton>
+            </div>
           </div>
           <label className="search" ref={searchRef}>
             <span className="sr-only">Servis veya metod ara</span>
@@ -1011,7 +1044,7 @@ export default function App() {
               Metod
             </span>
           </div>
-          <div className="module-sidebar-body" ref={sidebarBodyRef}>
+          <div className="module-sidebar-body" ref={sidebarBodyRef} tabIndex={-1}>
             <ModuleTree
               nodes={tree}
               selectedServiceId={pivotId}
@@ -1020,6 +1053,7 @@ export default function App() {
               scrollParentRef={sidebarBodyRef}
               showNonServiceMethods={showNonServiceMethods}
               pinServiceId={treePinServiceId}
+              keyboardEnabled={!shortcutsOpen}
               onClearPin={() => setTreePinServiceId(undefined)}
               onSelectCatalogNode={selectCatalogNode}
               onSelectService={(id) =>
@@ -1034,6 +1068,20 @@ export default function App() {
               onShowNonServiceMethodsChange={setShowNonServiceMethods}
             />
           </div>
+          <ShortcutsPanel
+            open={shortcutsOpen && surface === 'services'}
+            pivotId={pivotId}
+            pivotName={service?.name}
+            navPinned={navPinned}
+            mapExpanded={mapExpanded}
+            onTogglePin={toggleNavPinned}
+            onClose={() => setShortcutsOpen(false)}
+            onSelectService={(id) => {
+              setTreePinServiceId(undefined)
+              setQuery('')
+              selectPivot(id, { resetHistory: true, source: 'tree' })
+            }}
+          />
           </div>
           <button
             type="button"

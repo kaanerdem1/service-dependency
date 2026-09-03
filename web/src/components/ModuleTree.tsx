@@ -27,13 +27,12 @@ import { MotionTooltip } from '../motion/MotionTooltip'
 import { SkeletonShimmer } from '../motion/SkeletonShimmer'
 import { StatusBadge } from '../motion/StatusBadge'
 import { TreeAccordion } from '../motion/TreeAccordion'
+import { useModuleTreeKeyboard } from '../useModuleTreeKeyboard'
 
 const TIP_DELAY_MS = 1000
 const SERVICE_PAGE_SIZE = 50
 const VIRTUALIZE_MIN_ROWS = 200
 const ROW_HEIGHT_PX = 34
-const PATH_PULSE_STEP_MS = 560
-const PATH_PULSE_HOLD_MS = 980
 
 const KIND_LABEL: Record<ModuleNode['kind'], string> = {
   group: 'grup',
@@ -78,7 +77,6 @@ type TreeHydrationContextValue = {
   focusServiceId?: string
   focusShowAll: boolean
   revealFocusJarServices: () => void
-  pathPulseIds: Set<string>
   /** Kullanıcı başka jar açınca takip/scroll kilidini bırak */
   releaseFocusFollow: () => void
   focusFollowScroll: boolean
@@ -145,6 +143,8 @@ type Props = {
   scrollParentRef?: RefObject<HTMLElement | null>
   showNonServiceMethods?: boolean
   pinServiceId?: string
+  /** Klavye gezinmesi (favoriler drawer açıkken kapatılır) */
+  keyboardEnabled?: boolean
   /** Arama odağından çık (seçim kalsın, ağaç konumu korunur) */
   onClearPin?: () => void
   onSelectService: (serviceId: string) => void
@@ -296,6 +296,7 @@ function MethodTreeRow({
         className={`tree-row ${className} kind-method`}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-tree-method={methodId}
+        data-tree-nav={methodId}
         onClick={onSelect}
         {...tipHandlers}
       >
@@ -314,59 +315,17 @@ function isArtifactNode(node: ModuleNode): boolean {
   return node.kind === 'package' && node.id.startsWith('art-')
 }
 
-function TreeSortBar({
-  parentId,
-  depth,
-  sort,
-  onSort,
-}: {
-  parentId: string
-  depth: number
-  sort: TreeSort
-  onSort: (sort: TreeSort) => void
-}) {
-  return (
-    <div
-      className="tree-sort-bar"
-      style={{ paddingLeft: 8 + depth * 12 }}
-      data-tree-sort-parent={parentId}
-    >
-      <span className="tree-sort-label">Sırala</span>
-      <button
-        type="button"
-        className={`tree-sort-btn${sort === 'name' ? ' is-active' : ''}`}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          onSort('name')
-        }}
-      >
-        A–Z
-      </button>
-      <button
-        type="button"
-        className={`tree-sort-btn${sort === 'degree' ? ' is-active' : ''}`}
-        onMouseDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          onSort('degree')
-        }}
-      >
-        Bağımlılık Sayısı
-      </button>
-    </div>
-  )
-}
-
 function TreeLoadMoreRow({
   depth,
   remaining,
   loading,
+  parentNodeId,
   onLoad,
 }: {
   depth: number
   remaining: number
   loading: boolean
+  parentNodeId: string
   onLoad: () => void
 }) {
   return (
@@ -375,6 +334,7 @@ function TreeLoadMoreRow({
         type="button"
         className="tree-load-more"
         style={{ paddingLeft: 8 + depth * 12 }}
+        data-tree-nav={`load-more-${parentNodeId}`}
         disabled={loading}
         onClick={() => void onLoad()}
       >
@@ -651,7 +611,6 @@ function TreeItem({
   const openIds = hydration?.openIds ?? new Set<string>()
   const setBranchOpenId = hydration?.setBranchOpenId
   const registerChildren = hydration?.registerChildren
-  const setSort = hydration?.setSort
   const loadMore = hydration?.loadMore
   const showNonServiceMethods = hydration?.showNonServiceMethods ?? false
   const expandedServiceIds = hydration?.expandedServiceIds ?? new Set<string>()
@@ -660,7 +619,6 @@ function TreeItem({
   const focusServiceId = hydration?.focusServiceId
   const focusShowAll = hydration?.focusShowAll ?? true
   const revealFocusJarServices = hydration?.revealFocusJarServices
-  const pathPulseIds = hydration?.pathPulseIds ?? new Set<string>()
   const releaseFocusFollow = hydration?.releaseFocusFollow
 
   const isService = node.kind === 'service'
@@ -702,9 +660,6 @@ function TreeItem({
     ? Math.max(0, (meta?.total ?? node.childCount ?? 1) - 1)
     : 0
   const nextBatchCount = Math.min(SERVICE_PAGE_SIZE, hiddenSiblingCount)
-  const pathPulsing =
-    pathPulseIds.has(node.id) ||
-    Boolean(node.serviceId && pathPulseIds.has(node.serviceId))
 
   const setOpenState = useCallback(
     (next: boolean) => {
@@ -791,9 +746,10 @@ function TreeItem({
     <div className="tree-item">
       <div
         ref={rowRef}
-        className={`tree-row ${selected ? 'selected' : ''}${catalogSelected ? ' catalog-selected' : ''}${pathPulsing ? ' is-path-pulse' : ''} kind-${node.kind}`}
+        className={`tree-row ${selected ? 'selected' : ''}${catalogSelected ? ' catalog-selected' : ''} kind-${node.kind}`}
         style={{ paddingLeft: 8 + depth * 12 }}
         data-tree-node={node.id}
+        data-tree-nav={node.id}
         data-tree-service={isService ? node.serviceId : undefined}
       >
         {canExpand ? (
@@ -841,25 +797,9 @@ function TreeItem({
               {node.childCount} servis
             </StatusBadge>
           ) : null}
-          {isService && sort === 'degree' && node.degree != null ? (
-            <span className="tree-degree-chip" title="Bağımlılık sayısı (etkilenen servis)">
-              {node.degree}
-            </span>
-          ) : null}
         </button>
       </div>
       <TreeAccordion open={showChildBranch}>
-        {paginated && (hasResolvedChildren || sortReloading || open) && !focusCompact ? (
-          <TreeSortBar
-            parentId={node.id}
-            depth={depth + 1}
-            sort={sort}
-            onSort={(next) => {
-              if (next === sort && !sortReloading) return
-              setSort?.(node.id, next)
-            }}
-          />
-        ) : null}
         {loadingChildren || sortReloading ? (
           <div className="tree-item" style={{ paddingLeft: 8 + (depth + 1) * 12 }}>
             <SkeletonShimmer className="tree-row skeleton" lines={3} />
@@ -904,6 +844,7 @@ function TreeItem({
             <button
               type="button"
               className="tree-focus-more-btn"
+              data-tree-nav={`focus-more-${node.id}`}
               onClick={() => revealFocusJarServices?.()}
             >
               +{nextBatchCount} servis daha göster
@@ -915,6 +856,7 @@ function TreeItem({
             depth={depth + 1}
             remaining={total - loadedCount}
             loading={meta?.loadingMore ?? false}
+            parentNodeId={node.id}
             onLoad={() => void loadMore?.(node.id)}
           />
         ) : null}
@@ -952,6 +894,7 @@ export function ModuleTree({
   scrollParentRef,
   showNonServiceMethods = false,
   pinServiceId,
+  keyboardEnabled = true,
   onClearPin,
   onSelectService,
   onSelectMethod,
@@ -967,10 +910,8 @@ export function ModuleTree({
   const [expandedServiceIds, setExpandedServiceIds] = useState<Set<string>>(() => new Set())
   const [focusJarId, setFocusJarId] = useState<string>()
   const [focusShowAll, setFocusShowAll] = useState(false)
-  const [pathPulseIds, setPathPulseIds] = useState<Set<string>>(() => new Set())
   const [focusFollowScroll, setFocusFollowScroll] = useState(true)
   const timerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
-  const pulseTimerRef = useRef<ReturnType<typeof window.setTimeout> | undefined>(undefined)
   const listRef = useRef<HTMLDivElement>(null)
   const snapshotRef = useRef<TreeSnapshot | null>(null)
   const focusSessionRef = useRef<string | null>(null)
@@ -1032,7 +973,6 @@ export function ModuleTree({
       setHydrateRevealIds(snap.hydrateRevealIds)
       setFocusJarId(undefined)
       setFocusShowAll(false)
-      setPathPulseIds(new Set())
       setFocusFollowScroll(true)
       focusSessionRef.current = null
       focusAbandonedRef.current = false
@@ -1196,27 +1136,6 @@ export function ModuleTree({
     [childMap, pageMeta, sortByParent, pinServiceId, focusJarId],
   )
 
-  const runPathPulse = useCallback((ids: string[]) => {
-    window.clearTimeout(pulseTimerRef.current)
-    if (ids.length === 0) {
-      setPathPulseIds(new Set())
-      return
-    }
-    let step = 0
-    const tick = () => {
-      setPathPulseIds(new Set([ids[step]]))
-      step += 1
-      if (step < ids.length) {
-        pulseTimerRef.current = window.setTimeout(tick, PATH_PULSE_STEP_MS)
-        return
-      }
-      pulseTimerRef.current = window.setTimeout(() => {
-        setPathPulseIds(new Set())
-      }, PATH_PULSE_HOLD_MS)
-    }
-    tick()
-  }, [])
-
   const releaseFocusFollow = useCallback(() => {
     // Arama odağını bırak: seçim (harita) kalsın, ağaç konumu korunur, geri snap yok
     focusAbandonedRef.current = true
@@ -1225,7 +1144,6 @@ export function ModuleTree({
     setFocusFollowScroll(false)
     setFocusJarId(undefined)
     setFocusShowAll(true)
-    setPathPulseIds(new Set())
     onClearPin?.()
   }, [onClearPin])
 
@@ -1279,7 +1197,6 @@ export function ModuleTree({
       focusServiceId: pinServiceId,
       focusShowAll,
       revealFocusJarServices,
-      pathPulseIds,
       releaseFocusFollow,
       focusFollowScroll,
     }),
@@ -1300,7 +1217,6 @@ export function ModuleTree({
       pinServiceId,
       focusShowAll,
       revealFocusJarServices,
-      pathPulseIds,
       releaseFocusFollow,
       focusFollowScroll,
     ],
@@ -1388,7 +1304,6 @@ export function ModuleTree({
         const opens = new Set<string>()
 
         const jarSeg = path.find((s) => s.kind === 'package' || s.id.startsWith('art-'))
-        const groupSeg = path.find((s) => s.kind === 'group' || s.id.startsWith('pg-'))
         const serviceSeg = path.find((s) => s.kind === 'service')
 
         for (let i = 0; i < path.length - 1; i++) {
@@ -1470,12 +1385,6 @@ export function ModuleTree({
               for (const id of opens) next.add(id)
               return next
             })
-            const pulse: string[] = []
-            if (groupSeg?.id) pulse.push(groupSeg.id)
-            if (jarSeg?.id) pulse.push(jarSeg.id)
-            if (serviceSeg?.id) pulse.push(serviceSeg.id)
-            else if (serviceSeg?.serviceId) pulse.push(serviceSeg.serviceId)
-            runPathPulse(pulse)
           } else if (!shouldFocus) {
             focusSessionRef.current = null
           }
@@ -1489,7 +1398,7 @@ export function ModuleTree({
     return () => {
       cancelled = true
     }
-  }, [selectedServiceId, selectedMethodId, pinServiceId, runPathPulse])
+  }, [selectedServiceId, selectedMethodId, pinServiceId])
 
   const revealIds = useMemo(() => {
     const ids = revealAncestorIds(
@@ -1540,10 +1449,15 @@ export function ModuleTree({
   useEffect(
     () => () => {
       window.clearTimeout(timerRef.current)
-      window.clearTimeout(pulseTimerRef.current)
     },
     [],
   )
+
+  useModuleTreeKeyboard({
+    enabled: keyboardEnabled,
+    scrollParentRef,
+    treeRef: listRef,
+  })
 
   return (
     <TreeTipContext.Provider value={tipContext}>

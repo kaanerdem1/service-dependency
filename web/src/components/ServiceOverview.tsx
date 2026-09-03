@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getServiceCatalogContext, getServiceLocations } from '../api/client'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
-import { MotionToast } from '../motion/MotionToast'
 import { EmptyState } from './EmptyState'
 import { Button, Card, Field } from '../ui'
 import type {
@@ -139,104 +138,34 @@ function StatTile({
     <div className="service-bento-stat">
       <AnimatedNumber value={value} className="service-bento-stat-num" />
       <span className="service-bento-stat-label">{label}</span>
-      {hint ? <p className="service-bento-stat-hint">{hint}</p> : null}
+      {hint ? (
+        <p className="service-bento-stat-hint">{hint}</p>
+      ) : (
+        <p className="service-bento-stat-hint is-reserved" aria-hidden />
+      )}
     </div>
   )
 }
 
 function LocationPanel({
   service,
-  projectLabel,
   packageLabel,
   locations,
-  catalogContext,
 }: {
   service: Service
-  projectLabel?: string
   packageLabel?: string
   locations: ServiceLocation[]
-  catalogContext: ServiceCatalogContext | null
 }) {
-  const primaryProject = locationProjectLabel(service, projectLabel)
-  const primaryPackage = locationPackageLabel(service, packageLabel)
-  const groupDesc = catalogContext?.projectGroupDescription
+  const primaryGroup = service.projectGroupLabel ?? '—'
+  const primaryJar = locationPackageLabel(service, packageLabel)
 
   if (locations.length <= 1) {
     return (
-      <div className="service-doc-body service-doc-columns">
-        {service.projectGroupLabel || groupDesc ? (
-          <DocItem label="Grup">
-            {service.projectGroupLabel ? (
-              <span className="service-doc-group-name">{service.projectGroupLabel}</span>
-            ) : null}
-            {groupDesc ? <span className="service-doc-sub">{groupDesc}</span> : null}
-          </DocItem>
-        ) : null}
-        <DocItem label="Proje">{primaryProject}</DocItem>
-        <DocItem label="Paket" mono>
-          {primaryPackage}
+      <div className="service-doc-body service-location-compact">
+        <DocItem label="Grup">{primaryGroup}</DocItem>
+        <DocItem label="Jar" mono>
+          {primaryJar}
         </DocItem>
-      </div>
-    )
-  }
-
-  return (
-    <div className="service-doc-body service-location-list">
-      <p className="service-location-multi-hint">
-        Bu servis {locations.length} farklı jar konumunda tanımlı.
-      </p>
-      <ul className="service-location-rows">
-        {locations.map((loc) => (
-          <li key={loc.artifactId} className="service-location-row">
-            <span className="service-location-jar">{loc.artifactLabel}</span>
-            <span className="service-location-path">
-              {loc.projectGroupLabel} › {loc.projectLabel}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-function LocationFields({
-  service,
-  projectLabel,
-  packageLabel,
-  locations,
-  catalogContext,
-}: {
-  service: Service
-  projectLabel?: string
-  packageLabel?: string
-  locations: ServiceLocation[]
-  catalogContext: ServiceCatalogContext | null
-}) {
-  const groupDesc = catalogContext?.projectGroupDescription
-
-  if (locations.length <= 1) {
-    return (
-      <div className="service-doc-body service-doc-columns">
-        {service.projectGroupLabel || groupDesc ? (
-          <Field
-            label="Grup"
-            value={
-              [service.projectGroupLabel, groupDesc].filter(Boolean).join(' — ') ||
-              '—'
-            }
-            readOnly
-          />
-        ) : null}
-        <Field
-          label="Proje"
-          value={locationProjectLabel(service, projectLabel)}
-          readOnly
-        />
-        <Field
-          label="Paket"
-          value={locationPackageLabel(service, packageLabel)}
-          readOnly
-        />
       </div>
     )
   }
@@ -249,10 +178,43 @@ function LocationFields({
       <ul className="service-location-rows">
         {locations.map((loc) => (
           <li key={loc.artifactId} className="service-location-row">
-            <strong>{loc.artifactLabel}</strong>
-            <span>
-              {loc.projectGroupLabel} › {loc.projectLabel}
-            </span>
+            <span className="service-location-group">{loc.projectGroupLabel}</span>
+            <span className="service-location-jar">{loc.artifactLabel}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LocationFields({
+  service,
+  packageLabel,
+  locations,
+}: {
+  service: Service
+  packageLabel?: string
+  locations: ServiceLocation[]
+}) {
+  if (locations.length <= 1) {
+    return (
+      <div className="service-doc-body service-location-compact">
+        <Field label="Grup" value={service.projectGroupLabel ?? '—'} readOnly />
+        <Field label="Jar" value={locationPackageLabel(service, packageLabel)} readOnly />
+      </div>
+    )
+  }
+
+  return (
+    <div className="service-doc-body service-location-list">
+      <p className="service-location-multi-hint">
+        {locations.length} jar konumu
+      </p>
+      <ul className="service-location-rows">
+        {locations.map((loc) => (
+          <li key={loc.artifactId} className="service-location-row">
+            <strong>{loc.projectGroupLabel}</strong>
+            <span>{loc.artifactLabel}</span>
           </li>
         ))}
       </ul>
@@ -279,26 +241,24 @@ function OwnershipPanel({
 
   if (isUnlocated && !hasDbOwnership && !hasMockOwner) {
     return (
-      <p className="service-doc-hint service-bento-hint">
-        <strong>Konumsuz servis.</strong> Jar veya entry metod bağlantısı olmadığı için IT / iş
-        birimi envanterden okunamaz (~%68 servis). Harita ve İlişkiler sekmelerinden etki
-        analizine geçin.
+      <p className="service-doc-hint service-bento-hint service-ownership-compact">
+        <strong>Konumsuz.</strong> IT / iş birimi jar yolu olmadan okunamaz.
       </p>
     )
   }
 
   if (!hasDbOwnership && !hasMockOwner) {
     return (
-      <p className="service-doc-hint service-bento-hint">
+      <p className="service-doc-hint service-bento-hint service-ownership-compact">
         {hasJarPath
-          ? 'Jar yolu var ancak projede IT / iş birimi alanları boş. İlişkiler ve Harita sekmelerinden etki analizine geçin.'
-          : 'IT ve iş birimi sahipliği jar → proje yoluyla envanterden okunur. Bu servis için kayıt bulunamadı; İlişkiler ve Harita sekmelerinden etki analizine geçin.'}
+          ? 'Projede sahiplik alanı boş.'
+          : 'Sahiplik jar → proje yoluyla okunur; kayıt yok.'}
       </p>
     )
   }
 
   return (
-    <div className="service-doc-body service-doc-columns">
+    <div className="service-doc-body service-ownership-compact-body">
       {itTeam ? <DocItem label="IT ekibi">{itTeam}</DocItem> : null}
       {businessUnit ? <DocItem label="İş birimi">{businessUnit}</DocItem> : null}
       {hasMockOwner && service.owner ? (
@@ -335,7 +295,6 @@ export function ServiceOverview({
   const [saved, setSaved] = useState<string | null>(null)
   const [locations, setLocations] = useState<ServiceLocation[]>([])
   const [locationsReady, setLocationsReady] = useState(false)
-  const [copyToast, setCopyToast] = useState<string>()
 
   const isInventoryService = service.id.startsWith('sd-')
 
@@ -373,12 +332,6 @@ export function ServiceOverview({
     setEditing(false)
   }, [service.id, baseline, summaryLocked])
 
-  useEffect(() => {
-    if (!copyToast) return
-    const t = window.setTimeout(() => setCopyToast(undefined), 2200)
-    return () => window.clearTimeout(t)
-  }, [copyToast])
-
   if (loading) {
     return (
       <EmptyState
@@ -394,15 +347,6 @@ export function ServiceOverview({
   )
   const hasOwner = Boolean(service.owner) || hasDbOwnership
   const hasJarPath = locations.length > 0
-
-  const copyServiceId = async () => {
-    try {
-      await navigator.clipboard.writeText(service.id)
-      setCopyToast('Servis kimliği kopyalandı')
-    } catch {
-      setCopyToast('Kopyalanamadı')
-    }
-  }
 
   const save = () => {
     const trimmed = draft.trim()
@@ -435,8 +379,77 @@ export function ServiceOverview({
 
   const showEdit = !summaryLocked
 
+  const editActions = showEdit ? (
+    <div className="service-overview-actions">
+      {editing ? (
+        <>
+          <Button variant="ghost" compact onClick={cancel}>
+            İptal
+          </Button>
+          <Button variant="primary" compact onClick={save}>
+            Kaydet
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant="ghost"
+          compact
+          onClick={() => {
+            setDraft(saved ?? baseline)
+            setEditing(true)
+          }}
+        >
+          Düzenle
+        </Button>
+      )}
+    </div>
+  ) : null
+
+  const identityTile = (
+    <BentoTile area="identity" title="Kimlik">
+      {editing ? (
+        <div className="service-doc-body">
+          <div className="service-doc-columns service-doc-columns--meta">
+            <Field label="Servis adı" value={service.name} readOnly />
+            <Field label="Servis kimliği" value={service.id} readOnly />
+          </div>
+        </div>
+      ) : (
+        <div className="service-doc-body">
+          <p className="service-bento-hero-name">{service.name}</p>
+          <DocItem label="Servis kimliği" mono>
+            {service.id}
+          </DocItem>
+        </div>
+      )}
+    </BentoTile>
+  )
+
+  const locationTile = (
+    <BentoTile area="location" title="Konum">
+      {editing ? (
+        <LocationFields
+          service={service}
+          packageLabel={packageLabel}
+          locations={locations}
+        />
+      ) : (
+        <LocationPanel
+          service={service}
+          packageLabel={packageLabel}
+          locations={locations}
+        />
+      )}
+    </BentoTile>
+  )
+
   return (
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
+      <div className="service-overview-head">
+        {identityTile}
+        {locationTile}
+      </div>
+
       <div className="service-overview-stage">
         {editing ? (
           <form
@@ -447,25 +460,6 @@ export function ServiceOverview({
               save()
             }}
           >
-            <BentoTile area="identity" title="Kimlik">
-              <div className="service-doc-body">
-                <div className="service-doc-columns service-doc-columns--meta">
-                  <Field label="Servis adı" value={service.name} readOnly />
-                  <Field label="Servis kimliği" value={service.id} readOnly />
-                </div>
-              </div>
-            </BentoTile>
-
-            <BentoTile area="location" title="Konum">
-              <LocationFields
-                service={service}
-                projectLabel={projectLabel}
-                packageLabel={packageLabel}
-                locations={locations}
-                catalogContext={catalogContext}
-              />
-            </BentoTile>
-
             <BentoTile area="summary" title="İşlev özeti">
               <Field
                 label="İşlev özeti"
@@ -473,6 +467,15 @@ export function ServiceOverview({
                 rows={8}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
+              />
+            </BentoTile>
+
+            <BentoTile area="ownership" title="Sahiplik">
+              <OwnershipPanel
+                service={service}
+                catalogContext={catalogContext}
+                locationsReady={locationsReady}
+                hasJarPath={hasJarPath}
               />
             </BentoTile>
 
@@ -491,42 +494,9 @@ export function ServiceOverview({
                 readOnly
               />
             </BentoTile>
-
-            <BentoTile area="ownership" title="Sahiplik">
-              <OwnershipPanel
-                service={service}
-                catalogContext={catalogContext}
-                locationsReady={locationsReady}
-                hasJarPath={hasJarPath}
-              />
-            </BentoTile>
           </form>
         ) : (
           <div className={`service-bento${hasOwner ? ' has-owner' : ''}`}>
-            <BentoTile area="identity" title="Kimlik" spotlight>
-              <div className="service-doc-body">
-                <p className="service-bento-hero-name">{service.name}</p>
-                <DocItem label="Servis kimliği" mono>
-                  <span className="service-id-copy-row">
-                    {service.id}
-                    <button type="button" className="service-id-copy-btn" onClick={() => void copyServiceId()}>
-                      Kopyala
-                    </button>
-                  </span>
-                </DocItem>
-              </div>
-            </BentoTile>
-
-            <BentoTile area="location" title="Konum">
-              <LocationPanel
-                service={service}
-                projectLabel={projectLabel}
-                packageLabel={packageLabel}
-                locations={locations}
-                catalogContext={catalogContext}
-              />
-            </BentoTile>
-
             <BentoTile area="summary" title="İşlev özeti">
               <div className="service-summary-head">
                 {summaryLocked ? (
@@ -544,6 +514,15 @@ export function ServiceOverview({
               </div>
             </BentoTile>
 
+            <BentoTile area="ownership" title="Sahiplik">
+              <OwnershipPanel
+                service={service}
+                catalogContext={catalogContext}
+                locationsReady={locationsReady}
+                hasJarPath={hasJarPath}
+              />
+            </BentoTile>
+
             <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
               <StatTile
                 label="Bu servisi çağıran"
@@ -555,46 +534,13 @@ export function ServiceOverview({
             <BentoTile area="callees" title="Giden çağrılar" compactHeading>
               <StatTile label="Çağırdığı servis" value={calleeCount} />
             </BentoTile>
-
-            <BentoTile area="ownership" title="Sahiplik">
-              <OwnershipPanel
-                service={service}
-                catalogContext={catalogContext}
-                locationsReady={locationsReady}
-                hasJarPath={hasJarPath}
-              />
-            </BentoTile>
           </div>
         )}
       </div>
 
-      {showEdit ? (
-        <div className="service-overview-actions">
-          {editing ? (
-            <>
-              <Button variant="ghost" compact onClick={cancel}>
-                İptal
-              </Button>
-              <Button variant="primary" compact onClick={save}>
-                Kaydet
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="ghost"
-              compact
-              onClick={() => {
-                setDraft(saved ?? baseline)
-                setEditing(true)
-              }}
-            >
-              Düzenle
-            </Button>
-          )}
-        </div>
+      {editActions ? (
+        <div className="service-overview-foot">{editActions}</div>
       ) : null}
-
-      <MotionToast open={!!copyToast}>{copyToast}</MotionToast>
     </article>
   )
 }
