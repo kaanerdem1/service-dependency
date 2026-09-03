@@ -62,15 +62,6 @@ import { TreeKindIcon } from './components/TreeKindIcon'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import {
-  readTreeDensity,
-  readTreeKindFilter,
-  writeTreeDensity,
-  writeTreeKindFilter,
-  type TreeDensity,
-  type TreeKindFilter,
-} from './treePrefs'
-import type { ExpandJarInTreeRequest } from './components/ModuleTree'
-import {
   getChangeRequest,
   getImpactGraph,
   getInbox,
@@ -130,6 +121,28 @@ function SidebarPinIcon({ pinned }: { pinned: boolean }) {
         strokeWidth={pinned ? 0 : 1.5}
         strokeLinejoin="round"
         strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function InboxIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+      <path
+        d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path
+        d="m22 6-10 7L2 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -208,11 +221,6 @@ export default function App() {
   } | null>(null)
   const [showNonServiceMethods, setShowNonServiceMethods] = useState(false)
   const [treePinServiceId, setTreePinServiceId] = useState<string>()
-  const [treeDensity, setTreeDensity] = useState<TreeDensity>(() => readTreeDensity())
-  const [treeKindFilter, setTreeKindFilter] = useState<Set<TreeKindFilter>>(() =>
-    readTreeKindFilter(),
-  )
-  const [expandJarInTree, setExpandJarInTree] = useState<ExpandJarInTreeRequest>()
   const [selectedMethodId, setSelectedMethodId] = useState<string>()
   const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
   /** Metod seçilmeden Metodlar sekmesini aç (harita +N) — saklandı; detay paneli kaldırıldı */
@@ -593,34 +601,6 @@ export default function App() {
     [catalogNode?.id, pivotId, clearSelection, trail],
   )
 
-  const openJarInTree = useCallback((jarId: string, groupId: string) => {
-    setTreePinServiceId(undefined)
-    setNavHover(true)
-    setExpandJarInTree({ jarId, groupId, gen: Date.now() })
-  }, [])
-
-  const toggleTreeKind = useCallback((kind: TreeKindFilter) => {
-    setTreeKindFilter((prev) => {
-      const next = new Set(prev)
-      if (next.has(kind)) {
-        if (next.size <= 1) return prev
-        next.delete(kind)
-      } else {
-        next.add(kind)
-      }
-      writeTreeKindFilter(next)
-      return next
-    })
-  }, [])
-
-  const toggleTreeDensity = useCallback(() => {
-    setTreeDensity((prev) => {
-      const next: TreeDensity = prev === 'compact' ? 'comfortable' : 'compact'
-      writeTreeDensity(next)
-      return next
-    })
-  }, [])
-
   const selectPivot = useCallback(
     (id: string, opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' }) => {
       setCatalogNode(null)
@@ -894,11 +874,19 @@ export default function App() {
             {surface === 'services' && session ? (
               <button
                 type="button"
-                className="btn ghost"
+                className="masthead-icon-btn"
+                aria-label={
+                  inbox && inbox.pending > 0
+                    ? `Gelen kutusu, ${inbox.pending} okunmamış`
+                    : 'Gelen kutusu'
+                }
+                title="Gelen kutusu"
                 onClick={() => setInboxOpen(true)}
               >
-                Gelen kutusu
-                {inbox && inbox.pending > 0 ? ` (${inbox.pending})` : ''}
+                <InboxIcon />
+                {inbox && inbox.pending > 0 ? (
+                  <span className="masthead-icon-badge">{inbox.pending}</span>
+                ) : null}
               </button>
             ) : null}
           </div>
@@ -1069,41 +1057,24 @@ export default function App() {
             )}
           </label>
           <div className="module-kind-legend" aria-label="Ağaç türleri">
-            {(
-              [
-                ['group', 'Proje Grubu'] as const,
-                ['package', 'Jar'] as const,
-                ['service', 'Servis'] as const,
-                ['method', 'Metod'] as const,
-              ] as const
-            ).map(([kind, label]) => (
-              <button
-                key={kind}
-                type="button"
-                className={`module-kind-filter${treeKindFilter.has(kind) ? ' is-on' : ''}`}
-                aria-pressed={treeKindFilter.has(kind)}
-                aria-label={`${label} satırlarını ${treeKindFilter.has(kind) ? 'gizle' : 'göster'}`}
-                onClick={() => toggleTreeKind(kind)}
-              >
-                <TreeKindIcon kind={kind} size={13} />
-                {label}
-              </button>
-            ))}
-            <button
-              type="button"
-              className="tree-density-toggle"
-              aria-pressed={treeDensity === 'compact'}
-              title={treeDensity === 'compact' ? 'Ferah görünüme geç' : 'Sıkı görünüme geç'}
-              onClick={toggleTreeDensity}
-            >
-              {treeDensity === 'compact' ? 'Ferah' : 'Sıkı'}
-            </button>
+            <span className="module-kind-key">
+              <TreeKindIcon kind="group" size={13} />
+              Proje Grubu
+            </span>
+            <span className="module-kind-key">
+              <TreeKindIcon kind="package" size={13} />
+              Jar
+            </span>
+            <span className="module-kind-key">
+              <TreeKindIcon kind="service" size={13} />
+              Servis
+            </span>
+            <span className="module-kind-key">
+              <TreeKindIcon kind="method" size={13} />
+              Metod
+            </span>
           </div>
-          <div
-            className={`module-sidebar-body${treeDensity === 'compact' ? ' is-tree-compact' : ''}`}
-            ref={sidebarBodyRef}
-            tabIndex={-1}
-          >
+          <div className="module-sidebar-body" ref={sidebarBodyRef} tabIndex={-1}>
             <ModuleTree
               nodes={tree}
               selectedServiceId={pivotId}
@@ -1112,9 +1083,6 @@ export default function App() {
               scrollParentRef={sidebarBodyRef}
               showNonServiceMethods={showNonServiceMethods}
               pinServiceId={treePinServiceId}
-              treeDensity={treeDensity}
-              kindFilter={treeKindFilter}
-              expandJarInTree={expandJarInTree}
               keyboardEnabled={!shortcutsOpen}
               onClearPin={() => setTreePinServiceId(undefined)}
               onSelectCatalogNode={selectCatalogNode}
@@ -1170,7 +1138,6 @@ export default function App() {
                 onSelectGroup={(id, name) => selectCatalogNode({ id, kind: 'group', name })}
                 onSelectJar={(id, name) => selectCatalogNode({ id, kind: 'package', name })}
                 onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'tree' })}
-                onOpenJarInTree={openJarInTree}
                 onDismiss={clearSelection}
               />
             </div>

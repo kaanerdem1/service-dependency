@@ -11,7 +11,6 @@ type Props = {
   onSelectGroup: (nodeId: string, name: string) => void
   onSelectJar: (nodeId: string, name: string) => void
   onSelectService: (serviceId: string) => void
-  onOpenJarInTree?: (jarId: string, groupId: string) => void
   onDismiss?: () => void
 }
 
@@ -188,12 +187,10 @@ function GroupOverview({
 function ArtifactOverview({
   detail,
   onSelectService,
-  onOpenJarInTree,
   onDismiss,
 }: {
   detail: CatalogArtifactDetail
   onSelectService: (serviceId: string) => void
-  onOpenJarInTree?: (jarId: string, groupId: string) => void
   onDismiss?: () => void
 }) {
   return (
@@ -219,15 +216,6 @@ function ArtifactOverview({
               <Metric value={detail.serviceCount} label="Servis" />
               <Metric value={detail.classCount} label="Sınıf" />
             </div>
-            {onOpenJarInTree ? (
-              <button
-                type="button"
-                className="ce-open-tree btn ghost compact"
-                onClick={() => onOpenJarInTree(detail.id, detail.group.id)}
-              >
-                Ağaçta aç
-              </button>
-            ) : null}
             {onDismiss ? (
               <button type="button" className="ce-dismiss" onClick={onDismiss}>
                 Seçimi bırak
@@ -311,7 +299,6 @@ export function CatalogEntityOverview({
   kind,
   onSelectJar,
   onSelectService,
-  onOpenJarInTree,
   onDismiss,
 }: Props) {
   const [group, setGroup] = useState<CatalogGroupDetail | null>(null)
@@ -373,7 +360,6 @@ export function CatalogEntityOverview({
         <ArtifactOverview
           detail={artifact}
           onSelectService={onSelectService}
-          onOpenJarInTree={onOpenJarInTree}
           onDismiss={onDismiss}
         />
       ) : null}
