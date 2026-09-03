@@ -162,7 +162,7 @@ function LocationPanel({
   if (locations.length <= 1) {
     return (
       <div className="service-doc-body service-location-compact">
-        <DocItem label="Grup">{primaryGroup}</DocItem>
+        <DocItem label="Proje Grubu">{primaryGroup}</DocItem>
         <DocItem label="Jar" mono>
           {primaryJar}
         </DocItem>
@@ -199,7 +199,7 @@ function LocationFields({
   if (locations.length <= 1) {
     return (
       <div className="service-doc-body service-location-compact">
-        <Field label="Grup" value={service.projectGroupLabel ?? '—'} readOnly />
+        <Field label="Proje Grubu" value={service.projectGroupLabel ?? '—'} readOnly />
         <Field label="Jar" value={locationPackageLabel(service, packageLabel)} readOnly />
       </div>
     )

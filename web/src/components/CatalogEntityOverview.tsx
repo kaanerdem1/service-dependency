@@ -11,6 +11,7 @@ type Props = {
   onSelectGroup: (nodeId: string, name: string) => void
   onSelectJar: (nodeId: string, name: string) => void
   onSelectService: (serviceId: string) => void
+  onOpenJarInTree?: (jarId: string, groupId: string) => void
   onDismiss?: () => void
 }
 
@@ -76,12 +77,12 @@ function GroupOverview({
               <TreeKindIcon kind="group" size={22} />
             </div>
             <div className="ce-hero-copy">
-              <span className="ce-badge">Grup</span>
+              <span className="ce-badge">Proje Grubu</span>
               <h2 className="ce-title">{detail.name}</h2>
               {detail.description ? (
                 <p className="ce-subtitle">{detail.description}</p>
               ) : (
-                <p className="ce-subtitle is-muted">Envanterde grup açıklaması yok.</p>
+                <p className="ce-subtitle is-muted">Envanterde proje grubu açıklaması yok.</p>
               )}
             </div>
           </div>
@@ -187,10 +188,12 @@ function GroupOverview({
 function ArtifactOverview({
   detail,
   onSelectService,
+  onOpenJarInTree,
   onDismiss,
 }: {
   detail: CatalogArtifactDetail
   onSelectService: (serviceId: string) => void
+  onOpenJarInTree?: (jarId: string, groupId: string) => void
   onDismiss?: () => void
 }) {
   return (
@@ -216,6 +219,15 @@ function ArtifactOverview({
               <Metric value={detail.serviceCount} label="Servis" />
               <Metric value={detail.classCount} label="Sınıf" />
             </div>
+            {onOpenJarInTree ? (
+              <button
+                type="button"
+                className="ce-open-tree btn ghost compact"
+                onClick={() => onOpenJarInTree(detail.id, detail.group.id)}
+              >
+                Ağaçta aç
+              </button>
+            ) : null}
             {onDismiss ? (
               <button type="button" className="ce-dismiss" onClick={onDismiss}>
                 Seçimi bırak
@@ -250,7 +262,7 @@ function ArtifactOverview({
                   <dd>{detail.project.name}</dd>
                 </div>
                 <div className="ce-kv-row">
-                  <dt>Grup</dt>
+                  <dt>Proje Grubu</dt>
                   <dd>{detail.group.name}</dd>
                 </div>
               </dl>
@@ -299,6 +311,7 @@ export function CatalogEntityOverview({
   kind,
   onSelectJar,
   onSelectService,
+  onOpenJarInTree,
   onDismiss,
 }: Props) {
   const [group, setGroup] = useState<CatalogGroupDetail | null>(null)
@@ -346,7 +359,7 @@ export function CatalogEntityOverview({
   if (error) {
     return (
       <div className="ce-shell">
-        <EmptyState variant="catalog" what={error} action="Ağaçtan başka bir grup veya jar seçin." />
+        <EmptyState variant="catalog" what={error} action="Ağaçtan başka bir proje grubu veya jar seçin." />
       </div>
     )
   }
@@ -360,6 +373,7 @@ export function CatalogEntityOverview({
         <ArtifactOverview
           detail={artifact}
           onSelectService={onSelectService}
+          onOpenJarInTree={onOpenJarInTree}
           onDismiss={onDismiss}
         />
       ) : null}

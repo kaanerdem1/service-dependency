@@ -1915,9 +1915,97 @@
 .module-kind-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px 10px;
+  align-items: center;
+  gap: 6px 8px;
   margin: 2px 3px 8px;
   flex-shrink: 0;
+}
+
+.module-kind-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--shell-kind-key-fg);
+  user-select: none;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.module-kind-filter.is-on {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: var(--ink);
+}
+
+.module-kind-filter:not(.is-on) {
+  opacity: 0.45;
+}
+
+.module-kind-filter:hover {
+  opacity: 1;
+}
+
+.tree-density-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 6px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  cursor: pointer;
+}
+
+.tree-density-toggle[aria-pressed='true'] {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+}
+
+.tree-density-toggle:hover {
+  color: var(--ink);
+}
+
+.module-sidebar-body.is-tree-compact .module-tree.is-tree-compact .tree-row,
+.module-sidebar-body.is-tree-compact .tree-row {
+  min-height: 24px;
+  grid-template-columns: 16px 16px minmax(0, 1fr);
+  gap: 4px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.module-sidebar-body.is-tree-compact .tree-row.kind-group .tree-label,
+.module-sidebar-body.is-tree-compact .tree-row.kind-project .tree-label {
+  font-size: 10px;
+}
+
+.module-sidebar-body.is-tree-compact .tree-row.kind-group .tree-group-desc {
+  font-size: 9px;
+}
+
+.module-sidebar-body.is-tree-compact .tree-row.kind-package .tree-label,
+.module-sidebar-body.is-tree-compact .tree-row.kind-service .tree-label,
+.module-sidebar-body.is-tree-compact .tree-row.kind-method .tree-label {
+  font-size: 11px;
+}
+
+.module-sidebar-body.is-tree-compact .tree-jar-count {
+  font-size: 9px;
+  padding: 1px 5px;
+}
+
+.ce-hero-end .ce-open-tree {
+  white-space: nowrap;
 }
 
 .module-kind-key {

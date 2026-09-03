@@ -77,7 +77,7 @@ export function TreeKindIcon({ kind, size = 14, className, title }: Props) {
 }
 
 export const TREE_KIND_ICON_SET = [
-  { kind: 'group' as const, label: 'Grup', source: 'Lucide folder' },
+  { kind: 'group' as const, label: 'Proje Grubu', source: 'Lucide folder' },
   { kind: 'package' as const, label: 'Jar', source: 'Lucide package' },
   { kind: 'service' as const, label: 'Servis', source: 'Lucide layers' },
   { kind: 'method' as const, label: 'Metod', source: 'Lucide braces' },
