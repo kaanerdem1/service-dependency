@@ -1,0 +1,2466 @@
+{
+
+    "schema": "env",
+
+    "tables": [
+
+        {
+
+            "name": "artifact",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "project_id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "parent_id",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "kind",
+
+                    "type": "USER-DEFINED",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "name",
+
+                    "type": "text",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "version",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "group_id",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "artifact_id",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "path",
+
+                    "type": "text",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "sha256",
+
+                    "type": "character",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "size_bytes",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "class_count",
+
+                    "type": "integer",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_internal",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_shaded",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "scanned_at",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "call_edge",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "caller_id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "callee_id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "invoke_type",
+
+                    "type": "USER-DEFINED",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "line_number",
+
+                    "type": "integer",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_resolved",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "java_class",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "artifact_id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "fqcn",
+
+                    "type": "text",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "package_name",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "simple_name",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "superclass",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "source_file",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_interface",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_abstract",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_enum",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_synthetic",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "access_flags",
+
+                    "type": "integer",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "major_version",
+
+                    "type": "smallint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+ 
+        {
+
+            "name": "java_method",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "class_id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "name",
+
+                    "type": "text",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "descriptor",
+
+                    "type": "text",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "return_type",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "param_count",
+
+                    "type": "smallint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "access_flags",
+
+                    "type": "integer",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_static",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_abstract",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_synthetic",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_external",
+
+                    "type": "boolean",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "line_start",
+
+                    "type": "integer",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "line_end",
+
+                    "type": "integer",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "service_definition_id",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "process",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "code",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_tr",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_en",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "process_owner_oid",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "process_group",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "group_code",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "domain_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "module_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "process_owner",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "it_owner_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "it_business_owner_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_tr",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_en",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "process_service",
+
+            "columns": [
+
+                {
+
+                    "name": "process_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "service_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "project",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "project_name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "project_description",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "project_type",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "responsible_it_team",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "responsible_business_unit",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "project_group_id",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "project_group",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "project_group_name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description",
+
+                    "type": "text",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+ 
+       {
+
+            "name": "screen",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_tr",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_en",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "page_type",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "screen_process",
+
+            "columns": [
+
+                {
+
+                    "name": "screen_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "process_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "screen_service",
+
+            "columns": [
+
+                {
+
+                    "name": "screen_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "service_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "service",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_tr",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_en",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_financial",
+
+                    "type": "boolean",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_batch",
+
+                    "type": "boolean",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_calling_from_digital",
+
+                    "type": "boolean",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "service_owner_oid",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "process_group_oid",
+
+                    "type": "bigint",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_active",
+
+                    "type": "numeric",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "service_definition",
+
+            "columns": [
+
+                {
+
+                    "name": "id",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "method_name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "service_name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "package_name",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_batch",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp with time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "class_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "is_eod",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "service_description",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "service_params",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+ 
+        {
+
+            "name": "service_owner",
+
+            "columns": [
+
+                {
+
+                    "name": "oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "status",
+
+                    "type": "smallint",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "it_owner_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "it_business_owner_name",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_tr",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "description_en",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "update_user",
+
+                    "type": "character varying",
+
+                    "nullable": true,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "service_process",
+
+            "columns": [
+
+                {
+
+                    "name": "service_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "process_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        },
+
+        {
+
+            "name": "service_service",
+
+            "columns": [
+
+                {
+
+                    "name": "caller_service_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "called_service_oid",
+
+                    "type": "bigint",
+
+                    "nullable": false,
+
+                    "primaryKey": true
+
+                },
+
+                {
+
+                    "name": "create_date",
+
+                    "type": "timestamp without time zone",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                },
+
+                {
+
+                    "name": "create_user",
+
+                    "type": "character varying",
+
+                    "nullable": false,
+
+                    "primaryKey": false
+
+                }
+
+            ]
+
+        }
+
+    ],
+ 
+    "relationships": [
+
+        {
+
+            "name": "fk_artifact_parent",
+
+            "sourceTable": "artifact",
+
+            "targetTable": "artifact",
+
+            "sourceColumn": "parent_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_artifact_project",
+
+            "sourceTable": "artifact",
+
+            "targetTable": "project",
+
+            "sourceColumn": "project_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_edge_callee",
+
+            "sourceTable": "call_edge",
+
+            "targetTable": "java_method",
+
+            "sourceColumn": "callee_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_edge_caller",
+
+            "sourceTable": "call_edge",
+
+            "targetTable": "java_method",
+
+            "sourceColumn": "caller_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_class_artifact",
+
+            "sourceTable": "java_class",
+
+            "targetTable": "artifact",
+
+            "sourceColumn": "artifact_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_java_method_service_definition",
+
+            "sourceTable": "java_method",
+
+            "targetTable": "service_definition",
+
+            "sourceColumn": "service_definition_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "fk_method_class",
+
+            "sourceTable": "java_method",
+
+            "targetTable": "java_class",
+
+            "sourceColumn": "class_id",
+
+            "targetColumn": "id"
+
+        },
+
+        {
+
+            "name": "process_process_owner_oid_fkey",
+
+            "sourceTable": "process",
+
+            "targetTable": "process_owner",
+
+            "sourceColumn": "process_owner_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "process_service_process_oid_fkey",
+
+            "sourceTable": "process_service",
+
+            "targetTable": "process",
+
+            "sourceColumn": "process_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "process_service_service_oid_fkey",
+
+            "sourceTable": "process_service",
+
+            "targetTable": "service",
+
+            "sourceColumn": "service_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "screen_process_process_oid_fkey",
+
+            "sourceTable": "screen_process",
+
+            "targetTable": "process",
+
+            "sourceColumn": "process_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "screen_process_screen_oid_fkey",
+
+            "sourceTable": "screen_process",
+
+            "targetTable": "screen",
+
+            "sourceColumn": "screen_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "screen_service_screen_oid_fkey",
+
+            "sourceTable": "screen_service",
+
+            "targetTable": "screen",
+
+            "sourceColumn": "screen_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "screen_service_service_oid_fkey",
+
+            "sourceTable": "screen_service",
+
+            "targetTable": "service",
+
+            "sourceColumn": "service_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_process_group_oid_fkey",
+
+            "sourceTable": "service",
+
+            "targetTable": "process_group",
+
+            "sourceColumn": "process_group_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_service_owner_oid_fkey",
+
+            "sourceTable": "service",
+
+            "targetTable": "service_owner",
+
+            "sourceColumn": "service_owner_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_process_process_oid_fkey",
+
+            "sourceTable": "service_process",
+
+            "targetTable": "process",
+
+            "sourceColumn": "process_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_process_service_oid_fkey",
+
+            "sourceTable": "service_process",
+
+            "targetTable": "service",
+
+            "sourceColumn": "service_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_service_called_service_oid_fkey",
+
+            "sourceTable": "service_service",
+
+            "targetTable": "service",
+
+            "sourceColumn": "called_service_oid",
+
+            "targetColumn": "oid"
+
+        },
+
+        {
+
+            "name": "service_service_caller_service_oid_fkey",
+
+            "sourceTable": "service_service",
+
+            "targetTable": "service",
+
+            "sourceColumn": "caller_service_oid",
+
+            "targetColumn": "oid"
+
+        }
+
+    ]
+
+}
+ 

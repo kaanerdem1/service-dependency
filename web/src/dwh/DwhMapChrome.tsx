@@ -417,7 +417,7 @@ type BreadcrumbProps = {
   layout?: 'bar' | 'tree'
 }
 
-/** Ana etki yolu (via): örn. Payment → Refund → Notification */
+/** Ziyaret yolu: merkezden odaktaki node'a giden ana zincir. */
 export function PathBreadcrumb({
   centerId,
   focusId,
@@ -427,7 +427,7 @@ export function PathBreadcrumb({
   layout = 'bar',
 }: BreadcrumbProps) {
   const path = useMemo(() => {
-    if (!focusId || focusId.startsWith('collapsed-')) return null
+    if (!focusId || focusId.startsWith('collapsed-') || focusId.startsWith('dwh-collapsed-')) return null
     return discoveryPathTo(centerId, focusId, parents)
   }, [centerId, focusId, parents])
 
@@ -448,9 +448,9 @@ export function PathBreadcrumb({
               />
             </svg>
           </span>
-          <p className="map-info-empty-title">Etki yolunu görün</p>
+          <p className="map-info-empty-title">Ziyaret yolunu görün</p>
           <p className="map-info-empty-cta">
-            Haritada bir servisin üzerine gelin. Merkezden o servise giden yol
+            Haritada bir node'un üzerine gelin. Merkezden o node'a giden yol
             burada listelenir.
           </p>
         </div>
@@ -460,7 +460,7 @@ export function PathBreadcrumb({
       <div className="path-breadcrumb is-idle" aria-live="polite">
         <span className="path-bc-label">Yol</span>
         <span className="path-bc-hint">
-          Haritada bir servisin üzerine gelin — merkezden o servise giden yol
+          Haritada bir node'un üzerine gelin — merkezden o node'a giden yol
           burada görünür.
         </span>
       </div>
@@ -469,7 +469,7 @@ export function PathBreadcrumb({
 
   if (layout === 'tree') {
     return (
-      <nav className="path-bc-tree" aria-label="Ana etki yolu">
+      <nav className="path-bc-tree" aria-label="Ziyaret yolu">
         <ol className="path-bc-tree-list">
           {path.map((id, i) => {
             const name = nameById.get(id) ?? id
@@ -507,8 +507,8 @@ export function PathBreadcrumb({
   }
 
   return (
-    <nav className="path-breadcrumb" aria-label="Ana etki yolu">
-      <span className="path-bc-label">Yol</span>
+    <nav className="path-breadcrumb" aria-label="Ziyaret yolu">
+      <span className="path-bc-label">Ziyaret yolu</span>
       <ol className="path-bc-list">
         {path.map((id, i) => {
           const name = nameById.get(id) ?? id
@@ -702,9 +702,9 @@ export function MapInfoPanel({
 
           <section
             className="map-info-section map-info-via-section"
-            aria-label="Ana etki yolu"
+            aria-label="Ziyaret yolu"
           >
-            <h4 className="map-info-heading">Ana etki yolu</h4>
+            <h4 className="map-info-heading">Ziyaret yolu</h4>
             <PathBreadcrumb
               centerId={centerId}
               focusId={focusId}
@@ -863,6 +863,10 @@ type LayerControlsProps = {
   onExpandLayer: () => void
   onExpandAll: () => void
   onCollapseAll: () => void
+  onVisitBack?: () => void
+  onVisitForward?: () => void
+  canVisitBack?: boolean
+  canVisitForward?: boolean
   onTidyUp?: () => void
   onToggleLayoutMode?: () => void
   layoutMode?: MapLayoutMode
@@ -1347,6 +1351,10 @@ export function MapCanvasBar({
   onExpandLayer,
   onExpandAll,
   onCollapseAll,
+  onVisitBack,
+  onVisitForward,
+  canVisitBack = false,
+  canVisitForward = false,
   onTidyUp,
   onToggleLayoutMode,
   layoutMode = 'ltr',
@@ -1575,6 +1583,31 @@ export function MapCanvasBar({
           >
             <div className="map-dock-expand-inner">
               <div className="map-dock-expand-track">
+          {(onVisitBack || onVisitForward) && (
+            <>
+              <span className="map-dock-sep" aria-hidden />
+              <div className="map-dock-group">
+                <span className="map-dock-group-kicker">Gezinti</span>
+                <DockMagnifyRow>
+                  <DockBtn
+                    label="Önceki ziyaret"
+                    disabled={!canVisitBack}
+                    onClick={onVisitBack}
+                  >
+                    <IconLayerBack />
+                  </DockBtn>
+                  <DockBtn
+                    label="Sonraki ziyaret"
+                    disabled={!canVisitForward}
+                    onClick={onVisitForward}
+                  >
+                    <IconLayerForward />
+                  </DockBtn>
+                </DockMagnifyRow>
+              </div>
+            </>
+          )}
+
           <span className="map-dock-sep" aria-hidden />
 
           <div className="map-dock-group">
@@ -1850,7 +1883,7 @@ export function MapCanvasBar({
                       <span className="map-dock-cascade-count">{cascadeCount}</span>
                     </button>
                     <DockTooltipPortal open={cascadeHover} anchorRef={cascadeRef}>
-                      <strong>{cascadeCount} alternatif rota</strong> — ana etki yoluna
+                      <strong>{cascadeCount} alternatif rota</strong> — ziyaret yoluna
                       girmeyen bağlantılar. Turuncu kesikli oklarla gösterilir.
                       {showCascadeEdges
                         ? ' Haritada görünür — gizlemek için tıkla.'

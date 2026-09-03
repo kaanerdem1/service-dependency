@@ -221,7 +221,7 @@ export function DwhLineageTree({
 
   useEffect(() => {
     setTreeRoot(initialRoot)
-  }, [initialRoot])
+  }, [initialRoot, simple])
 
   const loadChildren = useCallback(
     async (node: TreeNodeState) => {

@@ -57,6 +57,10 @@ type Props = {
   loading?: boolean
   mapExpanded?: boolean
   active?: boolean
+  onVisitBack?: () => void
+  onVisitForward?: () => void
+  canVisitBack?: boolean
+  canVisitForward?: boolean
   onSelectTable: (tableId: number) => void
   onSelectReport: (reportId: number) => void
 }
@@ -87,6 +91,7 @@ const LEFT_X = 40
 const MAX_VISIBLE_PER_LAYER = 5
 const RADIAL_VISIBLE_CAP = 10
 const MIN_COLLAPSE_COUNT = 3
+const DWH_MIN_ZOOM = 0.18
 const EDGE_COLOR = '#2f6f55'
 type DwhLayoutMode = MapLayoutMode | 'swimlane'
 type DwhSwimlaneKey = 'LD' | 'TR' | 'EX' | 'KAYNAK' | 'DIGER'
@@ -1122,6 +1127,10 @@ function DwhLineageMapInner({
   loading,
   mapExpanded = false,
   active = true,
+  onVisitBack,
+  onVisitForward,
+  canVisitBack = false,
+  canVisitForward = false,
   onSelectTable,
   onSelectReport,
 }: Props) {
@@ -1190,7 +1199,10 @@ function DwhLineageMapInner({
 
   const flowLayoutMode: MapLayoutMode = layoutMode === 'swimlane' ? 'ltr' : layoutMode
   const layout = useMemo(
-    () => (layoutMode === 'radial' ? mapLayoutForRadial() : mapLayoutForDepth(visibleMaxHop)),
+    () => {
+      const baseLayout = layoutMode === 'radial' ? mapLayoutForRadial() : mapLayoutForDepth(visibleMaxHop)
+      return { ...baseLayout, minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM) }
+    },
     [layoutMode, visibleMaxHop],
   )
 
@@ -1514,6 +1526,10 @@ function DwhLineageMapInner({
                 setTidyNonce((nonce) => nonce + 1)
               }}
               truncated={graph.truncated}
+              onVisitBack={onVisitBack}
+              onVisitForward={onVisitForward}
+              canVisitBack={canVisitBack}
+              canVisitForward={canVisitForward}
               onCollapseLayer={() => setVisibleMaxHop((hop) => Math.max(1, hop - 1))}
               onExpandLayer={() => setVisibleMaxHop((hop) => Math.min(graphMaxHop, hop + 1))}
               onExpandAll={() => {

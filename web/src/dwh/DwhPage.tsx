@@ -42,6 +42,11 @@ import './DwhPage.css'
 type DwhTab = 'tables' | 'reports'
 type DwhStageTab = 'query' | 'columns' | 'lineage' | 'impact'
 type DetailKind = 'table' | 'report'
+type DwhVisitEntry = {
+  kind: DetailKind
+  id: number
+  name: string
+}
 
 const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['lineage', 'query', 'columns', 'impact']
 
@@ -95,8 +100,57 @@ const DWH_KIND_ICONS = {
   subquery: new URL('../assets/sql-server.png', import.meta.url).href,
 }
 
+function DwhStageVisitPath({
+  steps,
+  currentIndex,
+  onSelect,
+}: {
+  steps: DwhVisitEntry[]
+  currentIndex: number
+  onSelect: (index: number) => void
+}) {
+  if (steps.length === 0) return null
+
+  return (
+    <nav className="stage-visit-path dwh-stage-visit-path" aria-label="Ziyaret yolu">
+      <span className="stage-visit-path-label">Ziyaret yolu</span>
+      <ol className="stage-visit-path-list">
+        {steps.map((step, index) => {
+          const current = index === currentIndex
+          return (
+            <li key={`${step.kind}-${step.id}-${index}`} className="stage-visit-path-item">
+              {index > 0 ? (
+                <span className="stage-visit-path-sep" aria-hidden>
+                  /
+                </span>
+              ) : null}
+              <button
+                type="button"
+                className={`stage-visit-path-btn${current ? ' is-current' : ''}`}
+                title={step.name}
+                aria-current={current ? 'page' : undefined}
+                onClick={() => onSelect(index)}
+              >
+                {step.name}
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </nav>
+  )
+}
+
 function fullTableName(table: Pick<DwhTable, 'schemaName' | 'tableName'>) {
   return table.schemaName ? `${table.schemaName}.${table.tableName}` : table.tableName
+}
+
+function dwhVisitKey(entry: Pick<DwhVisitEntry, 'kind' | 'id'>) {
+  return `${entry.kind}:${entry.id}`
+}
+
+function sameDwhVisit(a: DwhVisitEntry | undefined, b: DwhVisitEntry) {
+  return Boolean(a && a.kind === b.kind && a.id === b.id)
 }
 
 function compactSql(sql: string | null | undefined) {
@@ -755,6 +809,8 @@ export function DwhPage({
   const [columns, setColumns] = useState<DwhColumn[]>([])
   const [statements, setStatements] = useState<DwhSqlStatement[]>([])
   const [selectedReport, setSelectedReport] = useState<DwhReportDetail>()
+  const [visitHistory, setVisitHistory] = useState<DwhVisitEntry[]>([])
+  const [visitIndex, setVisitIndex] = useState(-1)
   const [impact, setImpact] = useState<DwhTableImpact>()
   const [detailKind, setDetailKind] = useState<DetailKind>('table')
   const [simpleTree, setSimpleTree] = useState(false)
@@ -773,6 +829,111 @@ export function DwhPage({
   const pageStyle = {
     '--dwh-sidebar-panel-width': `${sidebarWidth}px`,
   } as CSSProperties
+
+  const entityNameByVisitKey = useMemo(() => {
+    const names = new Map<string, string>()
+    for (const table of tables) {
+      names.set(dwhVisitKey({ kind: 'table', id: table.tableId }), fullTableName(table))
+    }
+    for (const report of reports) {
+      names.set(dwhVisitKey({ kind: 'report', id: report.reportId }), report.reportName)
+    }
+    if (selectedTable) {
+      names.set(dwhVisitKey({ kind: 'table', id: selectedTable.tableId }), fullTableName(selectedTable))
+    }
+    if (selectedReport) {
+      names.set(dwhVisitKey({ kind: 'report', id: selectedReport.reportId }), selectedReport.reportName)
+    }
+    for (const node of lineageGraph?.nodes ?? []) {
+      if (node.entityKind === 'table' && node.tableId) {
+        names.set(dwhVisitKey({ kind: 'table', id: node.tableId }), node.label)
+      }
+      if (node.entityKind === 'report' && node.reportId) {
+        names.set(dwhVisitKey({ kind: 'report', id: node.reportId }), node.label)
+      }
+    }
+    return names
+  }, [lineageGraph, reports, selectedReport, selectedTable, tables])
+
+  const dwhVisitName = useCallback(
+    (kind: DetailKind, id: number) =>
+      entityNameByVisitKey.get(dwhVisitKey({ kind, id })) ??
+      (kind === 'table' ? `Tablo ${id}` : `Rapor ${id}`),
+    [entityNameByVisitKey],
+  )
+
+  const applyDwhVisit = useCallback((entry: DwhVisitEntry) => {
+    if (entry.kind === 'table') {
+      setRootTableId(entry.id)
+      setSelectedTableId(entry.id)
+      setRootReportId(undefined)
+      setSelectedReportId(undefined)
+      setCatalogTab('tables')
+      setDetailKind('table')
+    } else {
+      setRootReportId(entry.id)
+      setSelectedReportId(entry.id)
+      setRootTableId(undefined)
+      setSelectedTableId(undefined)
+      setCatalogTab('reports')
+      setDetailKind('report')
+    }
+    setStageTab('lineage')
+    setQuery('')
+  }, [])
+
+  const selectDwhVisit = useCallback(
+    (entry: DwhVisitEntry, options?: { resetHistory?: boolean }) => {
+      applyDwhVisit(entry)
+      if (options?.resetHistory) {
+        setVisitHistory([entry])
+        setVisitIndex(0)
+        return
+      }
+      setVisitHistory((current) => {
+        const currentIndex = visitIndex >= 0 ? visitIndex : current.length - 1
+        if (sameDwhVisit(current[currentIndex], entry)) {
+          setVisitIndex(Math.max(0, currentIndex))
+          return current
+        }
+        const next = [...current.slice(0, currentIndex + 1), entry]
+        setVisitIndex(next.length - 1)
+        return next
+      })
+    },
+    [applyDwhVisit, visitIndex],
+  )
+
+  const selectDwhVisitIndex = useCallback(
+    (index: number) => {
+      const entry = visitHistory[index]
+      if (!entry) return
+      setVisitIndex(index)
+      setMapExpanded(false)
+      applyDwhVisit(entry)
+    },
+    [applyDwhVisit, visitHistory],
+  )
+
+  const goDwhVisitBack = useCallback(() => {
+    if (visitIndex <= 0) return
+    const nextIndex = visitIndex - 1
+    const entry = visitHistory[nextIndex]
+    if (!entry) return
+    setVisitIndex(nextIndex)
+    setMapExpanded(false)
+    applyDwhVisit(entry)
+  }, [applyDwhVisit, visitHistory, visitIndex])
+
+  const goDwhVisitForward = useCallback(() => {
+    if (visitIndex < 0 || visitIndex >= visitHistory.length - 1) return
+    const nextIndex = visitIndex + 1
+    const entry = visitHistory[nextIndex]
+    if (!entry) return
+    setVisitIndex(nextIndex)
+    setMapExpanded(false)
+    applyDwhVisit(entry)
+  }, [applyDwhVisit, visitHistory, visitIndex])
 
   useEffect(() => {
     let cancelled = false
@@ -870,8 +1031,8 @@ export function DwhPage({
     setLoadingGraph(true)
     const load =
       detailKind === 'table'
-        ? getDwhTableLineageGraph(selectedId, 25, simpleTree)
-        : getDwhReportLineageGraph(selectedId, 25, simpleTree)
+        ? getDwhTableLineageGraph(selectedId, 25)
+        : getDwhReportLineageGraph(selectedId, 25)
     void load
       .then((graph) => {
         if (cancelled) return
@@ -887,7 +1048,7 @@ export function DwhPage({
     return () => {
       cancelled = true
     }
-  }, [detailKind, selectedTableId, selectedReportId, simpleTree])
+  }, [detailKind, selectedTableId, selectedReportId])
 
   useEffect(() => {
     if (detailKind !== 'table' || !selectedTableId) {
@@ -940,25 +1101,31 @@ export function DwhPage({
     if (detailKind === 'table' && selectedTable) return fullTableName(selectedTable)
     return heading
   }, [detailKind, heading, selectedReport, selectedTable])
+  const visitSteps = useMemo(
+    () =>
+      visitIndex >= 0
+        ? visitHistory.slice(0, visitIndex + 1).map((entry) => ({
+            ...entry,
+            name: entityNameByVisitKey.get(dwhVisitKey(entry)) ?? entry.name,
+          }))
+        : [],
+    [entityNameByVisitKey, visitHistory, visitIndex],
+  )
   const hasQuery = query.trim().length > 0
   const searchOpen = hasQuery
 
   const selectTableRoot = (table: DwhTable) => {
-    setRootTableId(table.tableId)
-    setSelectedTableId(table.tableId)
-    setRootReportId(undefined)
-    setDetailKind('table')
-    setStageTab('lineage')
-    setQuery('')
+    selectDwhVisit(
+      { kind: 'table', id: table.tableId, name: fullTableName(table) },
+      { resetHistory: true },
+    )
   }
 
   const selectReportRoot = (report: DwhReport) => {
-    setRootReportId(report.reportId)
-    setSelectedReportId(report.reportId)
-    setRootTableId(undefined)
-    setDetailKind('report')
-    setStageTab('lineage')
-    setQuery('')
+    selectDwhVisit(
+      { kind: 'report', id: report.reportId, name: report.reportName },
+      { resetHistory: true },
+    )
   }
 
   const toggleSidebarPinned = useCallback(() => {
@@ -1031,6 +1198,13 @@ export function DwhPage({
             setStageTab(next)
           }}
         />
+        {stageTab === 'lineage' ? (
+          <DwhStageVisitPath
+            steps={visitSteps}
+            currentIndex={visitIndex}
+            onSelect={selectDwhVisitIndex}
+          />
+        ) : null}
       </div>
 
       {error ? <div className="dwh-error">{error}</div> : null}
@@ -1194,16 +1368,14 @@ export function DwhPage({
             <div className="dwh-sidebar-body">
               <div className="dwh-tree-head">
                 <span>Lineage</span>
-                {catalogTab === 'tables' ? (
-                  <label className="dwh-simple-toggle">
-                    <input
-                      type="checkbox"
-                      checked={simpleTree}
-                      onChange={(e) => setSimpleTree(e.target.checked)}
-                    />
-                    Basit
-                  </label>
-                ) : null}
+                <label className="dwh-simple-toggle">
+                  <input
+                    type="checkbox"
+                    checked={simpleTree}
+                    onChange={(e) => setSimpleTree(e.target.checked)}
+                  />
+                  Alt sorgusuz
+                </label>
               </div>
               <DwhLineageTree
                 root={treeRoot}
@@ -1211,14 +1383,18 @@ export function DwhPage({
                 selectedTableId={detailKind === 'table' ? selectedTableId : undefined}
                 selectedReportId={detailKind === 'report' ? selectedReportId : undefined}
                 onSelectTable={(tableId) => {
-                  setSelectedTableId(tableId)
-                  setDetailKind('table')
-                  setStageTab('lineage')
+                  selectDwhVisit({
+                    kind: 'table',
+                    id: tableId,
+                    name: dwhVisitName('table', tableId),
+                  })
                 }}
                 onSelectReport={(reportId) => {
-                  setSelectedReportId(reportId)
-                  setDetailKind('report')
-                  setStageTab('lineage')
+                  selectDwhVisit({
+                    kind: 'report',
+                    id: reportId,
+                    name: dwhVisitName('report', reportId),
+                  })
                 }}
               />
             </div>
@@ -1254,13 +1430,23 @@ export function DwhPage({
                   loading={loadingGraph}
                   mapExpanded={mapExpanded}
                   active={stageTab === 'lineage'}
+                  onVisitBack={goDwhVisitBack}
+                  onVisitForward={goDwhVisitForward}
+                  canVisitBack={visitIndex > 0}
+                  canVisitForward={visitIndex >= 0 && visitIndex < visitHistory.length - 1}
                   onSelectTable={(tableId) => {
-                    setSelectedTableId(tableId)
-                    setDetailKind('table')
+                    selectDwhVisit({
+                      kind: 'table',
+                      id: tableId,
+                      name: dwhVisitName('table', tableId),
+                    })
                   }}
                   onSelectReport={(reportId) => {
-                    setSelectedReportId(reportId)
-                    setDetailKind('report')
+                    selectDwhVisit({
+                      kind: 'report',
+                      id: reportId,
+                      name: dwhVisitName('report', reportId),
+                    })
                   }}
                 />
               </MapStage>
