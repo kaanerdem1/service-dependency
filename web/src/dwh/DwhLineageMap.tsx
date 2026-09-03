@@ -7,6 +7,7 @@ import ReactFlow, {
   MarkerType,
   Position,
   ReactFlowProvider,
+  getBezierPath,
   getStraightPath,
   useEdgesState,
   useNodesState,
@@ -116,6 +117,9 @@ type DwhEdgeData = {
   targetEntityId?: string
   statementIds?: number[]
   hop?: number
+  fanIndex?: number
+  fanCount?: number
+  sameColumn?: boolean
   cx?: number
   cy?: number
   sx?: number
@@ -142,6 +146,55 @@ const EMPTY_GRAPH_STATS: GraphNodeStats = {
   targetDirect: 0,
   targetIndirect: 0,
   targetTotal: 0,
+}
+
+function DwhFanEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  style,
+  markerEnd,
+  data,
+}: EdgeProps<DwhEdgeData>) {
+  const fan = data?.fanIndex ?? 0
+  const fanCount = Math.max(1, data?.fanCount ?? 1)
+  const mid = (fanCount - 1) / 2
+  const spread = (fan - mid) * 26
+  const sameColumn = data?.sameColumn === true || Math.abs(sourceX - targetX) < 28
+
+  let edgePath: string
+  if (sameColumn) {
+    const bulge = Math.max(sourceX, targetX) + 118 + fan * 38 + Math.abs(spread) * 0.45
+    const y1 = sourceY + spread * 0.28
+    const y2 = targetY + spread * 0.28
+    edgePath = `M ${sourceX},${sourceY} C ${bulge},${y1} ${bulge},${y2} ${targetX},${targetY}`
+  } else {
+    const curvature = 0.52 + Math.abs(fan - mid) * 0.04
+    const [path] = getBezierPath({
+      sourceX,
+      sourceY: sourceY + spread * 0.2,
+      targetX,
+      targetY: targetY + spread * 0.2,
+      sourcePosition,
+      targetPosition,
+      curvature,
+    })
+    edgePath = path
+  }
+
+  return (
+    <BaseEdge
+      id={id}
+      path={edgePath}
+      style={style}
+      markerEnd={markerEnd}
+      interactionWidth={28}
+    />
+  )
 }
 
 function DwhRadialEdge({
@@ -196,9 +249,11 @@ function DwhRadialEdge({
   )
 }
 
+const DwhFanEdgeMemo = memo(DwhFanEdge)
 const DwhRadialEdgeMemo = memo(DwhRadialEdge)
 
 const DWH_EDGE_TYPES = {
+  fan: DwhFanEdgeMemo,
   radial: DwhRadialEdgeMemo,
 }
 
@@ -740,7 +795,7 @@ function buildDwhSwimlaneEdges(
           target: edge.source,
           sourceHandle: 'out',
           targetHandle: 'in',
-          type: 'smoothstep',
+          type: 'fan',
           className: [
             'dd-edge dwh-edge',
             kind === 'reportSql' && 'report-link',
@@ -950,7 +1005,7 @@ function buildDwhMap(
       target: visualTarget,
       sourceHandle: 'out',
       targetHandle: 'in',
-      type: radialTree ? 'radial' : 'smoothstep',
+      type: radialTree ? 'radial' : 'fan',
       className: [
         'dd-edge dwh-edge',
         radialTree && 'radial-link',
@@ -1072,7 +1127,7 @@ function DwhLineageMapInner({
 }: Props) {
   const graphMaxHop = useMemo(() => maxHop(graph), [graph])
   const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set())
-  const [visibleMaxHop, setVisibleMaxHop] = useState(graphMaxHop)
+  const [visibleMaxHop, setVisibleMaxHop] = useState(1)
   const [layoutMode, setLayoutMode] = useState<DwhLayoutMode>('ltr')
   const [focusId, setFocusId] = useState<string | null>(null)
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(graph?.rootId ?? null)
@@ -1105,18 +1160,25 @@ function DwhLineageMapInner({
   }, [active, graph, infoPanelOpen])
 
   useEffect(() => {
-    setVisibleMaxHop(graphMaxHop)
+    setVisibleMaxHop(1)
     setExpandedLayers(new Set())
     setFocusId(null)
     setInspectedNodeId(graph?.rootId ?? null)
     setInfoPanelOpen(true)
     layoutDirtyRef.current = false
-  }, [graph?.rootId, graphMaxHop])
+  }, [graph?.rootId])
 
   const inspectedNode = useMemo(
-    () => graph?.nodes.find((node) => node.id === inspectedNodeId),
-    [graph?.nodes, inspectedNodeId],
+    () => {
+      if (!graph) return undefined
+      const hoverNode = focusId
+        ? graph.nodes.find((node) => node.id === focusId)
+        : undefined
+      return hoverNode ?? graph.nodes.find((node) => node.id === inspectedNodeId)
+    },
+    [focusId, graph, inspectedNodeId],
   )
+  const inspectedNodeRenderId = inspectedNode?.id ?? null
 
   const graphNodeStats = useMemo(
     () =>
@@ -1295,7 +1357,7 @@ function DwhLineageMapInner({
     root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
-      el.classList.toggle('dwh-node-inspected', id === inspectedNodeId)
+      el.classList.toggle('dwh-node-inspected', id === inspectedNodeRenderId)
       if (!active) return
       const on =
         id === focusId ||
@@ -1318,7 +1380,7 @@ function DwhLineageMapInner({
       const on = edge && (edge.source === focusId || edge.target === focusId)
       el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
     })
-  }, [edges, focusId, inspectedNodeId])
+  }, [edges, focusId, inspectedNodeRenderId])
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<DwhNodeData>) => {
@@ -1334,8 +1396,15 @@ function DwhLineageMapInner({
       setInspectedNodeId(node.id)
       setInfoPanelOpen(true)
       setFocusId(node.id)
+      if (node.data.entityKind === 'table' && node.data.tableId) {
+        onSelectTable(node.data.tableId)
+        return
+      }
+      if (node.data.entityKind === 'report' && node.data.reportId) {
+        onSelectReport(node.data.reportId)
+      }
     },
-    [],
+    [onSelectReport, onSelectTable],
   )
 
   if (loading) {

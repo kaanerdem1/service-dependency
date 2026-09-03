@@ -89,6 +89,12 @@ const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
   },
 ]
 
+const DWH_KIND_ICONS = {
+  table: new URL('../assets/table.png', import.meta.url).href,
+  report: new URL('../assets/file.png', import.meta.url).href,
+  subquery: new URL('../assets/sql-server.png', import.meta.url).href,
+}
+
 function fullTableName(table: Pick<DwhTable, 'schemaName' | 'tableName'>) {
   return table.schemaName ? `${table.schemaName}.${table.tableName}` : table.tableName
 }
@@ -202,6 +208,14 @@ function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
         strokeLinecap="round"
       />
     </svg>
+  )
+}
+
+function DwhKindIconBadge({ kind }: { kind: 'table' | 'report' | 'subquery' }) {
+  return (
+    <span className={`dwh-kind-badge is-dwh-${kind}`} aria-hidden>
+      <img src={DWH_KIND_ICONS[kind]} alt="" aria-hidden />
+    </span>
   )
 }
 
@@ -1034,9 +1048,9 @@ export function DwhPage({
           <div className="dwh-sidebar-rail" aria-hidden={sidebarExpanded}>
             <span className="dwh-sidebar-rail-label">DWH</span>
             <div className="dwh-sidebar-rail-kinds" aria-hidden>
-              <span className="dwh-kind-badge is-dwh-table">T</span>
-              <span className="dwh-kind-badge is-dwh-report">R</span>
-              <span className="dwh-kind-badge is-dwh-subquery">Q</span>
+              <DwhKindIconBadge kind="table" />
+              <DwhKindIconBadge kind="report" />
+              <DwhKindIconBadge kind="subquery" />
             </div>
             <span className="dwh-sidebar-rail-hint">Paneli Aç</span>
           </div>
@@ -1164,15 +1178,15 @@ export function DwhPage({
 
             <div className="dwh-kind-legend" aria-label="DWH ağaç türleri">
               <span className="dwh-kind-key">
-                <span className="dwh-kind-badge is-dwh-table" aria-hidden>T</span>
+                <DwhKindIconBadge kind="table" />
                 Tablo
               </span>
               <span className="dwh-kind-key">
-                <span className="dwh-kind-badge is-dwh-report" aria-hidden>R</span>
+                <DwhKindIconBadge kind="report" />
                 Rapor
               </span>
               <span className="dwh-kind-key">
-                <span className="dwh-kind-badge is-dwh-subquery" aria-hidden>Q</span>
+                <DwhKindIconBadge kind="subquery" />
                 Alt Sorgu
               </span>
             </div>

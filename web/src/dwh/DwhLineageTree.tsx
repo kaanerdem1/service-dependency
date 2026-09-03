@@ -38,6 +38,12 @@ const KIND_INITIAL: Record<DwhTreeNode['kind'] | 'cycle', string> = {
   cycle: '!',
 }
 
+const KIND_ICON_SRC: Partial<Record<DwhTreeNode['kind'], string>> = {
+  table: new URL('../assets/table.png', import.meta.url).href,
+  report: new URL('../assets/file.png', import.meta.url).href,
+  subquery: new URL('../assets/sql-server.png', import.meta.url).href,
+}
+
 function tableFullName(table: Pick<DwhTable, 'schemaName' | 'tableName'>) {
   return table.schemaName ? `${table.schemaName}.${table.tableName}` : table.tableName
 }
@@ -157,7 +163,11 @@ function TreeItem({
           <span className="dwh-chev-spacer" />
         )}
         <span className={`dwh-tree-kind is-dwh-${kind}`} title={nodeKindLabel(node)}>
-          {KIND_INITIAL[kind]}
+          {node.kind !== 'empty' && !node.cycle && KIND_ICON_SRC[node.kind] ? (
+            <img src={KIND_ICON_SRC[node.kind]} alt="" aria-hidden />
+          ) : (
+            KIND_INITIAL[kind]
+          )}
         </span>
         <button
           type="button"
