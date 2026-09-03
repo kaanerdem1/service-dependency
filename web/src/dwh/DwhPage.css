@@ -215,6 +215,16 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   pointer-events: auto;
 }
 
+.dwh-sidebar-rail .module-sidebar-surface-switch {
+  width: 100%;
+}
+
+.dwh-sidebar-rail .module-sidebar-surface-switch button {
+  min-height: 22px;
+  padding: 3px 2px;
+  font-size: 9.5px;
+}
+
 .dwh-sidebar-rail-label {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -268,18 +278,17 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-sidebar-pin-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
   min-height: 28px;
-  padding: 0 9px 0 7px;
+  padding: 0;
   border: 1px solid #cfd6dc;
   border-radius: 8px;
   background: linear-gradient(180deg, #ffffff 0%, #f0f4f7 100%);
   color: #2a3840;
   font: inherit;
-  font-size: 10.5px;
-  font-weight: 700;
   line-height: 1;
   cursor: pointer;
   flex-shrink: 0;

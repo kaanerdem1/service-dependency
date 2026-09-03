@@ -190,38 +190,15 @@ function Metric({ label, value }: { label: string; value: number | string }) {
   )
 }
 
-function DwhSidebarLockIcon({ locked }: { locked: boolean }) {
-  if (locked) {
-    return (
-      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-        <rect x="4.25" y="7" width="7.5" height="5.75" rx="1.2" fill="currentColor" />
-        <path
-          d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.35"
-          strokeLinecap="round"
-        />
-      </svg>
-    )
-  }
+function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden>
-      <rect
-        x="4.25"
-        y="7"
-        width="7.5"
-        height="5.75"
-        rx="1.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.25"
-      />
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-pin-icon">
       <path
-        d="M6.1 7V5.6a1.9 1.9 0 1 1 3.8 0V7"
-        fill="none"
+        d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03-1 1.03 1v-7H19v-2c-1.66 0-3-1.34-3-3z"
+        fill={pinned ? 'currentColor' : 'none'}
         stroke="currentColor"
-        strokeWidth="1.25"
+        strokeWidth={pinned ? 0 : 1.5}
+        strokeLinejoin="round"
         strokeLinecap="round"
       />
     </svg>
@@ -1085,11 +1062,11 @@ export function DwhPage({
                 className={`dwh-sidebar-pin-btn${sidebarPinned ? ' is-pinned' : ''}`}
                 title={sidebarPinned ? 'Sabitlemeyi bırak' : 'Paneli sabitle'}
                 aria-label={sidebarPinned ? 'DWH paneli sabitli, sabitlemeyi bırak' : 'DWH panelini sabitle'}
+                aria-expanded={sidebarExpanded}
                 aria-pressed={sidebarPinned}
                 onClick={toggleSidebarPinned}
               >
-                <DwhSidebarLockIcon locked={sidebarPinned} />
-                <span>{sidebarPinned ? 'Sabitlemeyi Bırak' : 'Paneli Sabitle'}</span>
+                <DwhSidebarPinIcon pinned={sidebarPinned} />
               </button>
             </div>
 
