@@ -43,6 +43,58 @@ export type DwhReportColumn = {
   confidence?: 'KESIN' | 'TAHMIN' | null
 }
 
+export type DwhColumnLineageSource = {
+  id: string
+  sourceColumnId?: number | null
+  sourceTableId?: number | null
+  sourceTableName?: string | null
+  sourceColumnName?: string | null
+  transformationType?: string | null
+  confidence?: 'KESIN' | 'TAHMIN' | null
+  statementId?: number | null
+  packageName?: string | null
+  procedureName?: string | null
+}
+
+export type DwhColumnLineageTarget = {
+  id: string
+  targetColumnId?: number | null
+  targetColumnName: string
+  ordinal?: number | null
+  sources: DwhColumnLineageSource[]
+}
+
+export type DwhColumnLineageResponse = {
+  entityKind: 'table' | 'report'
+  table?: DwhTable
+  report?: DwhReport
+  targets: DwhColumnLineageTarget[]
+  totalColumns: number
+}
+
+export type DwhColumnAncestryStep = {
+  id: string
+  level: number
+  sourceColumnId: number
+  sourceTableId: number
+  sourceTableName: string
+  sourceColumnName: string
+  downstreamColumnId: number
+  downstreamTableName: string
+  downstreamColumnName: string
+  transformationType?: string | null
+  confidence?: 'KESIN' | 'TAHMIN' | null
+  pathText: string
+  original: boolean
+}
+
+export type DwhColumnAncestryResponse = {
+  columnId: number
+  columnName: string
+  tableName: string
+  steps: DwhColumnAncestryStep[]
+}
+
 export type DwhSqlStatement = {
   id: string
   statementId: number
@@ -78,7 +130,7 @@ export type DwhReportDetail = DwhReport & {
 export type DwhTreeConnection =
   | {
       type: 'statement'
-      targetTableId: number
+      targetTableId?: number
       sourceTableId: number
       statementIds: number[]
     }

@@ -29,15 +29,14 @@ function tableNode(row: SourceTableRow, targetTableId?: number): DwhTreeNode {
     layer: row.katman,
     sourceCount,
     hasChildren: sourceCount > 0,
-    connection:
-      targetTableId && row.statement_ids
-        ? {
-            type: 'statement',
-            targetTableId,
-            sourceTableId: row.table_id,
-            statementIds: row.statement_ids.map(Number),
-          }
-        : undefined,
+    connection: row.statement_ids
+      ? {
+          type: 'statement',
+          targetTableId,
+          sourceTableId: row.table_id,
+          statementIds: row.statement_ids.map(Number),
+        }
+      : undefined,
   }
 }
 

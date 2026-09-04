@@ -43,6 +43,9 @@ export function MapViewportSync({
   onNavDirectionConsumed,
   userInteracting = false,
   viewportSyncKey = 0,
+  topAligned = false,
+  readableMinZoom,
+  rightAlignOnLayerChange = false,
 }: {
   centerId: string
   visibleMaxHop: number
@@ -55,12 +58,17 @@ export function MapViewportSync({
   onNavDirectionConsumed?: () => void
   userInteracting?: boolean
   viewportSyncKey?: number
+  topAligned?: boolean
+  readableMinZoom?: number
+  rightAlignOnLayerChange?: boolean
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
   const prevHop = useRef(visibleMaxHop)
   const prevSyncKey = useRef(viewportSyncKey)
   const pendingHopFit = useRef(false)
+  const pendingLayerShift = useRef(false)
+  const prevLayoutMode = useRef(layoutMode)
   const drawerOpenRef = useRef(drawerOpen)
   drawerOpenRef.current = drawerOpen
   const mapExpandedRef = useRef(mapExpanded)
@@ -77,7 +85,7 @@ export function MapViewportSync({
   const paneH = useStore((s) => s.height)
 
   const fitZoomBounds = () => ({
-    minZoom: autoFitMinZoom(layout, visibleMaxHop),
+    minZoom: Math.max(autoFitMinZoom(layout, visibleMaxHop), readableMinZoom ?? 0),
     maxZoom: layout.maxZoom,
   })
 
@@ -85,6 +93,62 @@ export function MapViewportSync({
     rf
       .getNodes()
       .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge' || n.type === 'dwhNode')
+
+  const fitTopAligned = async (duration: number, preserveZoom = false) => {
+    if (paneW <= 0 || paneH <= 0) return false
+    const nodes = fitTargetNodes()
+    const topNodes = nodes.filter((node) => {
+      const data = node.data as { kind?: string } | undefined
+      return data?.kind === 'layerHeader' || data?.kind === 'center' || node.position.y <= 140
+    })
+    const targets = topNodes.length ? topNodes : nodes
+    if (!targets.length) return false
+
+    const bounds = targets.reduce(
+      (acc, node) => {
+        const styleWidth = typeof node.style?.width === 'number' ? node.style.width : undefined
+        const styleHeight = typeof node.style?.height === 'number' ? node.style.height : undefined
+        const width = node.width ?? styleWidth ?? layout.nodeW
+        const height = node.height ?? styleHeight ?? 72
+        return {
+          minX: Math.min(acc.minX, node.position.x),
+          minY: Math.min(acc.minY, node.position.y),
+          maxX: Math.max(acc.maxX, node.position.x + width),
+          maxY: Math.max(acc.maxY, node.position.y + height),
+        }
+      },
+      {
+        minX: Number.POSITIVE_INFINITY,
+        minY: Number.POSITIVE_INFINITY,
+        maxX: Number.NEGATIVE_INFINITY,
+        maxY: Number.NEGATIVE_INFINITY,
+      },
+    )
+    if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY)) return false
+
+    const { minZoom, maxZoom } = fitZoomBounds()
+    const horizontalPad = mapExpandedRef.current ? 56 : 42
+    const topPad = mapExpandedRef.current ? 58 : 48
+    const width = Math.max(1, bounds.maxX - bounds.minX)
+    const fittedZoom = (paneW - horizontalPad * 2) / width
+    const currentZoom = rf.getViewport().zoom
+    const zoom = preserveZoom
+      ? Math.min(layout.maxZoom, Math.max(layout.minZoom, currentZoom))
+      : Math.min(maxZoom, Math.max(minZoom, fittedZoom))
+    const x = preserveZoom && rightAlignOnLayerChange
+      ? paneW - horizontalPad - bounds.maxX * zoom
+      : horizontalPad - bounds.minX * zoom
+    await rf.setViewport(
+      {
+        x,
+        y: topPad - bounds.minY * zoom,
+        zoom,
+      },
+      { duration },
+    )
+    lastSyncAt.current = Date.now()
+    return true
+  }
 
   const collectRadialItems = () => {
     return rf.getNodes().flatMap((n) => {
@@ -123,6 +187,7 @@ export function MapViewportSync({
   const focusViewport = async (
     duration: number,
     mode: MapLayoutMode,
+    preserveLayerZoom = false,
   ) => {
     if (syncingRef.current || interactingRef.current) return
     syncingRef.current = true
@@ -169,6 +234,10 @@ export function MapViewportSync({
         }
       }
 
+      if (topAligned && mode !== 'radial' && (await fitTopAligned(duration, preserveLayerZoom))) {
+        return
+      }
+
       if (fitOpts.nodes.length > 0) {
         await rf.fitView({ ...fitOpts, duration })
       } else {
@@ -184,12 +253,15 @@ export function MapViewportSync({
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
     const hopChanged = prevHop.current !== visibleMaxHop
+    const modeChanged = prevLayoutMode.current !== layoutMode
     const syncKeyChanged = prevSyncKey.current !== viewportSyncKey
     prevCenter.current = centerId
+    prevLayoutMode.current = layoutMode
     prevSyncKey.current = viewportSyncKey
     if (hopChanged) {
       prevHop.current = visibleMaxHop
       pendingHopFit.current = true
+      pendingLayerShift.current = rightAlignOnLayerChange && !centerChanged && !modeChanged
       if (!centerChanged) return
     } else {
       prevHop.current = visibleMaxHop
@@ -199,6 +271,7 @@ export function MapViewportSync({
     if (deferHop) return
 
     const shouldRetryHopFit = pendingHopFit.current && syncKeyChanged
+    const preserveLayerZoom = pendingLayerShift.current
 
     const delay =
       syncKeyChanged && pendingHopFit.current
@@ -240,8 +313,10 @@ export function MapViewportSync({
         await focusViewport(
           centerChanged ? 320 : pendingHopFit.current ? 360 : 280,
           layoutMode,
+          preserveLayerZoom,
         )
         pendingHopFit.current = false
+        pendingLayerShift.current = false
       })()
     }, delay)
 
@@ -249,7 +324,7 @@ export function MapViewportSync({
     if (shouldRetryHopFit) {
       retryId = window.setTimeout(() => {
         if (interactingRef.current) return
-        void focusViewport(280, layoutMode)
+        void focusViewport(280, layoutMode, preserveLayerZoom)
       }, 340)
     }
 
@@ -266,6 +341,9 @@ export function MapViewportSync({
     layoutMode,
     mapExpanded,
     drawerOpen,
+    topAligned,
+    readableMinZoom,
+    rightAlignOnLayerChange,
     rf,
   ])
 
@@ -279,7 +357,7 @@ export function MapViewportSync({
       void focusViewport(240, layoutMode)
     }, 100)
     return () => window.clearTimeout(id)
-  }, [drawerOpen, layout, layoutMode, rf, visibleMaxHop])
+  }, [drawerOpen, layout, layoutMode, readableMinZoom, rf, topAligned, visibleMaxHop])
 
   const prevPane = useRef(`${Math.round(paneW)}x${Math.round(paneH)}`)
 
@@ -298,6 +376,8 @@ export function MapViewportSync({
     const id = window.setTimeout(() => {
       void (layoutMode === 'radial'
         ? focusViewport(240, 'radial')
+        : topAligned
+          ? focusViewport(240, layoutMode)
         : rf.fitView({
             padding: fitViewPaddingForChrome(layout, {
               drawerOpen: drawerOpenRef.current,
@@ -310,7 +390,7 @@ export function MapViewportSync({
           }))
     }, 100)
     return () => window.clearTimeout(id)
-  }, [paneW, paneH, layout, layoutMode, rf])
+  }, [paneW, paneH, layout, layoutMode, readableMinZoom, rf, topAligned])
 
   return null
 }
@@ -863,10 +943,6 @@ type LayerControlsProps = {
   onExpandLayer: () => void
   onExpandAll: () => void
   onCollapseAll: () => void
-  onVisitBack?: () => void
-  onVisitForward?: () => void
-  canVisitBack?: boolean
-  canVisitForward?: boolean
   onTidyUp?: () => void
   onToggleLayoutMode?: () => void
   layoutMode?: MapLayoutMode
@@ -894,6 +970,13 @@ type LayerControlsProps = {
   }>
   onProjectFiltersChange?: (projectIds: string[]) => void
   onPackageFiltersChange?: (packageIds: string[]) => void
+  layerTitle?: string
+  collapseAllLabel?: string
+  collapseLayerLabel?: string
+  expandLayerLabel?: string
+  expandAllLabel?: string
+  layerStatusLabel?: string
+  autoFitAfterTidy?: boolean
 }
 
 function DockBtn({
@@ -1351,10 +1434,6 @@ export function MapCanvasBar({
   onExpandLayer,
   onExpandAll,
   onCollapseAll,
-  onVisitBack,
-  onVisitForward,
-  canVisitBack = false,
-  canVisitForward = false,
   onTidyUp,
   onToggleLayoutMode,
   layoutMode = 'ltr',
@@ -1376,6 +1455,13 @@ export function MapCanvasBar({
   packageOptions = [],
   onProjectFiltersChange,
   onPackageFiltersChange,
+  layerTitle = 'Katman',
+  collapseAllLabel = 'Sadece 1. katman — doğrudan komşular',
+  collapseLayerLabel,
+  expandLayerLabel,
+  expandAllLabel = 'Tüm etki zincirini aç',
+  layerStatusLabel,
+  autoFitAfterTidy = true,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1388,9 +1474,6 @@ export function MapCanvasBar({
   const radialOn = activeViewMode === 'radial'
   const setViewMode = (mode: MapLayoutMode | 'swimlane') => {
     onSetViewMode?.(mode)
-    window.setTimeout(() => {
-      fitView({ padding: fitPadding, duration: 280 })
-    }, 40)
   }
 
   const rootRef = useRef<HTMLDivElement>(null)
@@ -1583,31 +1666,6 @@ export function MapCanvasBar({
           >
             <div className="map-dock-expand-inner">
               <div className="map-dock-expand-track">
-          {(onVisitBack || onVisitForward) && (
-            <>
-              <span className="map-dock-sep" aria-hidden />
-              <div className="map-dock-group">
-                <span className="map-dock-group-kicker">Gezinti</span>
-                <DockMagnifyRow>
-                  <DockBtn
-                    label="Önceki ziyaret"
-                    disabled={!canVisitBack}
-                    onClick={onVisitBack}
-                  >
-                    <IconLayerBack />
-                  </DockBtn>
-                  <DockBtn
-                    label="Sonraki ziyaret"
-                    disabled={!canVisitForward}
-                    onClick={onVisitForward}
-                  >
-                    <IconLayerForward />
-                  </DockBtn>
-                </DockMagnifyRow>
-              </div>
-            </>
-          )}
-
           <span className="map-dock-sep" aria-hidden />
 
           <div className="map-dock-group">
@@ -1630,9 +1688,11 @@ export function MapCanvasBar({
                   label="Hizala — düğümleri eski düzene al"
                   onClick={() => {
                     onTidyUp()
-                    window.setTimeout(() => {
-                      fitView({ padding: fitPadding, duration: 280 })
-                    }, 40)
+                    if (autoFitAfterTidy) {
+                      window.setTimeout(() => {
+                        fitView({ padding: fitPadding, duration: 280 })
+                      }, 40)
+                    }
                   }}
                 >
                   <IconTidy />
@@ -1687,31 +1747,31 @@ export function MapCanvasBar({
           <span className="map-dock-sep" aria-hidden />
 
           <div className="map-dock-group">
-            <span className="map-dock-group-kicker">Katman</span>
+            <span className="map-dock-group-kicker">{layerTitle}</span>
             <DockMagnifyRow>
               <DockBtn
-                label="Sadece 1. katman — doğrudan komşular"
+                label={collapseAllLabel}
                 disabled={!canCollapse}
                 onClick={onCollapseAll}
               >
                 <IconNeighbors />
               </DockBtn>
               <DockBtn
-                label={canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular'}
+                label={collapseLayerLabel ?? (canCollapse ? 'Bir katman geri' : 'Zaten sadece komşular')}
                 disabled={!canCollapse}
                 onClick={onCollapseLayer}
               >
                 <IconLayerBack />
               </DockBtn>
               <DockHoverTip
-                label={`Katman ${visibleMaxHop} / ${maxHopAvailable} görünür`}
+                label={layerStatusLabel ?? `Katman ${visibleMaxHop} / ${maxHopAvailable} görünür`}
                 className="map-dock-wrap"
               >
                 {({ ref, onMouseEnter, onMouseLeave }) => (
                 <span
                   ref={ref}
                   className="map-dock-hop is-compact"
-                  aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+                  aria-label={`${layerTitle} ${visibleMaxHop} / ${maxHopAvailable} görünür`}
                   onMouseEnter={onMouseEnter}
                   onMouseLeave={onMouseLeave}
                 >
@@ -1725,18 +1785,14 @@ export function MapCanvasBar({
                 )}
               </DockHoverTip>
               <DockBtn
-                label={
-                  nextHop
-                    ? `Bir katman ileri — ${nextHop}. katman`
-                    : 'Tüm katmanlar açık'
-                }
+                label={expandLayerLabel ?? (nextHop ? `Bir katman ileri — ${nextHop}. katman` : 'Tüm katmanlar açık')}
                 disabled={!canExpand}
                 onClick={onExpandLayer}
               >
                 <IconLayerForward />
               </DockBtn>
               <DockBtn
-                label="Tüm etki zincirini aç"
+                label={expandAllLabel}
                 disabled={!canExpand}
                 onClick={onExpandAll}
               >
