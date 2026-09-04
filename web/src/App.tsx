@@ -24,14 +24,14 @@ import { MorphHoverButton } from './motion/MorphHoverButton'
 import { MotionBanner, MotionToast } from './motion/MotionToast'
 import { StageTabs, buildServiceStageTabs, SERVICE_STAGE_TAB_ORDER, type StageTabId } from './motion/StageTabs'
 import { StageTabPanels } from './motion/StageTabPanels'
-import { MapLoadingSkeleton } from './motion/SkeletonShimmer'
+import { MapLoadingSkeleton, SkeletonShimmer } from './motion/SkeletonShimmer'
 import {
   packageLabelsFromTree,
   packagesInImpact,
   projectLabelsFromTree,
   projectsInImpact,
 } from './impact/projectFilter'
-import { AffectedList } from './components/AffectedList'
+import { RelationshipTable } from './components/RelationshipTable'
 import { ChangeRequestModal } from './components/ChangeRequestModal'
 import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
@@ -530,10 +530,6 @@ export default function App() {
     return m
   }, [tree, impact])
   const packageLabels = useMemo(() => packageLabelsFromTree(tree), [tree])
-  const projectOrder = useMemo(
-    () => tree.filter((n) => n.kind === 'project').map((n) => n.id),
-    [tree],
-  )
   const impactProjectOptions = useMemo(
     () => (impact ? projectsInImpact(impact, projectLabels) : []),
     [impact, projectLabels],
@@ -606,16 +602,25 @@ export default function App() {
   )
 
   const selectPivot = useCallback(
-    (id: string, opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' }) => {
+    (
+      id: string,
+      opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' | 'table' },
+    ) => {
       setCatalogNode(null)
-      setTreePinServiceId(opts?.source === 'search' ? id : undefined)
+      setTreePinServiceId(
+        opts?.source === 'search' || opts?.source === 'table' ? id : undefined,
+      )
       if (id === pivotId && !selectedMethodId) {
         clearSelection()
         return
       }
       const label = catalogServices.find((s) => s.id === id)?.name ?? id
       trail.record(
-        opts?.source === 'map' ? 'map_select' : opts?.source === 'search' ? 'search_select' : 'tree_select',
+        opts?.source === 'map'
+          ? 'map_select'
+          : opts?.source === 'search' || opts?.source === 'table'
+            ? 'search_select'
+            : 'tree_select',
         {
         level: 'service',
         id,
@@ -623,9 +628,11 @@ export default function App() {
       },
         opts?.source === 'map'
           ? 'Haritadan yeni servis seçildi'
-          : opts?.source === 'search'
-            ? 'Arama ile servis seçildi'
-            : 'Ağaçtan servis seçildi',
+          : opts?.source === 'table'
+            ? 'Tablodan servis seçildi'
+            : opts?.source === 'search'
+              ? 'Arama ile servis seçildi'
+              : 'Ağaçtan servis seçildi',
       )
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
@@ -1358,21 +1365,35 @@ export default function App() {
                         </button>
                       </div>
                     </div>
-                    <AffectedList
-                      callers={affected}
-                      callees={callees}
-                      loading={loading}
-                      onPivot={(id) => selectPivot(id)}
-                      projectLabels={projectLabels}
-                      projectOrder={projectOrder}
-                      projectFilter={tableProjectFilter}
-                      projectFilterLabel={
-                        tableProjectFilter
-                          ? projectLabels.get(tableProjectFilter) ?? tableProjectFilter
-                          : undefined
-                      }
-                      onClearProjectFilter={() => setTableProjectFilter(undefined)}
-                    />
+                    {service ? (
+                      <RelationshipTable
+                        pivot={service}
+                        impact={impact}
+                        callers={affected}
+                        callees={callees}
+                        loading={loading}
+                        visibleMaxHop={currentVisit?.visibleMaxHop ?? 1}
+                        onVisibleMaxHopChange={(hop) =>
+                          saveMapViewState({
+                            visibleMaxHop: hop,
+                            expandedLayers: currentVisit?.expandedLayers ?? [],
+                          })
+                        }
+                        onPivot={(id) => selectPivot(id, { source: 'table' })}
+                        projectLabels={projectLabels}
+                        projectFilter={tableProjectFilter}
+                        projectFilterLabel={
+                          tableProjectFilter
+                            ? projectLabels.get(tableProjectFilter) ?? tableProjectFilter
+                            : undefined
+                        }
+                        onClearProjectFilter={() => setTableProjectFilter(undefined)}
+                      />
+                    ) : loading ? (
+                      <div className="rel-table-wrap" data-motion="rel-table-skeleton">
+                        <SkeletonShimmer lines={6} />
+                      </div>
+                    ) : null}
                   </section>
 
                   <section

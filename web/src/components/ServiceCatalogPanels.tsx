@@ -202,7 +202,7 @@ export function ServiceScreensStage({
       <header className="stage-catalog-head">
         <h2 className="stage-catalog-title">Ekranlar</h2>
         <p className="stage-catalog-lead">
-          Bu servise bağlı ekran ve region kayıtları (envanter `screen_service`).
+          Bu servise bağlı region ve page kayıtları.
         </p>
       </header>
       <ScreenListPanel
@@ -227,7 +227,7 @@ export function ServiceProcessesStage({
       <header className="stage-catalog-head">
         <h2 className="stage-catalog-title">Process</h2>
         <p className="stage-catalog-lead">
-          Bu servise bağlı iş süreci kayıtları (envanter `process_service`).
+          Bu servise bağlı iş süreci kayıtları.
         </p>
       </header>
       <ProcessListPanel processes={processes} loading={loading} />
