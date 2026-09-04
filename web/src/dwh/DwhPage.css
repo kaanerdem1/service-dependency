@@ -1335,24 +1335,6 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   white-space: nowrap;
 }
 
-.dwh-map-drawer-action {
-  width: 100%;
-  min-height: 34px;
-  border: 1px solid #9cc7b4;
-  border-radius: 8px;
-  background: #dcebe4;
-  color: #17563d;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.dwh-map-drawer-action:hover {
-  border-color: #78b398;
-  background: #cae0d5;
-}
-
 .dwh-map-drawer-empty,
 .dwh-map-drawer-note {
   margin-top: 10px;
@@ -1432,16 +1414,19 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-layer-header-node .dd-node-body {
-  min-height: 44px;
-  border: 1px solid #cfd8dc;
+  min-height: 48px;
+  padding: 8px 12px 9px;
+  border: 1px solid rgba(155, 184, 171, 0.72);
+  border-top: 3px solid #2f6f55;
   border-radius: 8px;
-  background: rgba(245, 248, 249, 0.92);
-  color: #52625b;
-  box-shadow: none;
+  background: rgba(255, 255, 255, 0.82);
+  color: #43514a;
+  box-shadow: 0 5px 16px rgba(40, 35, 28, 0.05);
 }
 
 .dwh-layer-header-node .dd-node-label {
-  color: #245f46;
+  display: block;
+  color: #17563d;
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0;
@@ -1449,10 +1434,17 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-layer-header-node .dd-node-hop {
-  margin-top: 2px;
-  color: #7b858e;
-  font-size: 10px;
-  font-weight: 750;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #eef6f1;
+  color: #607069;
+  font-size: 10.5px;
+  font-weight: 800;
 }
 
 .dwh-map-node.kind-report .dd-node-body {
