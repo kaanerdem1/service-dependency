@@ -1,5 +1,10 @@
 import { Router } from 'express'
 import { DWH_SCHEMA, query } from './db.js'
+import {
+  getColumnAncestry,
+  getReportColumnLineage,
+  getTableColumnLineage,
+} from './columnLineageService.js'
 import { buildReportLineageGraph, buildTableLineageGraph } from './graphService.js'
 import { getTableImpact } from './impactService.js'
 import { getReportMapSummary, getTableMapSummary } from './mapSummaryService.js'
@@ -65,6 +70,18 @@ dwhRouter.get('/tables/:tableId/columns', async (req, res) => {
   }
 })
 
+dwhRouter.get('/tables/:tableId/column-lineage', async (req, res) => {
+  const tableId = parseId(req.params.tableId)
+  if (!tableId) return res.status(400).json({ error: 'invalid_table_id' })
+  try {
+    const lineage = await getTableColumnLineage(tableId)
+    if (!lineage) return res.status(404).json({ error: 'not_found' })
+    res.json(lineage)
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
 dwhRouter.get('/tables/:tableId/statements', async (req, res) => {
   const tableId = parseId(req.params.tableId)
   if (!tableId) return res.status(400).json({ error: 'invalid_table_id' })
@@ -72,6 +89,18 @@ dwhRouter.get('/tables/:tableId/statements', async (req, res) => {
     const table = await getTable(tableId)
     if (!table) return res.status(404).json({ error: 'not_found' })
     res.json({ table, statements: await listStatementsForTable(tableId) })
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
+dwhRouter.get('/columns/:columnId/ancestry', async (req, res) => {
+  const columnId = parseId(req.params.columnId)
+  if (!columnId) return res.status(400).json({ error: 'invalid_column_id' })
+  try {
+    const ancestry = await getColumnAncestry(columnId)
+    if (!ancestry) return res.status(404).json({ error: 'not_found' })
+    res.json(ancestry)
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
   }
@@ -153,6 +182,18 @@ dwhRouter.get('/reports/:reportId', async (req, res) => {
     const report = await getReport(reportId)
     if (!report) return res.status(404).json({ error: 'not_found' })
     res.json(report)
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
+  }
+})
+
+dwhRouter.get('/reports/:reportId/column-lineage', async (req, res) => {
+  const reportId = parseId(req.params.reportId)
+  if (!reportId) return res.status(400).json({ error: 'invalid_report_id' })
+  try {
+    const lineage = await getReportColumnLineage(reportId)
+    if (!lineage) return res.status(404).json({ error: 'not_found' })
+    res.json(lineage)
   } catch (e) {
     res.status(500).json({ error: e instanceof Error ? e.message : 'db_error' })
   }

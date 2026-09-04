@@ -15,8 +15,10 @@ import { StageTabPanels } from '../motion/StageTabPanels'
 import { StageTabs, type StageTabDef } from '../motion/StageTabs'
 import {
   getDwhReport,
+  getDwhReportColumnLineage,
   getDwhReportLineageGraph,
   getDwhTable,
+  getDwhTableColumnLineage,
   getDwhTableColumns,
   getDwhTableImpact,
   getDwhTableLineageGraph,
@@ -24,11 +26,13 @@ import {
   listDwhReports,
   listDwhTables,
 } from './api'
+import { DwhColumnLineagePanel } from './DwhColumnLineagePanel'
 import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
 import { type AppSurface } from '../components/SurfaceSwitch'
 import type {
   DwhColumn,
+  DwhColumnLineageResponse,
   DwhImpactTable,
   DwhLineageGraph,
   DwhReport,
@@ -40,7 +44,7 @@ import type {
 import './DwhPage.css'
 
 type DwhTab = 'tables' | 'reports'
-type DwhStageTab = 'query' | 'columns' | 'lineage' | 'impact'
+type DwhStageTab = 'map' | 'lineage' | 'query' | 'columns' | 'impact'
 type DetailKind = 'table' | 'report'
 type DwhVisitEntry = {
   kind: DetailKind
@@ -48,11 +52,11 @@ type DwhVisitEntry = {
   name: string
 }
 
-const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['lineage', 'query', 'columns', 'impact']
+const DWH_STAGE_TAB_ORDER: DwhStageTab[] = ['map', 'lineage', 'query', 'columns', 'impact']
 
 const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
   {
-    id: 'lineage',
+    id: 'map',
     label: 'Harita',
     icon: (
       <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
@@ -60,6 +64,17 @@ const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
         <circle cx="12" cy="4" r="2" stroke="currentColor" strokeWidth="1.25" />
         <circle cx="12" cy="12" r="2" stroke="currentColor" strokeWidth="1.25" />
         <path d="M5.8 7.2 10.2 4.8M5.8 8.8l4.4 2.4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'lineage',
+    label: 'Lineage',
+    icon: (
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+        <path d="M3 4.5h4M3 8h6M3 11.5h4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M9.5 4.5h3M10.5 8h2M9.5 11.5h3" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+        <path d="M7.5 4.5h1.4c.9 0 1.6.7 1.6 1.6V8M9 11.5h-.4c-.9 0-1.6-.7-1.6-1.6V8" stroke="currentColor" strokeWidth="1.15" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -797,7 +812,7 @@ export function DwhPage({
   onSurfaceChange: (next: AppSurface) => void
 }) {
   const [catalogTab, setCatalogTab] = useState<DwhTab>('tables')
-  const [stageTab, setStageTab] = useState<DwhStageTab>('lineage')
+  const [stageTab, setStageTab] = useState<DwhStageTab>('map')
   const [query, setQuery] = useState('')
   const [tables, setTables] = useState<DwhTable[]>([])
   const [reports, setReports] = useState<DwhReport[]>([])
@@ -815,11 +830,13 @@ export function DwhPage({
   const [detailKind, setDetailKind] = useState<DetailKind>('table')
   const [simpleTree, setSimpleTree] = useState(false)
   const [lineageGraph, setLineageGraph] = useState<DwhLineageGraph>()
+  const [columnLineage, setColumnLineage] = useState<DwhColumnLineageResponse>()
   const [mapExpanded, setMapExpanded] = useState(false)
   const [loadingList, setLoadingList] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [loadingGraph, setLoadingGraph] = useState(false)
   const [loadingImpact, setLoadingImpact] = useState(false)
+  const [loadingColumnLineage, setLoadingColumnLineage] = useState(false)
   const [error, setError] = useState<string>()
   const [sidebarPinned, setSidebarPinned] = useState(true)
   const [sidebarHover, setSidebarHover] = useState(false)
@@ -878,7 +895,7 @@ export function DwhPage({
       setCatalogTab('reports')
       setDetailKind('report')
     }
-    setStageTab('lineage')
+    setStageTab('map')
     setQuery('')
   }, [])
 
@@ -1051,6 +1068,36 @@ export function DwhPage({
   }, [detailKind, selectedTableId, selectedReportId])
 
   useEffect(() => {
+    const selectedId = detailKind === 'table' ? selectedTableId : selectedReportId
+    if (stageTab !== 'lineage' || !selectedId) {
+      setColumnLineage(undefined)
+      setLoadingColumnLineage(false)
+      return
+    }
+    let cancelled = false
+    setLoadingColumnLineage(true)
+    const load =
+      detailKind === 'table'
+        ? getDwhTableColumnLineage(selectedId)
+        : getDwhReportColumnLineage(selectedId)
+    void load
+      .then((response) => {
+        if (cancelled) return
+        setColumnLineage(response)
+        setError(undefined)
+      })
+      .catch((e: Error) => {
+        if (!cancelled) setError(e.message)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingColumnLineage(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [detailKind, selectedTableId, selectedReportId, stageTab])
+
+  useEffect(() => {
     if (detailKind !== 'table' || !selectedTableId) {
       setImpact(undefined)
       setLoadingImpact(false)
@@ -1157,7 +1204,7 @@ export function DwhPage({
 
   return (
     <main
-      className={`main dwh-main${stageTab === 'lineage' ? ' main-map' : ''}${sidebarExpanded ? ' dwh-sidebar-open' : ' dwh-sidebar-closed'}${sidebarPinned ? ' dwh-sidebar-pinned' : ''}`}
+      className={`main dwh-main${stageTab === 'map' ? ' main-map' : ''}${sidebarExpanded ? ' dwh-sidebar-open' : ' dwh-sidebar-closed'}${sidebarPinned ? ' dwh-sidebar-pinned' : ''}`}
       style={pageStyle}
     >
       <div className="stage-top dwh-stage-top">
@@ -1194,11 +1241,11 @@ export function DwhPage({
           tabs={DWH_STAGE_TABS}
           ariaLabel="DWH detay görünümü"
           onSelect={(next) => {
-            if (next !== 'lineage') setMapExpanded(false)
+            if (next !== 'map') setMapExpanded(false)
             setStageTab(next)
           }}
         />
-        {stageTab === 'lineage' ? (
+        {stageTab === 'map' ? (
           <DwhStageVisitPath
             steps={visitSteps}
             currentIndex={visitIndex}
@@ -1408,28 +1455,28 @@ export function DwhPage({
           </div>
         </aside>
 
-        <section className={`dwh-detail-panel stage-body${stageTab === 'lineage' ? ' is-map-view' : ''}`}>
+        <section className={`dwh-detail-panel stage-body${stageTab === 'map' ? ' is-map-view' : ''}`}>
           <StageTabPanels<DwhStageTab>
             tab={stageTab}
             tabOrder={DWH_STAGE_TAB_ORDER}
-            mapOnly={stageTab === 'lineage'}
+            mapOnly={stageTab === 'map'}
           >
             <section
-              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-lineage"
-              aria-hidden={stageTab !== 'lineage'}
+              className="stage-panel stage-panel-map dwh-stage-panel dwh-stage-panel-map"
+              aria-hidden={stageTab !== 'map'}
               aria-label="Harita"
             >
               <MapStage
                 title={stageHeading}
                 expanded={mapExpanded}
                 onExpandedChange={setMapExpanded}
-                active={stageTab === 'lineage'}
+                active={stageTab === 'map'}
               >
                 <DwhLineageMap
                   graph={lineageGraph}
                   loading={loadingGraph}
                   mapExpanded={mapExpanded}
-                  active={stageTab === 'lineage'}
+                  active={stageTab === 'map'}
                   onVisitBack={goDwhVisitBack}
                   onVisitForward={goDwhVisitForward}
                   canVisitBack={visitIndex > 0}
@@ -1450,6 +1497,17 @@ export function DwhPage({
                   }}
                 />
               </MapStage>
+            </section>
+
+            <section
+              className="stage-panel dwh-stage-panel dwh-stage-panel-column-lineage"
+              aria-hidden={stageTab !== 'lineage'}
+              aria-label="Lineage"
+            >
+              <DwhColumnLineagePanel
+                lineage={columnLineage}
+                loading={loadingColumnLineage}
+              />
             </section>
 
             <section

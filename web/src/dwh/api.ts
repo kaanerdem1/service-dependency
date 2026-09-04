@@ -1,4 +1,6 @@
 import type {
+  DwhColumnAncestryResponse,
+  DwhColumnLineageResponse,
   DwhReport,
   DwhReportDetail,
   DwhLineageGraph,
@@ -45,6 +47,10 @@ export function getDwhTableColumns(tableId: number) {
   return request<DwhTableColumnsResponse>(`/tables/${tableId}/columns`)
 }
 
+export function getDwhTableColumnLineage(tableId: number) {
+  return request<DwhColumnLineageResponse>(`/tables/${tableId}/column-lineage`)
+}
+
 export function getDwhTableStatements(tableId: number) {
   return request<DwhTableStatementsResponse>(`/tables/${tableId}/statements`)
 }
@@ -77,6 +83,10 @@ export function getDwhReport(reportId: number) {
   return request<DwhReportDetail>(`/reports/${reportId}`)
 }
 
+export function getDwhReportColumnLineage(reportId: number) {
+  return request<DwhColumnLineageResponse>(`/reports/${reportId}/column-lineage`)
+}
+
 export function getDwhReportTreeChildren(reportId: number) {
   return request<DwhTreeChildrenResponse>(`/reports/${reportId}/tree-children`)
 }
@@ -97,4 +107,8 @@ export function getDwhSubqueryChildren(subqueryId: number) {
 
 export function getDwhStatement(statementId: number) {
   return request<DwhSqlStatement>(`/statements/${statementId}`)
+}
+
+export function getDwhColumnAncestry(columnId: number) {
+  return request<DwhColumnAncestryResponse>(`/columns/${columnId}/ancestry`)
 }
