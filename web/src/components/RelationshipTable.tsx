@@ -64,7 +64,6 @@ type DisplayRow = {
 }
 
 type ColId = 'layer1' | 'layer2' | 'layer3' | 'layer4'
-type SortKey = 'layer1' | 'layer2' | 'layer3' | 'layer4'
 
 const COL_STORAGE = 'sd-rel-table-col-widths-v6'
 const MODE_STORAGE = 'sd-rel-table-mode'
@@ -562,7 +561,7 @@ function flattenVisible(
           continue
         }
 
-        if (l3.children.length === 0) {
+        if (l3.children.length === 0 || !showL4) {
           rows.push({
             key: `l1-${l1.id}-l2-${l2.id}-l3-${l3.id}-open`,
             index: first ? index : undefined,
@@ -665,8 +664,6 @@ export function RelationshipTable({
   const [mode, setMode] = useState<RelTableMode>(loadMode)
   const [q, setQ] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('layer1')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [widths, setWidths] = useState(loadWidths)
   const [expandedL2, setExpandedL2] = useState<Set<string>>(() => new Set())
   const [emptyOpenL2, setEmptyOpenL2] = useState<Set<string>>(() => new Set())
@@ -807,36 +804,21 @@ export function RelationshipTable({
       .filter(Boolean) as LayerNode[]
   }, [tree, q, groupFilter, projectFilter])
 
-  const sortedTree = useMemo(() => {
-    const dir = sortDir === 'asc' ? 1 : -1
-    const copy = [...filteredTree]
-    copy.sort((a, b) => {
-      if (sortKey === 'layer1') return a.name.localeCompare(b.name, 'tr') * dir
-      if (sortKey === 'layer2') {
-        const an = a.children[0]?.name ?? ''
-        const bn = b.children[0]?.name ?? ''
-        return an.localeCompare(bn, 'tr') * dir || a.name.localeCompare(b.name, 'tr')
-      }
-      const an = a.children[0]?.children[0]?.name ?? ''
-      const bn = b.children[0]?.children[0]?.name ?? ''
-      return an.localeCompare(bn, 'tr') * dir || a.name.localeCompare(b.name, 'tr')
-    })
-    return copy
-  }, [filteredTree, sortKey, sortDir])
+  const displayTree = filteredTree
 
   // 2. katman içeriği: L1 çocuklarını kuyrukla yükle (ok yok, her zaman görünür)
   useEffect(() => {
     if (mode !== 'callers') return
-    const pending = sortedTree
+    const pending = displayTree
       .map((n) => n.id)
       .filter((id) => !loadedRef.current.has(id) && !loadingRef.current.has(id))
     for (const id of pending.slice(0, 6)) void loadCallersOf(id)
-  }, [sortedTree, loadedIds, loadingIds, mode, loadCallersOf])
+  }, [displayTree, loadedIds, loadingIds, mode, loadCallersOf])
 
   const displayRows = useMemo(
     () =>
       flattenVisible(
-        sortedTree,
+        displayTree,
         showLayer2,
         showLayer3,
         showLayer4,
@@ -847,7 +829,7 @@ export function RelationshipTable({
         loadingIds,
       ),
     [
-      sortedTree,
+      displayTree,
       showLayer2,
       showLayer3,
       showLayer4,
@@ -859,7 +841,7 @@ export function RelationshipTable({
     ],
   )
 
-  const l1Count = sortedTree.length
+  const l1Count = displayTree.length
 
   const toggleL2 = (l1Id: string, l2Id: string) => {
     const key = `${l1Id}::${l2Id}`
@@ -888,7 +870,7 @@ export function RelationshipTable({
     }
 
     let existingL2ChildCount = 0
-    for (const l1 of sortedTree) {
+    for (const l1 of displayTree) {
       if (l1.id !== l1Id) continue
       for (const l2 of l1.children) {
         if (l2.id === l2Id) {
@@ -933,7 +915,7 @@ export function RelationshipTable({
     }
 
     let existingChildCount = 0
-    outer: for (const l1 of sortedTree) {
+    outer: for (const l1 of displayTree) {
       for (const l2 of l1.children) {
         if (l2.id !== l2Id) continue
         for (const l3 of l2.children) {
@@ -962,20 +944,9 @@ export function RelationshipTable({
     })()
   }
 
-  const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
-  }
-
   const resizeCol = (col: ColId, width: number) => {
     setWidths((prev) => ({ ...prev, [col]: width }))
   }
-
-  const sortMark = (key: SortKey) =>
-    sortKey === key ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
 
   if (loading) {
     return (
@@ -984,9 +955,6 @@ export function RelationshipTable({
       </div>
     )
   }
-
-  const col1Title =
-    mode === 'callers' ? 'Seçili Servisi Çağıran' : 'Seçili Servisin Çağırdığı'
 
   return (
     <div className="rel-table-wrap">
@@ -1084,48 +1052,24 @@ export function RelationshipTable({
             <thead>
               <tr>
                 <th scope="col">
-                  <button type="button" className="rel-th-btn" onClick={() => toggleSort('layer1')}>
-                    {col1Title}
-                    {sortMark('layer1')}
-                  </button>
+                  <span className="rel-th-text">1. Katman</span>
                   <ColResizeHandle col="layer1" onResize={resizeCol} />
                 </th>
                 {showLayer2 ? (
                   <th scope="col">
-                    <button
-                      type="button"
-                      className="rel-th-btn"
-                      onClick={() => toggleSort('layer2')}
-                    >
-                      2. Katman
-                      {sortMark('layer2')}
-                    </button>
+                    <span className="rel-th-text">2. Katman</span>
                     <ColResizeHandle col="layer2" onResize={resizeCol} />
                   </th>
                 ) : null}
                 {showLayer3 ? (
                   <th scope="col">
-                    <button
-                      type="button"
-                      className="rel-th-btn"
-                      onClick={() => toggleSort('layer3')}
-                    >
-                      3. Katman
-                      {sortMark('layer3')}
-                    </button>
+                    <span className="rel-th-text">3. Katman</span>
                     <ColResizeHandle col="layer3" onResize={resizeCol} />
                   </th>
                 ) : null}
                 {showLayer4 ? (
                   <th scope="col">
-                    <button
-                      type="button"
-                      className="rel-th-btn"
-                      onClick={() => toggleSort('layer4')}
-                    >
-                      4. Katman
-                      {sortMark('layer4')}
-                    </button>
+                    <span className="rel-th-text">4. Katman</span>
                     <ColResizeHandle col="layer4" onResize={resizeCol} />
                   </th>
                 ) : null}

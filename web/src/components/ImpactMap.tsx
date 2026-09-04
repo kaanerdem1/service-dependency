@@ -2693,32 +2693,7 @@ export function ImpactMap({
       <div className="map-canvas-row">
       <div className="map-canvas">
       <div className="path-layer-bar">
-        <div className="path-layer-start">
-          {expandedProjectClusters.size > 0 && (
-            <div className="map-cluster-trail" role="navigation" aria-label="Açık grup">
-              {[...expandedProjectClusters].map((key) => (
-                <span key={key} className="map-cluster-crumb">
-                  <span className="map-cluster-crumb-label">Grup açık</span>
-                  <button
-                    type="button"
-                    className="map-cluster-crumb-link"
-                    onClick={() => onOpenAffectedTab?.()}
-                  >
-                    Tablo
-                  </button>
-                  <button
-                    type="button"
-                    className="map-cluster-crumb-close"
-                    aria-label="Gruplara dön"
-                    onClick={() => setExpandedProjectClusters(new Set())}
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        <div className="path-layer-start" />
         <div className="path-layer-end">
           <button
             type="button"

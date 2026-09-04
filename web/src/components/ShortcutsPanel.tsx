@@ -391,8 +391,6 @@ export function ShortcutsPanel({
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
 
-  const refresh = useCallback(() => setStore(readShortcuts()), [])
-
   useEffect(() => {
     if (!open) {
       setQuery('')
@@ -400,10 +398,12 @@ export function ShortcutsPanel({
       setNavIndex(-1)
       return
     }
-    refresh()
+    const data = readShortcuts()
+    setStore(data)
+    setCollapsedFolders(new Set(data.folders.map((f) => f.id)))
     const t = window.setTimeout(() => searchRef.current?.focus(), 180)
     return () => window.clearTimeout(t)
-  }, [open, refresh])
+  }, [open])
 
   useEffect(() => {
     if (pivotId && pivotName) {
@@ -721,7 +721,14 @@ export function ShortcutsPanel({
             type="button"
             className="sc-toolbar-btn"
             disabled={store.folders.length >= 8}
-            onClick={() => setStore(addFolder('Yeni klasör'))}
+            onClick={() => {
+              const next = addFolder('Yeni klasör')
+              setStore(next)
+              const created = next.folders[next.folders.length - 1]
+              if (created) {
+                setCollapsedFolders((prev) => new Set(prev).add(created.id))
+              }
+            }}
           >
             Yeni klasör
           </button>
