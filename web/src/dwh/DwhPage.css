@@ -47,6 +47,7 @@
 
 .dwh-toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   min-width: 0;
@@ -1335,6 +1336,80 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   white-space: nowrap;
 }
 
+.dwh-map-connections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dwh-map-connection-group + .dwh-map-connection-group {
+  padding-top: 10px;
+  border-top: 1px solid rgba(120, 132, 143, 0.18);
+}
+
+.dwh-map-connection-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.dwh-map-connection-group-head span {
+  color: #53615b;
+  font-size: 11.5px;
+  font-weight: 800;
+}
+
+.dwh-map-connection-group-head strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.dwh-map-connection-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dwh-map-connection-item {
+  min-width: 0;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(120, 132, 143, 0.16);
+}
+
+.dwh-map-connection-item:first-child {
+  border-top: 0;
+}
+
+.dwh-map-connection-item span,
+.dwh-map-connection-item small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dwh-map-connection-item span {
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.dwh-map-connection-item small,
+.dwh-map-connection-empty,
+.dwh-map-connection-more {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+
+.dwh-map-connection-empty,
+.dwh-map-connection-more {
+  display: block;
+  padding-top: 4px;
+}
+
 .dwh-map-drawer-empty,
 .dwh-map-drawer-note {
   margin-top: 10px;
@@ -1398,6 +1473,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-map-node {
+  position: relative;
   border: 0;
   padding: 0;
   background: transparent;
@@ -1407,6 +1483,44 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-lineage-map.is-swimlane .react-flow__background {
   opacity: 0.45;
+}
+
+.dwh-swimlane-projection-stats {
+  position: absolute;
+  bottom: 14px;
+  left: 16px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px 12px;
+  max-width: calc(100% - 250px);
+  padding: 7px 10px;
+  border: 1px solid rgba(155, 184, 171, 0.66);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 14px rgba(40, 35, 28, 0.06);
+  color: #64716b;
+  font-size: 11px;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .dwh-swimlane-projection-stats {
+    max-width: calc(100% - 32px);
+  }
+}
+
+.dwh-swimlane-projection-stats strong {
+  color: #17563d;
+  font-weight: 850;
+}
+
+.dwh-swimlane-projection-stats span + span::before {
+  content: '·';
+  margin-right: 12px;
+  color: #a5aea9;
 }
 
 .dwh-layer-header-node {
@@ -1470,6 +1584,80 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   background: #fff1ee;
   border-style: dashed;
   color: #8b2e2e;
+}
+
+.dwh-map-node:not(.center):not(.radial-dot).layer-ld .dd-node-body {
+  border-color: #9bc2af;
+  border-left: 4px solid #2f6f55;
+  background: #f2f8f5;
+}
+
+.dwh-map-node:not(.center):not(.radial-dot).layer-tr .dd-node-body {
+  border-color: #a9c2db;
+  border-left: 4px solid #3f73a2;
+  background: #f2f7fb;
+}
+
+.dwh-map-node:not(.center):not(.radial-dot).layer-ex .dd-node-body {
+  border-color: #e0c28c;
+  border-left: 4px solid #b67b2d;
+  background: #fff8eb;
+}
+
+.dwh-map-node:not(.center):not(.radial-dot).layer-kaynak .dd-node-body {
+  border-color: #c7b5d9;
+  border-left: 4px solid #76559a;
+  background: #f7f3fa;
+}
+
+.dwh-map-node:not(.center):not(.radial-dot).layer-diger .dd-node-body {
+  border-color: #cbd2d6;
+  border-left: 4px solid #77838b;
+  background: #f5f7f8;
+}
+
+.dwh-lineage-map.is-radial .dwh-map-node.layer-ld .dd-radial-core {
+  background: #2f6f55;
+}
+
+.dwh-lineage-map.is-radial .dwh-map-node.layer-tr .dd-radial-core {
+  background: #3f73a2;
+}
+
+.dwh-lineage-map.is-radial .dwh-map-node.layer-ex .dd-radial-core {
+  background: #b67b2d;
+}
+
+.dwh-lineage-map.is-radial .dwh-map-node.layer-kaynak .dd-radial-core {
+  background: #76559a;
+}
+
+.dwh-node-reference-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 17px;
+  padding: 0 5px;
+  border: 1px solid #aeb8c0;
+  border-radius: 7px;
+  background: #f7f9fa;
+  box-shadow: 0 2px 6px rgba(40, 35, 28, 0.12);
+  color: #53616c;
+  font-size: 8.5px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.dwh-node-reference-badge.is-radial {
+  top: -13px;
+  right: -17px;
 }
 
 .dwh-lineage-map.is-radial .dwh-map-node.kind-report .dd-radial-core {

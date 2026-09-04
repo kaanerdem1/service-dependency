@@ -44,6 +44,8 @@ export function MapViewportSync({
   userInteracting = false,
   viewportSyncKey = 0,
   topAligned = false,
+  readableMinZoom,
+  rightAlignOnLayerChange = false,
 }: {
   centerId: string
   visibleMaxHop: number
@@ -57,12 +59,16 @@ export function MapViewportSync({
   userInteracting?: boolean
   viewportSyncKey?: number
   topAligned?: boolean
+  readableMinZoom?: number
+  rightAlignOnLayerChange?: boolean
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
   const prevHop = useRef(visibleMaxHop)
   const prevSyncKey = useRef(viewportSyncKey)
   const pendingHopFit = useRef(false)
+  const pendingLayerShift = useRef(false)
+  const prevLayoutMode = useRef(layoutMode)
   const drawerOpenRef = useRef(drawerOpen)
   drawerOpenRef.current = drawerOpen
   const mapExpandedRef = useRef(mapExpanded)
@@ -79,7 +85,7 @@ export function MapViewportSync({
   const paneH = useStore((s) => s.height)
 
   const fitZoomBounds = () => ({
-    minZoom: autoFitMinZoom(layout, visibleMaxHop),
+    minZoom: Math.max(autoFitMinZoom(layout, visibleMaxHop), readableMinZoom ?? 0),
     maxZoom: layout.maxZoom,
   })
 
@@ -88,7 +94,7 @@ export function MapViewportSync({
       .getNodes()
       .filter((n) => n.type === 'serviceNode' || n.type === 'methodBadge' || n.type === 'dwhNode')
 
-  const fitTopAligned = async (duration: number) => {
+  const fitTopAligned = async (duration: number, preserveZoom = false) => {
     if (paneW <= 0 || paneH <= 0) return false
     const nodes = fitTargetNodes()
     const topNodes = nodes.filter((node) => {
@@ -124,10 +130,17 @@ export function MapViewportSync({
     const horizontalPad = mapExpandedRef.current ? 56 : 42
     const topPad = mapExpandedRef.current ? 58 : 48
     const width = Math.max(1, bounds.maxX - bounds.minX)
-    const zoom = Math.min(maxZoom, Math.max(minZoom, (paneW - horizontalPad * 2) / width))
+    const fittedZoom = (paneW - horizontalPad * 2) / width
+    const currentZoom = rf.getViewport().zoom
+    const zoom = preserveZoom
+      ? Math.min(layout.maxZoom, Math.max(layout.minZoom, currentZoom))
+      : Math.min(maxZoom, Math.max(minZoom, fittedZoom))
+    const x = preserveZoom && rightAlignOnLayerChange
+      ? paneW - horizontalPad - bounds.maxX * zoom
+      : horizontalPad - bounds.minX * zoom
     await rf.setViewport(
       {
-        x: horizontalPad - bounds.minX * zoom,
+        x,
         y: topPad - bounds.minY * zoom,
         zoom,
       },
@@ -174,6 +187,7 @@ export function MapViewportSync({
   const focusViewport = async (
     duration: number,
     mode: MapLayoutMode,
+    preserveLayerZoom = false,
   ) => {
     if (syncingRef.current || interactingRef.current) return
     syncingRef.current = true
@@ -220,7 +234,7 @@ export function MapViewportSync({
         }
       }
 
-      if (topAligned && mode !== 'radial' && (await fitTopAligned(duration))) {
+      if (topAligned && mode !== 'radial' && (await fitTopAligned(duration, preserveLayerZoom))) {
         return
       }
 
@@ -239,12 +253,15 @@ export function MapViewportSync({
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
     const hopChanged = prevHop.current !== visibleMaxHop
+    const modeChanged = prevLayoutMode.current !== layoutMode
     const syncKeyChanged = prevSyncKey.current !== viewportSyncKey
     prevCenter.current = centerId
+    prevLayoutMode.current = layoutMode
     prevSyncKey.current = viewportSyncKey
     if (hopChanged) {
       prevHop.current = visibleMaxHop
       pendingHopFit.current = true
+      pendingLayerShift.current = rightAlignOnLayerChange && !centerChanged && !modeChanged
       if (!centerChanged) return
     } else {
       prevHop.current = visibleMaxHop
@@ -254,6 +271,7 @@ export function MapViewportSync({
     if (deferHop) return
 
     const shouldRetryHopFit = pendingHopFit.current && syncKeyChanged
+    const preserveLayerZoom = pendingLayerShift.current
 
     const delay =
       syncKeyChanged && pendingHopFit.current
@@ -295,8 +313,10 @@ export function MapViewportSync({
         await focusViewport(
           centerChanged ? 320 : pendingHopFit.current ? 360 : 280,
           layoutMode,
+          preserveLayerZoom,
         )
         pendingHopFit.current = false
+        pendingLayerShift.current = false
       })()
     }, delay)
 
@@ -304,7 +324,7 @@ export function MapViewportSync({
     if (shouldRetryHopFit) {
       retryId = window.setTimeout(() => {
         if (interactingRef.current) return
-        void focusViewport(280, layoutMode)
+        void focusViewport(280, layoutMode, preserveLayerZoom)
       }, 340)
     }
 
@@ -322,6 +342,8 @@ export function MapViewportSync({
     mapExpanded,
     drawerOpen,
     topAligned,
+    readableMinZoom,
+    rightAlignOnLayerChange,
     rf,
   ])
 
@@ -335,7 +357,7 @@ export function MapViewportSync({
       void focusViewport(240, layoutMode)
     }, 100)
     return () => window.clearTimeout(id)
-  }, [drawerOpen, layout, layoutMode, rf, topAligned, visibleMaxHop])
+  }, [drawerOpen, layout, layoutMode, readableMinZoom, rf, topAligned, visibleMaxHop])
 
   const prevPane = useRef(`${Math.round(paneW)}x${Math.round(paneH)}`)
 
@@ -368,7 +390,7 @@ export function MapViewportSync({
           }))
     }, 100)
     return () => window.clearTimeout(id)
-  }, [paneW, paneH, layout, layoutMode, rf, topAligned])
+  }, [paneW, paneH, layout, layoutMode, readableMinZoom, rf, topAligned])
 
   return null
 }
@@ -954,6 +976,7 @@ type LayerControlsProps = {
   expandLayerLabel?: string
   expandAllLabel?: string
   layerStatusLabel?: string
+  autoFitAfterTidy?: boolean
 }
 
 function DockBtn({
@@ -1438,6 +1461,7 @@ export function MapCanvasBar({
   expandLayerLabel,
   expandAllLabel = 'Tüm etki zincirini aç',
   layerStatusLabel,
+  autoFitAfterTidy = true,
 }: LayerControlsProps) {
   const { zoomIn, zoomOut, fitView } = useReactFlow()
   const canExpand = visibleMaxHop < maxHopAvailable
@@ -1450,9 +1474,6 @@ export function MapCanvasBar({
   const radialOn = activeViewMode === 'radial'
   const setViewMode = (mode: MapLayoutMode | 'swimlane') => {
     onSetViewMode?.(mode)
-    window.setTimeout(() => {
-      fitView({ padding: fitPadding, duration: 280 })
-    }, 40)
   }
 
   const rootRef = useRef<HTMLDivElement>(null)
@@ -1667,9 +1688,11 @@ export function MapCanvasBar({
                   label="Hizala — düğümleri eski düzene al"
                   onClick={() => {
                     onTidyUp()
-                    window.setTimeout(() => {
-                      fitView({ padding: fitPadding, duration: 280 })
-                    }, 40)
+                    if (autoFitAfterTidy) {
+                      window.setTimeout(() => {
+                        fitView({ padding: fitPadding, duration: 280 })
+                      }, 40)
+                    }
                   }}
                 >
                   <IconTidy />
@@ -1748,7 +1771,7 @@ export function MapCanvasBar({
                 <span
                   ref={ref}
                   className="map-dock-hop is-compact"
-                  aria-label={`Görünen katman ${visibleMaxHop} / ${maxHopAvailable}`}
+                  aria-label={`${layerTitle} ${visibleMaxHop} / ${maxHopAvailable} görünür`}
                   onMouseEnter={onMouseEnter}
                   onMouseLeave={onMouseLeave}
                 >

@@ -130,7 +130,7 @@ export type DwhReportDetail = DwhReport & {
 export type DwhTreeConnection =
   | {
       type: 'statement'
-      targetTableId: number
+      targetTableId?: number
       sourceTableId: number
       statementIds: number[]
     }

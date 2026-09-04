@@ -44,6 +44,12 @@ import {
   type RadialLabelSide,
 } from '../impact/mapLayout'
 import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from './DwhMapChrome'
+import {
+  buildDwhSwimlaneProjection,
+  normalizeDwhLayer,
+  type DwhSwimlaneKey,
+  type DwhSwimlaneProjectionEdge,
+} from './swimlaneProjection'
 import type {
   DwhLineageEntityKind,
   DwhLineageGraph,
@@ -76,8 +82,14 @@ type DwhNodeData = {
   hop: number
   tableId?: number
   reportId?: number
+  layer?: DwhSwimlaneKey
   count?: number
   hiddenIds?: string[]
+  memberIds?: string[]
+  occurrenceCount?: number
+  referenceCount?: number
+  cycleCount?: number
+  summaryMode?: boolean
   radialDot?: boolean
   radialAngle?: number
   radialCx?: number
@@ -94,8 +106,6 @@ const MIN_COLLAPSE_COUNT = 3
 const DWH_MIN_ZOOM = 0.18
 const EDGE_COLOR = '#2f6f55'
 type DwhLayoutMode = MapLayoutMode | 'swimlane'
-type DwhSwimlaneKey = 'LD' | 'TR' | 'EX' | 'KAYNAK' | 'DIGER'
-
 const DWH_SWIMLANE_ORDER: DwhSwimlaneKey[] = ['LD', 'TR', 'EX', 'KAYNAK', 'DIGER']
 const DWH_SWIMLANE_CONTROL_ORDER: DwhSwimlaneKey[] = ['LD', 'TR', 'EX', 'KAYNAK']
 const DWH_SWIMLANE_LABELS: Record<DwhSwimlaneKey, string> = {
@@ -109,7 +119,7 @@ const DWH_SWIMLANE_HEADER_Y = 20
 const DWH_SWIMLANE_NODE_Y = 92
 const DWH_SWIMLANE_ROOT_X = 56
 const DWH_SWIMLANE_ROOT_TO_LAYER_GAP = 124
-const DWH_SWIMLANE_ROW_GAP = 60
+const DWH_SWIMLANE_ROW_GAP = 76
 const DWH_SWIMLANE_COL_GAP = 84
 const EDGE_MARKER = {
   type: MarkerType.ArrowClosed,
@@ -134,6 +144,8 @@ type DwhEdgeData = {
   ty?: number
   sr?: number
   tr?: number
+  relationCount?: number
+  originalEdgeIds?: string[]
 }
 
 type GraphNodeStats = {
@@ -269,6 +281,7 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
   const isLayerHeader = data.kind === 'layerHeader'
   const radial = Boolean(data.radialDot)
   const verticalFlow = data.flowDirection === 'vertical'
+  const referenceCount = data.referenceCount ?? (data.kind === 'reference' ? 1 : 0)
   if (isLayerHeader) {
     return (
       <div className="dd-node dwh-map-node dwh-layer-header-node">
@@ -303,11 +316,7 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
     ? { ...radialNodeHitStyle(isCenter), position: 'relative' as const, overflow: 'visible' as const }
     : undefined
   const hopLine =
-    radial && !isCenter && !isCollapsed
-      ? `${data.hop}. katman`
-      : radial && isCollapsed
-        ? `Aç · ${data.count ?? 0} node daha`
-        : null
+    radial && isCollapsed ? `Aç · ${data.count ?? 0} node daha` : null
   const radialLabelStyle =
     radial && labelSide
       ? radialLabelDomStyle(
@@ -328,6 +337,8 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
         isCenter && 'center',
         isCollapsed && 'collapsed',
         data.kind !== 'center' && `kind-${data.kind}`,
+        !isCenter && data.layer && `layer-${data.layer.toLocaleLowerCase('tr-TR')}`,
+        referenceCount > 0 && 'has-reference-badge',
         radial && 'radial-dot',
       ]
         .filter(Boolean)
@@ -341,12 +352,14 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
           <>
             {label}
             <span className="dd-node-hop">{isCollapsed ? `Aç · ${data.count} node daha` : data.sub}</span>
-            {!isCenter && !isCollapsed ? (
-              <span className="dd-node-hop">{data.hop}. katman</span>
-            ) : null}
           </>
         )}
       </div>
+      {!isCenter && referenceCount > 0 ? (
+        <span className={`dwh-node-reference-badge${radial ? ' is-radial' : ''}`} title={`${referenceCount} referans kullanım`}>
+          REF{referenceCount > 1 ? ` ×${referenceCount}` : ''}
+        </span>
+      ) : null}
       {radial ? (
         <span className="dd-radial-shell" style={radialHit}>
           <span className={`dd-radial-core${isCenter ? ' is-center' : ''}`} aria-hidden />
@@ -473,11 +486,60 @@ function DwhDrawerMetric({
   )
 }
 
+type DwhDrawerConnection = {
+  id: string
+  label: string
+  meta: string
+  relationCount: number
+}
+
+type DwhDrawerConnections = {
+  sources: DwhDrawerConnection[]
+  targets: DwhDrawerConnection[]
+}
+
+function DwhDrawerConnectionGroup({
+  title,
+  items,
+}: {
+  title: string
+  items: DwhDrawerConnection[]
+}) {
+  const visibleItems = items.slice(0, 12)
+  return (
+    <div className="dwh-map-connection-group">
+      <div className="dwh-map-connection-group-head">
+        <span>{title}</span>
+        <strong>{items.length}</strong>
+      </div>
+      {visibleItems.length ? (
+        <div className="dwh-map-connection-list">
+          {visibleItems.map((item) => (
+            <div key={item.id} className="dwh-map-connection-item">
+              <span title={item.label}>{item.label}</span>
+              <small>
+                {item.meta}
+                {item.relationCount > 1 ? ` · ${item.relationCount} bağlantı` : ''}
+              </small>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <span className="dwh-map-connection-empty">Bağlantı yok</span>
+      )}
+      {items.length > visibleItems.length ? (
+        <span className="dwh-map-connection-more">+{items.length - visibleItems.length} bağlantı daha</span>
+      ) : null}
+    </div>
+  )
+}
+
 function DwhMapInfoDrawer({
   open,
   node,
   summary,
   graphStats,
+  connections,
   loading,
   error,
   onOpenChange,
@@ -486,6 +548,7 @@ function DwhMapInfoDrawer({
   node?: DwhLineageNode
   summary?: DwhMapNodeSummary
   graphStats: GraphNodeStats
+  connections: DwhDrawerConnections
   loading: boolean
   error?: string | null
   onOpenChange: (open: boolean) => void
@@ -538,7 +601,7 @@ function DwhMapInfoDrawer({
                   {node.label}
                 </strong>
                 <span className="dwh-map-info-node-meta">
-                  {node.subtitle || node.layer || `${node.depth}. katman`}
+                  {node.subtitle || node.layer || entityLabel(node.entityKind)}
                 </span>
               </section>
 
@@ -578,29 +641,11 @@ function DwhMapInfoDrawer({
               ) : null}
 
               <section className="dwh-map-info-section">
-                <h5>Grafikteki konum</h5>
-                <dl className="dwh-map-info-facts">
-                  <div>
-                    <dt>Katman</dt>
-                    <dd>{node.depth}</dd>
-                  </div>
-                  <div>
-                    <dt>Tip</dt>
-                    <dd>{node.kind === node.entityKind ? entityLabel(node.entityKind) : node.kind}</dd>
-                  </div>
-                  {summary?.maxSourceDepth ? (
-                    <div>
-                      <dt>Kaynak derinliği</dt>
-                      <dd>{summary.maxSourceDepth}</dd>
-                    </div>
-                  ) : null}
-                  {summary?.maxTargetDepth ? (
-                    <div>
-                      <dt>Etki derinliği</dt>
-                      <dd>{summary.maxTargetDepth}</dd>
-                    </div>
-                  ) : null}
-                </dl>
+                <h5>Doğrudan bağlantılar</h5>
+                <div className="dwh-map-connections">
+                  <DwhDrawerConnectionGroup title="Kaynak aldığı" items={connections.sources} />
+                  <DwhDrawerConnectionGroup title="Doldurduğu" items={connections.targets} />
+                </div>
               </section>
 
             </>
@@ -626,7 +671,7 @@ function splitLayer(
 
 function nodeSubLabel(node: DwhLineageNode) {
   if (node.kind === 'cycle') return node.entityKind === 'table' ? 'Döngü tablo' : 'Döngü'
-  if (node.kind === 'reference') return node.entityKind === 'table' ? 'Referans tablo' : 'Referans'
+  if (node.kind === 'reference') return node.layer ?? (node.entityKind === 'table' ? 'Tablo' : 'Referans')
   if (node.kind === 'table') return node.subtitle ?? node.layer ?? 'Tablo'
   if (node.kind === 'report') return node.subtitle ?? 'Rapor'
   return node.subtitle ?? 'Alt sorgu'
@@ -634,16 +679,6 @@ function nodeSubLabel(node: DwhLineageNode) {
 
 function rootSubLabel(graph: DwhLineageGraph) {
   return graph.rootKind === 'report' ? 'Rapor' : 'Tablo'
-}
-
-function normalizeDwhLayer(node?: DwhLineageNode): DwhSwimlaneKey {
-  if (!node) return 'DIGER'
-  const raw = (node.layer || node.subtitle || '').trim().toLocaleUpperCase('tr-TR')
-  if (raw === 'LD') return 'LD'
-  if (raw === 'TR') return 'TR'
-  if (raw === 'EX') return 'EX'
-  if (raw === 'KAYNAK' || raw === 'SOURCE') return 'KAYNAK'
-  return 'DIGER'
 }
 
 function swimlaneKeysForGraph(graph?: DwhLineageGraph): DwhSwimlaneKey[] {
@@ -661,15 +696,15 @@ function swimlaneKeysForGraph(graph?: DwhLineageGraph): DwhSwimlaneKey[] {
 function applyDwhSwimlaneLayout(
   nodes: Node<DwhNodeData>[],
   graph: DwhLineageGraph,
-  layout: MapLayout,
+  projectionEdges: DwhSwimlaneProjectionEdge[],
 ): Node<DwhNodeData>[] {
   const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]))
-  const nodeW = Math.max(layout.nodeW, 220)
+  const nodeW = 260
   const rootNode = nodes.find((node) => node.id === graph.rootId)
   const rootW = typeof rootNode?.style?.width === 'number' ? rootNode.style.width : mapNodeWidth('lg')
   const firstLayerX = DWH_SWIMLANE_ROOT_X + rootW + DWH_SWIMLANE_ROOT_TO_LAYER_GAP
   const colPitch = nodeW + DWH_SWIMLANE_COL_GAP
-  const rowPitch = Math.max(DWH_SWIMLANE_ROW_GAP, Math.round(layout.rowGap * 0.92))
+  const rowPitch = DWH_SWIMLANE_ROW_GAP
   const nonRoot = nodes.filter((node) => {
     const graphNode = graphNodeById.get(node.id)
     return (
@@ -688,6 +723,65 @@ function applyDwhSwimlaneLayout(
   }
 
   const usedKeys = DWH_SWIMLANE_ORDER.filter((key) => grouped.has(key))
+  const laneByNodeId = new Map<string, number>()
+  usedKeys.forEach((key, laneIndex) => {
+    for (const node of grouped.get(key) ?? []) laneByNodeId.set(node.id, laneIndex)
+  })
+  const neighbors = new Map<string, Set<string>>()
+  for (const edge of projectionEdges) {
+    const sourceNeighbors = neighbors.get(edge.source) ?? new Set<string>()
+    sourceNeighbors.add(edge.target)
+    neighbors.set(edge.source, sourceNeighbors)
+    const targetNeighbors = neighbors.get(edge.target) ?? new Set<string>()
+    targetNeighbors.add(edge.source)
+    neighbors.set(edge.target, targetNeighbors)
+  }
+  for (const key of usedKeys) {
+    grouped.set(
+      key,
+      [...(grouped.get(key) ?? [])].sort((a, b) => {
+        const depthDiff = (a.data.hop ?? 0) - (b.data.hop ?? 0)
+        return depthDiff || a.data.fullLabel.localeCompare(b.data.fullLabel, 'tr')
+      }),
+    )
+  }
+  const reorderLane = (laneIndex: number, towardEarlier: boolean) => {
+    const key = usedKeys[laneIndex]
+    const laneNodes = grouped.get(key) ?? []
+    const rowById = new Map<string, number>([[graph.rootId, 0]])
+    usedKeys.forEach((laneKey) => {
+      const positionedLaneNodes = grouped.get(laneKey) ?? []
+      positionedLaneNodes.forEach((node, row) => rowById.set(node.id, row))
+    })
+    const previousOrder = new Map(laneNodes.map((node, index) => [node.id, index]))
+    laneNodes.sort((a, b) => {
+      const score = (node: Node<DwhNodeData>) => {
+        const rows = Array.from(neighbors.get(node.id) ?? []).flatMap((neighborId) => {
+          const neighborLane = laneByNodeId.get(neighborId) ?? -1
+          const eligible = towardEarlier ? neighborLane < laneIndex : neighborLane > laneIndex
+          const row = rowById.get(neighborId)
+          return eligible && row !== undefined ? [row] : []
+        })
+        return rows.length ? rows.reduce((sum, row) => sum + row, 0) / rows.length : undefined
+      }
+      const aScore = score(a)
+      const bScore = score(b)
+      if (aScore !== undefined || bScore !== undefined) {
+        if (aScore === undefined) return 1
+        if (bScore === undefined) return -1
+        if (aScore !== bScore) return aScore - bScore
+      }
+      return (previousOrder.get(a.id) ?? 0) - (previousOrder.get(b.id) ?? 0)
+    })
+  }
+  for (let sweep = 0; sweep < 3; sweep += 1) {
+    for (let laneIndex = 0; laneIndex < usedKeys.length; laneIndex += 1) {
+      reorderLane(laneIndex, true)
+    }
+    for (let laneIndex = usedKeys.length - 1; laneIndex >= 0; laneIndex -= 1) {
+      reorderLane(laneIndex, false)
+    }
+  }
   const positioned: Node<DwhNodeData>[] = []
 
   for (const node of nodes) {
@@ -703,10 +797,11 @@ function applyDwhSwimlaneLayout(
 
   usedKeys.forEach((key, laneIndex) => {
     const x = firstLayerX + laneIndex * colPitch
-    const laneNodes = [...(grouped.get(key) ?? [])].sort((a, b) => {
-      const depthDiff = (a.data.hop ?? 0) - (b.data.hop ?? 0)
-      return depthDiff || a.data.fullLabel.localeCompare(b.data.fullLabel, 'tr')
-    })
+    const laneNodes = grouped.get(key) ?? []
+    const occurrenceCount = laneNodes.reduce(
+      (total, node) => total + (node.data.occurrenceCount ?? 1),
+      0,
+    )
     positioned.push({
       id: `dwh-swimlane-header-${key}`,
       type: 'dwhNode',
@@ -716,7 +811,10 @@ function applyDwhSwimlaneLayout(
         fullLabel: DWH_SWIMLANE_LABELS[key],
         showTip: false,
         size: 'sm',
-        sub: `${laneNodes.length} kayıt`,
+        sub:
+          occurrenceCount === laneNodes.length
+            ? `${laneNodes.length} tablo`
+            : `${laneNodes.length} tablo · ${occurrenceCount} kullanım`,
         kind: 'layerHeader',
         hop: 0,
       },
@@ -746,88 +844,154 @@ function applyDwhSwimlaneLayout(
 }
 
 function buildDwhSwimlaneEdges(
-  graph: DwhLineageGraph,
+  projectionEdges: DwhSwimlaneProjectionEdge[],
   positionedNodes: Node<DwhNodeData>[],
 ): Edge[] {
-  const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]))
   const visibleIds = new Set(
     positionedNodes
       .filter((node) => node.data.kind !== 'layerHeader')
       .map((node) => node.id),
   )
-  const childrenByParent = new Map<string, DwhLineageGraph['edges']>()
-
-  for (const edge of graph.edges) {
-    const parentExists = graphNodeById.has(edge.target)
-    const childHop = graphNodeById.get(edge.source)?.depth
-    if (!parentExists || childHop === undefined) continue
-    const list = childrenByParent.get(edge.target) ?? []
-    list.push(edge)
-    childrenByParent.set(edge.target, list)
-  }
-
   const edges: Edge[] = []
-  const seen = new Set<string>()
-
-  for (const sourceId of visibleIds) {
-    const sourceNode = graphNodeById.get(sourceId)
-    if (!sourceNode || sourceNode.entityKind === 'subquery') continue
-    const queue = [...(childrenByParent.get(sourceId) ?? [])]
-    const visited = new Set<string>()
-
-    while (queue.length) {
-      const edge = queue.shift()
-      if (!edge || visited.has(edge.source)) continue
-      visited.add(edge.source)
-      const childNode = graphNodeById.get(edge.source)
-      if (!childNode) continue
-
-      if (visibleIds.has(edge.source) && childNode.entityKind !== 'subquery') {
-        const id = `${sourceId}->${edge.source}`
-        if (sourceId === edge.source || seen.has(id)) continue
-        seen.add(id)
-        const direct = childNode.depth <= sourceNode.depth + 1
-        const kind = edge.kind === 'subquery' ? 'statement' : edge.kind
-        edges.push({
-          id,
-          source: sourceId,
-          target: edge.source,
-          sourceHandle: 'out',
-          targetHandle: 'in',
-          type: 'fan',
-          className: [
-            'dd-edge dwh-edge',
-            kind === 'reportSql' && 'report-link',
-            direct ? 'direct' : 'indirect',
-          ]
-            .filter(Boolean)
-            .join(' '),
-          markerEnd: EDGE_MARKER,
-          style: {
-            stroke:
-              kind === 'reportSql'
-                ? '#60438b'
-                : direct
-                  ? EDGE_COLOR
-                  : '#8a847a',
-            strokeWidth: direct ? 2.4 : 1.7,
-            strokeDasharray: direct ? undefined : '6 5',
-          },
-          data: {
-            sourceEntityId: edge.source,
-            targetEntityId: sourceId,
-            statementIds: edge.statementIds,
-            hop: childNode.depth,
-          },
-        })
-        continue
-      }
-
-      queue.push(...(childrenByParent.get(edge.source) ?? []))
-    }
+  for (const edge of projectionEdges) {
+    if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue
+    const stroke = edge.kind === 'reportSql' ? '#60438b' : EDGE_COLOR
+    edges.push({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: 'out',
+      targetHandle: 'in',
+      type: 'fan',
+      className: [
+        'dd-edge dwh-edge direct',
+        edge.kind === 'reportSql' && 'report-link',
+        edge.relationCount > 1 && 'is-aggregated',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      markerEnd: { ...EDGE_MARKER, color: stroke },
+      style: {
+        stroke,
+        strokeWidth: Math.min(3.2, 1.7 + Math.log2(edge.relationCount + 1) * 0.32),
+        opacity: 0.62,
+      },
+      data: {
+        sourceEntityId: edge.target,
+        targetEntityId: edge.source,
+        statementIds: edge.statementIds,
+        hop: edge.minDepth,
+        relationCount: edge.relationCount,
+        originalEdgeIds: edge.originalEdgeIds,
+      },
+    })
   }
 
   return edges
+}
+
+type DwhBuiltMap = {
+  nodes: Node<DwhNodeData>[]
+  edges: Edge[]
+  hops: number[]
+  swimlaneSummary?: {
+    uniqueNodeCount: number
+    occurrenceCount: number
+    relationCount: number
+    relationUseCount: number
+    hiddenSubqueryCount: number
+  }
+}
+
+function buildDwhSwimlaneMap(
+  graph: DwhLineageGraph,
+  visibleSwimlaneKeys: DwhSwimlaneKey[],
+  layout: MapLayout,
+): DwhBuiltMap {
+  const projection = buildDwhSwimlaneProjection(graph, visibleSwimlaneKeys)
+  const rootProjection = projection.nodes.find((node) => node.id === graph.rootId)
+  if (!rootProjection) return { nodes: [], edges: [], hops: [] }
+
+  const root = rootProjection.node
+  const rootSize = mapNodeSizeFor('center', 0, Math.max(1, visibleSwimlaneKeys.length))
+  const rootW = mapNodeWidth(rootSize)
+  const nodes: Node<DwhNodeData>[] = [
+    {
+      id: rootProjection.id,
+      type: 'dwhNode',
+      position: { x: LEFT_X, y: 40 },
+      data: {
+        label: root.label,
+        fullLabel: root.label,
+        showTip: mapLabelNeedsTip(root.label, 60),
+        size: rootSize,
+        sub: root.subtitle ?? rootSubLabel(graph),
+        entityKind: root.entityKind,
+        kind: 'center',
+        hop: 0,
+        tableId: root.tableId,
+        reportId: root.reportId,
+        layer: normalizeDwhLayer(root),
+        memberIds: rootProjection.memberIds,
+        occurrenceCount: rootProjection.occurrenceCount,
+        referenceCount: rootProjection.referenceCount,
+        cycleCount: rootProjection.cycleCount,
+        summaryMode: true,
+      },
+      style: { width: rootW },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      draggable: true,
+    },
+  ]
+
+  for (const projected of projection.nodes) {
+    if (projected.id === graph.rootId) continue
+    const details: string[] = [DWH_SWIMLANE_LABELS[projected.layer].replace(' Katmanı', '')]
+    if (projected.occurrenceCount > 1) details.push(`${projected.occurrenceCount} kullanım`)
+    if (projected.cycleCount > 0) details.push(`${projected.cycleCount} döngü`)
+    nodes.push({
+      id: projected.id,
+      type: 'dwhNode',
+      position: { x: LEFT_X + projected.minDepth * (layout.nodeW + layout.colGap), y: 40 },
+      data: {
+        label: compactMapLabel(projected.node.label, 60),
+        fullLabel: projected.node.label,
+        showTip: mapLabelNeedsTip(projected.node.label, 60),
+        size: 'sm',
+        sub: details.join(' · '),
+        entityKind: projected.node.entityKind,
+        kind: projected.node.kind,
+        hop: projected.minDepth,
+        tableId: projected.node.tableId,
+        reportId: projected.node.reportId,
+        layer: projected.layer,
+        memberIds: projected.memberIds,
+        occurrenceCount: projected.occurrenceCount,
+        referenceCount: projected.referenceCount,
+        cycleCount: projected.cycleCount,
+        summaryMode: true,
+      },
+      style: { width: 260 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+      draggable: true,
+    })
+  }
+
+  const positioned = applyDwhSwimlaneLayout(nodes, graph, projection.edges)
+  return {
+    nodes: positioned,
+    edges: buildDwhSwimlaneEdges(projection.edges, positioned),
+    hops: Array.from(new Set(projection.nodes.map((node) => node.minDepth))).sort((a, b) => a - b),
+    swimlaneSummary: {
+      uniqueNodeCount: projection.nodes.length,
+      occurrenceCount: projection.originalNodeCount,
+      relationCount: projection.edges.length,
+      relationUseCount: projection.edges.reduce((total, edge) => total + edge.relationCount, 0),
+      hiddenSubqueryCount: projection.hiddenSubqueryCount,
+    },
+  }
 }
 
 function buildDwhMap(
@@ -837,19 +1001,18 @@ function buildDwhMap(
   visibleSwimlaneKeys: DwhSwimlaneKey[],
   layout: MapLayout,
   layoutMode: DwhLayoutMode,
-): { nodes: Node<DwhNodeData>[]; edges: Edge[]; hops: number[] } {
+): DwhBuiltMap {
   const { nodeW, colGap, rowGap, tipChars } = layout
   const colPitch = nodeW + colGap
   const root = graph.nodes.find((node) => node.id === graph.rootId) ?? graph.nodes[0]
   if (!root) return { nodes: [], edges: [], hops: [] }
+  if (layoutMode === 'swimlane') {
+    return buildDwhSwimlaneMap(graph, visibleSwimlaneKeys, layout)
+  }
 
   const byHop = new Map<number, DwhLineageNode[]>()
   for (const node of graph.nodes) {
     if (node.id === graph.rootId) continue
-    if (layoutMode === 'swimlane') {
-      if (node.entityKind === 'subquery') continue
-      if (!visibleSwimlaneKeys.includes(normalizeDwhLayer(node))) continue
-    }
     const hop = Math.max(1, node.depth)
     const list = byHop.get(hop) ?? []
     list.push(node)
@@ -858,20 +1021,20 @@ function buildDwhMap(
   const hops = [...byHop.keys()].sort((a, b) => a - b)
   const visibleByHop = new Map<number, DwhLineageNode[]>()
   const collapsedMeta = new Map<number, DwhLineageNode[]>()
+  const parentByNodeId = new Map(graph.edges.map((edge) => [edge.source, edge.target]))
+  const rowOrderByNodeId = new Map<string, number>([[graph.rootId, 0]])
 
   for (const hop of hops) {
-    if (layoutMode !== 'swimlane' && hop > visibleMaxHop) continue
-    const sorted = [...(byHop.get(hop) ?? [])].sort((a, b) => a.label.localeCompare(b.label, 'tr'))
+    if (hop > visibleMaxHop) continue
+    const sorted = [...(byHop.get(hop) ?? [])].sort((a, b) => {
+      const aParentOrder = rowOrderByNodeId.get(parentByNodeId.get(a.id) ?? '') ?? Number.MAX_SAFE_INTEGER
+      const bParentOrder = rowOrderByNodeId.get(parentByNodeId.get(b.id) ?? '') ?? Number.MAX_SAFE_INTEGER
+      return aParentOrder - bParentOrder || a.label.localeCompare(b.label, 'tr')
+    })
+    sorted.forEach((node, row) => rowOrderByNodeId.set(node.id, row))
     const { visible, hidden } = splitLayer(sorted, expandedLayers.has(hop), layoutMode)
     visibleByHop.set(hop, visible)
     if (hidden.length) collapsedMeta.set(hop, hidden)
-  }
-
-  let rowCount = 1
-  for (const hop of hops) {
-    const visible = visibleByHop.get(hop)?.length ?? 0
-    const extra = collapsedMeta.has(hop) ? 1 : 0
-    rowCount = Math.max(rowCount, visible + extra)
   }
 
   const rootSize = layoutMode === 'radial' ? 'md' : mapNodeSizeFor('center', 0, visibleMaxHop)
@@ -882,7 +1045,7 @@ function buildDwhMap(
       type: 'dwhNode',
       position: {
         x: LEFT_X,
-        y: 40 + ((rowCount - 1) * rowGap) / 2,
+        y: 40,
       },
       data: {
         label: root.label,
@@ -895,6 +1058,7 @@ function buildDwhMap(
         hop: 0,
         tableId: root.tableId,
         reportId: root.reportId,
+        layer: normalizeDwhLayer(root),
       },
       style: { width: rootW },
       sourcePosition: Position.Right,
@@ -906,10 +1070,9 @@ function buildDwhMap(
   const visibleIds = new Set<string>([root.id])
 
   for (const hop of hops) {
-    if (layoutMode !== 'swimlane' && hop > visibleMaxHop) continue
+    if (hop > visibleMaxHop) continue
     const visible = visibleByHop.get(hop) ?? []
     visible.forEach((node, i) => {
-      if (layoutMode === 'swimlane' && node.entityKind === 'subquery') return
       visibleIds.add(node.id)
       const size = layoutMode === 'radial' ? 'md' : mapNodeSizeFor('service', hop, visibleMaxHop)
       const w = layoutMode === 'radial' ? layout.nodeW : mapNodeWidth(size)
@@ -931,6 +1094,8 @@ function buildDwhMap(
           hop,
           tableId: node.tableId,
           reportId: node.reportId,
+          layer: normalizeDwhLayer(node),
+          referenceCount: node.kind === 'reference' ? 1 : undefined,
         },
         style: { width: w },
         sourcePosition: Position.Right,
@@ -957,7 +1122,7 @@ function buildDwhMap(
           fullLabel: label,
           showTip: false,
           size,
-          sub: `${hop}. katman`,
+          sub: `${hidden.length} düğüm gizli`,
           kind: 'collapsed',
           hop,
           count: hidden.length,
@@ -1062,13 +1227,9 @@ function buildDwhMap(
           centerWidth: rootW,
           treeParent,
         }).nodes
-      : layoutMode === 'swimlane'
-        ? applyDwhSwimlaneLayout(nodes, graph, layout)
-        : nodes
+      : nodes
 
-  let edges = layoutMode === 'swimlane'
-    ? buildDwhSwimlaneEdges(graph, positioned)
-    : finalEdges
+  let edges = finalEdges
 
   if (layoutMode === 'radial') {
     const posOf = new Map(positioned.filter((node) => node.type === 'dwhNode').map((node) => [node.id, node]))
@@ -1153,6 +1314,7 @@ function DwhLineageMapInner({
   const lastTidyRef = useRef(0)
   const layoutEpochRef = useRef('')
   const prevRootRef = useRef(graph?.rootId ?? '')
+  const skipNextViewportSyncRef = useRef(false)
   const rfInstance = useRef<ReactFlowInstance | null>(null)
 
   useEffect(() => {
@@ -1214,12 +1376,20 @@ function DwhLineageMapInner({
   const layout = useMemo(
     () => {
       const baseLayout = layoutMode === 'radial' ? mapLayoutForRadial() : mapLayoutForDepth(visibleControlLayer)
-      return { ...baseLayout, minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM) }
+      if (layoutMode !== 'ltr') {
+        return { ...baseLayout, minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM) }
+      }
+      return {
+        ...baseLayout,
+        colGap: visibleControlLayer >= 3 ? 150 : 220,
+        rowGap: visibleControlLayer >= 3 ? 88 : 104,
+        minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM),
+      }
     },
     [layoutMode, visibleControlLayer],
   )
 
-  const built = useMemo(
+  const built = useMemo<DwhBuiltMap>(
     () =>
       graph
         ? buildDwhMap(graph, expandedLayers, visibleMaxHop, visibleSwimlaneKeys, layout, layoutMode)
@@ -1235,9 +1405,57 @@ function DwhLineageMapInner({
         .join('|'),
     [built.nodes],
   )
+  const inspectedConnections = useMemo<DwhDrawerConnections>(() => {
+    if (!inspectedNodeRenderId) return { sources: [], targets: [] }
+    const nodeById = new Map(
+      built.nodes
+        .filter((node) => node.data.kind !== 'layerHeader')
+        .map((node) => [node.id, node]),
+    )
+    const collect = (direction: 'source' | 'target') => {
+      const items = new Map<string, DwhDrawerConnection>()
+      for (const edge of built.edges) {
+        const matches = direction === 'source'
+          ? edge.source === inspectedNodeRenderId
+          : edge.target === inspectedNodeRenderId
+        if (!matches) continue
+        const neighborId = direction === 'source' ? edge.target : edge.source
+        const neighbor = nodeById.get(neighborId)
+        if (!neighbor) continue
+        const itemKey = neighbor.data.tableId
+          ? `table:${neighbor.data.tableId}`
+          : neighbor.data.reportId
+            ? `report:${neighbor.data.reportId}`
+            : neighbor.id
+        const relationCount = ((edge.data as DwhEdgeData | undefined)?.relationCount ?? 1)
+        const existing = items.get(itemKey)
+        if (existing) {
+          existing.relationCount += relationCount
+          continue
+        }
+        items.set(itemKey, {
+          id: itemKey,
+          label: neighbor.data.fullLabel || neighbor.data.label,
+          meta: neighbor.data.layer
+            ? DWH_SWIMLANE_LABELS[neighbor.data.layer]
+            : neighbor.data.sub,
+          relationCount,
+        })
+      }
+      return Array.from(items.values()).sort((a, b) => a.label.localeCompare(b.label, 'tr'))
+    }
+    return {
+      sources: collect('source'),
+      targets: collect('target'),
+    }
+  }, [built.edges, built.nodes, inspectedNodeRenderId])
 
   useLayoutEffect(() => {
     if (!active) return
+    if (skipNextViewportSyncRef.current) {
+      skipNextViewportSyncRef.current = false
+      return
+    }
     let raf1 = 0
     let raf2 = 0
     raf1 = requestAnimationFrame(() => {
@@ -1380,18 +1598,35 @@ function DwhLineageMapInner({
     const root = mapRef.current
     if (!root) return
     const active = Boolean(focusId)
+    const focusNodeIds = new Set<string>()
+    const focusEdgeIds = new Set<string>()
+    if (focusId) {
+      focusNodeIds.add(focusId)
+      const queue = [focusId]
+      while (queue.length) {
+        const currentId = queue.shift()
+        if (!currentId) break
+        for (const edge of edges) {
+          if (edge.target !== currentId || focusEdgeIds.has(edge.id)) continue
+          focusEdgeIds.add(edge.id)
+          if (!focusNodeIds.has(edge.source)) {
+            focusNodeIds.add(edge.source)
+            queue.push(edge.source)
+          }
+        }
+      }
+      for (const edge of edges) {
+        if (edge.source !== focusId) continue
+        focusEdgeIds.add(edge.id)
+        focusNodeIds.add(edge.target)
+      }
+    }
     root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
       const id = el.getAttribute('data-id') ?? ''
       el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
       el.classList.toggle('dwh-node-inspected', id === inspectedNodeRenderId)
       if (!active) return
-      const on =
-        id === focusId ||
-        edges.some(
-          (edge) =>
-            (edge.source === focusId || edge.target === focusId) &&
-            (edge.source === id || edge.target === id),
-        )
+      const on = focusNodeIds.has(id)
       el.classList.add(on ? 'rf-path-on' : 'rf-path-off')
       if (id === focusId) el.classList.add('rf-path-focus')
     })
@@ -1402,8 +1637,7 @@ function DwhLineageMapInner({
         el.getAttribute('data-testid')?.replace(/^rf__edge-/, '') ??
         el.getAttribute('data-id') ??
         ''
-      const edge = edges.find((item) => item.id === edgeId)
-      const on = edge && (edge.source === focusId || edge.target === focusId)
+      const on = focusEdgeIds.has(edgeId)
       el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
     })
   }, [edges, focusId, inspectedNodeRenderId])
@@ -1415,6 +1649,7 @@ function DwhLineageMapInner({
         return
       }
       if (node.data.kind === 'collapsed') {
+        skipNextViewportSyncRef.current = true
         setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
         return
       }
@@ -1458,10 +1693,25 @@ function DwhLineageMapInner({
       onMouseLeave={() => setFocusId(null)}
     >
       {graph.truncated ? (
-        <p className="map-budget-hint">Grafik sınır nedeniyle kısaltıldı.</p>
+        <p className="map-budget-hint">
+          Grafik güvenlik sınırında kesildi (en fazla 900 düğüm ve {graph.maxDepth} seviye); görünmeyen lineage dalları olabilir.
+        </p>
       ) : null}
       <div className="dwh-map-canvas-row">
       <div className="map-canvas map-canvas-dock-host">
+        {layoutMode === 'swimlane' && built.swimlaneSummary ? (
+          <div className="dwh-swimlane-projection-stats" aria-label="Katmanlı görünüm özeti">
+            <strong>{Math.max(0, built.swimlaneSummary.uniqueNodeCount - 1)} tekil kaynak</strong>
+            <span>{Math.max(0, built.swimlaneSummary.occurrenceCount - 1)} kullanım</span>
+            <span>{built.swimlaneSummary.relationCount} tekil ilişki</span>
+            {built.swimlaneSummary.relationUseCount > built.swimlaneSummary.relationCount ? (
+              <span>{built.swimlaneSummary.relationUseCount} bağlantı kaydı</span>
+            ) : null}
+            {built.swimlaneSummary.hiddenSubqueryCount > 0 ? (
+              <span>{built.swimlaneSummary.hiddenSubqueryCount} SQL grubu özetlendi</span>
+            ) : null}
+          </div>
+        ) : null}
         {(onVisitBack || onVisitForward) && (
           <div className="path-layer-bar dwh-map-visit-nav">
             <div className="path-layer-start" />
@@ -1499,18 +1749,12 @@ function DwhLineageMapInner({
               }}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
-              fitView
-              fitViewOptions={{
-                padding: layout.fitPadding,
-                minZoom: layout.minZoom,
-                maxZoom: layout.maxZoom,
-              }}
               nodesDraggable
               nodeDragThreshold={4}
               selectNodesOnDrag={false}
               nodesConnectable={false}
               panOnDrag
-              onlyRenderVisibleElements={false}
+              onlyRenderVisibleElements
               minZoom={layout.minZoom}
               maxZoom={layout.maxZoom}
               onNodeClick={onNodeClick}
@@ -1538,13 +1782,15 @@ function DwhLineageMapInner({
               <MapViewportSync
                 centerId={graph.rootId}
                 visibleMaxHop={visibleControlLayer}
-                layoutKey={`${expandedLayers.size}-${graph.rootId}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleControlLayer}-${mapExpanded}`}
+                layoutKey={`${graph.rootId}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleControlLayer}-${mapExpanded}`}
                 layout={layout}
                 layoutMode={flowLayoutMode}
                 drawerOpen={infoPanelOpen}
                 mapExpanded={mapExpanded}
                 viewportSyncKey={viewportSyncKey}
-                topAligned={layoutMode === 'swimlane'}
+                topAligned={layoutMode !== 'radial'}
+                readableMinZoom={layoutMode === 'swimlane' ? 0.46 : 0.42}
+                rightAlignOnLayerChange
               />
               <Background
                 variant={BackgroundVariant.Dots}
@@ -1605,32 +1851,37 @@ function DwhLineageMapInner({
                 setLayoutMode((mode) => (mode === 'radial' ? 'ltr' : 'radial'))
                 setTidyNonce((nonce) => nonce + 1)
               }}
-              layerTitle={layoutMode === 'swimlane' ? 'DWH Katmanı' : undefined}
+              layerTitle={layoutMode === 'swimlane' ? 'DWH Katmanı' : 'Seviye'}
               collapseAllLabel={
                 layoutMode === 'swimlane'
                   ? `Sadece ${DWH_SWIMLANE_LABELS[swimlaneKeys[0] ?? 'LD']} katmanını göster`
-                  : undefined
+                  : 'Yalnızca doğrudan kaynakları göster'
               }
               collapseLayerLabel={
                 layoutMode === 'swimlane'
                   ? visibleControlLayer > 1
                     ? `${DWH_SWIMLANE_LABELS[swimlaneKeys[visibleControlLayer - 1] ?? 'LD']} katmanını kapat`
                     : 'İlk DWH katmanı açık'
-                  : undefined
+                  : visibleControlLayer > 1
+                    ? `${visibleControlLayer - 1}. seviyeye dön`
+                    : 'İlk seviye açık'
               }
               expandLayerLabel={
                 layoutMode === 'swimlane'
                   ? visibleControlLayer < swimlaneMaxLayer
                     ? `${DWH_SWIMLANE_LABELS[swimlaneKeys[visibleControlLayer] ?? 'LD']} katmanını aç`
                     : 'Tüm DWH katmanları açık'
-                  : undefined
+                  : visibleControlLayer < graphMaxHop
+                    ? `${visibleControlLayer + 1}. seviyeyi aç`
+                    : 'Tüm seviyeler açık'
               }
-              expandAllLabel={layoutMode === 'swimlane' ? 'Tüm DWH katmanlarını aç' : undefined}
+              expandAllLabel={layoutMode === 'swimlane' ? 'Tüm DWH katmanlarını aç' : 'Tüm seviyeleri aç'}
               layerStatusLabel={
                 layoutMode === 'swimlane'
                   ? `${visibleControlLayer} / ${swimlaneMaxLayer} DWH katmanı görünür`
-                  : undefined
+                  : `${visibleControlLayer} / ${graphMaxHop} seviye görünür`
               }
+              autoFitAfterTidy={false}
             />
           </ReactFlowProvider>
         ) : (
@@ -1642,6 +1893,7 @@ function DwhLineageMapInner({
         node={inspectedNode}
         summary={nodeSummary}
         graphStats={graphNodeStats}
+        connections={inspectedConnections}
         loading={summaryLoading}
         error={summaryError}
         onOpenChange={setInfoPanelOpen}

@@ -115,7 +115,7 @@ export type DwhSqlStatement = {
 export type DwhTreeConnection =
   | {
       type: 'statement'
-      targetTableId: number
+      targetTableId?: number
       sourceTableId: number
       statementIds: number[]
     }

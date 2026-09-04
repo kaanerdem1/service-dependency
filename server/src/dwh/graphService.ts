@@ -24,6 +24,14 @@ type WalkContext = {
   expandedEntityKeys: Set<string>
 }
 
+type WalkTask = {
+  entityKind: 'table' | 'report' | 'subquery'
+  entityId: number
+  nodeId: string
+  depth: number
+  pathEntityKeys: Set<string>
+}
+
 function treeEntityKind(node: Pick<DwhTreeNode, 'kind'>): DwhLineageEntityKind | undefined {
   if (node.kind === 'table' || node.kind === 'report' || node.kind === 'subquery') return node.kind
   return undefined
@@ -175,13 +183,14 @@ function edgeFromChild(child: DwhTreeNode, childId: string, parentId: string): D
   }
 }
 
-async function addChildBranch(
+function addChildBranch(
   child: DwhTreeNode,
   parentNodeId: string,
   childDepth: number,
   siblingIndex: number,
   pathEntityKeys: Set<string>,
   context: WalkContext,
+  queue: WalkTask[],
 ) {
   const entityKey = treeEntityKey(child)
   if (!entityKey) return
@@ -200,55 +209,72 @@ async function addChildBranch(
   if (!context.graph.addNode(childNode)) return
   context.graph.addEdge(edgeFromChild(child, childNode.id, parentNodeId))
 
-  if (isCycle || isReference || childDepth >= context.maxDepth || !context.graph.hasNodeCapacity()) return
+  if (isCycle || isReference) return
+  if (childDepth >= context.maxDepth) {
+    if (child.hasChildren) context.graph.markTruncated()
+    return
+  }
+  if (!context.graph.hasNodeCapacity()) return
 
   if (child.kind === 'table' && child.tableId) {
     context.expandedEntityKeys.add(entityKey)
-    await walkTable(child.tableId, childNode.id, childDepth, new Set([...pathEntityKeys, entityKey]), context)
+    queue.push({
+      entityKind: 'table',
+      entityId: child.tableId,
+      nodeId: childNode.id,
+      depth: childDepth,
+      pathEntityKeys: new Set([...pathEntityKeys, entityKey]),
+    })
   } else if (child.kind === 'subquery' && child.subqueryId) {
     context.expandedEntityKeys.add(entityKey)
-    await walkSubquery(child.subqueryId, childNode.id, childDepth, new Set([...pathEntityKeys, entityKey]), context)
+    queue.push({
+      entityKind: 'subquery',
+      entityId: child.subqueryId,
+      nodeId: childNode.id,
+      depth: childDepth,
+      pathEntityKeys: new Set([...pathEntityKeys, entityKey]),
+    })
   }
 }
 
-async function walkTable(
-  currentTableId: number,
-  parentNodeId: string,
-  depth: number,
-  pathEntityKeys: Set<string>,
-  context: WalkContext,
-) {
-  if (depth >= context.maxDepth || !context.graph.hasNodeCapacity()) return
-  const response = await listTableTreeChildren(currentTableId, context.simple)
-  let siblingIndex = 0
-  for (const child of response.children) {
-    if (child.kind === 'empty') continue
-    await addChildBranch(child, parentNodeId, depth + 1, siblingIndex, pathEntityKeys, context)
-    siblingIndex += 1
+async function walkBreadthFirst(initialTask: WalkTask, context: WalkContext) {
+  const queue: WalkTask[] = [initialTask]
+  let cursor = 0
+
+  while (cursor < queue.length) {
     if (!context.graph.hasNodeCapacity()) {
       context.graph.markTruncated()
-      break
+      return
     }
-  }
-}
+    const task = queue[cursor]
+    cursor += 1
+    if (!task) continue
+    if (task.depth >= context.maxDepth) continue
 
-async function walkSubquery(
-  subqueryId: number,
-  parentNodeId: string,
-  depth: number,
-  pathEntityKeys: Set<string>,
-  context: WalkContext,
-) {
-  if (depth >= context.maxDepth || !context.graph.hasNodeCapacity()) return
-  const response = await listSubqueryTreeChildren(subqueryId)
-  let siblingIndex = 0
-  for (const child of response.children) {
-    if (child.kind === 'empty') continue
-    await addChildBranch(child, parentNodeId, depth + 1, siblingIndex, pathEntityKeys, context)
-    siblingIndex += 1
-    if (!context.graph.hasNodeCapacity()) {
-      context.graph.markTruncated()
-      break
+    const response =
+      task.entityKind === 'table'
+        ? await listTableTreeChildren(task.entityId, context.simple)
+        : task.entityKind === 'report'
+          ? await listReportTreeChildren(task.entityId)
+          : await listSubqueryTreeChildren(task.entityId)
+
+    let siblingIndex = 0
+    for (const child of response.children) {
+      if (child.kind === 'empty') continue
+      addChildBranch(
+        child,
+        task.nodeId,
+        task.depth + 1,
+        siblingIndex,
+        task.pathEntityKeys,
+        context,
+        queue,
+      )
+      siblingIndex += 1
+      if (!context.graph.hasNodeCapacity()) {
+        context.graph.markTruncated()
+        return
+      }
     }
   }
 }
@@ -273,7 +299,16 @@ export async function buildTableLineageGraph(
     expandedEntityKeys: new Set([rootEntityKey]),
   }
 
-  await walkTable(table.tableId, rootId, 0, new Set([rootEntityKey]), context)
+  await walkBreadthFirst(
+    {
+      entityKind: 'table',
+      entityId: table.tableId,
+      nodeId: rootId,
+      depth: 0,
+      pathEntityKeys: new Set([rootEntityKey]),
+    },
+    context,
+  )
   return graph.toGraph()
 }
 
@@ -306,17 +341,16 @@ export async function buildReportLineageGraph(
     expandedEntityKeys: new Set([rootEntityKey]),
   }
 
-  const response = await listReportTreeChildren(report.reportId)
-  let siblingIndex = 0
-  for (const child of response.children) {
-    if (child.kind !== 'table' || !child.tableId) continue
-    await addChildBranch(child, rootId, 1, siblingIndex, new Set([rootEntityKey]), context)
-    siblingIndex += 1
-    if (!context.graph.hasNodeCapacity()) {
-      context.graph.markTruncated()
-      break
-    }
-  }
+  await walkBreadthFirst(
+    {
+      entityKind: 'report',
+      entityId: report.reportId,
+      nodeId: rootId,
+      depth: 0,
+      pathEntityKeys: new Set([rootEntityKey]),
+    },
+    context,
+  )
 
   return graph.toGraph()
 }
