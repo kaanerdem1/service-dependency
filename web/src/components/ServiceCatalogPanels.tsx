@@ -111,11 +111,15 @@ function ScreenListPanel({
         <EmptyState
           variant="catalog"
           what={
-            filter === 'all'
-              ? 'Bu servise bağlı ekran kaydı yok.'
-              : `${pageTypeLabel(filter)} türünde ekran bağlantısı yok.`
+            filter === 'all' || screens.length === 0
+              ? 'Bu servis envanterde bir ekrana bağlı görünmüyor.'
+              : `${pageTypeLabel(filter)} türünde ekran kaydı yok.`
           }
-          action="Envanterde screen_service ilişkisi seyrek; çoğu serviste liste boş kalır."
+          action={
+            filter === 'all' || screens.length === 0
+              ? 'Envanterde ekran eşleşmesi seyrek; etki analizi için Harita veya Tablo sekmesini kullanın.'
+              : 'Tümü sekmesine geçerek diğer ekran türlerine bakın.'
+          }
         />
       ) : (
         <ul className="service-link-list">
@@ -152,7 +156,7 @@ function ProcessListPanel({
     return (
       <EmptyState
         variant="catalog"
-        what="Process bağlantıları yükleniyor."
+        what="Süreç bağlantıları yükleniyor."
         action="Birkaç saniye bekleyin."
       />
     )
@@ -162,8 +166,8 @@ function ProcessListPanel({
     return (
       <EmptyState
         variant="catalog"
-        what="Bu servise bağlı process kaydı yok."
-        action="Envanterde process_service ilişkisi seyrek; çoğu serviste liste boş kalır."
+        what="Bu servis envanterde bir iş sürecine bağlı görünmüyor."
+        action="Süreç eşleşmesi seyrek; teknik bağımlılık için Harita veya Tablo sekmesine bakın."
       />
     )
   }

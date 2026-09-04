@@ -315,6 +315,13 @@ function isArtifactNode(node: ModuleNode): boolean {
   return node.kind === 'package' && node.id.startsWith('art-')
 }
 
+function treeNodeLabel(node: ModuleNode): string {
+  if (node.kind === 'package' && node.name.toLowerCase().endsWith('.jar')) {
+    return node.name.slice(0, -4)
+  }
+  return node.name
+}
+
 function TreeLoadMoreRow({
   depth,
   remaining,
@@ -645,7 +652,7 @@ function TreeItem({
   const tipText =
     node.kind === 'group' && node.description
       ? `${node.name} — ${node.description}`
-      : node.name
+      : treeNodeLabel(node)
   const tipHandlers = useTreeTipHandlers(tipText, {
     force: node.kind === 'group' && Boolean(node.description),
   })
@@ -787,7 +794,7 @@ function TreeItem({
           }}
         >
           <span className="tree-label-stack">
-            <span className="tree-label">{node.name}</span>
+            <span className="tree-label">{treeNodeLabel(node)}</span>
             {node.kind === 'group' && node.description ? (
               <span className="tree-group-desc">{node.description}</span>
             ) : null}
@@ -1453,11 +1460,45 @@ export function ModuleTree({
     [],
   )
 
-  useModuleTreeKeyboard({
+  const { clearFocus: clearTreeFocus, focusNavId: focusTreeNavId } = useModuleTreeKeyboard({
     enabled: keyboardEnabled,
     scrollParentRef,
     treeRef: listRef,
   })
+
+  const prevCatalogNodeIdRef = useRef<string | undefined>(selectedCatalogNodeId)
+
+  useEffect(() => {
+    const prev = prevCatalogNodeIdRef.current
+    prevCatalogNodeIdRef.current = selectedCatalogNodeId
+    if (prev && !selectedCatalogNodeId && selectedServiceId) {
+      clearTreeFocus()
+    }
+  }, [selectedCatalogNodeId, selectedServiceId, clearTreeFocus])
+
+  useEffect(() => {
+    if (!pinServiceId || pinServiceId !== selectedServiceId) return
+    const scrollEl = scrollParentRef?.current
+    if (!scrollEl || !selectedServiceId) {
+      clearTreeFocus()
+      return
+    }
+    const row = scrollEl
+      .querySelector<HTMLElement>(`[data-tree-service="${CSS.escape(selectedServiceId)}"]`)
+      ?.closest<HTMLElement>('[data-tree-nav]')
+    if (row) {
+      focusTreeNavId(row.dataset.treeNav ?? null)
+    } else {
+      clearTreeFocus()
+    }
+  }, [
+    pinServiceId,
+    selectedServiceId,
+    followGen,
+    scrollParentRef,
+    clearTreeFocus,
+    focusTreeNavId,
+  ])
 
   return (
     <TreeTipContext.Provider value={tipContext}>

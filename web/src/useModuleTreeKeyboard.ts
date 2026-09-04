@@ -227,5 +227,16 @@ export function useModuleTreeKeyboard({
     }
   }, [enabled, scrollParentRef, treeRef, syncFocusClass, setFocus])
 
-  return { kbdNavId }
+  const clearFocus = useCallback(() => {
+    setFocus(null)
+  }, [setFocus])
+
+  const focusNavId = useCallback(
+    (navId: string | null) => {
+      setFocus(navId)
+    },
+    [setFocus],
+  )
+
+  return { kbdNavId, clearFocus, focusNavId }
 }

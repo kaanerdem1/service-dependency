@@ -1,6 +1,10 @@
 import { animate, useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
-import { getCatalogArtifactDetail, getCatalogGroupDetail } from '../api/client'
+import {
+  getCatalogArtifactDetail,
+  getCatalogGroupDetail,
+  getModuleChildren,
+} from '../api/client'
 import { EmptyState } from './EmptyState'
 import { TreeKindIcon } from './TreeKindIcon'
 import type { CatalogArtifactDetail, CatalogGroupDetail } from '../types'
@@ -13,6 +17,8 @@ type Props = {
   onSelectService: (serviceId: string) => void
   onDismiss?: () => void
 }
+
+const JAR_SERVICE_PAGE_SIZE = 24
 
 function uniqueTeams(projects: { responsibleItTeam: string | null; responsibleBusinessUnit: string | null }[]) {
   const it = new Set<string>()
@@ -193,6 +199,34 @@ function ArtifactOverview({
   onSelectService: (serviceId: string) => void
   onDismiss?: () => void
 }) {
+  const [services, setServices] = useState(detail.sampleServices)
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  useEffect(() => {
+    setServices(detail.sampleServices)
+    setLoadingMore(false)
+  }, [detail.id, detail.sampleServices])
+
+  const remaining = Math.max(0, detail.serviceCount - services.length)
+  const hasMore = remaining > 0
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const page = await getModuleChildren(detail.id, {
+        limit: JAR_SERVICE_PAGE_SIZE,
+        offset: services.length,
+      })
+      const next = page.items
+        .filter((item) => item.serviceId)
+        .map((item) => ({ id: item.serviceId!, name: item.name }))
+      setServices((prev) => [...prev, ...next])
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   return (
     <article className="ce-page">
       <header className="ce-hero">
@@ -246,10 +280,6 @@ function ArtifactOverview({
                   </div>
                 ) : null}
                 <div className="ce-kv-row">
-                  <dt>Proje</dt>
-                  <dd>{detail.project.name}</dd>
-                </div>
-                <div className="ce-kv-row">
                   <dt>Proje Grubu</dt>
                   <dd>{detail.group.name}</dd>
                 </div>
@@ -258,19 +288,19 @@ function ArtifactOverview({
           </section>
         </aside>
 
-        {detail.sampleServices.length > 0 ? (
+        {services.length > 0 ? (
           <section className="ce-panel ce-panel-main">
             <header className="ce-panel-head">
               <h3 className="ce-panel-title">Servisler</h3>
               <span className="ce-panel-count">
-                {detail.serviceCount > detail.sampleServices.length
-                  ? `${detail.sampleServices.length} / ${detail.serviceCount}`
-                  : detail.sampleServices.length}
+                {detail.serviceCount > services.length
+                  ? `${services.length} / ${detail.serviceCount}`
+                  : services.length}
               </span>
             </header>
             <div className="ce-panel-body ce-panel-scroll">
               <ul className="ce-svc-list">
-                {detail.sampleServices.map((svc) => (
+                {services.map((svc) => (
                   <li key={svc.id}>
                     <button
                       type="button"
@@ -286,6 +316,18 @@ function ArtifactOverview({
                   </li>
                 ))}
               </ul>
+              {hasMore ? (
+                <button
+                  type="button"
+                  className="ce-load-more"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore
+                    ? 'Yükleniyor…'
+                    : `+${Math.min(JAR_SERVICE_PAGE_SIZE, remaining)} adet daha göster`}
+                </button>
+              ) : null}
             </div>
           </section>
         ) : null}
