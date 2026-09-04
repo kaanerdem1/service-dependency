@@ -40,6 +40,7 @@ import { MethodImpactMap } from './components/MethodImpactMap'
 import { CatalogEntityOverview } from './components/CatalogEntityOverview'
 import { ModuleTree } from './components/ModuleTree'
 import { CommandPalette } from './components/CommandPalette'
+import { SearchHitContent } from './components/SearchHitContent'
 import { ServiceOverview } from './components/ServiceOverview'
 import {
   ServiceProcessesStage,
@@ -60,7 +61,9 @@ import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
 import { TreeKindIcon } from './components/TreeKindIcon'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
+import { FavoriteStarButton } from './components/FavoriteStarButton'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
+import { useServiceFavorites } from './useServiceFavorites'
 import {
   getChangeRequest,
   getImpactGraph,
@@ -257,6 +260,7 @@ export default function App() {
   const sidebarBodyRef = useRef<HTMLDivElement>(null)
 
   const { trail, buildClientPayload } = useSnapshotPack()
+  const { isFavorite, toggleFavorite } = useServiceFavorites()
 
   const [session, setSession] = useState<SessionUser>()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
@@ -1010,15 +1014,12 @@ export default function App() {
                         setQuery('')
                       }}
                     >
-                      <span className="search-hit-main">
-                        <span
-                          className="search-hit-text name-tip is-short"
-                          data-tip={s.name}
-                        >
-                          <strong>{s.name}</strong>
-                        </span>
-                        <span className="hit-tag hit-tag-service">Servis</span>
-                      </span>
+                      <SearchHitContent
+                        title={s.name}
+                        kind="service"
+                        metaId={s.id}
+                        tip={s.name}
+                      />
                     </button>
                   </MotionListItem>
                 ))}
@@ -1031,23 +1032,13 @@ export default function App() {
                         setQuery('')
                       }}
                     >
-                      <span className="search-hit-main">
-                        <span
-                          className="search-hit-text name-tip is-short"
-                          data-tip={`${m.className}.${m.name}`}
-                        >
-                          <strong>
-                            {m.className}.{m.name}
-                          </strong>
-                        </span>
-                        <span className="hit-tag hit-tag-method">Metod</span>
-                      </span>
-                      <span
-                        className="method-hit-svc name-tip is-short"
-                        data-tip={m.serviceName}
-                      >
-                        {m.serviceName}
-                      </span>
+                      <SearchHitContent
+                        title={`${m.className}.${m.name}`}
+                        kind="method"
+                        metaId={m.id}
+                        subtitle={m.serviceName}
+                        tip={`${m.className}.${m.name}`}
+                      />
                     </button>
                   </MotionListItem>
                 ))}
@@ -1149,9 +1140,19 @@ export default function App() {
                 <div className="stage-head">
                   <div className="main-heading-wrap">
                     <span className="service-status-dot" aria-hidden />
-                    <h1 className="main-heading" title={service?.name}>
-                      {service?.name}
-                    </h1>
+                    <div className="main-heading-title-row">
+                      <h1 className="main-heading" title={service?.name}>
+                        {service?.name}
+                      </h1>
+                      {pivotId && service ? (
+                        <FavoriteStarButton
+                          active={isFavorite(pivotId)}
+                          className="fav-star-btn is-plain stage-heading-fav"
+                          size={16}
+                          onToggle={() => toggleFavorite(pivotId, service.name)}
+                        />
+                      ) : null}
+                    </div>
                   </div>
                   <div className="stage-actions">
                     <button
@@ -1435,10 +1436,12 @@ export default function App() {
 
       <CommandPalette
         open={cmdkOpen}
+        theme={appTheme}
         onOpenChange={setCmdkOpen}
         frequent={frequentRecents}
         visitTrail={visitTrailForCmdk}
         onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
+        onSelectMethod={selectMethod}
         onOpenInbox={() => setInboxOpen(true)}
       />
 
