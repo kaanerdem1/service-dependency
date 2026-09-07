@@ -1148,20 +1148,6 @@ export function applyRadialLayout<T extends RadialLayoutNode>(
       return (n?.data.fullLabel ?? n?.data.label ?? id).toLowerCase()
     },
   )
-  for (const hop of hops) {
-    if (hop <= 1) continue
-    const ids = (byHop.get(hop) ?? []).map((n) => n.id)
-    if (ids.length < 2) continue
-    ids.sort((a, b) =>
-      String(idToNode.get(a)?.data.label ?? a).localeCompare(
-        String(idToNode.get(b)?.data.label ?? b),
-        'tr',
-      ),
-    )
-    ids.forEach((id, i) => {
-      angles.set(id, -Math.PI / 2 + ((i + 0.5) / ids.length) * Math.PI * 2)
-    })
-  }
 
   const hopNames = new Map<number, { id: string; name: string }[]>()
   for (const hop of hops) {

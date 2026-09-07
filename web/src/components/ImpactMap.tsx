@@ -34,7 +34,6 @@ import ReactFlow, {
   ReactFlowProvider,
   applyNodeChanges,
   getBezierPath,
-  getStraightPath,
   useEdgesState,
   useNodesState,
   type Edge,
@@ -64,6 +63,7 @@ import {
 import {
   RADIAL_CENTER_HIT,
   RADIAL_DOT_R,
+  RADIAL_EDGE_END_GAP,
   RADIAL_HIT,
   applyRadialLayout,
   compactMapLabel,
@@ -80,7 +80,6 @@ import {
   radialLabelSide,
   radialNodeHitStyle,
   radialMaxZoom,
-  radialSpokeEnds,
   wrapRadialName,
   type MapLayout,
   type MapLayoutMode,
@@ -961,7 +960,7 @@ function FanEdge({
   )
 }
 
-/** Radial: eğri + yön oku yolun ortasında (uçta isim/nokta ile kesişmesin) */
+/** Radial: eğri + yön oku — React Flow handle koordinatları sürüklemede güncellenir */
 function RadialEdge({
   id,
   sourceX,
@@ -971,36 +970,15 @@ function RadialEdge({
   style,
   data,
 }: EdgeProps<FanEdgeData>) {
-  const cx = data?.cx
-  const cy = data?.cy
-  const geom = (() => {
-    if (typeof cx !== 'number' || typeof cy !== 'number') {
-      const [path] = getStraightPath({ sourceX, sourceY, targetX, targetY })
-      const mx = (sourceX + targetX) / 2
-      const my = (sourceY + targetY) / 2
-      return {
-        path,
-        mx,
-        my,
-        angle: Math.atan2(targetY - sourceY, targetX - sourceX),
-      }
-    }
-    const ends = radialSpokeEnds(
-      cx,
-      cy,
-      {
-        x: data?.sx ?? sourceX,
-        y: data?.sy ?? sourceY,
-        r: data?.sr ?? 9,
-      },
-      {
-        x: data?.tx ?? targetX,
-        y: data?.ty ?? targetY,
-        r: data?.tr ?? 9,
-      },
-    )
-    return radialEdgeGeometry(ends.sx, ends.sy, ends.tx, ends.ty, cx, cy)
-  })()
+  const tr = data?.tr ?? RADIAL_DOT_R
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const dist = Math.hypot(dx, dy) || 1
+  const ux = dx / dist
+  const uy = dy / dist
+  const tx = targetX - ux * (tr + RADIAL_EDGE_END_GAP)
+  const ty = targetY - uy * (tr + RADIAL_EDGE_END_GAP)
+  const geom = radialEdgeGeometry(sourceX, sourceY, tx, ty, 0, 0)
   const fill = (style?.stroke as string) || '#6e6e6e'
   return (
     <>
