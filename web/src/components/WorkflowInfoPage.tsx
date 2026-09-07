@@ -1,20 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  CHANGE_KINDS,
-  hydrateDetails,
-  latestServiceChange,
-} from './ServiceChangeLog'
 import { WorkflowFolderGlyph } from './WorkflowIcons'
-import { WorkflowStepReorder } from './WorkflowStepReorder'
+import { WorkflowFlowCanvas } from './WorkflowFlowCanvas'
 import {
   WORKFLOWS_CHANGED_EVENT,
   childFolders,
   folderAcceptsSteps,
-  placeWorkflowStep,
   readWorkflows,
-  removeWorkflowStep,
   stepsInFolder,
-  type WorkflowStep,
   type WorkflowsStore,
 } from '../workflowStore'
 
@@ -23,40 +15,7 @@ type Props = {
   onSelectService: (serviceId: string) => void
   onOpenFolder: (folderId: string) => void
   onDismiss: () => void
-}
-
-function excerpt(text?: string) {
-  const t = text?.trim()
-  if (!t) return null
-  return t.length > 88 ? `${t.slice(0, 85)}…` : t
-}
-
-function handshake(
-  prev: WorkflowStep,
-  next: WorkflowStep,
-): { status: 'ok' | 'watch'; title: string; detail?: string } | null {
-  const prevChange = latestServiceChange(prev.serviceId)
-  const nextChange = latestServiceChange(next.serviceId)
-  const prevDetails = prevChange ? hydrateDetails(prevChange) : {}
-  const nextDetails = nextChange ? hydrateDetails(nextChange) : {}
-  const prevOut = prevChange?.kinds.includes('output')
-  const nextIn = nextChange?.kinds.includes('input')
-
-  if (prevOut && nextIn) {
-    return {
-      status: 'ok',
-      title: 'Çıktı → girdi notu var',
-      detail: excerpt(nextDetails.input) ?? excerpt(prevDetails.output) ?? undefined,
-    }
-  }
-  if (prevOut && !nextIn) {
-    return {
-      status: 'watch',
-      title: 'Çıktı notu var, sonraki girdide not yok',
-      detail: excerpt(prevDetails.output) ?? undefined,
-    }
-  }
-  return null
+  canEdit?: boolean
 }
 
 export function WorkflowInfoPage({
@@ -64,6 +23,7 @@ export function WorkflowInfoPage({
   onSelectService,
   onOpenFolder,
   onDismiss,
+  canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
 
@@ -175,40 +135,19 @@ export function WorkflowInfoPage({
           </div>
           {steps.length === 0 ? (
             <div className="wf-info-blank">
-              <p>Henüz adım yok. Drawer’dan bu akışın üzerine sürükleyin.</p>
+              <p>
+                {canEdit
+                  ? 'Henüz adım yok. Drawer’dan bu akışın üzerine sürükleyin.'
+                  : 'Henüz adım yok.'}
+              </p>
             </div>
           ) : (
-            <WorkflowStepReorder
-              folderId={folder.id}
+            <WorkflowFlowCanvas
+              store={store}
               steps={steps}
-              variant="info"
-              onPlace={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
-              onSelect={onSelectService}
-              onRemove={(id) => setStore(removeWorkflowStep(id))}
-              afterRow={(step) => {
-                const i = steps.findIndex((s) => s.id === step.id)
-                const next = i >= 0 ? steps[i + 1] : undefined
-                if (!next) return null
-                const link = handshake(step, next)
-                if (!link) return null
-                const change = latestServiceChange(step.serviceId)
-                const kinds = CHANGE_KINDS.filter((k) => change?.kinds.includes(k.id))
-                return (
-                  <div className={`wf-info-link is-${link.status} is-compact`}>
-                    {kinds.length > 0 ? (
-                      <span className="wf-info-chips">
-                        {kinds.map((k) => (
-                          <span key={k.id} className={`wf-info-chip is-${k.id}`}>
-                            {k.label}
-                          </span>
-                        ))}
-                      </span>
-                    ) : null}
-                    <span className="wf-info-link-label">{link.title}</span>
-                    {link.detail ? <span className="wf-info-link-detail">{link.detail}</span> : null}
-                  </div>
-                )
-              }}
+              canEdit={canEdit}
+              onStore={setStore}
+              onSelectService={onSelectService}
             />
           )}
         </section>

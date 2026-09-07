@@ -48,6 +48,7 @@ type Props = {
   onSelectService: (serviceId: string) => void
   onOpenFolder: (folderId: string) => void
   infoFolderId?: string
+  canEdit?: boolean
 }
 
 function isWorkflowDrag(e: ReactDragEvent) {
@@ -128,6 +129,7 @@ function DropZone({
   children,
   acceptSteps = true,
   acceptFolders = true,
+  locked = false,
   onDropStep,
   onDropFolder,
 }: {
@@ -135,6 +137,7 @@ function DropZone({
   children: ReactNode
   acceptSteps?: boolean
   acceptFolders?: boolean
+  locked?: boolean
   onDropStep: (stepId: string, folderId?: string) => void
   onDropFolder?: (dragFolderId: string, folderId?: string) => void
 }) {
@@ -143,6 +146,7 @@ function DropZone({
   const reset = useCallback(() => setOver(false), [])
 
   const allowsCurrent = () => {
+    if (locked) return false
     const kind = peekWorkflowDrag()
     if (kind === 'step') return acceptSteps
     if (kind === 'folder') return acceptFolders
@@ -230,6 +234,7 @@ function FolderBlock({
   editingFolderId,
   onStartEdit,
   onStopEdit,
+  canEdit = true,
 }: {
   folder: WorkflowFolder
   store: WorkflowsStore
@@ -251,6 +256,7 @@ function FolderBlock({
   editingFolderId?: string
   onStartEdit: (id: string) => void
   onStopEdit: () => void
+  canEdit?: boolean
 }) {
   const editing = editingFolderId === folder.id
   const items = stepsInFolder(store, folder.id)
@@ -273,14 +279,15 @@ function FolderBlock({
       <DropZone
         folderId={folder.id}
         acceptSteps={!organizer}
+        locked={!canEdit}
         onDropStep={onMove}
         onDropFolder={onMoveFolder}
       >
         <div
           className="sc-folder-head"
-          draggable
-          onDragStart={onFolderDragStart}
-          onDragEnd={() => endWorkflowDrag()}
+          draggable={canEdit}
+          onDragStart={canEdit ? onFolderDragStart : undefined}
+          onDragEnd={canEdit ? () => endWorkflowDrag() : undefined}
         >
           <button
             type="button"
@@ -300,9 +307,11 @@ function FolderBlock({
               onOpenInfo(folder.id)
             }}
           >
-            <span className="sc-drag-handle" aria-hidden>
-              ⋮⋮
-            </span>
+            {canEdit ? (
+              <span className="sc-drag-handle" aria-hidden>
+                ⋮⋮
+              </span>
+            ) : null}
             <WorkflowFolderGlyph icon={folder.icon ?? 'flow'} size={14} />
             {editing ? (
               <InlineRename
@@ -320,6 +329,7 @@ function FolderBlock({
             )}
             {count > 0 ? <span className="sc-folder-count">{count}</span> : null}
           </button>
+          {canEdit ? (
           <div className="sc-folder-actions">
             {allowChild ? (
               <button
@@ -351,6 +361,7 @@ function FolderBlock({
               ×
             </button>
           </div>
+          ) : null}
         </div>
       </DropZone>
       {!collapsed ? (
@@ -362,8 +373,9 @@ function FolderBlock({
               variant="drawer"
               onPlace={onPlace}
               onSelect={onSelectService}
-              onRemove={onRemove}
+              onRemove={canEdit ? onRemove : undefined}
               focusServiceId={focusServiceId}
+              readOnly={!canEdit}
             />
           ) : null}
         </div>
@@ -392,6 +404,7 @@ function FolderBlock({
               editingFolderId={editingFolderId}
               onStartEdit={onStartEdit}
               onStopEdit={onStopEdit}
+              canEdit={canEdit}
             />
           ))
         : null}
@@ -410,6 +423,7 @@ export function WorkflowsPanel({
   onSelectService,
   onOpenFolder,
   infoFolderId,
+  canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set())
@@ -590,7 +604,11 @@ export function WorkflowsPanel({
 
         {searchingMode ? (
           <div className="sc-search-hits" role="listbox" aria-label="Arama sonuçları">
-            <p className="sc-search-status">+ köke ekler; sonra bir akışın üzerine bırakın</p>
+            <p className="sc-search-status">
+              {canEdit
+                ? '+ köke ekler; sonra bir akışın üzerine bırakın'
+                : 'Sonuçtan servisi açın'}
+            </p>
             {searching ? (
               <p className="sc-search-status">Aranıyor…</p>
             ) : hits.length === 0 ? (
@@ -607,21 +625,24 @@ export function WorkflowsPanel({
                     <TreeKindIcon kind="service" size={13} />
                     <span className="sc-hit-name">{s.name}</span>
                   </button>
-                  <button
-                    type="button"
-                    className="sc-fav-btn"
-                    title="Köke ekle"
-                    aria-label="Köke ekle"
-                    onClick={() => addToRoot(s.id, s.name)}
-                  >
-                    +
-                  </button>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      className="sc-fav-btn"
+                      title="Köke ekle"
+                      aria-label="Köke ekle"
+                      onClick={() => addToRoot(s.id, s.name)}
+                    >
+                      +
+                    </button>
+                  ) : null}
                 </div>
               ))
             )}
           </div>
         ) : null}
 
+        {canEdit ? (
         <div className="shortcuts-panel-toolbar">
           <button
             type="button"
@@ -650,16 +671,21 @@ export function WorkflowsPanel({
             Yeni klasör
           </button>
         </div>
+        ) : (
+          <p className="sc-readonly-note">Salt okuma — düzenleme yetkisi intranet oturumundan gelecek.</p>
+        )}
 
         <div className="shortcuts-drawer-body">
           {store.steps.length === 0 && store.folders.length === 0 ? (
             <p className="shortcuts-panel-empty">
-              Yeni akış veya klasör oluşturun. Servisi + ile köke ekleyin, sonra
-              bir akışın üzerine bırakın. Akışlar klasörlerin altına taşınabilir.
+              {canEdit
+                ? 'Yeni akış veya klasör oluşturun. Servisi + ile köke ekleyin, sonra bir akışın üzerine bırakın. Akışlar klasörlerin altına taşınabilir.'
+                : 'Henüz akış yok.'}
             </p>
           ) : null}
 
           <DropZone
+            locked={!canEdit}
             onDropStep={(id) => setStore(moveWorkflowStep(id, undefined))}
             onDropFolder={(id) => setStore(moveWorkflowFolder(id, undefined))}
           >
@@ -670,7 +696,8 @@ export function WorkflowsPanel({
                 variant="drawer"
                 onPlace={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
                 onSelect={openService}
-                onRemove={(id) => setStore(removeWorkflowStep(id))}
+                onRemove={canEdit ? (id) => setStore(removeWorkflowStep(id)) : undefined}
+                readOnly={!canEdit}
               />
             ) : null}
           </DropZone>
@@ -700,6 +727,7 @@ export function WorkflowsPanel({
               editingFolderId={editingFolderId}
               onStartEdit={setEditingFolderId}
               onStopEdit={() => setEditingFolderId(undefined)}
+              canEdit={canEdit}
             />
           ))}
         </div>

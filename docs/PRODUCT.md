@@ -209,7 +209,8 @@ Dokümanda “yetkili kişi” var; **rol matrisi** yok. UI (buton, disabled, em
 |-----|----------|------------|
 | **Requester** (değiştiren / talep açan) | Talep açar; ne/neden yazar; durumu izler | Başkasının flag’ini değiştiremez; gate’i bypass edemez |
 | **Owner** (etkilenen servis sorumlusu) | Kendi servisi için 🟢 kabul / 🔴 red / 🟡 düzenlemede atar; not ekler | Başka servisin flag’ini atamaz; talebi tek başına kapatamaz |
-| **Viewer** (salt okuma) | Ağaç + etkilenenler + talep özeti görür | Talep açamaz / flag atamaz |
+| **Viewer** (salt okuma) | Ağaç + etkilenenler + talep özeti görür; iş akışlarını görüntüler | Talep açamaz / flag atamaz; akış oluşturamaz / not yazamaz |
+| **Catalog editor** (direktör / yetkili — intranet SSO) | İş akışı CRUD, servis değişiklik notu, özet (flag `canEdit`) | SSO yokken mock’ta herkese açık; gömülünce host set eder |
 | **Admin** (opsiyonel, sonra) | Owner ataması, acil override politikası | — (MVP’de yok varsayılabilir) |
 
 

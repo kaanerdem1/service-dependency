@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { resolveCatalogCanEdit } from '../auth/catalogAccess'
 import { AutoHeight } from '../motion/AutoHeight'
 import { MotionDrawer } from '../motion/MotionDrawer'
 import { MotionList, MotionListItem } from '../motion/MotionList'
@@ -113,6 +114,7 @@ function readChanges(serviceId: string): ServiceChange[] {
 }
 
 function writeChanges(serviceId: string, rows: ServiceChange[]) {
+  if (!resolveCatalogCanEdit()) return
   localStorage.setItem(changesStorageKey(serviceId), JSON.stringify(rows))
 }
 
@@ -151,9 +153,10 @@ function composeNote(kinds: ChangeKindId[], details: KindDetails) {
 
 type Props = {
   serviceId: string
+  canEdit?: boolean
 }
 
-export function ServiceChangeLog({ serviceId }: Props) {
+export function ServiceChangeLog({ serviceId, canEdit = true }: Props) {
   const [rows, setRows] = useState<ServiceChange[]>([])
   const [openId, setOpenId] = useState<string | 'new' | null>(null)
   const [draft, setDraft] = useState<Draft>(emptyDraft)
@@ -184,8 +187,9 @@ export function ServiceChangeLog({ serviceId }: Props) {
   const drawerTitle = isNew ? 'Değişiklik notu' : 'Değişiklik kaydı'
 
   const persist = (next: ServiceChange[]) => {
-    setRows(next)
+    if (!canEdit) return
     writeChanges(serviceId, next)
+    setRows(next)
   }
 
   const closeDrawer = useCallback(() => {
@@ -290,7 +294,9 @@ export function ServiceChangeLog({ serviceId }: Props) {
     <div className="svc-changes">
       {sorted.length === 0 ? (
         <p className="svc-changes-empty">
-          Kayıt yok. Servis sahibi, kod değişince buraya not düşer.
+          {canEdit
+            ? 'Kayıt yok. Servis sahibi, kod değişince buraya not düşer.'
+            : 'Kayıt yok.'}
         </p>
       ) : (
         <MotionList className="svc-changes-list">
@@ -319,11 +325,13 @@ export function ServiceChangeLog({ serviceId }: Props) {
         </MotionList>
       )}
 
-      <div className="svc-changes-toolbar">
-        <Button variant="ghost" compact onClick={openNew}>
-          + Not ekle
-        </Button>
-      </div>
+      {canEdit ? (
+        <div className="svc-changes-toolbar">
+          <Button variant="ghost" compact onClick={openNew}>
+            + Not ekle
+          </Button>
+        </div>
+      ) : null}
 
       <MotionDrawer open={formOpen} title={drawerTitle} onClose={closeDrawer}>
         {viewing ? (
@@ -357,12 +365,18 @@ export function ServiceChangeLog({ serviceId }: Props) {
               </ul>
             </div>
             <p className="svc-changes-kind-hint">
-              Kayıt kilitli. Düzeltmek için silip yeni not ekleyin.
+              {canEdit
+                ? 'Kayıt kilitli. Düzeltmek için silip yeni not ekleyin.'
+                : 'Salt okuma.'}
             </p>
             <div className="svc-changes-form-actions">
-              <Button variant="ghost" compact onClick={remove}>
-                Sil
-              </Button>
+              {canEdit ? (
+                <Button variant="ghost" compact onClick={remove}>
+                  Sil
+                </Button>
+              ) : (
+                <span />
+              )}
               <Button variant="primary" compact onClick={closeDrawer}>
                 Kapat
               </Button>

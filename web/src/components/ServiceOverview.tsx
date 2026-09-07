@@ -18,6 +18,7 @@ type Props = {
   callerCount: number
   calleeCount: number
   loading?: boolean
+  canEdit?: boolean
 }
 
 function exampleOperations(serviceName: string): string[] {
@@ -279,6 +280,7 @@ export function ServiceOverview({
   callerCount,
   calleeCount,
   loading,
+  canEdit = true,
 }: Props) {
   const [catalogContext, setCatalogContext] = useState<ServiceCatalogContext | null>(null)
 
@@ -350,6 +352,7 @@ export function ServiceOverview({
   const hasJarPath = locations.length > 0
 
   const save = () => {
+    if (!canEdit) return
     const trimmed = draft.trim()
     if (trimmed && trimmed !== baseline) {
       localStorage.setItem(summaryStorageKey(service.id), trimmed)
@@ -378,7 +381,7 @@ export function ServiceOverview({
       return <p key={i}>{line}</p>
     })
 
-  const showEdit = !summaryLocked
+  const showEdit = !summaryLocked && canEdit
 
   const editActions = showEdit ? (
     <div className="service-overview-actions">
@@ -446,7 +449,7 @@ export function ServiceOverview({
 
   const changesTile = (
     <BentoTile area="changes" title="Son değişiklikler">
-      <ServiceChangeLog serviceId={service.id} />
+      <ServiceChangeLog serviceId={service.id} canEdit={canEdit} />
     </BentoTile>
   )
 

@@ -1,3 +1,5 @@
+import { resolveCatalogCanEdit } from './auth/catalogAccess'
+
 export const STEP_MIME = 'application/x-sd-workflow-step'
 export const FOLDER_MIME = 'application/x-sd-workflow-folder'
 
@@ -50,11 +52,65 @@ export type WorkflowStep = {
   canonicalName: string
   folderId?: string
   order: number
+  input?: string
+  output?: string
+  edgeCases?: string
+  scenarios?: string
+}
+
+export type WorkflowStepDoc = {
+  input?: string
+  output?: string
+  edgeCases?: string
+  scenarios?: string
+}
+
+function optText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function stepDocFields(s: {
+  input?: string
+  output?: string
+  edgeCases?: string
+  scenarios?: string
+}): WorkflowStepDoc {
+  return {
+    ...(optText(s.input) ? { input: s.input!.trim() } : {}),
+    ...(optText(s.output) ? { output: s.output!.trim() } : {}),
+    ...(optText(s.edgeCases) ? { edgeCases: s.edgeCases!.trim() } : {}),
+    ...(optText(s.scenarios) ? { scenarios: s.scenarios!.trim() } : {}),
+  }
+}
+
+export const WORKFLOW_EDGE_STATUSES = [
+  'stable',
+  'must-change',
+  'watch',
+  'note',
+] as const
+
+export type WorkflowEdgeStatus = (typeof WORKFLOW_EDGE_STATUSES)[number]
+
+export type WorkflowEdge = {
+  id: string
+  fromStepId: string
+  toStepId: string
+  status: WorkflowEdgeStatus
+  note?: string
+}
+
+export const WORKFLOW_EDGE_LABELS: Record<WorkflowEdgeStatus, string> = {
+  stable: 'Değişmemeli',
+  'must-change': 'Değişmeli',
+  watch: 'Kontrol',
+  note: 'Not',
 }
 
 export type WorkflowsStore = {
   folders: WorkflowFolder[]
   steps: WorkflowStep[]
+  edges: WorkflowEdge[]
 }
 
 export function folderAcceptsSteps(
@@ -67,7 +123,7 @@ export function folderAcceptsSteps(
   return store.folders.every((f) => f.parentId !== folder.id)
 }
 
-const EMPTY: WorkflowsStore = { folders: [], steps: [] }
+const EMPTY: WorkflowsStore = { folders: [], steps: [], edges: [] }
 
 function newId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
@@ -128,10 +184,45 @@ function normalize(raw: unknown): WorkflowsStore {
               ? s.folderId
               : undefined,
           order: typeof s.order === 'number' ? s.order : i,
+          ...stepDocFields(s),
         }))
         .slice(0, MAX_STEPS)
     : []
-  return { folders, steps }
+  const stepIds = new Set(steps.map((s) => s.id))
+  const edges = Array.isArray(o.edges)
+    ? o.edges
+        .filter((e): e is WorkflowEdge => {
+          if (!e || typeof e !== 'object') return false
+          const row = e as WorkflowEdge
+          return (
+            typeof row.id === 'string' &&
+            typeof row.fromStepId === 'string' &&
+            typeof row.toStepId === 'string' &&
+            stepIds.has(row.fromStepId) &&
+            stepIds.has(row.toStepId) &&
+            WORKFLOW_EDGE_STATUSES.includes(row.status as WorkflowEdgeStatus)
+          )
+        })
+        .map((e) => ({
+            id: e.id,
+            fromStepId: e.fromStepId,
+            toStepId: e.toStepId,
+            status: e.status,
+            ...(typeof e.note === 'string' && e.note.trim() ? { note: e.note.trim() } : {}),
+          }))
+    : []
+  const byId = new Map(steps.map((s) => [s.id, s]))
+  for (const e of Array.isArray(o.edges) ? o.edges : []) {
+    if (!e || typeof e !== 'object') continue
+    const row = e as WorkflowEdge & { handoff?: string; expectedOut?: string; expectedIn?: string }
+    const leftover =
+      optText(row.handoff) || optText(row.expectedOut) || optText(row.expectedIn)
+    const from = leftover ? byId.get(row.fromStepId) : undefined
+    if (from && leftover && !from.output) {
+      byId.set(from.id, { ...from, output: leftover })
+    }
+  }
+  return { folders, steps: [...byId.values()], edges }
 }
 
 export function readWorkflows(): WorkflowsStore {
@@ -145,6 +236,7 @@ export function readWorkflows(): WorkflowsStore {
 }
 
 function writeWorkflows(store: WorkflowsStore): WorkflowsStore {
+  if (!resolveCatalogCanEdit()) return readWorkflows()
   const next = normalize(store)
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
@@ -208,9 +300,12 @@ export function deleteWorkflowFolder(folderId: string): WorkflowsStore {
   for (const f of store.folders) {
     if (f.parentId && removeIds.has(f.parentId)) removeIds.add(f.id)
   }
+  const nextSteps = store.steps.filter((s) => !s.folderId || !removeIds.has(s.folderId))
+  const keep = new Set(nextSteps.map((s) => s.id))
   return writeWorkflows({
     folders: store.folders.filter((f) => !removeIds.has(f.id)),
-    steps: store.steps.filter((s) => !s.folderId || !removeIds.has(s.folderId)),
+    steps: nextSteps,
+    edges: store.edges.filter((e) => keep.has(e.fromStepId) && keep.has(e.toStepId)),
   })
 }
 
@@ -253,6 +348,66 @@ export function removeWorkflowStep(stepId: string): WorkflowsStore {
   return writeWorkflows({
     ...store,
     steps: store.steps.filter((s) => s.id !== stepId),
+    edges: store.edges.filter((e) => e.fromStepId !== stepId && e.toStepId !== stepId),
+  })
+}
+
+export function edgeBetween(
+  store: WorkflowsStore,
+  fromStepId: string,
+  toStepId: string,
+): WorkflowEdge | undefined {
+  return store.edges.find((e) => e.fromStepId === fromStepId && e.toStepId === toStepId)
+}
+
+export function upsertWorkflowEdge(
+  fromStepId: string,
+  toStepId: string,
+  patch: {
+    status: WorkflowEdgeStatus
+    note?: string
+  },
+): WorkflowsStore {
+  const store = readWorkflows()
+  const ids = new Set(store.steps.map((s) => s.id))
+  if (!ids.has(fromStepId) || !ids.has(toStepId) || fromStepId === toStepId) return store
+  const note = patch.note?.trim()
+  const next: WorkflowEdge = {
+    id: edgeBetween(store, fromStepId, toStepId)?.id ?? newId('we'),
+    fromStepId,
+    toStepId,
+    status: patch.status,
+    ...(note ? { note } : {}),
+  }
+  const rest = store.edges.filter(
+    (e) => !(e.fromStepId === fromStepId && e.toStepId === toStepId),
+  )
+  return writeWorkflows({ ...store, edges: [...rest, next] })
+}
+
+export function removeWorkflowEdge(fromStepId: string, toStepId: string): WorkflowsStore {
+  const store = readWorkflows()
+  return writeWorkflows({
+    ...store,
+    edges: store.edges.filter(
+      (e) => !(e.fromStepId === fromStepId && e.toStepId === toStepId),
+    ),
+  })
+}
+
+export function updateWorkflowStepDoc(
+  stepId: string,
+  patch: WorkflowStepDoc,
+): WorkflowsStore {
+  const store = readWorkflows()
+  if (!store.steps.some((s) => s.id === stepId)) return store
+  return writeWorkflows({
+    ...store,
+    steps: store.steps.map((s) => {
+      if (s.id !== stepId) return s
+      const { input: _i, output: _o, edgeCases: _e, scenarios: _s, ...rest } = s
+      return { ...rest, ...stepDocFields({ ...s, ...patch }) }
+    }),
   })
 }
 

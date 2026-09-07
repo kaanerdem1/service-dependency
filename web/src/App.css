@@ -1463,6 +1463,20 @@
   background: color-mix(in srgb, #c9a227 12%, transparent);
 }
 
+.sc-readonly-note {
+  margin: 8px 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--shell-sidebar-muted, var(--muted));
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 6%, transparent);
+}
+
+.wf-reorder-row.is-readonly {
+  cursor: default;
+}
+
 .shortcuts-panel-toolbar {
   display: flex;
   flex-wrap: nowrap;
@@ -3584,6 +3598,371 @@
 .wf-info-blank p {
   margin: 0;
   font-size: 13px;
+  color: var(--muted);
+}
+
+.wf-canvas {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 0 4px;
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+}
+
+.wf-canvas-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.wf-canvas-node {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 4%, transparent);
+}
+
+.wf-canvas-node-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wf-canvas-index {
+  flex-shrink: 0;
+  width: 1.4rem;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.wf-canvas-node-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 4px 0;
+}
+
+.wf-canvas-node-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.wf-canvas-edge {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 0 0 0 22px;
+  padding: 12px 0 14px 22px;
+  min-width: 0;
+}
+
+.wf-canvas-arrow {
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wf-canvas-arrow-shaft {
+  flex: 1;
+  width: 2px;
+  min-height: 12px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 55%, #8a93a0) 0 5px,
+    transparent 5px 9px
+  );
+  background-size: 2px 9px;
+  animation: wf-flow-down 0.7s linear infinite;
+}
+
+.wf-canvas-arrow-head {
+  width: 0;
+  height: 0;
+  margin-top: -1px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid color-mix(in srgb, var(--accent) 55%, #8a93a0);
+}
+
+@keyframes wf-flow-down {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wf-canvas-arrow-shaft {
+    animation: none;
+  }
+}
+
+.wf-canvas-docs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  min-width: 0;
+}
+
+.wf-canvas-docs-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.wf-canvas-doc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.wf-canvas-doc-label {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
+}
+
+.wf-canvas-doc-hint {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.wf-canvas-doc-body {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.wf-canvas-doc textarea {
+  width: 100%;
+  min-height: 4.2em;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  background: #fff;
+  color: inherit;
+}
+
+.wf-canvas-doc textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.wf-canvas-mismatch {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #8a3b16;
+}
+
+@media (max-width: 720px) {
+  .wf-canvas-docs {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wf-canvas-edge-empty {
+  align-self: flex-start;
+  border: 1px dashed color-mix(in srgb, var(--line) 85%, transparent);
+  background: color-mix(in srgb, #fff 70%, transparent);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.wf-canvas-edge-empty.is-static {
+  cursor: default;
+}
+
+.wf-canvas-chip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  color: inherit;
+}
+
+.wf-canvas-chip.is-stable,
+.wf-canvas-edge.is-stable .wf-canvas-chip {
+  background: color-mix(in srgb, var(--accent) 16%, #fff);
+  color: #2f5d4a;
+}
+
+.wf-canvas-chip.is-must-change,
+.wf-canvas-edge.is-must-change .wf-canvas-chip {
+  background: color-mix(in srgb, #d97848 18%, #fff);
+  color: #8a3b16;
+}
+
+.wf-canvas-chip.is-watch,
+.wf-canvas-edge.is-watch .wf-canvas-chip {
+  background: color-mix(in srgb, #e3b341 22%, #fff);
+  color: #7a5a10;
+}
+
+.wf-canvas-chip.is-note,
+.wf-canvas-edge.is-note .wf-canvas-chip {
+  background: color-mix(in srgb, var(--ink) 8%, #fff);
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+}
+
+.wf-canvas-edge-note {
+  margin: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
+.wf-canvas-io {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  width: 100%;
+  font-size: 13px;
+}
+
+.wf-canvas-io dt {
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.wf-canvas-io dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.wf-canvas-catalog {
+  margin: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.wf-canvas-edge.is-open {
+  padding-bottom: 16px;
+}
+
+.wf-canvas-edge-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 92%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+
+.wf-canvas-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wf-canvas-status-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.wf-canvas-status-opt.is-on {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+}
+
+.wf-canvas-status-opt input {
+  margin: 0;
+}
+
+.wf-canvas-io-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wf-canvas-edge-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.wf-canvas-one {
+  margin: 12px 0 0;
+  font-size: 12px;
   color: var(--muted);
 }
 

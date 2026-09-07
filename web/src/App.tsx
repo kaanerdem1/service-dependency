@@ -87,6 +87,7 @@ import {
   readServiceRecents,
   renameServiceRecent,
 } from './serviceRecents'
+import { resolveCatalogCanEdit } from './auth/catalogAccess'
 import type { SessionUser } from './mock/session'
 import type {
   AffectedService,
@@ -283,6 +284,7 @@ export default function App() {
   const { isFavorite, toggleFavorite } = useServiceFavorites()
 
   const [session, setSession] = useState<SessionUser>()
+  const canEditCatalog = resolveCatalogCanEdit()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
   const [liveStatus, setLiveStatus] = useState('')
   const [crOpen, setCrOpen] = useState(false)
@@ -1171,6 +1173,7 @@ export default function App() {
             }}
             onOpenFolder={setWorkflowInfoId}
             infoFolderId={workflowInfoId}
+            canEdit={canEditCatalog}
           />
           </div>
           <button
@@ -1201,6 +1204,7 @@ export default function App() {
                   selectPivot(id, { resetHistory: true, source: 'tree' })
                 }}
                 onDismiss={() => setWorkflowInfoId(undefined)}
+                canEdit={canEditCatalog}
               />
             </div>
           ) : null}
@@ -1494,6 +1498,7 @@ export default function App() {
                         callerCount={affected.length}
                         calleeCount={callees.length}
                         loading={loading}
+                        canEdit={canEditCatalog}
                       />
                     )}
                   </section>

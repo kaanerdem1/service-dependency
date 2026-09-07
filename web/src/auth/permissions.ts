@@ -31,6 +31,9 @@ export function canOpenNewServiceRequest(user: SessionActor): boolean {
   return Boolean(user.team && user.role === 'lead')
 }
 
+/** İş akışı + servis notu yazma. SSO gelene kadar catalogAccess flag’i. */
+export { resolveCatalogCanEdit as canEditCatalog } from './catalogAccess'
+
 export function roleLabel(role?: TeamRole): string {
   if (role === 'lead') return 'Lider'
   if (role === 'member') return 'Çalışan'

@@ -13,6 +13,7 @@ type Props = {
   onRemove?: (stepId: string) => void
   focusServiceId?: string
   afterRow?: (step: WorkflowStep, index: number) => ReactNode
+  readOnly?: boolean
 }
 
 function parseStepId(e: ReactDragEvent): string | undefined {
@@ -43,6 +44,7 @@ export function WorkflowStepReorder({
   onRemove,
   focusServiceId,
   afterRow,
+  readOnly = false,
 }: Props) {
   const [dragId, setDragId] = useState<string>()
   const [insertAt, setInsertAt] = useState<number>()
@@ -80,6 +82,7 @@ export function WorkflowStepReorder({
   const finish = (e: ReactDragEvent) => {
     e.preventDefault()
     e.stopPropagation()
+    if (readOnly) return
     const id = parseStepId(e) ?? dragId
     const index = insertAt
     clearDrag()
@@ -90,9 +93,9 @@ export function WorkflowStepReorder({
   return (
     <div
       ref={listRef}
-      className={`wf-reorder${info ? ' is-info' : ' is-drawer'}${dragId ? ' is-dragging' : ''}`}
+      className={`wf-reorder${info ? ' is-info' : ' is-drawer'}${dragId ? ' is-dragging' : ''}${readOnly ? ' is-readonly' : ''}`}
       onDragOver={(e) => {
-        if (!isStepDrag(e)) return
+        if (readOnly || !isStepDrag(e)) return
         e.preventDefault()
         e.stopPropagation()
         e.dataTransfer.dropEffect = 'move'
@@ -110,9 +113,13 @@ export function WorkflowStepReorder({
           >
             <div
               data-step-id={item.id}
-              draggable
-              className={`wf-reorder-row${info ? ' is-info' : ''}${focusServiceId === item.serviceId ? ' is-focus' : ''}`}
+              draggable={!readOnly}
+              className={`wf-reorder-row${info ? ' is-info' : ''}${focusServiceId === item.serviceId ? ' is-focus' : ''}${readOnly ? ' is-readonly' : ''}`}
               onDragStart={(e) => {
+                if (readOnly) {
+                  e.preventDefault()
+                  return
+                }
                 beginWorkflowDrag('step')
                 e.dataTransfer.setData(STEP_MIME, item.id)
                 e.dataTransfer.setData('text/plain', `step:${item.id}`)
@@ -122,7 +129,7 @@ export function WorkflowStepReorder({
               }}
               onDragEnd={clearDrag}
               onDragOver={(e) => {
-                if (!isStepDrag(e)) return
+                if (readOnly || !isStepDrag(e)) return
                 e.preventDefault()
                 e.stopPropagation()
                 if (!dragId) {
@@ -133,9 +140,11 @@ export function WorkflowStepReorder({
               }}
               onDrop={finish}
             >
-              <span className="sc-drag-handle" aria-hidden title="Sıralamak için sürükle">
-                ⋮⋮
-              </span>
+              {readOnly ? null : (
+                <span className="sc-drag-handle" aria-hidden title="Sıralamak için sürükle">
+                  ⋮⋮
+                </span>
+              )}
               <span className="wf-step-index">{index + 1}</span>
               <button
                 type="button"
@@ -149,7 +158,7 @@ export function WorkflowStepReorder({
                 </span>
                 {info ? <span className="wf-info-service-go">Aç</span> : null}
               </button>
-              {onRemove ? (
+              {onRemove && !readOnly ? (
                 <button
                   type="button"
                   className="sc-icon-btn sc-icon-btn-danger"
