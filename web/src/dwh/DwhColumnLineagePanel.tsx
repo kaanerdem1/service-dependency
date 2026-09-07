@@ -1,11 +1,14 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
+  BaseEdge,
   Background,
   BackgroundVariant,
   Handle,
   MarkerType,
   Position,
   type Edge,
+  type EdgeProps,
+  type EdgeTypes,
   type Node,
   type NodeProps,
   type NodeTypes,
@@ -33,6 +36,30 @@ type ColumnNodeData = {
   kind: 'source' | 'target' | 'original'
   confidence?: string | null
 }
+
+type ColumnEdgeData = {
+  fanIndex: number
+  fanCount: number
+  transformationType?: string | null
+  confidence?: string | null
+}
+
+type ColumnLineageGraph = {
+  nodes: Node<ColumnNodeData>[]
+  edges: Edge<ColumnEdgeData>[]
+}
+
+type ColumnEdgeSemantic = {
+  transformationType?: string | null
+  confidence?: string | null
+}
+
+const COLUMN_FLOW_LEFT_X = 42
+const COLUMN_FLOW_TOP_Y = 54
+const COLUMN_FLOW_NODE_W = 260
+const COLUMN_FLOW_SOURCE_W = 284
+const COLUMN_FLOW_COL_PITCH = 398
+const COLUMN_FLOW_ROW_GAP = 88
 
 function procedureLabel(source: DwhColumnLineageSource) {
   const pkg = source.packageName?.trim()
@@ -82,7 +109,38 @@ function ColumnLineageNode({ data }: NodeProps<ColumnNodeData>) {
 const ColumnLineageNodeMemo = memo(ColumnLineageNode)
 const NODE_TYPES: NodeTypes = { columnLineageNode: ColumnLineageNodeMemo }
 
-function edgeStyle(step: Pick<DwhColumnAncestryStep, 'transformationType' | 'confidence'>) {
+function ColumnLineageFanEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  style,
+  markerEnd,
+  data,
+}: EdgeProps<ColumnEdgeData>) {
+  const fanIndex = data?.fanIndex ?? 0
+  const fanCount = Math.max(1, data?.fanCount ?? 1)
+  const mid = (fanCount - 1) / 2
+  const spread = Math.max(-76, Math.min(76, (fanIndex - mid) * 14))
+  const dx = Math.max(120, Math.abs(targetX - sourceX) * 0.42)
+  const path = `M ${sourceX},${sourceY} C ${sourceX + dx},${sourceY + spread} ${targetX - dx},${targetY + spread} ${targetX},${targetY}`
+
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      style={style}
+      markerEnd={markerEnd}
+      interactionWidth={24}
+    />
+  )
+}
+
+const ColumnLineageFanEdgeMemo = memo(ColumnLineageFanEdge)
+const EDGE_TYPES: EdgeTypes = { columnFan: ColumnLineageFanEdgeMemo }
+
+function edgeStyle(step: ColumnEdgeSemantic) {
   const derived = step.transformationType === 'TURETILMIS'
   return {
     color: derived ? '#9a6a16' : '#2f6f55',
@@ -90,112 +148,195 @@ function edgeStyle(step: Pick<DwhColumnAncestryStep, 'transformationType' | 'con
   }
 }
 
+function edgeClassName(step: ColumnEdgeSemantic) {
+  return `dwh-col-flow-edge${step.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}${step.confidence === 'TAHMIN' ? ' is-estimated' : ''}`
+}
+
+function edgeDataForGroup(
+  edge: ColumnEdgeSemantic,
+  fanIndex: number,
+  fanCount: number,
+): ColumnEdgeData {
+  return {
+    fanIndex,
+    fanCount,
+    transformationType: edge.transformationType,
+    confidence: edge.confidence,
+  }
+}
+
 function buildAncestryGraph(
   target: DwhColumnLineageTarget | undefined,
   ancestry: DwhColumnAncestryResponse | undefined,
-): { nodes: Node<ColumnNodeData>[]; edges: Edge[] } {
+): ColumnLineageGraph {
   if (!target) return { nodes: [], edges: [] }
 
   const steps = ancestry?.steps ?? []
   if (!target.targetColumnId || !steps.length) return buildDirectGraph(target)
 
   const levels = Array.from(new Set(steps.map((step) => step.level))).sort((a, b) => a - b)
+  const maxLevel = Math.max(...levels)
   const columnIds = new Set<number>([target.targetColumnId])
   steps.forEach((step) => columnIds.add(step.sourceColumnId))
+  const targetId = nodeIdForColumn(target.targetColumnId)
+  const metaByColumnId = new Map<number, ColumnNodeData>()
+  const visualColumnById = new Map<string, number>([[targetId, maxLevel]])
+  const idsByVisualColumn = new Map<number, string[]>()
+  const downstreamBySourceId = new Map<string, string[]>()
+
+  for (const step of steps) {
+    const sourceId = nodeIdForColumn(step.sourceColumnId)
+    const currentColumn = visualColumnById.get(sourceId)
+    const visualColumn = maxLevel - step.level
+    visualColumnById.set(
+      sourceId,
+      currentColumn === undefined ? visualColumn : Math.min(currentColumn, visualColumn),
+    )
+    metaByColumnId.set(step.sourceColumnId, {
+      label: step.sourceColumnName,
+      sub: step.sourceTableName,
+      kind: step.original ? 'original' : 'source',
+      confidence: step.confidence,
+    })
+    const downstream = downstreamBySourceId.get(sourceId) ?? []
+    downstream.push(nodeIdForColumn(step.downstreamColumnId))
+    downstreamBySourceId.set(sourceId, downstream)
+  }
+
+  for (const [id, visualColumn] of visualColumnById) {
+    if (id === targetId) continue
+    const list = idsByVisualColumn.get(visualColumn) ?? []
+    list.push(id)
+    idsByVisualColumn.set(visualColumn, list)
+  }
+
+  const maxRows = Math.max(1, ...Array.from(idsByVisualColumn.values()).map((ids) => ids.length))
+  const targetY = COLUMN_FLOW_TOP_Y + ((maxRows - 1) * COLUMN_FLOW_ROW_GAP) / 2
+  const yById = new Map<string, number>([[targetId, targetY]])
 
   const nodes: Node<ColumnNodeData>[] = [
     {
-      id: nodeIdForColumn(target.targetColumnId),
+      id: targetId,
       type: 'columnLineageNode',
-      position: { x: levels.length * 280 + 34, y: 110 },
+      position: { x: COLUMN_FLOW_LEFT_X + maxLevel * COLUMN_FLOW_COL_PITCH, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: ancestry.tableName,
         kind: 'target',
       },
-      style: { width: 250 },
+      style: { width: COLUMN_FLOW_NODE_W },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       draggable: false,
     },
   ]
 
-  levels.forEach((level) => {
-    const levelSteps = steps.filter((step) => step.level === level)
-    levelSteps.forEach((step, rowIndex) => {
-      const id = nodeIdForColumn(step.sourceColumnId)
-      if (nodes.some((node) => node.id === id)) return
+  for (let visualColumn = maxLevel - 1; visualColumn >= 0; visualColumn -= 1) {
+    const ids = idsByVisualColumn.get(visualColumn) ?? []
+    const score = (id: string) => {
+      const yValues = (downstreamBySourceId.get(id) ?? [])
+        .map((downstreamId) => yById.get(downstreamId))
+        .filter((value): value is number => typeof value === 'number')
+      return yValues.length
+        ? yValues.reduce((sum, value) => sum + value, 0) / yValues.length
+        : Number.POSITIVE_INFINITY
+    }
+    const sorted = [...ids].sort((a, b) => {
+      const aScore = score(a)
+      const bScore = score(b)
+      if (Number.isFinite(aScore) || Number.isFinite(bScore)) {
+        if (!Number.isFinite(aScore)) return 1
+        if (!Number.isFinite(bScore)) return -1
+        if (aScore !== bScore) return aScore - bScore
+      }
+      const aMeta = metaByColumnId.get(Number(a.replace('column:', '')))
+      const bMeta = metaByColumnId.get(Number(b.replace('column:', '')))
+      return `${aMeta?.sub ?? ''}.${aMeta?.label ?? a}`.localeCompare(`${bMeta?.sub ?? ''}.${bMeta?.label ?? b}`, 'tr')
+    })
+    const columnTop = COLUMN_FLOW_TOP_Y + ((maxRows - sorted.length) * COLUMN_FLOW_ROW_GAP) / 2
+
+    sorted.forEach((id, rowIndex) => {
+      const columnId = Number(id.replace('column:', ''))
+      const meta = metaByColumnId.get(columnId)
+      if (!meta) return
+      const y = columnTop + rowIndex * COLUMN_FLOW_ROW_GAP
+      yById.set(id, y)
       nodes.push({
         id,
         type: 'columnLineageNode',
         position: {
-          x: (levels.length - level) * 280 + 34,
-          y: 34 + rowIndex * 86 + level * 18,
+          x: COLUMN_FLOW_LEFT_X + visualColumn * COLUMN_FLOW_COL_PITCH,
+          y,
         },
-        data: {
-          label: step.sourceColumnName,
-          sub: step.sourceTableName,
-          kind: step.original ? 'original' : 'source',
-          confidence: step.confidence,
-        },
-        style: { width: 250 },
+        data: meta,
+        style: { width: COLUMN_FLOW_NODE_W },
         sourcePosition: Position.Right,
         targetPosition: Position.Left,
         draggable: false,
       })
     })
-  })
+  }
 
   const seenEdges = new Set<string>()
-  const edges: Edge[] = []
+  const rawEdges: Array<{ id: string; source: string; target: string; step: DwhColumnAncestryStep }> = []
   steps.forEach((step, index) => {
     if (!columnIds.has(step.downstreamColumnId)) return
     const source = nodeIdForColumn(step.sourceColumnId)
-    const targetId = nodeIdForColumn(step.downstreamColumnId)
-    const edgeKey = `${source}->${targetId}`
+    const downstreamId = nodeIdForColumn(step.downstreamColumnId)
+    const edgeKey = `${source}->${downstreamId}`
     if (seenEdges.has(edgeKey)) return
     seenEdges.add(edgeKey)
-    const style = edgeStyle(step)
-    edges.push({
-      id: `${edgeKey}:${index}`,
-      source,
-      target: targetId,
-      type: 'smoothstep',
+    rawEdges.push({ id: `${edgeKey}:${index}`, source, target: downstreamId, step })
+  })
+
+  const incomingByTarget = new Map<string, typeof rawEdges>()
+  for (const edge of rawEdges) {
+    const group = incomingByTarget.get(edge.target) ?? []
+    group.push(edge)
+    incomingByTarget.set(edge.target, group)
+  }
+
+  const edges: Edge<ColumnEdgeData>[] = rawEdges.map((edge) => {
+    const group = incomingByTarget.get(edge.target) ?? [edge]
+    const style = edgeStyle(edge.step)
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: 'columnFan',
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: 18,
         height: 18,
         color: style.color,
       },
-      label: transformLabel(step.transformationType),
-      className: `dwh-col-flow-edge${step.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}${step.confidence === 'TAHMIN' ? ' is-estimated' : ''}`,
+      className: edgeClassName(edge.step),
       style: {
         stroke: style.color,
-        strokeWidth: 2.2,
+        strokeWidth: 2.15,
         strokeDasharray: style.dash,
       },
-    })
+      data: edgeDataForGroup(edge.step, group.indexOf(edge), group.length),
+    }
   })
 
   return { nodes, edges }
 }
 
-function buildDirectGraph(target: DwhColumnLineageTarget): { nodes: Node<ColumnNodeData>[]; edges: Edge[] } {
+function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
   const shownSources = target.sources
-  const rowGap = 74
-  const graphHeight = Math.max(1, shownSources.length) * rowGap
-  const targetY = Math.max(0, graphHeight / 2 - 36)
+  const targetY = COLUMN_FLOW_TOP_Y + ((Math.max(1, shownSources.length) - 1) * COLUMN_FLOW_ROW_GAP) / 2
   const nodes: Node<ColumnNodeData>[] = [
     {
       id: 'target',
       type: 'columnLineageNode',
-      position: { x: 560, y: targetY },
+      position: { x: COLUMN_FLOW_LEFT_X + COLUMN_FLOW_COL_PITCH, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: `${target.sources.length} kaynak kolon`,
         kind: 'target',
       },
-      style: { width: 260 },
+      style: { width: COLUMN_FLOW_NODE_W },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       draggable: false,
@@ -206,43 +347,40 @@ function buildDirectGraph(target: DwhColumnLineageTarget): { nodes: Node<ColumnN
     nodes.push({
       id: `source:${index}`,
       type: 'columnLineageNode',
-      position: { x: 34, y: index * rowGap },
+      position: { x: COLUMN_FLOW_LEFT_X, y: COLUMN_FLOW_TOP_Y + index * COLUMN_FLOW_ROW_GAP },
       data: {
         label: source.sourceColumnName ?? 'Kolon yok',
         sub: source.sourceTableName ?? 'Kaynak tablo yok',
         kind: 'source',
         confidence: source.confidence,
       },
-      style: { width: 290 },
+      style: { width: COLUMN_FLOW_SOURCE_W },
       sourcePosition: Position.Right,
       targetPosition: Position.Left,
       draggable: false,
     })
   })
 
-  const edges: Edge[] = shownSources.map((source, index) => {
-    const style = edgeStyle({
-      transformationType: source.transformationType,
-      confidence: source.confidence,
-    })
+  const edges: Edge<ColumnEdgeData>[] = shownSources.map((source, index) => {
+    const style = edgeStyle(source)
     return {
       id: `edge:${index}`,
       source: `source:${index}`,
       target: 'target',
-      type: 'smoothstep',
+      type: 'columnFan',
       markerEnd: {
         type: MarkerType.ArrowClosed,
         width: 18,
         height: 18,
         color: style.color,
       },
-      label: transformLabel(source.transformationType),
-      className: `dwh-col-flow-edge${source.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}${source.confidence === 'TAHMIN' ? ' is-estimated' : ''}`,
+      className: edgeClassName(source),
       style: {
         stroke: style.color,
-        strokeWidth: 2.2,
+        strokeWidth: 2.15,
         strokeDasharray: style.dash,
       },
+      data: edgeDataForGroup(source, index, shownSources.length),
     }
   })
 
@@ -261,6 +399,25 @@ function SourceBadges({ source }: { source: DwhColumnLineageSource }) {
         </span>
       ) : null}
     </span>
+  )
+}
+
+function ColumnLineageLegend() {
+  return (
+    <div className="dwh-col-flow-legend" aria-label="Kolon lineage çizgi anlamları">
+      <span>
+        <i className="is-direct" aria-hidden />
+        Direkt
+      </span>
+      <span>
+        <i className="is-derived" aria-hidden />
+        Türetilmiş
+      </span>
+      <span>
+        <i className="is-estimated" aria-hidden />
+        Tahmin
+      </span>
+    </div>
   )
 }
 
@@ -519,6 +676,7 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
 
         {viewMode === 'map' ? (
           <div className="dwh-col-flow-canvas">
+            <ColumnLineageLegend />
             {ancestryLoading && selectedTarget?.targetColumnId ? (
               <div className="dwh-col-map-status">Tam soykütük haritası yükleniyor...</div>
             ) : null}
@@ -528,9 +686,10 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
               nodes={graph.nodes}
               edges={graph.edges}
               nodeTypes={NODE_TYPES}
+              edgeTypes={EDGE_TYPES}
               fitView
-              fitViewOptions={{ padding: 0.22, duration: 250 }}
-              minZoom={0.25}
+              fitViewOptions={{ padding: 0.28, duration: 250 }}
+              minZoom={0.2}
               maxZoom={1.25}
               nodesDraggable={false}
               nodesConnectable={false}
