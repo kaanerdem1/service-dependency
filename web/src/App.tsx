@@ -64,6 +64,7 @@ import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { FavoriteStarButton } from './components/FavoriteStarButton'
+import { CatalogHelp } from './components/CatalogHelp'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import { useServiceFavorites } from './useServiceFavorites'
 import {
@@ -1139,6 +1140,7 @@ export default function App() {
             />
           </div>
           <div className="module-sidebar-foot">
+            <CatalogHelp />
             <TreeOptionsRadial
               showNonServiceMethods={showNonServiceMethods}
               onShowNonServiceMethodsChange={setShowNonServiceMethods}

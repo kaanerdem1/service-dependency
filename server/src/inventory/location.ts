@@ -237,10 +237,12 @@ export const SEARCH_WITH_LOCATION_SQL = `
     )
   ORDER BY
     CASE
+      WHEN sd.service_name ILIKE (btrim($1, '%') || '%') THEN 0
+      WHEN sd.service_name ILIKE $1 THEN 1
       WHEN ('sd-' || sd.id::text) ILIKE $1 AND length(btrim($1, '%')) <= length('sd-' || sd.id::text) + 2
-        THEN 0
-      WHEN sd.id::text ILIKE $1 THEN 1
-      ELSE 2
+        THEN 2
+      WHEN sd.id::text ILIKE $1 THEN 3
+      ELSE 4
     END,
     sd.service_name
   LIMIT $2 OFFSET $3

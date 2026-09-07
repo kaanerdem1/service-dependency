@@ -1420,7 +1420,7 @@
 
 .sc-hit-main {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 7px;
   flex: 1;
   min-width: 0;
@@ -1438,10 +1438,32 @@
   background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 8%, transparent);
 }
 
+.sc-hit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
 .sc-hit-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.sc-hit-name mark {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: inherit;
+  font-weight: 750;
+  padding: 0;
+}
+
+.sc-hit-id {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--shell-sidebar-muted, var(--muted));
 }
 
 .sc-fav-btn {
@@ -6409,11 +6431,168 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .module-sidebar-foot {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px 6px 10px;
   border-top: 1px solid color-mix(in srgb, var(--shell-sidebar-fg, var(--line)) 12%, transparent);
   position: relative;
   overflow: visible;
   z-index: 6;
+}
+
+.catalog-help {
+  width: 100%;
+}
+
+.catalog-help-dialog {
+  width: min(720px, 100%);
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  padding: 22px 24px 24px;
+  border-radius: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow:
+    0 24px 60px color-mix(in srgb, #000 28%, transparent),
+    0 2px 8px color-mix(in srgb, #000 10%, transparent);
+}
+
+.catalog-help-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.catalog-help-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.catalog-help-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.catalog-help-close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.catalog-help-close:hover {
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  color: var(--ink);
+}
+
+.catalog-help-lede {
+  margin: 10px 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.catalog-help-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.catalog-help-card {
+  min-width: 0;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 70%, var(--ink) 4%);
+  border: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+}
+
+.catalog-help-card h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.catalog-help-card ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.catalog-help-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--ink) 86%, var(--muted));
+}
+
+.catalog-help-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.catalog-help-kbd {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, #fff 70%, var(--surface));
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.catalog-help-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.catalog-help-card ul + .catalog-help-note {
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .catalog-help-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+[data-theme='white'] .catalog-help-dialog {
+  background: #fff;
+  box-shadow:
+    0 24px 56px rgba(28, 27, 25, 0.14),
+    0 2px 8px rgba(28, 27, 25, 0.05);
+}
+
+[data-theme='white'] .catalog-help-card {
+  background: #f7f8fa;
 }
 
 .tree-options {

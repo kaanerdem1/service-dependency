@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { searchServices } from '../api/client'
+import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
 import { TreeKindIcon } from './TreeKindIcon'
 import { GitBranchIcon, WorkflowFolderGlyph } from './WorkflowIcons'
 import { WorkflowStepReorder } from './WorkflowStepReorder'
@@ -465,7 +466,7 @@ export function WorkflowsPanel({
     const timer = window.setTimeout(() => {
       void searchServices(q)
         .then((rows) => {
-          if (!cancelled) setHits(rows.slice(0, 12))
+          if (!cancelled) setHits(rankServiceHits(rows, q).slice(0, 12))
         })
         .catch(() => {
           if (!cancelled) setHits([])
@@ -623,7 +624,7 @@ export function WorkflowsPanel({
                     onClick={() => openService(s.id)}
                   >
                     <TreeKindIcon kind="service" size={13} />
-                    <span className="sc-hit-name">{s.name}</span>
+                    <SearchHitLabel name={s.name} query={query} id={s.id} />
                   </button>
                   {canEdit ? (
                     <button
