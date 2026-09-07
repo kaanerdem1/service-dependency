@@ -970,6 +970,17 @@ type LayerControlsProps = {
   }>
   onProjectFiltersChange?: (projectIds: string[]) => void
   onPackageFiltersChange?: (packageIds: string[]) => void
+  contentFilters?: string[]
+  contentFilterOptions?: Array<{ id: string; label: string; subLabel?: string }>
+  onContentFiltersChange?: (ids: string[]) => void
+  contentExtraFilter?: {
+    label: string
+    subLabel?: string
+    checked: boolean
+    onChange: (checked: boolean) => void
+  }
+  contentFilterTitle?: string
+  contentFilterDescription?: string
   layerTitle?: string
   collapseAllLabel?: string
   collapseLayerLabel?: string
@@ -1455,6 +1466,12 @@ export function MapCanvasBar({
   packageOptions = [],
   onProjectFiltersChange,
   onPackageFiltersChange,
+  contentFilters = [],
+  contentFilterOptions = [],
+  onContentFiltersChange,
+  contentExtraFilter,
+  contentFilterTitle = 'Harita filtresi',
+  contentFilterDescription = 'Haritada görünecek node sınıflarını seçer',
   layerTitle = 'Katman',
   collapseAllLabel = 'Sadece 1. katman — doğrudan komşular',
   collapseLayerLabel,
@@ -1481,6 +1498,7 @@ export function MapCanvasBar({
   const [placed, setPlaced] = useState<{ x: number; y: number } | null>(null)
   const [dockCollapsed, setDockCollapsed] = useState(false)
   const [projectPopOpen, setProjectPopOpen] = useState(false)
+  const [contentPopOpen, setContentPopOpen] = useState(false)
   const gripRef = useRef<HTMLButtonElement>(null)
   const collapseRef = useRef<HTMLButtonElement>(null)
   const [gripHover, setGripHover] = useState(false)
@@ -1494,6 +1512,9 @@ export function MapCanvasBar({
     sy: number
   } | null>(null)
   const hasScopeFilter = projectFilters.length > 0 || packageFilters.length > 0
+  const hasContentFilter =
+    (contentFilterOptions.length > 0 && contentFilters.length < contentFilterOptions.length) ||
+    Boolean(contentExtraFilter?.checked)
   const toggleProjectFilter = (id: string) => {
     const next = projectFilters.includes(id)
       ? projectFilters.filter((x) => x !== id)
@@ -1509,6 +1530,15 @@ export function MapCanvasBar({
   const clearScopeFilters = () => {
     onProjectFiltersChange?.([])
     onPackageFiltersChange?.([])
+  }
+  const toggleContentFilter = (id: string) => {
+    const next = contentFilters.includes(id)
+      ? contentFilters.filter((x) => x !== id)
+      : [...contentFilters, id]
+    onContentFiltersChange?.(next)
+  }
+  const clearContentFilters = () => {
+    onContentFiltersChange?.(contentFilterOptions.map((option) => option.id))
   }
 
   useEffect(() => {
@@ -1640,7 +1670,10 @@ export function MapCanvasBar({
               onMouseLeave={() => setCollapseHover(false)}
               onClick={() => {
                 setDockCollapsed((c) => {
-                  if (!c) setProjectPopOpen(false)
+                  if (!c) {
+                    setProjectPopOpen(false)
+                    setContentPopOpen(false)
+                  }
                   return !c
                 })
               }}
@@ -1909,6 +1942,103 @@ export function MapCanvasBar({
               </div>
             </>
           )}
+
+          {(onContentFiltersChange && contentFilterOptions.length > 0) || contentExtraFilter ? (
+            <>
+              <span className="map-dock-sep" aria-hidden />
+              <div className="map-dock-group">
+                <span className="map-dock-group-kicker">Filtre</span>
+                <DockMagnifyRow>
+                  <MotionPopover
+                    open={contentPopOpen}
+                    onOpenChange={setContentPopOpen}
+                    className="map-dock-wrap map-dock-project-wrap motion-popover-dock"
+                    panelClassName="map-dock-project-pop"
+                    placement="top"
+                    label={contentFilterTitle}
+                    trigger={
+                      <button
+                        type="button"
+                        className={`map-dock-btn map-dock-project-trigger${hasContentFilter ? ' is-pressed' : ''}${contentPopOpen ? ' is-open' : ''}`}
+                        title={contentFilterTitle}
+                        aria-label={hasContentFilter ? `${contentFilterTitle} değiştir` : contentFilterTitle}
+                        aria-expanded={contentPopOpen}
+                        aria-haspopup="dialog"
+                        onClick={() => setContentPopOpen((open) => !open)}
+                      >
+                        <IconProjectFilter />
+                        {hasContentFilter ? (
+                          <span className="map-dock-project-dot" aria-hidden />
+                        ) : null}
+                      </button>
+                    }
+                  >
+                    <div className="map-dock-project-pop-head">
+                      <strong>{contentFilterTitle}</strong>
+                      <span>{contentFilterDescription}</span>
+                    </div>
+                    {hasContentFilter ? (
+                      <button
+                        type="button"
+                        className="map-dock-project-clear"
+                        onClick={() => {
+                          clearContentFilters()
+                          if (contentExtraFilter?.checked) contentExtraFilter.onChange(false)
+                        }}
+                      >
+                        Tümünü göster
+                      </button>
+                    ) : null}
+                    <div className="map-dock-project-list" aria-label={contentFilterTitle}>
+                      {onContentFiltersChange && contentFilterOptions.length > 0 ? (
+                        <>
+                          <p className="map-dock-project-section">Katman</p>
+                          {contentFilterOptions.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="checkbox"
+                              aria-checked={contentFilters.includes(option.id)}
+                              className={`map-dock-project-opt${contentFilters.includes(option.id) ? ' is-on' : ''}`}
+                              onClick={() => toggleContentFilter(option.id)}
+                            >
+                              <span>{option.label}</span>
+                              {option.subLabel ? (
+                                <span className="map-dock-project-sub">{option.subLabel}</span>
+                              ) : null}
+                              {contentFilters.includes(option.id) ? (
+                                <span className="map-dock-project-check">✓</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </>
+                      ) : null}
+                      {contentExtraFilter ? (
+                        <>
+                          <p className="map-dock-project-section">Görünüm</p>
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={contentExtraFilter.checked}
+                            className={`map-dock-project-opt${contentExtraFilter.checked ? ' is-on' : ''}`}
+                            onClick={() => contentExtraFilter.onChange(!contentExtraFilter.checked)}
+                          >
+                            <span>{contentExtraFilter.label}</span>
+                            {contentExtraFilter.subLabel ? (
+                              <span className="map-dock-project-sub">{contentExtraFilter.subLabel}</span>
+                            ) : null}
+                            {contentExtraFilter.checked ? (
+                              <span className="map-dock-project-check">✓</span>
+                            ) : null}
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </MotionPopover>
+                </DockMagnifyRow>
+              </div>
+            </>
+          ) : null}
 
           {onToggleCascadeEdges && (cascadeCount ?? 0) > 0 && (
             <>

@@ -6,11 +6,14 @@ import {
   useState,
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
+  type ReactNode,
 } from 'react'
-import { AnimatePresence } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { createPortal } from 'react-dom'
 import { MapStage } from '../components/MapStage'
 import { DwhSearchHitsPortal } from './DwhSearchHitsPortal'
 import { MotionListItem } from '../motion/MotionList'
+import { MotionModalPanel } from '../motion/MotionModal'
 import { StageTabPanels } from '../motion/StageTabPanels'
 import { StageTabs, type StageTabDef } from '../motion/StageTabs'
 import {
@@ -305,60 +308,66 @@ function ColumnsTable({ columns }: { columns: DwhColumn[] }) {
   )
 }
 
-function StatementOption({
-  statement,
-  selected,
-  onSelect,
-}: {
-  statement: DwhSqlStatement
-  selected: boolean
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`dwh-statement-option${selected ? ' is-selected' : ''}`}
-      onClick={onSelect}
-    >
-      <span className="dwh-statement-option-main">
-        <span className="dwh-statement-procedure">{procedureLabel(statement)}</span>
-        {statement.role === 'reader' && statement.relatedTable ? (
-          <span className="dwh-statement-route">→ {statement.relatedTable}</span>
-        ) : null}
-      </span>
-      <DmlBadge dmlType={statement.dmlType} />
-    </button>
-  )
-}
-
-function StatementGroup({
+function StatementTable({
   title,
-  note,
+  empty,
   statements,
-  selectedId,
-  onSelect,
+  relationLabel,
+  onOpen,
 }: {
   title: string
-  note?: string
+  empty: string
   statements: DwhSqlStatement[]
-  selectedId?: number
-  onSelect: (statementId: number) => void
+  relationLabel: (statement: DwhSqlStatement) => string
+  onOpen: (statement: DwhSqlStatement) => void
 }) {
-  if (!statements.length) return null
   return (
-    <section className="dwh-statement-group">
-      <h4>{title}</h4>
-      {note ? <p>{note}</p> : null}
-      <div className="dwh-statement-options">
-        {statements.map((statement) => (
-          <StatementOption
-            key={`${statement.role ?? 'statement'}-${statement.id}`}
-            statement={statement}
-            selected={statement.statementId === selectedId}
-            onSelect={() => onSelect(statement.statementId)}
-          />
-        ))}
+    <section className="dwh-query-table-card">
+      <div className="dwh-query-table-head">
+        <h4>{title}</h4>
+        <span>{statements.length} sorgu</span>
       </div>
+      {statements.length ? (
+        <div className="dwh-query-table-wrap">
+          <table className="dwh-query-table">
+            <thead>
+              <tr>
+                <th>Prosedür</th>
+                <th>İlişki</th>
+                <th>DML</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statements.map((statement) => {
+                const relation = relationLabel(statement)
+                return (
+                  <tr
+                    key={`${statement.role ?? 'statement'}-${statement.id}`}
+                    className="dwh-query-row"
+                    role="button"
+                    tabIndex={0}
+                    title={`${procedureLabel(statement)} · ${relation}`}
+                    onClick={() => onOpen(statement)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      onOpen(statement)
+                    }}
+                  >
+                    <td>
+                      <span className="dwh-query-procedure-link">{procedureLabel(statement)}</span>
+                    </td>
+                    <td title={relation}>{relation}</td>
+                    <td><DmlBadge dmlType={statement.dmlType} /></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="dwh-query-table-empty">{empty}</p>
+      )}
     </section>
   )
 }
@@ -451,6 +460,167 @@ function SqlDetailPanel({
   )
 }
 
+function DwhSqlModalBackdrop({
+  children,
+  onClose,
+}: {
+  children: ReactNode
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const backdrop = (
+    <motion.div
+      className="modal-backdrop dwh-sql-modal-backdrop"
+      role="presentation"
+      data-motion="dwh-sql-modal-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.18 }}
+      onClick={onClose}
+    >
+      {children}
+    </motion.div>
+  )
+
+  if (typeof document === 'undefined') return backdrop
+  return createPortal(backdrop, document.body)
+}
+
+function StatementDetailModal({
+  statement,
+  focusTable,
+  onClose,
+}: {
+  statement?: DwhSqlStatement
+  focusTable?: string
+  onClose: () => void
+}) {
+  return (
+    <AnimatePresence>
+      {statement ? (
+        <DwhSqlModalBackdrop onClose={onClose}>
+          <MotionModalPanel
+            className="modal wide dwh-sql-modal"
+            labelledBy="dwh-sql-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-head">
+              <h2 id="dwh-sql-modal-title">Sorgu detayı</h2>
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Kapat
+              </button>
+            </header>
+            <SqlDetailPanel statement={statement} focusTable={focusTable} />
+          </MotionModalPanel>
+        </DwhSqlModalBackdrop>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
+function ReportSqlDetailPanel({ report }: { report: DwhReportDetail }) {
+  const [view, setView] = useState<'summary' | 'full'>('full')
+  const hasSummary = Boolean(report.simplifiedSql)
+  const sqlText = hasSummary && view === 'summary' ? report.simplifiedSql : report.sqlText
+
+  useEffect(() => {
+    setView(hasSummary ? 'summary' : 'full')
+  }, [hasSummary, report.reportId, report.simplifiedSql])
+
+  return (
+    <article className="dwh-sql-detail">
+      <div className="dwh-sql-detail-head">
+        <div>
+          <span className="dwh-eyebrow">Rapor</span>
+          <h3>Rapor SQL</h3>
+          <p>{report.reportName}</p>
+        </div>
+        <DmlBadge dmlType="SELECT" />
+      </div>
+
+      <div className="dwh-sql-meta-grid">
+        <span>
+          <strong>Dosya</strong>
+          {report.fileName ?? 'bilgi yok'}
+        </span>
+        <span>
+          <strong>Kaynak</strong>
+          {report.sourceTables.length}
+        </span>
+        <span>
+          <strong>Kolon</strong>
+          {report.columns.length}
+        </span>
+      </div>
+
+      <div className="dwh-sql-view-head">
+        <h4>SQL</h4>
+        {hasSummary ? (
+          <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
+            <button
+              type="button"
+              className={view === 'summary' ? 'on' : undefined}
+              onClick={() => setView('summary')}
+            >
+              Sade
+            </button>
+            <button
+              type="button"
+              className={view === 'full' ? 'on' : undefined}
+              onClick={() => setView('full')}
+            >
+              Tam SQL
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <pre className="dwh-sql-block">{sqlText || 'SQL metni yok'}</pre>
+    </article>
+  )
+}
+
+function ReportSqlDetailModal({
+  report,
+  open,
+  onClose,
+}: {
+  report?: DwhReportDetail
+  open: boolean
+  onClose: () => void
+}) {
+  return (
+    <AnimatePresence>
+      {open && report ? (
+        <DwhSqlModalBackdrop onClose={onClose}>
+          <MotionModalPanel
+            className="modal wide dwh-sql-modal"
+            labelledBy="dwh-report-sql-modal-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="modal-head">
+              <h2 id="dwh-report-sql-modal-title">Rapor sorgusu</h2>
+              <button type="button" className="btn ghost" onClick={onClose}>
+                Kapat
+              </button>
+            </header>
+            <ReportSqlDetailPanel report={report} />
+          </MotionModalPanel>
+        </DwhSqlModalBackdrop>
+      ) : null}
+    </AnimatePresence>
+  )
+}
+
 function TableQueryPanel({
   table,
   statements,
@@ -460,14 +630,11 @@ function TableQueryPanel({
   statements: DwhSqlStatement[]
   loading: boolean
 }) {
-  const [selectedStatementId, setSelectedStatementId] = useState<number>()
+  const [activeStatement, setActiveStatement] = useState<DwhSqlStatement>()
 
   useEffect(() => {
-    setSelectedStatementId((current) => {
-      if (current && statements.some((statement) => statement.statementId === current)) return current
-      return statements[0]?.statementId
-    })
-  }, [statements])
+    setActiveStatement(undefined)
+  }, [table?.tableId, statements])
 
   if (loading) return <div className="dwh-detail-empty">SQL kullanımları yükleniyor...</div>
   if (!table) return <div className="dwh-detail-empty">Bir tablo seçin.</div>
@@ -475,120 +642,112 @@ function TableQueryPanel({
 
   const writers = statements.filter((statement) => statement.role === 'writer')
   const readers = statements.filter((statement) => statement.role === 'reader')
-  const selected = statements.find((statement) => statement.statementId === selectedStatementId) ?? statements[0]
   const tableName = fullTableName(table)
 
   return (
-    <div className="dwh-tab-content dwh-query-layout">
-      <aside className="dwh-query-list" aria-label="Sorgu seçenekleri">
-        <StatementGroup
-          title={`${tableName} tablosunu dolduran sorgular (${writers.length})`}
-          statements={writers}
-          selectedId={selected.statementId}
-          onSelect={setSelectedStatementId}
-        />
-        <StatementGroup
-          title={`${tableName} tablosunu kaynak olarak kullanan sorgular (${readers.length})`}
-          note="Prosedür → Etkilediği tablo"
+    <>
+      <div className="dwh-tab-content dwh-query-layout">
+        <StatementTable
+          title="Çağıranlar"
+          empty={`${tableName} tablosunu kaynak olarak kullanan sorgu yok.`}
           statements={readers}
-          selectedId={selected.statementId}
-          onSelect={setSelectedStatementId}
+          relationLabel={(statement) => statement.relatedTable ?? statement.targetTable ?? 'Hedef tablo yok'}
+          onOpen={setActiveStatement}
         />
-      </aside>
-      <SqlDetailPanel statement={selected} focusTable={tableName} />
-    </div>
+        <StatementTable
+          title="Çağrılanlar"
+          empty={`${tableName} tablosunu dolduran sorgu yok.`}
+          statements={writers}
+          relationLabel={(statement) => statement.targetTable ?? tableName}
+          onOpen={setActiveStatement}
+        />
+      </div>
+      <StatementDetailModal
+        statement={activeStatement}
+        focusTable={tableName}
+        onClose={() => setActiveStatement(undefined)}
+      />
+    </>
   )
 }
 
 function ReportQueryPanel({ report, loading }: { report?: DwhReportDetail; loading: boolean }) {
-  const [view, setView] = useState<'summary' | 'full'>('full')
-  const hasSummary = Boolean(report?.simplifiedSql)
-  const sqlText = hasSummary && view === 'summary' ? report?.simplifiedSql : report?.sqlText
+  const [sqlOpen, setSqlOpen] = useState(false)
 
   useEffect(() => {
-    setView(hasSummary ? 'summary' : 'full')
-  }, [hasSummary, report?.reportId, report?.simplifiedSql])
+    setSqlOpen(false)
+  }, [report?.reportId])
 
   if (loading) return <div className="dwh-detail-empty">Rapor sorgusu yükleniyor...</div>
   if (!report) return <div className="dwh-detail-empty">Bir rapor seçin.</div>
   return (
-    <div className="dwh-tab-content dwh-query-layout dwh-report-query-layout">
-      <aside className="dwh-query-list" aria-label="Rapor kaynak tabloları">
-        <section className="dwh-statement-group">
-          <h4>Rapor kaynak tabloları ({report.sourceTables.length})</h4>
-          {report.fileName ? <p>{report.fileName}</p> : null}
-          <div className="dwh-statement-options">
-            {report.sourceTables.map((table) => (
-              <div
-                key={table.id}
-                className="dwh-statement-option dwh-report-source-option"
-                title={fullTableName(table)}
-              >
-                <span className="dwh-statement-option-main">
-                  <span className="dwh-statement-procedure">{fullTableName(table)}</span>
-                  <span className="dwh-statement-route">{table.layer ?? 'Kaynak tablo'}</span>
-                </span>
-                <span className="hit-tag hit-tag-table">Tablo</span>
-              </div>
-            ))}
+    <>
+      <div className="dwh-tab-content dwh-query-layout dwh-report-query-layout">
+        <section className="dwh-query-table-card dwh-report-source-table-card">
+          <div className="dwh-query-table-head">
+            <h4>Rapor kaynakları</h4>
+            <span>{report.sourceTables.length} tablo</span>
+          </div>
+          <div className="dwh-query-report-actions">
+            <span title={report.fileName ?? report.reportName}>{report.fileName ?? report.reportName}</span>
+            <button type="button" className="btn ghost" onClick={() => setSqlOpen(true)}>
+              SQL göster
+            </button>
+          </div>
+          {report.sourceTables.length ? (
+            <div className="dwh-query-table-wrap">
+              <table className="dwh-query-table">
+                <thead>
+                  <tr>
+                    <th>Tablo</th>
+                    <th>Katman</th>
+                    <th>Tür</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.sourceTables.map((table) => (
+                    <tr key={table.id}>
+                      <td title={fullTableName(table)}>{fullTableName(table)}</td>
+                      <td>{table.layer ?? '-'}</td>
+                      <td><span className="hit-tag hit-tag-table">Tablo</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="dwh-query-table-empty">Kaynak tablo kaydı yok.</p>
+          )}
+        </section>
+        <section className="dwh-query-table-card dwh-report-source-table-card">
+          <div className="dwh-query-table-head">
+            <h4>Rapor bilgisi</h4>
+            <span>{report.columns.length} kolon</span>
+          </div>
+          <div className="dwh-query-report-summary">
+            <span>
+              <strong>Rapor</strong>
+              {report.reportName}
+            </span>
+            <span>
+              <strong>Dosya</strong>
+              {report.fileName ?? '-'}
+            </span>
+            <span>
+              <strong>SQL</strong>
+              <button type="button" className="dwh-query-procedure-link" onClick={() => setSqlOpen(true)}>
+                Rapor sorgusunu aç
+              </button>
+            </span>
           </div>
         </section>
-        {report.sourceTables.length ? (
-          null
-        ) : (
-          <p className="dwh-empty-line">Kaynak tablo kaydı yok.</p>
-        )}
-      </aside>
-
-      <article className="dwh-sql-detail">
-        <div className="dwh-sql-detail-head">
-          <div>
-            <span className="dwh-eyebrow">Rapor</span>
-            <h3>Rapor SQL</h3>
-            <p>{report.reportName}</p>
-          </div>
-          <DmlBadge dmlType="SELECT" />
-        </div>
-
-        <div className="dwh-sql-meta-grid">
-          <span>
-            <strong>Dosya</strong>
-            {report.fileName ?? 'bilgi yok'}
-          </span>
-          <span>
-            <strong>Kaynak</strong>
-            {report.sourceTables.length}
-          </span>
-          <span>
-            <strong>Kolon</strong>
-            {report.columns.length}
-          </span>
-        </div>
-
-        <div className="dwh-sql-view-head">
-          <h4>SQL</h4>
-          {hasSummary ? (
-            <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
-              <button
-                type="button"
-                className={view === 'summary' ? 'on' : undefined}
-                onClick={() => setView('summary')}
-              >
-                Sade
-              </button>
-              <button
-                type="button"
-                className={view === 'full' ? 'on' : undefined}
-                onClick={() => setView('full')}
-              >
-                Tam SQL
-              </button>
-            </div>
-          ) : null}
-        </div>
-        <pre className="dwh-sql-block">{sqlText || 'SQL metni yok'}</pre>
-      </article>
-    </div>
+      </div>
+      <ReportSqlDetailModal
+        report={report}
+        open={sqlOpen}
+        onClose={() => setSqlOpen(false)}
+      />
+    </>
   )
 }
 

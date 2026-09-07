@@ -50,6 +50,7 @@ import {
   type DwhSwimlaneProjectionEdge,
 } from './swimlaneProjection'
 import type {
+  DwhLineageEdge,
   DwhLineageEntityKind,
   DwhLineageGraph,
   DwhLineageNode,
@@ -77,7 +78,7 @@ type DwhNodeData = {
   size: MapLayout['size']
   sub: string
   entityKind?: DwhLineageEntityKind
-  kind: 'center' | DwhLineageNodeKind | 'collapsed' | 'layerHeader'
+  kind: 'center' | DwhLineageNodeKind | 'layerGroup' | 'collapsed' | 'layerHeader'
   hop: number
   tableId?: number
   reportId?: number
@@ -105,6 +106,17 @@ const MIN_COLLAPSE_COUNT = 3
 const DWH_MIN_ZOOM = 0.18
 const EDGE_COLOR = '#2f6f55'
 type DwhLayoutMode = MapLayoutMode | 'swimlane'
+type DwhVisualNodeKind = DwhLineageNodeKind | 'layerGroup'
+type DwhVisualLineageNode = Omit<DwhLineageNode, 'kind'> & {
+  kind: DwhVisualNodeKind
+  memberCount?: number
+}
+type DwhVisualLineageGraph = Omit<DwhLineageGraph, 'nodes'> & {
+  nodes: DwhVisualLineageNode[]
+}
+type DwhReadableLineageGraph = Omit<DwhLineageGraph, 'nodes'> & {
+  nodes: DwhVisualLineageNode[]
+}
 const DWH_SWIMLANE_ORDER: DwhSwimlaneKey[] = ['LD', 'TR', 'EX', 'KAYNAK', 'DIGER']
 const DWH_SWIMLANE_CONTROL_ORDER: DwhSwimlaneKey[] = ['LD', 'TR', 'EX', 'KAYNAK']
 const DWH_SWIMLANE_LABELS: Record<DwhSwimlaneKey, string> = {
@@ -112,6 +124,22 @@ const DWH_SWIMLANE_LABELS: Record<DwhSwimlaneKey, string> = {
   TR: 'TR Katmanı',
   EX: 'EX Katmanı',
   KAYNAK: 'Kaynak Sistem',
+  DIGER: 'Diğer',
+}
+const DWH_SUBQUERY_FILTER_KEY = 'SUBQUERY'
+const DWH_CONTENT_FILTER_ORDER = [...DWH_SWIMLANE_CONTROL_ORDER, 'DIGER']
+const DWH_CONTENT_FILTER_LABELS: Record<string, string> = {
+  LD: 'LD',
+  TR: 'TR',
+  EX: 'EX',
+  KAYNAK: 'Kaynak',
+  DIGER: 'Diğer',
+}
+const DWH_LAYER_GROUP_LABELS: Record<DwhSwimlaneKey, string> = {
+  LD: 'LD',
+  TR: 'TR',
+  EX: 'EX',
+  KAYNAK: 'KAYNAK',
   DIGER: 'Diğer',
 }
 const DWH_SWIMLANE_HEADER_Y = 20
@@ -392,7 +420,7 @@ function entityLabel(kind?: DwhLineageEntityKind) {
 }
 
 function countReachableTables(
-  graph: DwhLineageGraph,
+  graph: DwhReadableLineageGraph,
   startId: string,
   direction: 'source' | 'target',
 ) {
@@ -433,7 +461,7 @@ function countReachableTables(
   }
 }
 
-function graphStatsForNode(graph: DwhLineageGraph, nodeId: string): GraphNodeStats {
+function graphStatsForNode(graph: DwhReadableLineageGraph, nodeId: string): GraphNodeStats {
   const source = countReachableTables(graph, nodeId, 'source')
   const target = countReachableTables(graph, nodeId, 'target')
   return {
@@ -637,27 +665,32 @@ function DwhMapInfoDrawer({
 }
 
 function splitLayer(
-  all: DwhLineageNode[],
+  all: DwhVisualLineageNode[],
   expanded: boolean,
   layoutMode: DwhLayoutMode,
 ) {
-  if (layoutMode === 'swimlane') return { visible: all, hidden: [] as DwhLineageNode[] }
-  if (expanded) return { visible: all, hidden: [] as DwhLineageNode[] }
+  if (layoutMode === 'swimlane') return { visible: all, hidden: [] as DwhVisualLineageNode[] }
+  if (expanded) return { visible: all, hidden: [] as DwhVisualLineageNode[] }
   const cap = layoutMode === 'radial' ? RADIAL_VISIBLE_CAP : MAX_VISIBLE_PER_LAYER
   const hidden = all.length > cap ? all.slice(cap) : []
-  if (hidden.length < MIN_COLLAPSE_COUNT) return { visible: all, hidden: [] as DwhLineageNode[] }
+  if (hidden.length < MIN_COLLAPSE_COUNT) return { visible: all, hidden: [] as DwhVisualLineageNode[] }
   return { visible: all.slice(0, cap), hidden }
 }
 
-function nodeSubLabel(node: DwhLineageNode) {
+function nodeSubLabel(node: DwhVisualLineageNode) {
   if (node.kind === 'cycle') return node.entityKind === 'table' ? 'Döngü tablo' : 'Döngü'
   if (node.kind === 'reference') return node.layer ?? (node.entityKind === 'table' ? 'Tablo' : 'Referans')
   if (node.kind === 'table') return node.subtitle ?? node.layer ?? 'Tablo'
   if (node.kind === 'report') return node.subtitle ?? 'Rapor'
+  if (node.kind === 'layerGroup') return node.subtitle ?? 'Katman grubu'
   return node.subtitle ?? 'Alt sorgu'
 }
 
-function rootSubLabel(graph: DwhLineageGraph) {
+function isRealLineageNode(node?: DwhVisualLineageNode): node is DwhLineageNode {
+  return Boolean(node && node.kind !== 'layerGroup')
+}
+
+function rootSubLabel(graph: Pick<DwhLineageGraph, 'rootKind'>) {
   return graph.rootKind === 'report' ? 'Rapor' : 'Tablo'
 }
 
@@ -975,7 +1008,7 @@ function buildDwhSwimlaneMap(
 }
 
 function buildDwhMap(
-  graph: DwhLineageGraph,
+  graph: DwhVisualLineageGraph,
   expandedLayers: Set<number>,
   visibleMaxHop: number,
   visibleSwimlaneKeys: DwhSwimlaneKey[],
@@ -987,10 +1020,10 @@ function buildDwhMap(
   const root = graph.nodes.find((node) => node.id === graph.rootId) ?? graph.nodes[0]
   if (!root) return { nodes: [], edges: [], hops: [] }
   if (layoutMode === 'swimlane') {
-    return buildDwhSwimlaneMap(graph, visibleSwimlaneKeys, layout)
+    return buildDwhSwimlaneMap(graph as DwhLineageGraph, visibleSwimlaneKeys, layout)
   }
 
-  const byHop = new Map<number, DwhLineageNode[]>()
+  const byHop = new Map<number, DwhVisualLineageNode[]>()
   for (const node of graph.nodes) {
     if (node.id === graph.rootId) continue
     const hop = Math.max(1, node.depth)
@@ -999,8 +1032,8 @@ function buildDwhMap(
     byHop.set(hop, list)
   }
   const hops = [...byHop.keys()].sort((a, b) => a - b)
-  const visibleByHop = new Map<number, DwhLineageNode[]>()
-  const collapsedMeta = new Map<number, DwhLineageNode[]>()
+  const visibleByHop = new Map<number, DwhVisualLineageNode[]>()
+  const collapsedMeta = new Map<number, DwhVisualLineageNode[]>()
   const parentByNodeId = new Map(graph.edges.map((edge) => [edge.source, edge.target]))
   const rowOrderByNodeId = new Map<string, number>([[graph.rootId, 0]])
 
@@ -1054,7 +1087,12 @@ function buildDwhMap(
     const visible = visibleByHop.get(hop) ?? []
     visible.forEach((node, i) => {
       visibleIds.add(node.id)
-      const size = layoutMode === 'radial' ? 'md' : mapNodeSizeFor('service', hop, visibleMaxHop)
+      const size =
+        node.kind === 'layerGroup'
+          ? 'sm'
+          : layoutMode === 'radial'
+            ? 'md'
+            : mapNodeSizeFor('service', hop, visibleMaxHop)
       const w = layoutMode === 'radial' ? layout.nodeW : mapNodeWidth(size)
       nodes.push({
         id: node.id,
@@ -1069,7 +1107,7 @@ function buildDwhMap(
           showTip: mapLabelNeedsTip(node.label, layoutMode === 'radial' ? 28 : tipChars),
           size,
           sub: nodeSubLabel(node),
-          entityKind: node.entityKind,
+          entityKind: node.kind === 'layerGroup' ? undefined : node.entityKind,
           kind: node.kind,
           hop,
           tableId: node.tableId,
@@ -1257,9 +1295,190 @@ function buildDwhMap(
   return { nodes: positioned, edges, hops }
 }
 
-function maxHop(graph?: DwhLineageGraph) {
+// Mirrors the legacy diagram order: group direct table siblings first, apply
+// layer pruning, then splice subquery wrappers when "Alt sorgusuz" is enabled.
+function projectDwhDiagramGraph(
+  graph?: DwhLineageGraph,
+  filterIds: readonly string[] = [],
+  hideSubqueries = false,
+): DwhVisualLineageGraph | undefined {
+  if (!graph) return undefined
+
+  const allowed = new Set(filterIds)
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+  const childrenByParent = new Map<string, DwhLineageEdge[]>()
+  for (const edge of graph.edges) {
+    const children = childrenByParent.get(edge.target) ?? []
+    children.push(edge)
+    childrenByParent.set(edge.target, children)
+  }
+
+  const nodes = new Map<string, DwhVisualLineageNode>()
+  const edges = new Map<string, DwhLineageEdge>()
+
+  const visibleLayer = (node: DwhLineageNode) =>
+    node.id === graph.rootId ||
+    node.entityKind !== 'table' ||
+    allowed.has(normalizeDwhLayer(node))
+
+  const addNode = (node: DwhVisualLineageNode, depth: number) => {
+    const current = nodes.get(node.id)
+    nodes.set(node.id, {
+      ...node,
+      depth: current ? Math.min(current.depth, depth) : depth,
+    })
+  }
+  const addEdge = (edge: DwhLineageEdge) => {
+    if (!edges.has(edge.id)) edges.set(edge.id, edge)
+  }
+
+  const attachToParent = (
+    childTopIds: string[],
+    parentId: string | undefined,
+    edge: DwhLineageEdge,
+    edgePrefix: string,
+  ) => {
+    if (!parentId) return
+    for (const childTopId of childTopIds) {
+      if (childTopId === parentId) continue
+      addEdge({
+        ...edge,
+        id: `${edgePrefix}:${childTopId}->${parentId}:${edge.id}`,
+        source: childTopId,
+        target: parentId,
+      })
+    }
+  }
+
+  const buildChildren = (
+    parentId: string,
+    childDepth: number,
+    visualParentId: string | undefined,
+  ): string[] => {
+    const childEdges = childrenByParent.get(parentId) ?? []
+    const topIds: string[] = []
+
+    const tableEdges = childEdges.filter((edge) => {
+      const child = nodeById.get(edge.source)
+      return child?.entityKind === 'table'
+    })
+    const layers = new Set(tableEdges.map((edge) => normalizeDwhLayer(nodeById.get(edge.source))))
+    const shouldGroup = tableEdges.length > 1 && layers.size > 1
+
+    const groupedTableEdges = new Map<DwhSwimlaneKey, DwhLineageEdge[]>()
+    if (shouldGroup) {
+      for (const edge of tableEdges) {
+        const child = nodeById.get(edge.source)
+        const layer = normalizeDwhLayer(child)
+        const group = groupedTableEdges.get(layer) ?? []
+        group.push(edge)
+        groupedTableEdges.set(layer, group)
+      }
+    }
+
+    for (const edge of childEdges) {
+      const child = nodeById.get(edge.source)
+      if (!child) continue
+      if (shouldGroup && child.entityKind === 'table') continue
+
+      const childTopIds = buildBranch(child.id, childDepth)
+      attachToParent(childTopIds, visualParentId, edge, 'diagram')
+      topIds.push(...childTopIds)
+    }
+
+    if (shouldGroup) {
+      for (const layer of groupedTableEdges.keys()) {
+        const layerTableEdges = groupedTableEdges.get(layer) ?? []
+        if (!layerTableEdges.length) continue
+        const memberTopIds: string[] = []
+        for (const edge of layerTableEdges) {
+          const childTopIds = buildBranch(edge.source, childDepth + 1)
+          if (!childTopIds.length) continue
+          attachToParent(
+            childTopIds,
+            `dwh-layer-group:${parentId}:${layer}`,
+            edge,
+            'layerGroup-member',
+          )
+          memberTopIds.push(...childTopIds)
+        }
+        if (!memberTopIds.length) continue
+
+        const groupId = `dwh-layer-group:${parentId}:${layer}`
+        const groupNode: DwhVisualLineageNode = {
+          id: groupId,
+          kind: 'layerGroup',
+          entityKind: 'subquery',
+          entityKey: groupId,
+          label: `${DWH_LAYER_GROUP_LABELS[layer]} (${memberTopIds.length})`,
+          subtitle: 'Katman grubu',
+          layer,
+          depth: childDepth,
+          memberCount: memberTopIds.length,
+        }
+        addNode(groupNode, childDepth)
+        if (visualParentId) {
+          addEdge({
+            id: `layerGroup:${groupId}->${visualParentId}`,
+            kind: 'subquery',
+            source: groupId,
+            target: visualParentId,
+            label: 'katman grubu',
+          })
+        }
+        topIds.push(groupId)
+      }
+    }
+
+    return topIds
+  }
+
+  const buildBranch = (nodeId: string, depth: number): string[] => {
+    const node = nodeById.get(nodeId)
+    if (!node || !visibleLayer(node)) return []
+
+    if (hideSubqueries && node.entityKind === 'subquery') {
+      return buildChildren(node.id, depth, undefined)
+    }
+
+    addNode(node, depth)
+    buildChildren(node.id, depth + 1, node.id)
+    return [node.id]
+  }
+
+  buildBranch(graph.rootId, 0)
+
+  return {
+    ...graph,
+    nodes: Array.from(nodes.values()),
+    edges: Array.from(edges.values()),
+  }
+}
+
+function maxHop(graph?: DwhVisualLineageGraph) {
   if (!graph) return 1
   return Math.max(1, ...graph.nodes.map((node) => node.depth))
+}
+
+function dwhContentFilterKey(node: DwhLineageNode) {
+  return node.entityKind === 'subquery' ? DWH_SUBQUERY_FILTER_KEY : normalizeDwhLayer(node)
+}
+
+function dwhContentFilterOptionsForGraph(graph?: DwhLineageGraph) {
+  if (!graph) return []
+  const counts = new Map<string, number>()
+  for (const node of graph.nodes) {
+    if (node.id === graph.rootId) continue
+    const key = dwhContentFilterKey(node)
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return DWH_CONTENT_FILTER_ORDER
+    .filter((key) => counts.has(key))
+    .map((key) => ({
+      id: key,
+      label: DWH_CONTENT_FILTER_LABELS[key] ?? key,
+      subLabel: `${counts.get(key) ?? 0} node`,
+    }))
 }
 
 function DwhLineageMapInner({
@@ -1274,11 +1493,26 @@ function DwhLineageMapInner({
   onSelectTable,
   onSelectReport,
 }: Props) {
-  const graphMaxHop = useMemo(() => maxHop(graph), [graph])
   const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set())
   const [visibleMaxHop, setVisibleMaxHop] = useState(1)
   const [visibleSwimlaneCount, setVisibleSwimlaneCount] = useState(1)
   const [layoutMode, setLayoutMode] = useState<DwhLayoutMode>('ltr')
+  const [hideSubqueries, setHideSubqueries] = useState(false)
+  const contentFilterOptions = useMemo(() => dwhContentFilterOptionsForGraph(graph), [graph])
+  const allContentFilterIds = useMemo(
+    () => contentFilterOptions.map((option) => option.id),
+    [contentFilterOptions],
+  )
+  const [contentFilters, setContentFilters] = useState<string[]>(allContentFilterIds)
+  const visualGraph = useMemo(
+    () =>
+      graph && layoutMode !== 'swimlane'
+        ? projectDwhDiagramGraph(graph, contentFilters, hideSubqueries)
+        : (graph as DwhVisualLineageGraph | undefined),
+    [contentFilters, graph, hideSubqueries, layoutMode],
+  )
+  const activeGraph = layoutMode === 'swimlane' ? (graph as DwhVisualLineageGraph | undefined) : visualGraph
+  const graphMaxHop = useMemo(() => maxHop(visualGraph), [visualGraph])
   const [focusId, setFocusId] = useState<string | null>(null)
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(graph?.rootId ?? null)
   const [infoPanelOpen, setInfoPanelOpen] = useState(true)
@@ -1314,30 +1548,34 @@ function DwhLineageMapInner({
     setVisibleMaxHop(1)
     setVisibleSwimlaneCount(1)
     setExpandedLayers(new Set())
+    setContentFilters(allContentFilterIds)
+    setHideSubqueries(false)
     setFocusId(null)
     setInspectedNodeId(graph?.rootId ?? null)
     setInfoPanelOpen(true)
     layoutDirtyRef.current = false
-  }, [graph?.rootId])
+  }, [allContentFilterIds, graph?.rootId])
 
   const inspectedNode = useMemo(
     () => {
       if (!graph) return undefined
       const hoverNode = focusId
-        ? graph.nodes.find((node) => node.id === focusId)
+        ? activeGraph?.nodes.find((node) => node.id === focusId)
         : undefined
-      return hoverNode ?? graph.nodes.find((node) => node.id === inspectedNodeId)
+      if (isRealLineageNode(hoverNode)) return hoverNode
+      const selectedNode = activeGraph?.nodes.find((node) => node.id === inspectedNodeId)
+      return isRealLineageNode(selectedNode) ? selectedNode : undefined
     },
-    [focusId, graph, inspectedNodeId],
+    [activeGraph, focusId, graph, inspectedNodeId],
   )
   const inspectedNodeRenderId = inspectedNode?.id ?? null
 
   const graphNodeStats = useMemo(
     () =>
       graph && inspectedNode
-        ? graphStatsForNode(graph, inspectedNode.id)
+        ? graphStatsForNode(activeGraph ?? graph, inspectedNode.id)
         : EMPTY_GRAPH_STATS,
-    [graph, inspectedNode],
+    [activeGraph, graph, inspectedNode],
   )
 
   const flowLayoutMode: MapLayoutMode = layoutMode === 'swimlane' ? 'ltr' : layoutMode
@@ -1352,6 +1590,10 @@ function DwhLineageMapInner({
   useEffect(() => {
     setVisibleSwimlaneCount((count) => Math.min(Math.max(1, count), swimlaneMaxLayer))
   }, [swimlaneMaxLayer])
+
+  useEffect(() => {
+    setVisibleMaxHop((hop) => Math.min(Math.max(1, hop), graphMaxHop))
+  }, [graphMaxHop])
 
   const layout = useMemo(
     () => {
@@ -1371,10 +1613,10 @@ function DwhLineageMapInner({
 
   const built = useMemo<DwhBuiltMap>(
     () =>
-      graph
-        ? buildDwhMap(graph, expandedLayers, visibleMaxHop, visibleSwimlaneKeys, layout, layoutMode)
+      visualGraph
+        ? buildDwhMap(visualGraph, expandedLayers, visibleMaxHop, visibleSwimlaneKeys, layout, layoutMode)
         : { nodes: [] as Node<DwhNodeData>[], edges: [] as Edge[], hops: [] as number[] },
-    [graph, expandedLayers, layout, layoutMode, visibleMaxHop, visibleSwimlaneKeys],
+    [expandedLayers, layout, layoutMode, visibleMaxHop, visibleSwimlaneKeys, visualGraph],
   )
 
   const builtNodeSig = useMemo(
@@ -1633,6 +1875,10 @@ function DwhLineageMapInner({
         setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
         return
       }
+      if (node.data.kind === 'layerGroup') {
+        setFocusId(node.id)
+        return
+      }
       if (node.data.kind === 'layerHeader') return
       setInspectedNodeId(node.id)
       setInfoPanelOpen(true)
@@ -1831,6 +2077,35 @@ function DwhLineageMapInner({
                 setLayoutMode((mode) => (mode === 'radial' ? 'ltr' : 'radial'))
                 setTidyNonce((nonce) => nonce + 1)
               }}
+              contentFilters={layoutMode === 'swimlane' ? undefined : contentFilters}
+              contentFilterOptions={layoutMode === 'swimlane' ? undefined : contentFilterOptions}
+              contentExtraFilter={
+                layoutMode === 'swimlane'
+                  ? undefined
+                  : {
+                      label: 'Alt sorgusuz',
+                      subLabel: 'Alt sorgu node’larını çizmeden içindeki tabloları üst node’a bağlar',
+                      checked: hideSubqueries,
+                      onChange: (checked) => {
+                        layoutDirtyRef.current = false
+                        setFocusId(null)
+                        setHideSubqueries(checked)
+                        setTidyNonce((nonce) => nonce + 1)
+                      },
+                    }
+              }
+              onContentFiltersChange={
+                layoutMode === 'swimlane'
+                  ? undefined
+                  : (ids) => {
+                      layoutDirtyRef.current = false
+                      setFocusId(null)
+                      setContentFilters(ids)
+                      setTidyNonce((nonce) => nonce + 1)
+                    }
+              }
+              contentFilterTitle="DWH filtresi"
+              contentFilterDescription="Ağaç ve halka görünümünde katmanları ve alt sorgusuz modu yönetir"
               layerTitle={layoutMode === 'swimlane' ? 'DWH Katmanı' : 'Seviye'}
               collapseAllLabel={
                 layoutMode === 'swimlane'

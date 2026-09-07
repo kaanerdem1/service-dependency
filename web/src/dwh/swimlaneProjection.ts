@@ -35,7 +35,7 @@ export type DwhSwimlaneProjection = {
   hiddenSubqueryCount: number
 }
 
-export function normalizeDwhLayer(node?: DwhLineageNode): DwhSwimlaneKey {
+export function normalizeDwhLayer(node?: Pick<DwhLineageNode, 'layer' | 'subtitle'>): DwhSwimlaneKey {
   if (!node) return 'DIGER'
   const raw = (node.layer || node.subtitle || '').trim().toLocaleUpperCase('tr-TR')
   if (raw === 'LD') return 'LD'
