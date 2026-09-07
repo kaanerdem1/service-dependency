@@ -4,6 +4,10 @@ import { searchMethods, searchServices } from '../api/client'
 import type { AppTheme } from '../theme'
 import type { MethodRef, Service } from '../types'
 import { SearchHitContent } from './SearchHitContent'
+import {
+  favoritesPanelShortcutLabel,
+  workflowsPanelShortcutLabel,
+} from '../panelShortcuts'
 
 type RecentItem = { id: string; name: string }
 
@@ -18,6 +22,8 @@ type Props = {
   onSelectService: (serviceId: string) => void
   onSelectMethod?: (serviceId: string, methodId: string) => void
   onOpenInbox?: () => void
+  onOpenFavorites?: () => void
+  onOpenWorkflows?: () => void
 }
 
 function SearchGlyph() {
@@ -38,6 +44,8 @@ export function CommandPalette({
   onSelectService,
   onSelectMethod,
   onOpenInbox,
+  onOpenFavorites,
+  onOpenWorkflows,
 }: Props) {
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
@@ -124,6 +132,24 @@ export function CommandPalette({
   }
 
   const showIdleHints = query.trim().length < 2
+
+  const actionMatches = (keywords: string[]) => {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return keywords.some((k) => k.includes(q) || q.includes(k))
+  }
+
+  const showFavoritesAction = Boolean(onOpenFavorites) && actionMatches(['favori', 'yıldız', 'star'])
+  const showWorkflowsAction =
+    Boolean(onOpenWorkflows) && actionMatches(['akış', 'iş akış', 'flow', 'workflow'])
+  const showInboxAction = Boolean(onOpenInbox) && actionMatches(['gelen', 'inbox', 'kutu', 'talep'])
+  const showActions =
+    showFavoritesAction || showWorkflowsAction || showInboxAction || (onOpenInbox && showIdleHints)
+
+  const panelKeys = {
+    fav: favoritesPanelShortcutLabel(),
+    flow: workflowsPanelShortcutLabel(),
+  }
 
   if (!open) return null
 
@@ -220,31 +246,65 @@ export function CommandPalette({
             </Command.Group>
           ) : null}
 
+          {showActions ? (
           <Command.Group heading="Eylemler">
-            {onOpenInbox ? (
+            {showFavoritesAction ? (
               <Command.Item
-                value="action-inbox"
+                value="action-favorites-panel"
                 onSelect={() => {
-                  onOpenInbox()
+                  onOpenFavorites?.()
                   onOpenChange(false)
                 }}
               >
                 <SearchHitContent
-                  title="Gelen kutusu"
+                  title="Favoriler paneli"
                   kind="action"
-                  subtitle="Talepler ve güncellemeler"
+                  subtitle={`${panelKeys.fav} — aç / kapat`}
                 />
               </Command.Item>
-            ) : (
-              <Command.Item value="action-inbox-soon" disabled className="is-muted">
+            ) : null}
+            {showWorkflowsAction ? (
+              <Command.Item
+                value="action-workflows-panel"
+                onSelect={() => {
+                  onOpenWorkflows?.()
+                  onOpenChange(false)
+                }}
+              >
                 <SearchHitContent
-                  title="Gelen kutusu"
+                  title="İş akışları paneli"
                   kind="action"
-                  subtitle="Oturum gerekli"
+                  subtitle={`${panelKeys.flow} — aç / kapat`}
                 />
               </Command.Item>
-            )}
+            ) : null}
+            {showInboxAction ? (
+              onOpenInbox ? (
+                <Command.Item
+                  value="action-inbox"
+                  onSelect={() => {
+                    onOpenInbox()
+                    onOpenChange(false)
+                  }}
+                >
+                  <SearchHitContent
+                    title="Gelen kutusu"
+                    kind="action"
+                    subtitle="Talepler ve güncellemeler"
+                  />
+                </Command.Item>
+              ) : (
+                <Command.Item value="action-inbox-soon" disabled className="is-muted">
+                  <SearchHitContent
+                    title="Gelen kutusu"
+                    kind="action"
+                    subtitle="Oturum gerekli"
+                  />
+                </Command.Item>
+              )
+            ) : null}
           </Command.Group>
+          ) : null}
         </Command.List>
 
         <footer className="cmdk-foot">

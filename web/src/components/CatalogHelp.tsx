@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MotionModalBackdrop, MotionModalPanel } from '../motion/MotionModal'
 import { listItemTransition, springSoft } from '../motion/config'
-
-function isApple(): boolean {
-  return /Mac|iPhone|iPad/.test(navigator.platform)
-}
+import {
+  favoritesPanelShortcutLabel,
+  isApplePlatform,
+  workflowsPanelShortcutLabel,
+} from '../panelShortcuts'
 
 function Kbd({ children }: { children: string }) {
   return <kbd className="catalog-help-kbd">{children}</kbd>
@@ -27,7 +28,9 @@ function Row({ keys, text }: { keys: string[]; text: string }) {
 
 export function CatalogHelp() {
   const [open, setOpen] = useState(false)
-  const mod = isApple() ? '⌘' : 'Ctrl'
+  const mod = isApplePlatform() ? '⌘' : 'Ctrl'
+  const favKeys = favoritesPanelShortcutLabel()
+  const flowKeys = workflowsPanelShortcutLabel()
 
   useEffect(() => {
     if (!open) return
@@ -83,8 +86,15 @@ export function CatalogHelp() {
                   </button>
                 </header>
                 <p className="catalog-help-lede">
-                  Ağaçta dolaş, favoriye sabitle, iş akışında sıra kur. Kısayollar
-                  yazı alanındayken çalışmaz.
+                  Ağaçta dolaş, favoriye sabitle, iş akışında sıra kur. Paneller:{' '}
+                  <Kbd>{favKeys}</Kbd> favoriler, <Kbd>{flowKeys}</Kbd> iş akışları.
+                  {isApplePlatform() ? (
+                    <>
+                      {' '}
+                      <Kbd>⌘F</Kbd> / <Kbd>⌘G</Kbd> tarayıcıda dolu;{' '}
+                      <strong>Control</strong> tuşu ile deneyin.
+                    </>
+                  ) : null}
                 </p>
 
                 <div className="catalog-help-grid">
@@ -97,6 +107,22 @@ export function CatalogHelp() {
                     <h3>Genel</h3>
                     <ul>
                       <Row keys={[`${mod}K`]} text="Komut paleti — servis, metod, sd-…" />
+                      <Row
+                        keys={
+                          isApplePlatform()
+                            ? ['⌃', 'F']
+                            : ['Ctrl', 'Alt', 'F']
+                        }
+                        text="Favoriler paneli — aç / kapat (aynı kısayol)"
+                      />
+                      <Row
+                        keys={
+                          isApplePlatform()
+                            ? ['⌃', 'G']
+                            : ['Ctrl', 'Alt', 'G']
+                        }
+                        text="İş akışları paneli — aç / kapat (aynı kısayol)"
+                      />
                       <Row keys={['Esc']} text="Palet, panel veya tam ekran haritayı kapat" />
                       <Row keys={['↑', '↓']} text="Modül ağacında satır seç" />
                       <Row keys={['Enter']} text="Seçili servisi veya klasörü aç" />
@@ -112,8 +138,8 @@ export function CatalogHelp() {
                   >
                     <h3>Favoriler</h3>
                     <p className="catalog-help-note">
-                      Üst çubuktaki yıldız paneli açar. Servisi arayıp ★ ile ekleyin;
-                      klasöre sürükleyin.
+                      Üst çubuktaki yıldız veya <Kbd>{favKeys}</Kbd>. Servisi arayıp ★ ile
+                      ekleyin; klasöre sürükleyin.
                     </p>
                     <ul>
                       <Row keys={['↑', '↓']} text="Listede gezin" />
@@ -134,9 +160,9 @@ export function CatalogHelp() {
                   >
                     <h3>İş akışları</h3>
                     <p className="catalog-help-note">
-                      Dal ikonu paneli açar. + köke ekler; sonra servisi bir{' '}
-                      <strong>akışın</strong> üzerine bırakın. Klasöre servis
-                      bırakılamaz.
+                      Dal ikonu veya <Kbd>{flowKeys}</Kbd>. + köke
+                      ekler; sonra servisi bir <strong>akışın</strong> üzerine bırakın.
+                      Klasöre servis bırakılamaz.
                     </p>
                     <ul>
                       <Row keys={['Esc']} text="Paneli kapat" />

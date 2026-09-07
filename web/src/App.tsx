@@ -102,6 +102,18 @@ import type {
   Snapshot,
 } from './types'
 import './App.css'
+import {
+  favoritesPanelShortcutLabel,
+  matchPanelShortcut,
+  workflowsPanelShortcutLabel,
+} from './panelShortcuts'
+
+function isTextEditingTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
+}
 
 type Tab = StageTabId
 
@@ -835,19 +847,41 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (surface === 'services') {
+        if (matchPanelShortcut(e, 'favorites')) {
+          e.preventDefault()
+          e.stopPropagation()
+          setCmdkOpen(false)
+          setWorkflowsOpen(false)
+          setShortcutsOpen((v) => !v)
+          return
+        }
+        if (matchPanelShortcut(e, 'workflows')) {
+          e.preventDefault()
+          e.stopPropagation()
+          setCmdkOpen(false)
+          setShortcutsOpen(false)
+          setWorkflowsOpen((v) => !v)
+          return
+        }
+      }
+
+      if (isTextEditingTarget(e.target)) return
+
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault()
         setCmdkOpen(true)
         return
       }
+
       if (e.key === 'Escape' && cmdkOpen) {
         e.preventDefault()
         setCmdkOpen(false)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [cmdkOpen])
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [cmdkOpen, surface])
 
   const selectVisitIndex = useCallback(
     (i: number) => {
@@ -993,7 +1027,11 @@ export default function App() {
                 type="button"
                 className={`sidebar-star-btn${shortcutsOpen ? ' is-active' : ''}`}
                 layoutId="sidebar-star-hover"
-                title={shortcutsOpen ? 'Favorileri gizle' : 'Favorilerim'}
+                title={
+                  shortcutsOpen
+                    ? `Favorileri kapat (${favoritesPanelShortcutLabel()})`
+                    : `Favoriler panelini aç (${favoritesPanelShortcutLabel()})`
+                }
                 aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
                 aria-expanded={shortcutsOpen}
                 onClick={() => {
@@ -1007,7 +1045,11 @@ export default function App() {
                 type="button"
                 className={`sidebar-star-btn sidebar-flow-btn${workflowsOpen ? ' is-active' : ''}`}
                 layoutId="sidebar-flow-hover"
-                title={workflowsOpen ? 'İş akışlarını gizle' : 'İş akışları'}
+                title={
+                  workflowsOpen
+                    ? `İş akışlarını kapat (${workflowsPanelShortcutLabel()})`
+                    : `İş akışları panelini aç (${workflowsPanelShortcutLabel()})`
+                }
                 aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
                 aria-expanded={workflowsOpen}
                 onClick={() => {
@@ -1564,6 +1606,14 @@ export default function App() {
         onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
         onSelectMethod={selectMethod}
         onOpenInbox={() => setInboxOpen(true)}
+        onOpenFavorites={() => {
+          setWorkflowsOpen(false)
+          setShortcutsOpen((v) => !v)
+        }}
+        onOpenWorkflows={() => {
+          setShortcutsOpen(false)
+          setWorkflowsOpen((v) => !v)
+        }}
       />
 
       <AnimatePresence>
