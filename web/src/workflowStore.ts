@@ -469,6 +469,55 @@ export function moveWorkflowStep(stepId: string, folderId?: string): WorkflowsSt
   return placeWorkflowStep(stepId, folderId, index)
 }
 
+export type ServiceWorkflowHit = {
+  folderId?: string
+  name: string
+  path: string
+}
+
+function folderPathLabel(folders: WorkflowFolder[], folder: WorkflowFolder): string {
+  const parts = [folder.name]
+  const seen = new Set<string>([folder.id])
+  let current = folder.parentId
+    ? folders.find((f) => f.id === folder.parentId)
+    : undefined
+  while (current) {
+    parts.unshift(current.name)
+    if (seen.has(current.id)) break
+    seen.add(current.id)
+    current = current.parentId
+      ? folders.find((f) => f.id === current?.parentId)
+      : undefined
+  }
+  return parts.join(' › ')
+}
+
+export function workflowsForService(
+  serviceId: string,
+  store: WorkflowsStore = readWorkflows(),
+): ServiceWorkflowHit[] {
+  const hits: ServiceWorkflowHit[] = []
+  const seen = new Set<string>()
+  for (const step of store.steps) {
+    if (step.serviceId !== serviceId) continue
+    const key = step.folderId ?? '__root'
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (!step.folderId) {
+      hits.push({ name: 'Kök', path: 'Kök' })
+      continue
+    }
+    const folder = store.folders.find((f) => f.id === step.folderId)
+    if (!folder) continue
+    hits.push({
+      folderId: folder.id,
+      name: folder.name,
+      path: folderPathLabel(store.folders, folder),
+    })
+  }
+  return hits
+}
+
 export function stepsInFolder(store: WorkflowsStore, folderId?: string): WorkflowStep[] {
   return store.steps
     .filter((s) => s.folderId === folderId)

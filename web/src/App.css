@@ -2890,6 +2890,96 @@
   margin-top: 1px;
 }
 
+.stage-wf-chip {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.stage-wf-chip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 0 8px 0 6px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stage-wf-chip-btn svg {
+  display: block;
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.stage-wf-chip-btn:hover,
+.stage-wf-chip-btn.is-open {
+  background: color-mix(in srgb, var(--ink) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--ink) 16%, var(--line));
+}
+
+.stage-wf-chip-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 40;
+  min-width: 220px;
+  max-width: min(360px, 70vw);
+  padding: 6px;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: 0 12px 28px color-mix(in srgb, #000 18%, transparent);
+}
+
+.stage-wf-chip-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stage-wf-chip-list button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stage-wf-chip-list button:hover {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.stage-wf-chip-list strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.stage-wf-chip-list span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .service-status-dot {
   flex-shrink: 0;
   width: 8px;

@@ -266,7 +266,6 @@ function FolderBlock({
   const selected = selectedFolderId === folder.id
   const allowChild = canNestUnder(store, folder.id)
   const organizer = !folderAcceptsSteps(store, folder)
-  const count = organizer ? children.length : items.length
 
   const onFolderDragStart = (e: ReactDragEvent) => {
     beginWorkflowDrag('folder')
@@ -328,7 +327,6 @@ function FolderBlock({
             ) : (
               <span className="sc-folder-name">{folder.name}</span>
             )}
-            {count > 0 ? <span className="sc-folder-count">{count}</span> : null}
           </button>
           {canEdit ? (
           <div className="sc-folder-actions">
@@ -550,7 +548,6 @@ export function WorkflowsPanel({
               <GitBranchIcon filled />
             </span>
             <span className="shortcuts-drawer-title">İş akışları</span>
-            <span className="shortcuts-drawer-meta">{store.steps.length}</span>
           </div>
           <div className="shortcuts-drawer-head-actions">
             <button

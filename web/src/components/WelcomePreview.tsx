@@ -364,7 +364,6 @@ function FlowScene() {
       <div className="wp-fav">
         <div className="wp-fav-toolbar">
           <span className="wp-fav-toolbar-title">İş akışları</span>
-          <span className="wp-fav-toolbar-meta">2</span>
         </div>
         <div className="wp-fav-search" aria-hidden>
           <span>Servis ara…</span>
@@ -399,7 +398,6 @@ function FlowScene() {
               ▾
             </span>
             <span className="wp-fav-folder-name">Kredi kullandırım</span>
-            <span className="wp-fav-folder-count">2</span>
           </motion.div>
           <motion.div
             className="wp-fav-item"
@@ -407,7 +405,6 @@ function FlowScene() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.38, ...springSoft }}
           >
-            <span className="wf-step-index">1</span>
             <span className="wp-fav-item-name">CONS_APPLICATION_GET</span>
           </motion.div>
         </motion.div>

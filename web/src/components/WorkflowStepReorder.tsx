@@ -145,7 +145,7 @@ export function WorkflowStepReorder({
                   ⋮⋮
                 </span>
               )}
-              <span className="wf-step-index">{index + 1}</span>
+              {info ? <span className="wf-step-index">{index + 1}</span> : null}
               <button
                 type="button"
                 className={info ? 'wf-info-service-main' : 'sc-row-main'}

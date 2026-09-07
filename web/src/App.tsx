@@ -64,6 +64,7 @@ import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { FavoriteStarButton } from './components/FavoriteStarButton'
+import { ServiceWorkflowChip } from './components/ServiceWorkflowChip'
 import { CatalogHelp } from './components/CatalogHelp'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import { useServiceFavorites } from './useServiceFavorites'
@@ -1235,12 +1236,27 @@ export default function App() {
                         {service?.name}
                       </h1>
                       {pivotId && service ? (
-                        <FavoriteStarButton
-                          active={isFavorite(pivotId)}
-                          className="fav-star-btn is-plain stage-heading-fav"
-                          size={16}
-                          onToggle={() => toggleFavorite(pivotId, service.name)}
-                        />
+                        <>
+                          <FavoriteStarButton
+                            active={isFavorite(pivotId)}
+                            className="fav-star-btn is-plain stage-heading-fav"
+                            size={16}
+                            onToggle={() => toggleFavorite(pivotId, service.name)}
+                          />
+                          <ServiceWorkflowChip
+                            serviceId={pivotId}
+                            onOpenFlow={(folderId) => {
+                              setShortcutsOpen(false)
+                              setWorkflowsOpen(false)
+                              setWorkflowInfoId(folderId)
+                            }}
+                            onOpenRoot={() => {
+                              setShortcutsOpen(false)
+                              setWorkflowInfoId(undefined)
+                              setWorkflowsOpen(true)
+                            }}
+                          />
+                        </>
                       ) : null}
                     </div>
                   </div>

@@ -535,11 +535,7 @@ export function ServiceOverview({
             </BentoTile>
 
             <BentoTile area="callers" title="Gelen çağrılar" compactHeading>
-              <StatTile
-                label="Bu servisi çağıran"
-                value={callerCount}
-                hint="İlişkiler sekmesinde liste"
-              />
+              <StatTile label="Bu servisi çağıran" value={callerCount} />
             </BentoTile>
 
             <BentoTile area="callees" title="Giden çağrılar" compactHeading>
