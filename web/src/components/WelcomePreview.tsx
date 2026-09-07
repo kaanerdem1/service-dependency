@@ -9,6 +9,7 @@ export type WelcomeStepId =
   | 'overview'
   | 'screens'
   | 'star'
+  | 'flow'
 
 const sceneTransition = {
   initial: { opacity: 0 },
@@ -357,6 +358,64 @@ function StarScene() {
   )
 }
 
+function FlowScene() {
+  return (
+    <PreviewShell label="İş akışları">
+      <div className="wp-fav">
+        <div className="wp-fav-toolbar">
+          <span className="wp-fav-toolbar-title">İş akışları</span>
+          <span className="wp-fav-toolbar-meta">2</span>
+        </div>
+        <div className="wp-fav-search" aria-hidden>
+          <span>Servis ara…</span>
+        </div>
+        <motion.div
+          className="wp-fav-drawer"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12, ...springSoft }}
+        >
+          <span className="wp-fav-section">Kök</span>
+          {['PROPOSAL_MAIN_GET'].map((name, i) => (
+            <motion.div
+              key={name}
+              className="wp-fav-item"
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.16 + i * 0.08, ...springSoft }}
+            >
+              <span className="wp-dot" />
+              <span className="wp-fav-item-name">{name}</span>
+            </motion.div>
+          ))}
+          <span className="wp-fav-section is-folders">Akış</span>
+          <motion.div
+            className="wp-fav-folder"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28, ...springSoft }}
+          >
+            <span className="wp-fav-folder-chev" aria-hidden>
+              ▾
+            </span>
+            <span className="wp-fav-folder-name">Kredi kullandırım</span>
+            <span className="wp-fav-folder-count">2</span>
+          </motion.div>
+          <motion.div
+            className="wp-fav-item"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.38, ...springSoft }}
+          >
+            <span className="wf-step-index">1</span>
+            <span className="wp-fav-item-name">CONS_APPLICATION_GET</span>
+          </motion.div>
+        </motion.div>
+      </div>
+    </PreviewShell>
+  )
+}
+
 const SCENES: Record<WelcomeStepId, () => ReactNode> = {
   search: SearchScene,
   map: MapScene,
@@ -364,6 +423,7 @@ const SCENES: Record<WelcomeStepId, () => ReactNode> = {
   overview: OverviewScene,
   screens: ScreensScene,
   star: StarScene,
+  flow: FlowScene,
 }
 
 export function WelcomePreview({ step }: { step: WelcomeStepId }) {

@@ -61,6 +61,8 @@ import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
 import { TreeKindIcon } from './components/TreeKindIcon'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
+import { WorkflowsPanel } from './components/WorkflowsPanel'
+import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { FavoriteStarButton } from './components/FavoriteStarButton'
 import { TreeOptionsRadial } from './components/TreeOptionsRadial'
 import { useServiceFavorites } from './useServiceFavorites'
@@ -109,6 +111,24 @@ function SidebarStarIcon({ active }: { active: boolean }) {
         stroke="currentColor"
         strokeWidth={active ? 0 : 1.4}
         strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function SidebarFlowIcon({ active }: { active: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+      <circle cx="6" cy="6" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="6" cy="18" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="18" cy="6" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6 8.2v7.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path
+        d="M8.2 6h5.4A4.4 4.4 0 0 1 18 10.4V18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
     </svg>
   )
@@ -243,7 +263,7 @@ export default function App() {
   const [surface, setSurface] = useState<AppSurface>('services')
   const [navHover, setNavHover] = useState(true)
   const [navPinned, setNavPinned] = useState(true)
-  const [navWidth, setNavWidth] = useState(272)
+  const [navWidth, setNavWidth] = useState(300)
   const [allowNavCollapse, setAllowNavCollapse] = useState(false)
   const navExpanded = navPinned || navHover || !allowNavCollapse
   const appFrameStyle = {
@@ -277,12 +297,18 @@ export default function App() {
   const [snapshotToast, setSnapshotToast] = useState<string>()
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [workflowsOpen, setWorkflowsOpen] = useState(false)
+  const [workflowInfoId, setWorkflowInfoId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
 
   useEffect(() => {
-    if (surface !== 'services') setShortcutsOpen(false)
+    if (surface !== 'services') {
+      setShortcutsOpen(false)
+      setWorkflowsOpen(false)
+      setWorkflowInfoId(undefined)
+    }
   }, [surface])
 
   const toggleNavPinned = useCallback(() => {
@@ -573,6 +599,7 @@ export default function App() {
     setMapExpanded(false)
     setAllowNavCollapse(false)
     setNavHover(true)
+    setWorkflowInfoId(undefined)
   }, [])
 
   const selectCatalogNode = useCallback(
@@ -596,6 +623,7 @@ export default function App() {
       setImpact(undefined)
       setMapExpanded(false)
       setCatalogNode({ id: node.id, kind: node.kind, name: node.name })
+      setWorkflowInfoId(undefined)
       setAllowNavCollapse(true)
     },
     [catalogNode?.id, pivotId, clearSelection, trail],
@@ -607,6 +635,7 @@ export default function App() {
       opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' | 'table' },
     ) => {
       setCatalogNode(null)
+      setWorkflowInfoId(undefined)
       setTreePinServiceId(
         opts?.source === 'search' || opts?.source === 'table' ? id : undefined,
       )
@@ -760,8 +789,8 @@ export default function App() {
     historyIndex >= 0 && historyIndex < history.length
       ? history[historyIndex]
       : undefined
-  const hasSelection = !!pivotId || !!catalogNode
-  const hasServiceSelection = !!pivotId
+  const hasSelection = !!pivotId || !!catalogNode || !!workflowInfoId
+  const hasServiceSelection = !!pivotId && !workflowInfoId
 
   const serviceNameById = useMemo(() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
@@ -963,9 +992,26 @@ export default function App() {
                 title={shortcutsOpen ? 'Favorileri gizle' : 'Favorilerim'}
                 aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
                 aria-expanded={shortcutsOpen}
-                onClick={() => setShortcutsOpen((v) => !v)}
+                onClick={() => {
+                  setWorkflowsOpen(false)
+                  setShortcutsOpen((v) => !v)
+                }}
               >
                 <SidebarStarIcon active={shortcutsOpen} />
+              </MorphHoverButton>
+              <MorphHoverButton
+                type="button"
+                className={`sidebar-star-btn sidebar-flow-btn${workflowsOpen ? ' is-active' : ''}`}
+                layoutId="sidebar-flow-hover"
+                title={workflowsOpen ? 'İş akışlarını gizle' : 'İş akışları'}
+                aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
+                aria-expanded={workflowsOpen}
+                onClick={() => {
+                  setShortcutsOpen(false)
+                  setWorkflowsOpen((v) => !v)
+                }}
+              >
+                <SidebarFlowIcon active={workflowsOpen} />
               </MorphHoverButton>
             </div>
           </div>
@@ -1081,7 +1127,7 @@ export default function App() {
               scrollParentRef={sidebarBodyRef}
               showNonServiceMethods={showNonServiceMethods}
               pinServiceId={treePinServiceId}
-              keyboardEnabled={!shortcutsOpen}
+              keyboardEnabled={!shortcutsOpen && !workflowsOpen}
               onClearPin={() => setTreePinServiceId(undefined)}
               onSelectCatalogNode={selectCatalogNode}
               onSelectService={(id) =>
@@ -1110,6 +1156,22 @@ export default function App() {
               selectPivot(id, { resetHistory: true, source: 'tree' })
             }}
           />
+          <WorkflowsPanel
+            open={workflowsOpen && surface === 'services'}
+            pivotId={pivotId}
+            pivotName={service?.name}
+            navPinned={navPinned}
+            mapExpanded={mapExpanded}
+            onTogglePin={toggleNavPinned}
+            onClose={() => setWorkflowsOpen(false)}
+            onSelectService={(id) => {
+              setTreePinServiceId(undefined)
+              setQuery('')
+              selectPivot(id, { resetHistory: true, source: 'tree' })
+            }}
+            onOpenFolder={setWorkflowInfoId}
+            infoFolderId={workflowInfoId}
+          />
           </div>
           <button
             type="button"
@@ -1123,12 +1185,27 @@ export default function App() {
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${!hasSelection ? ' is-empty' : ''}`}
+          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId ? ' main-catalog-entity main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
           {!hasSelection && <WelcomeScreen />}
 
-          {catalogNode && !pivotId ? (
+          {workflowInfoId ? (
+            <div className="stage-body wf-info-stage">
+              <WorkflowInfoPage
+                folderId={workflowInfoId}
+                onOpenFolder={setWorkflowInfoId}
+                onSelectService={(id) => {
+                  setTreePinServiceId(undefined)
+                  setQuery('')
+                  selectPivot(id, { resetHistory: true, source: 'tree' })
+                }}
+                onDismiss={() => setWorkflowInfoId(undefined)}
+              />
+            </div>
+          ) : null}
+
+          {catalogNode && !pivotId && !workflowInfoId ? (
             <div className="stage-body">
               <CatalogEntityOverview
                 nodeId={catalogNode.id}

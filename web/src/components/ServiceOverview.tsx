@@ -3,6 +3,7 @@ import { getServiceCatalogContext, getServiceLocations } from '../api/client'
 import { AnimatedNumber } from '../motion/AnimatedNumber'
 import { MotionSpotlight } from '../motion/MotionSpotlight'
 import { EmptyState } from './EmptyState'
+import { ServiceChangeLog } from './ServiceChangeLog'
 import { Button, Card, Field } from '../ui'
 import type {
   Service,
@@ -443,11 +444,18 @@ export function ServiceOverview({
     </BentoTile>
   )
 
+  const changesTile = (
+    <BentoTile area="changes" title="Son değişiklikler">
+      <ServiceChangeLog serviceId={service.id} />
+    </BentoTile>
+  )
+
   return (
     <article className={`service-overview${editing ? ' is-editing' : ''}`}>
       <div className="service-overview-head">
         {identityTile}
         {locationTile}
+        {changesTile}
       </div>
 
       <div className="service-overview-stage">

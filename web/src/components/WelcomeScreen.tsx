@@ -45,6 +45,12 @@ const STEPS: Step[] = [
     title: 'Favoriler',
     sub: 'Başlıktaki ★ ile sabitle',
   },
+  {
+    id: 'flow',
+    title: 'İş akışları',
+    sub: 'Dal ikonu ile sıra oluştur',
+    hint: 'Servisi + ile köke ekleyin, akışa sürükleyin; ada tıklayınca bilgi sayfası açılır',
+  },
 ]
 
 const STEP_MS = 4800
