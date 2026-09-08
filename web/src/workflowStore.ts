@@ -23,7 +23,7 @@ export function peekWorkflowDrag() {
 }
 const MAX_FOLDERS = 40
 const MAX_STEPS = 120
-const MAX_FOLDER_DEPTH = 2
+const MAX_FOLDER_DEPTH = 4
 
 export const WORKFLOW_FOLDER_ICONS = [
   'folder',
@@ -40,11 +40,45 @@ export type WorkflowFolder = {
   name: string
   icon?: WorkflowFolderIcon
   parentId?: string
+  /** Akışın ne işe yaradığı, nerede kullanıldığı — info sayfası ve dal kartı. */
+  summary?: string
+  /**
+   * Bu klasör bir "akış" (adım kabul ediyorsa) ise, parent içindeki adımlarla
+   * AYNI sıralama havuzunu paylaşır — `order` steps'inkiyle karşılaştırılır.
+   * Böylece bir alt akış, adımların arasına sürüklenip konumu değiştirilebilir
+   * (bkz. `sequenceInFolder`). Aynı noktada art arda gelen birden çok alt akış,
+   * info sayfasında birbirinin alternatifi (senaryo) tab'ları olarak görünür.
+   */
+  order?: number
 }
 
 export function isOrganizerFolder(folder?: WorkflowFolder): boolean {
   return folder?.icon === 'folder'
 }
+
+/** Girdi / Çıktı için önceden tanımlı alan. İleride DB'den (`service_field` benzeri) gelecek. */
+export type WorkflowFieldDef = { key: string; label: string }
+
+/** Geçici mock — gerçek alan seti servis DB'sinden gelene kadar. */
+export const MOCK_INPUT_FIELD_DEFS: WorkflowFieldDef[] = [
+  { key: 'hesapNo', label: 'Hesap No' },
+  { key: 'basvuruId', label: 'Başvuru ID' },
+  { key: 'musteriId', label: 'Müşteri ID' },
+  { key: 'talepTutari', label: 'Talep Tutarı' },
+  { key: 'kanal', label: 'Kanal' },
+  { key: 'segment', label: 'Segment (Bireysel/Ticari)' },
+]
+
+export const MOCK_OUTPUT_FIELD_DEFS: WorkflowFieldDef[] = [
+  { key: 'sonuc', label: 'Sonuç / Durum' },
+  { key: 'hataKodu', label: 'Hata Kodu' },
+  { key: 'onaylananTutar', label: 'Onaylanan Tutar' },
+  { key: 'referansNo', label: 'Referans No' },
+  { key: 'limit', label: 'Limit' },
+]
+
+/** Adım Girdi/Çıktı değeri: `alanAnahtarı -> değer`. */
+export type WorkflowFieldMap = Record<string, string>
 
 export type WorkflowStep = {
   id: string
@@ -52,15 +86,15 @@ export type WorkflowStep = {
   canonicalName: string
   folderId?: string
   order: number
-  input?: string
-  output?: string
+  input?: WorkflowFieldMap
+  output?: WorkflowFieldMap
   edgeCases?: string
   scenarios?: string
 }
 
 export type WorkflowStepDoc = {
-  input?: string
-  output?: string
+  input?: WorkflowFieldMap
+  output?: WorkflowFieldMap
   edgeCases?: string
   scenarios?: string
 }
@@ -69,15 +103,33 @@ function optText(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
+/** Eski serbest metin girdi/çıktıyı tek alanlı map'e taşır (geriye dönük uyumluluk). */
+function optFieldMap(value: unknown): WorkflowFieldMap | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? { deger: trimmed } : undefined
+  }
+  if (!value || typeof value !== 'object') return undefined
+  const out: WorkflowFieldMap = {}
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof k === 'string' && k.trim() && typeof v === 'string' && v.trim()) {
+      out[k.trim()] = v.trim()
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 function stepDocFields(s: {
-  input?: string
-  output?: string
+  input?: unknown
+  output?: unknown
   edgeCases?: string
   scenarios?: string
 }): WorkflowStepDoc {
+  const input = optFieldMap(s.input)
+  const output = optFieldMap(s.output)
   return {
-    ...(optText(s.input) ? { input: s.input!.trim() } : {}),
-    ...(optText(s.output) ? { output: s.output!.trim() } : {}),
+    ...(input ? { input } : {}),
+    ...(output ? { output } : {}),
     ...(optText(s.edgeCases) ? { edgeCases: s.edgeCases!.trim() } : {}),
     ...(optText(s.scenarios) ? { scenarios: s.scenarios!.trim() } : {}),
   }
@@ -161,6 +213,10 @@ function normalize(raw: unknown): WorkflowsStore {
             ? { icon: f.icon as WorkflowFolderIcon }
             : {}),
           ...(typeof f.parentId === 'string' ? { parentId: f.parentId } : {}),
+          ...(typeof f.order === 'number' ? { order: f.order } : {}),
+          ...(typeof f.summary === 'string' && f.summary.trim()
+            ? { summary: f.summary.trim() }
+            : {}),
         }))
         .slice(0, MAX_FOLDERS)
     : []
@@ -219,7 +275,7 @@ function normalize(raw: unknown): WorkflowsStore {
       optText(row.handoff) || optText(row.expectedOut) || optText(row.expectedIn)
     const from = leftover ? byId.get(row.fromStepId) : undefined
     if (from && leftover && !from.output) {
-      byId.set(from.id, { ...from, output: leftover })
+      byId.set(from.id, { ...from, output: { deger: leftover } })
     }
   }
   return { folders, steps: [...byId.values()], edges }
@@ -247,6 +303,59 @@ function writeWorkflows(store: WorkflowsStore): WorkflowsStore {
   return next
 }
 
+export function stepsInFolder(store: WorkflowsStore, folderId?: string): WorkflowStep[] {
+  return store.steps
+    .filter((s) => s.folderId === folderId)
+    .sort((a, b) => a.order - b.order)
+}
+
+export function childFolders(
+  store: WorkflowsStore,
+  parentId?: string,
+): WorkflowFolder[] {
+  return store.folders.filter((f) => f.parentId === parentId)
+}
+
+/** Adım kabul eden alt akışlar — parent'ın adım sırasına dahil olan klasörler. */
+export function flowChildren(store: WorkflowsStore, parentId?: string): WorkflowFolder[] {
+  return childFolders(store, parentId).filter((f) => folderAcceptsSteps(store, f))
+}
+
+/** Salt organizasyon klasörleri (icon='folder') — adım sırasına dahil olmaz, ayrı listelenir. */
+export function pureOrganizerChildren(store: WorkflowsStore, parentId?: string): WorkflowFolder[] {
+  return childFolders(store, parentId).filter((f) => !folderAcceptsSteps(store, f))
+}
+
+export type WorkflowSequenceItem =
+  | { kind: 'step'; id: string; order: number; step: WorkflowStep }
+  | { kind: 'folder'; id: string; order: number; folder: WorkflowFolder }
+
+/**
+ * Bir konteynerin (folderId) içindeki adımlar + alt akışlar TEK sıralamada.
+ * Sürükle-bırakla adımların arasına bir alt akış (veya tam tersi) yerleştirilebilir.
+ * Info sayfasında art arda gelen alt akış(lar) tab olarak, adımlar ise numaralı
+ * kart olarak gösterilir (bkz. `WorkflowFlowCanvas`).
+ */
+export function sequenceInFolder(store: WorkflowsStore, folderId?: string): WorkflowSequenceItem[] {
+  const steps: WorkflowSequenceItem[] = stepsInFolder(store, folderId).map((step) => ({
+    kind: 'step',
+    id: step.id,
+    order: step.order,
+    step,
+  }))
+  const folders: WorkflowSequenceItem[] = flowChildren(store, folderId).map((folder) => ({
+    kind: 'folder',
+    id: folder.id,
+    order: folder.order ?? Number.MAX_SAFE_INTEGER,
+    folder,
+  }))
+  return [...steps, ...folders].sort((a, b) => a.order - b.order)
+}
+
+function nextSequenceOrder(store: WorkflowsStore, parentId?: string): number {
+  return sequenceInFolder(store, parentId).reduce((max, it) => Math.max(max, it.order), -1) + 1
+}
+
 export function addWorkflowFolder(
   name: string,
   parentId?: string,
@@ -268,6 +377,7 @@ export function addWorkflowFolder(
         name: name.trim() || 'Yeni klasör',
         ...(icon ? { icon } : {}),
         ...(parentId ? { parentId } : {}),
+        order: nextSequenceOrder(store, parentId),
       },
     ],
   })
@@ -291,6 +401,23 @@ export function renameWorkflowFolder(folderId: string, name: string): WorkflowsS
   return writeWorkflows({
     ...store,
     folders: store.folders.map((f) => (f.id === folderId ? { ...f, name: trimmed } : f)),
+  })
+}
+
+export function setWorkflowFolderSummary(folderId: string, summary: string): WorkflowsStore {
+  const store = readWorkflows()
+  if (!store.folders.some((f) => f.id === folderId)) return store
+  const trimmed = summary.trim()
+  return writeWorkflows({
+    ...store,
+    folders: store.folders.map((f) => {
+      if (f.id !== folderId) return f
+      if (!trimmed) {
+        const { summary: _drop, ...rest } = f
+        return rest
+      }
+      return { ...f, summary: trimmed }
+    }),
   })
 }
 
@@ -326,8 +453,7 @@ export function addWorkflowStep(
   ) {
     return store
   }
-  const siblings = store.steps.filter((s) => s.folderId === validFolder)
-  const order = siblings.reduce((max, s) => Math.max(max, s.order), -1) + 1
+  const order = nextSequenceOrder(store, validFolder)
   return writeWorkflows({
     ...store,
     steps: [
@@ -411,62 +537,156 @@ export function updateWorkflowStepDoc(
   })
 }
 
+export function setWorkflowStepField(
+  stepId: string,
+  kind: 'input' | 'output',
+  key: string,
+  value: string,
+): WorkflowsStore {
+  const store = readWorkflows()
+  const step = store.steps.find((s) => s.id === stepId)
+  if (!step || !key.trim()) return store
+  const nextMap: WorkflowFieldMap = { ...(step[kind] ?? {}), [key.trim()]: value }
+  return updateWorkflowStepDoc(stepId, { [kind]: nextMap } as WorkflowStepDoc)
+}
+
+export function removeWorkflowStepField(
+  stepId: string,
+  kind: 'input' | 'output',
+  key: string,
+): WorkflowsStore {
+  const store = readWorkflows()
+  const step = store.steps.find((s) => s.id === stepId)
+  if (!step) return store
+  const nextMap: WorkflowFieldMap = { ...(step[kind] ?? {}) }
+  delete nextMap[key]
+  return updateWorkflowStepDoc(stepId, { [kind]: nextMap } as WorkflowStepDoc)
+}
+
+export function isDescendantOf(
+  folders: WorkflowFolder[],
+  maybeChildId: string,
+  ancestorId: string,
+): boolean {
+  const seen = new Set<string>()
+  let current = folders.find((f) => f.id === maybeChildId)
+  while (current?.parentId) {
+    if (current.parentId === ancestorId) return true
+    if (seen.has(current.id)) break
+    seen.add(current.id)
+    current = folders.find((f) => f.id === current?.parentId)
+  }
+  return false
+}
+
+function subtreeExtraDepth(folders: WorkflowFolder[], folderId: string): number {
+  const kids = folders.filter((f) => f.parentId === folderId)
+  if (kids.length === 0) return 0
+  return 1 + Math.max(...kids.map((k) => subtreeExtraDepth(folders, k.id)))
+}
+
+export function canNestUnder(store: WorkflowsStore, parentId: string): boolean {
+  return folderDepth(store.folders, parentId) < MAX_FOLDER_DEPTH
+}
+
+/**
+ * Bir adımı veya alt akışı (kind), bir konteynerin (parentId) içinde belirli bir
+ * sıra index'ine yerleştirir. Adımlar ve alt akışlar AYNI sıra havuzunu paylaşır,
+ * bu yüzden bir alt akış adımların arasına, bir adım da alt akışların arasına
+ * sürüklenip bırakılabilir.
+ */
+export function placeWorkflowItem(
+  kind: 'step' | 'folder',
+  id: string,
+  parentId: string | undefined,
+  index: number,
+): WorkflowsStore {
+  const store = readWorkflows()
+  if (kind === 'step') {
+    const step = store.steps.find((s) => s.id === id)
+    if (!step) return store
+    const dest = parentId ? store.folders.find((f) => f.id === parentId) : undefined
+    const validParent = dest ? dest.id : undefined
+    if (!folderAcceptsSteps(store, dest) && step.folderId !== validParent) return store
+    if (
+      store.steps.some(
+        (s) => s.id !== id && s.serviceId === step.serviceId && s.folderId === validParent,
+      )
+    ) {
+      return store
+    }
+  } else {
+    const folder = store.folders.find((f) => f.id === id)
+    if (!folder) return store
+    if (parentId === id) return store
+    if (parentId && isDescendantOf(store.folders, parentId, id)) return store
+    if (parentId) {
+      const parent = store.folders.find((f) => f.id === parentId)
+      if (!parent) return store
+      const newDepth =
+        folderDepth(store.folders, parent.id) + 1 + subtreeExtraDepth(store.folders, id)
+      if (newDepth > MAX_FOLDER_DEPTH) return store
+    }
+  }
+
+  const siblings = sequenceInFolder(store, parentId).filter((it) => it.id !== id)
+  const clamped = Math.max(0, Math.min(Math.floor(index), siblings.length))
+  const withNew = [
+    ...siblings.slice(0, clamped),
+    { kind, id } as { kind: 'step' | 'folder'; id: string },
+    ...siblings.slice(clamped),
+  ]
+  const orderById = new Map(withNew.map((it, i) => [it.id, i]))
+
+  return writeWorkflows({
+    ...store,
+    steps: store.steps.map((s) => {
+      if (s.id === id && kind === 'step') {
+        return { ...s, folderId: parentId, order: orderById.get(id) ?? clamped }
+      }
+      const o = orderById.get(s.id)
+      return o != null && s.folderId === parentId ? { ...s, order: o } : s
+    }),
+    folders: store.folders.map((f) => {
+      if (f.id === id && kind === 'folder') {
+        return { ...f, parentId, order: orderById.get(id) ?? clamped }
+      }
+      const o = orderById.get(f.id)
+      return o != null && f.parentId === parentId ? { ...f, order: o } : f
+    }),
+  })
+}
+
 export function placeWorkflowStep(
   stepId: string,
   folderId: string | undefined,
   index: number,
 ): WorkflowsStore {
-  const store = readWorkflows()
-  const step = store.steps.find((s) => s.id === stepId)
-  if (!step) return store
-  const dest = folderId ? store.folders.find((f) => f.id === folderId) : undefined
-  const validFolder = dest ? dest.id : undefined
-  if (!folderAcceptsSteps(store, dest) && step.folderId !== validFolder) return store
-  if (
-    store.steps.some(
-      (s) =>
-        s.id !== stepId &&
-        s.serviceId === step.serviceId &&
-        s.folderId === validFolder,
-    )
-  ) {
-    return store
-  }
-  const siblings = store.steps
-    .filter((s) => s.id !== stepId && s.folderId === validFolder)
-    .sort((a, b) => a.order - b.order)
-  const clamped = Math.max(0, Math.min(Math.floor(index), siblings.length))
-  const nextOrder = [
-    ...siblings.slice(0, clamped),
-    { ...step, folderId: validFolder },
-    ...siblings.slice(clamped),
-  ]
-  const orderById = new Map(nextOrder.map((s, i) => [s.id, i]))
-  return writeWorkflows({
-    ...store,
-    steps: store.steps.map((s) => {
-      const order = orderById.get(s.id)
-      if (s.id === stepId) {
-        return { ...s, folderId: validFolder, order: order ?? clamped }
-      }
-      if (order != null && s.folderId === validFolder) {
-        return { ...s, order }
-      }
-      return s
-    }),
-  })
+  return placeWorkflowItem('step', stepId, folderId, index)
 }
 
 export function moveWorkflowStep(stepId: string, folderId?: string): WorkflowsStore {
   const store = readWorkflows()
-  const siblings = store.steps.filter((s) => s.folderId === folderId).length
-  const alreadyHere = store.steps.some(
-    (s) => s.id === stepId && s.folderId === folderId,
-  )
-  const index = alreadyHere
-    ? store.steps.filter((s) => s.folderId === folderId && s.id !== stepId).length
-    : siblings
-  return placeWorkflowStep(stepId, folderId, index)
+  const seq = sequenceInFolder(store, folderId)
+  const alreadyHere = store.steps.some((s) => s.id === stepId && s.folderId === folderId)
+  const index = alreadyHere ? seq.filter((it) => it.id !== stepId).length : seq.length
+  return placeWorkflowItem('step', stepId, folderId, index)
+}
+
+export function placeWorkflowFolder(
+  folderId: string,
+  parentId: string | undefined,
+  index: number,
+): WorkflowsStore {
+  return placeWorkflowItem('folder', folderId, parentId, index)
+}
+
+export function moveWorkflowFolder(folderId: string, parentId?: string): WorkflowsStore {
+  const store = readWorkflows()
+  const seq = sequenceInFolder(store, parentId)
+  const alreadyHere = store.folders.some((f) => f.id === folderId && f.parentId === parentId)
+  const index = alreadyHere ? seq.filter((it) => it.id !== folderId).length : seq.length
+  return placeWorkflowItem('folder', folderId, parentId, index)
 }
 
 export type ServiceWorkflowHit = {
@@ -516,74 +736,4 @@ export function workflowsForService(
     })
   }
   return hits
-}
-
-export function stepsInFolder(store: WorkflowsStore, folderId?: string): WorkflowStep[] {
-  return store.steps
-    .filter((s) => s.folderId === folderId)
-    .sort((a, b) => a.order - b.order)
-}
-
-export function childFolders(
-  store: WorkflowsStore,
-  parentId?: string,
-): WorkflowFolder[] {
-  return store.folders.filter((f) => f.parentId === parentId)
-}
-
-export function isDescendantOf(
-  folders: WorkflowFolder[],
-  maybeChildId: string,
-  ancestorId: string,
-): boolean {
-  const seen = new Set<string>()
-  let current = folders.find((f) => f.id === maybeChildId)
-  while (current?.parentId) {
-    if (current.parentId === ancestorId) return true
-    if (seen.has(current.id)) break
-    seen.add(current.id)
-    current = folders.find((f) => f.id === current?.parentId)
-  }
-  return false
-}
-
-function subtreeExtraDepth(folders: WorkflowFolder[], folderId: string): number {
-  const kids = folders.filter((f) => f.parentId === folderId)
-  if (kids.length === 0) return 0
-  return 1 + Math.max(...kids.map((k) => subtreeExtraDepth(folders, k.id)))
-}
-
-export function canNestUnder(store: WorkflowsStore, parentId: string): boolean {
-  return folderDepth(store.folders, parentId) < MAX_FOLDER_DEPTH
-}
-
-export function moveWorkflowFolder(
-  folderId: string,
-  parentId?: string,
-): WorkflowsStore {
-  const store = readWorkflows()
-  const folder = store.folders.find((f) => f.id === folderId)
-  if (!folder) return store
-  if (parentId === folderId) return store
-  if (parentId && isDescendantOf(store.folders, parentId, folderId)) return store
-  let nextParent: string | undefined
-  if (parentId) {
-    const parent = store.folders.find((f) => f.id === parentId)
-    if (!parent) return store
-    const newDepth = folderDepth(store.folders, parent.id) + 1 + subtreeExtraDepth(store.folders, folderId)
-    if (newDepth > MAX_FOLDER_DEPTH) return store
-    nextParent = parentId
-  }
-  return writeWorkflows({
-    ...store,
-    folders: store.folders.map((f) => {
-      if (f.id !== folderId) return f
-      if (nextParent) return { ...f, parentId: nextParent }
-      return {
-        id: f.id,
-        name: f.name,
-        ...(f.icon ? { icon: f.icon } : {}),
-      }
-    }),
-  })
 }

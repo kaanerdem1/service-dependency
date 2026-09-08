@@ -3534,7 +3534,7 @@
 
 .wf-info-hero {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px 24px;
   padding-bottom: 14px;
@@ -3626,6 +3626,41 @@
   font-size: 13px;
   line-height: 1.45;
   color: color-mix(in srgb, var(--ink) 72%, var(--muted));
+}
+
+.wf-info-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 62ch;
+}
+
+.wf-info-summary-label {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wf-info-summary textarea {
+  width: 100%;
+  min-height: 4.2em;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #fff;
+  color: inherit;
+}
+
+.wf-info-summary textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
 }
 
 .wf-info-block {
@@ -4078,6 +4113,332 @@
   color: var(--muted);
 }
 
+/* Girdi / Çıktı — key-value alan listesi (mock; ileride DB'den) */
+.wf-canvas-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.wf-canvas-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+}
+
+.wf-canvas-field-row.is-static {
+  padding: 2px 0;
+}
+
+.wf-canvas-field-row.is-static dt {
+  color: var(--muted);
+  font-weight: 650;
+  min-width: 110px;
+}
+
+.wf-canvas-field-row.is-static dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.wf-canvas-field-key {
+  min-width: 110px;
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-weight: 650;
+  font-size: 11.5px;
+}
+
+.wf-canvas-field-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.wf-canvas-field-value:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.wf-canvas-field-add select {
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--line) 82%, transparent);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Dallanma — Y çatal + seçilince satırı dolduran sütunlar */
+.wf-fork {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 4px;
+}
+
+.wf-fork-stem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 22px;
+}
+
+.wf-fork-stem-line {
+  flex: 1;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.wf-fork-stem-head {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.wf-fork-y {
+  height: 22px;
+  margin: 0 18%;
+}
+
+.wf-fork-y svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wf-fork-y path {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--line));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.wf-fork-lanes {
+  display: flex;
+  align-items: stretch;
+  min-height: 200px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, var(--line)),
+    0 8px 24px color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.wf-fork-lane {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 18px 16px;
+  background: color-mix(in srgb, #fff 94%, var(--accent));
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.wf-fork-lane:last-child {
+  box-shadow: none;
+}
+
+.wf-fork-lane.is-open {
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+}
+
+.wf-fork-lane.is-collapsed {
+  padding-left: 0;
+  padding-right: 0;
+  pointer-events: none;
+  box-shadow: none;
+}
+
+.wf-fork-lane-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wf-fork-lane-mark {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.wf-fork-lane-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.wf-fork-lane-remove {
+  flex-shrink: 0;
+}
+
+.wf-fork-lane-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.wf-fork-lane-summary {
+  flex: 1;
+  width: 100%;
+  min-height: 4.2em;
+  resize: vertical;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #fff;
+  color: inherit;
+}
+
+.wf-fork-lane-summary.is-static {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+}
+
+.wf-fork-continue {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 11px;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  cursor: pointer;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--accent) 70%, #000);
+}
+
+.wf-fork-continue:hover {
+  filter: brightness(1.06);
+}
+
+.wf-fork-continue.is-close {
+  background: color-mix(in srgb, var(--ink) 78%, #fff);
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--ink) 55%, #000);
+}
+
+.wf-branch-body {
+  margin-top: 2px;
+}
+
+.wf-branch-body > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wf-fork-end {
+  margin: 8px 0 4px;
+  padding: 10px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--line));
+  border-radius: 12px;
+}
+
+.wf-fork-resume {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0 2px;
+}
+
+.wf-fork-resume-line {
+  width: 2px;
+  height: 18px;
+  background: repeating-linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--accent) 55%, var(--line)) 0 4px,
+    transparent 4px 8px
+  );
+}
+
+.wf-fork-resume-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.wf-fork-resume-head {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.wf-branch-rename input {
+  width: 100%;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  font-size: 12.5px;
+  font-weight: 650;
+  background: transparent;
+  color: var(--ink);
+}
+
+.wf-branch-add-step {
+  position: relative;
+  margin-top: 6px;
+}
+
+.wf-branch-add-step-input {
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--line) 82%, transparent);
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+
+.wf-branch-search-hits {
+  margin-top: 4px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 10px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.wf-branch-end {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-style: italic;
+}
+
 .wf-reorder {
   display: flex;
   flex-direction: column;
@@ -4094,12 +4455,20 @@
   gap: 4px;
 }
 
+.wf-reorder-slot {
+  min-width: 0;
+}
+
+.wf-reorder-slot.is-folder {
+  margin: 2px 0;
+}
+
 .wf-reorder-item.is-lifted {
   z-index: 2;
   opacity: 0.55;
 }
 
-.wf-reorder.is-dragging .wf-reorder-item:not(.is-lifted) .wf-reorder-row {
+.wf-reorder.is-info.is-dragging .wf-reorder-item:not(.is-lifted) .wf-reorder-row {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
@@ -4128,8 +4497,12 @@
   border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 
-.wf-reorder-item.is-lifted .wf-reorder-row {
+.wf-reorder.is-info .wf-reorder-item.is-lifted .wf-reorder-row {
   background: color-mix(in srgb, var(--accent) 12%, #fff);
+}
+
+.wf-reorder.is-drawer .wf-reorder-item.is-lifted .wf-reorder-row {
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 10%, transparent);
 }
 
 .wf-info-service-main {
@@ -4165,6 +4538,10 @@
 
 .wf-reorder.is-drawer {
   min-width: 0;
+}
+
+.wf-reorder.is-drawer .wf-reorder-item {
+  background: transparent;
 }
 
 .wf-reorder.is-drawer .wf-reorder-row {

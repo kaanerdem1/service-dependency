@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { motion } from 'motion/react'
+import { AutoHeight } from '../motion/AutoHeight'
+import { layoutSpring } from '../motion/config'
 import { TreeKindIcon } from './TreeKindIcon'
+import { WorkflowFolderGlyph } from './WorkflowIcons'
+import { searchServices } from '../api/client'
+import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
 import {
   CHANGE_KINDS,
   hydrateDetails,
@@ -7,46 +13,58 @@ import {
 } from './ServiceChangeLog'
 import { Button, Field } from '../ui'
 import {
+  MOCK_INPUT_FIELD_DEFS,
+  MOCK_OUTPUT_FIELD_DEFS,
   WORKFLOW_EDGE_LABELS,
   WORKFLOW_EDGE_STATUSES,
+  addWorkflowStep,
+  deleteWorkflowFolder,
   edgeBetween,
   removeWorkflowEdge,
   removeWorkflowStep,
+  removeWorkflowStepField,
+  sequenceInFolder,
+  setWorkflowFolderSummary,
+  setWorkflowStepField,
   updateWorkflowStepDoc,
   upsertWorkflowEdge,
   type WorkflowEdge,
   type WorkflowEdgeStatus,
+  type WorkflowFieldDef,
+  type WorkflowFieldMap,
+  type WorkflowFolder,
+  type WorkflowSequenceItem,
   type WorkflowStep,
   type WorkflowStepDoc,
   type WorkflowsStore,
 } from '../workflowStore'
+import type { Service } from '../types'
 
 type Props = {
   store: WorkflowsStore
-  steps: WorkflowStep[]
+  items: WorkflowSequenceItem[]
   canEdit: boolean
   onStore: (next: WorkflowsStore) => void
   onSelectService: (serviceId: string) => void
+  /** Görünen kartların 0 tabanlı başlangıç numarası — iç/dış akış aynı zinciri paylaşır. */
+  startIndex?: number
+}
+
+function countStepsDeep(store: WorkflowsStore, items: WorkflowSequenceItem[]): number {
+  let n = 0
+  for (const it of items) {
+    if (it.kind === 'step') n += 1
+    else n += countStepsDeep(store, sequenceInFolder(store, it.folder.id))
+  }
+  return n
 }
 
 const STEP_FIELDS: {
-  id: keyof WorkflowStepDoc
+  id: keyof WorkflowStepDoc & ('edgeCases' | 'scenarios')
   label: string
   hint: string
   placeholder: string
 }[] = [
-  {
-    id: 'input',
-    label: 'Girdi',
-    hint: 'Bu servisin aldığı parametre, kayıt, dosya veya çağrı.',
-    placeholder: 'Örn. hesap no, silme nedeni, imza',
-  },
-  {
-    id: 'output',
-    label: 'Çıktı',
-    hint: 'Bu servisin ürettiği sonuç veya sonraki adıma verdiği sözleşme.',
-    placeholder: 'Örn. silindi bayrağı, hata kodu',
-  },
   {
     id: 'edgeCases',
     label: 'Kenar durumlar',
@@ -84,10 +102,23 @@ function catalogDetail(prev: WorkflowStep, next: WorkflowStep): string | null {
   return nextDetails.input?.trim() || prevDetails.output?.trim() || null
 }
 
+/** İki adım arası kontrat kontrolü: önceki çıktı değerlerinden hiçbiri sonraki girdide yoksa uyar. */
 function contractMismatch(from: WorkflowStep, to: WorkflowStep): boolean {
-  const out = from.output?.trim()
-  const inn = to.input?.trim()
-  return Boolean(out && inn && out !== inn)
+  const outValues = new Set(
+    Object.values(from.output ?? {})
+      .map((v) => v.trim())
+      .filter(Boolean),
+  )
+  const inValues = new Set(
+    Object.values(to.input ?? {})
+      .map((v) => v.trim())
+      .filter(Boolean),
+  )
+  if (outValues.size === 0 || inValues.size === 0) return false
+  for (const v of outValues) {
+    if (inValues.has(v)) return false
+  }
+  return true
 }
 
 function FlowArrow() {
@@ -145,6 +176,99 @@ function DocField({
   )
 }
 
+/** Girdi / Çıktı — önceden tanımlı (mock; ileride DB) alan seti üzerinden key-value düzenleyici. */
+function FieldMapEditor({
+  stepId,
+  kind,
+  label,
+  hint,
+  defs,
+  value,
+  canEdit,
+  onStore,
+}: {
+  stepId: string
+  kind: 'input' | 'output'
+  label: string
+  hint: string
+  defs: WorkflowFieldDef[]
+  value?: WorkflowFieldMap
+  canEdit: boolean
+  onStore: (next: WorkflowsStore) => void
+}) {
+  const [draftKey, setDraftKey] = useState('')
+  const entries = Object.entries(value ?? {})
+  const usedKeys = new Set(entries.map(([k]) => k))
+  const available = defs.filter((d) => !usedKeys.has(d.key))
+  const labelFor = (key: string) => defs.find((d) => d.key === key)?.label ?? key
+
+  if (!canEdit) {
+    if (entries.length === 0) return null
+    return (
+      <div className="wf-canvas-doc">
+        <h3 className="wf-canvas-doc-label">{label}</h3>
+        <dl className="wf-canvas-fields">
+          {entries.map(([k, v]) => (
+            <div key={k} className="wf-canvas-field-row is-static">
+              <dt>{labelFor(k)}</dt>
+              <dd>{v || '—'}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    )
+  }
+
+  return (
+    <div className="wf-canvas-doc">
+      <span className="wf-canvas-doc-label">{label}</span>
+      <span className="wf-canvas-doc-hint">{hint}</span>
+      <div className="wf-canvas-fields">
+        {entries.map(([k, v]) => (
+          <div key={k} className="wf-canvas-field-row">
+            <span className="wf-canvas-field-key">{labelFor(k)}</span>
+            <input
+              type="text"
+              className="wf-canvas-field-value"
+              value={v}
+              onChange={(e) => onStore(setWorkflowStepField(stepId, kind, k, e.target.value))}
+            />
+            <button
+              type="button"
+              className="sc-icon-btn sc-icon-btn-danger"
+              aria-label={`${labelFor(k)} alanını kaldır`}
+              onClick={() => onStore(removeWorkflowStepField(stepId, kind, k))}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        {available.length > 0 ? (
+          <div className="wf-canvas-field-add">
+            <select
+              value={draftKey}
+              aria-label={`${label} alanı ekle`}
+              onChange={(e) => {
+                const key = e.target.value
+                if (!key) return
+                onStore(setWorkflowStepField(stepId, kind, key, ''))
+                setDraftKey('')
+              }}
+            >
+              <option value="">+ alan ekle…</option>
+              {available.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function StepCard({
   step,
   index,
@@ -158,8 +282,10 @@ function StepCard({
   onStore: (next: WorkflowsStore) => void
   onSelectService: (serviceId: string) => void
 }) {
-  const filled = STEP_FIELDS.filter((f) => step[f.id]?.trim())
-  const showGrid = canEdit || filled.length > 0
+  const filledDocs = STEP_FIELDS.filter((f) => step[f.id]?.trim())
+  const hasInput = Object.keys(step.input ?? {}).length > 0
+  const hasOutput = Object.keys(step.output ?? {}).length > 0
+  const showGrid = canEdit || filledDocs.length > 0 || hasInput || hasOutput
 
   return (
     <article className="wf-canvas-node">
@@ -189,18 +315,36 @@ function StepCard({
       </div>
       {showGrid ? (
         <div className="wf-canvas-docs">
-          {STEP_FIELDS.filter((field) => canEdit || step[field.id]?.trim()).map(
-            (field) => (
-              <DocField
-                key={field.id}
-                stepId={step.id}
-                field={field}
-                value={step[field.id]}
-                canEdit={canEdit}
-                onStore={onStore}
-              />
-            ),
-          )}
+          <FieldMapEditor
+            stepId={step.id}
+            kind="input"
+            label="Girdi"
+            hint="Bu adımın aldığı alanlar (önceden tanımlı liste)."
+            defs={MOCK_INPUT_FIELD_DEFS}
+            value={step.input}
+            canEdit={canEdit}
+            onStore={onStore}
+          />
+          <FieldMapEditor
+            stepId={step.id}
+            kind="output"
+            label="Çıktı"
+            hint="Bu adımın ürettiği alanlar (önceden tanımlı liste)."
+            defs={MOCK_OUTPUT_FIELD_DEFS}
+            value={step.output}
+            canEdit={canEdit}
+            onStore={onStore}
+          />
+          {STEP_FIELDS.filter((field) => canEdit || step[field.id]?.trim()).map((field) => (
+            <DocField
+              key={field.id}
+              stepId={step.id}
+              field={field}
+              value={step[field.id]}
+              canEdit={canEdit}
+              onStore={onStore}
+            />
+          ))}
         </div>
       ) : (
         <p className="wf-canvas-docs-empty">Bu adım için girdi / çıktı yazılmamış.</p>
@@ -373,54 +517,364 @@ function EdgeEditor({
   )
 }
 
-export function WorkflowFlowCanvas({
+/** Bir dalın (senaryo klasörünün) içine servis eklemek için mini arama. */
+function AddBranchStep({
+  folderId,
+  onStore,
+}: {
+  folderId: string
+  onStore: (next: WorkflowsStore) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<Service[]>([])
+  const [searching, setSearching] = useState(false)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (q.length < 2) {
+      setHits([])
+      setSearching(false)
+      return
+    }
+    let cancelled = false
+    setSearching(true)
+    const timer = window.setTimeout(() => {
+      void searchServices(q)
+        .then((rows) => {
+          if (!cancelled) setHits(rankServiceHits(rows, q).slice(0, 8))
+        })
+        .catch(() => {
+          if (!cancelled) setHits([])
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false)
+        })
+    }, 180)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
+    }
+  }, [query])
+
+  return (
+    <div className="wf-branch-add-step">
+      <input
+        type="text"
+        className="wf-branch-add-step-input"
+        value={query}
+        placeholder="Bu dala servis ara ve ekle…"
+        onChange={(e) => setQuery(e.target.value)}
+        aria-label="Dala servis ekle"
+      />
+      {query.trim().length >= 2 ? (
+        <div className="sc-search-hits wf-branch-search-hits">
+          {searching ? (
+            <p className="sc-search-status">Aranıyor…</p>
+          ) : hits.length === 0 ? (
+            <p className="sc-search-status">Sonuç yok</p>
+          ) : (
+            hits.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="sc-hit-main"
+                onClick={() => {
+                  onStore(addWorkflowStep(s.id, s.name, folderId))
+                  setQuery('')
+                  setHits([])
+                }}
+              >
+                <TreeKindIcon kind="service" size={13} />
+                <SearchHitLabel name={s.name} query={query} id={s.id} />
+              </button>
+            ))
+          )}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Ortak adımlardan sonra art arda gelen alt akışlar. Seçilen sütun satırı
+ * kaplar, diğerleri kapanır; kapatınca eski bölünmüş haline döner.
+ * İç akış açık olmasa da alttaki ortak (bağımsız) adımlar numaralı görünür.
+ */
+function BranchGroup({
+  anchorStep,
+  branches,
+  tail,
+  startIndex,
   store,
-  steps,
   canEdit,
   onStore,
   onSelectService,
-}: Props) {
-  const [openKey, setOpenKey] = useState<string>()
-  const pairs = useMemo(() => {
-    const rows: { from: WorkflowStep; to: WorkflowStep }[] = []
-    for (let i = 0; i < steps.length - 1; i++) {
-      rows.push({ from: steps[i]!, to: steps[i + 1]! })
-    }
-    return rows
-  }, [steps])
+}: {
+  anchorStep?: WorkflowStep
+  branches: WorkflowFolder[]
+  tail: WorkflowSequenceItem[]
+  startIndex: number
+  store: WorkflowsStore
+  canEdit: boolean
+  onStore: (next: WorkflowsStore) => void
+  onSelectService: (serviceId: string) => void
+}) {
+  const [openId, setOpenId] = useState<string>()
+  const [entryOpen, setEntryOpen] = useState(false)
+  const [exitOpen, setExitOpen] = useState(false)
+
+  const openFolder = branches.find((b) => b.id === openId)
+  const openSequence = useMemo(
+    () => (openFolder ? sequenceInFolder(store, openFolder.id) : []),
+    [openFolder, store],
+  )
+  const openSteps = useMemo(
+    () => openSequence.filter((it): it is Extract<WorkflowSequenceItem, { kind: 'step' }> => it.kind === 'step'),
+    [openSequence],
+  )
+  const firstOpenStep = openSteps[0]?.step
+  const lastOpenStep = openSteps[openSteps.length - 1]?.step
+  const mergeStep = tail.find((it): it is Extract<WorkflowSequenceItem, { kind: 'step' }> => it.kind === 'step')?.step
+  const innerCount = openFolder ? countStepsDeep(store, openSequence) : 0
+  const forkIndex = startIndex
+  const tailStart = startIndex + 1 + innerCount
 
   return (
-    <div className="wf-canvas">
-      {steps.map((step, index) => {
-        const next = steps[index + 1]
-        const pairKey = next ? `${step.id}→${next.id}` : undefined
-        return (
-          <div key={step.id} className="wf-canvas-block">
-            <StepCard
-              step={step}
-              index={index}
-              canEdit={canEdit}
-              onStore={onStore}
-              onSelectService={onSelectService}
-            />
-            {next && pairKey ? (
+    <div className="wf-fork">
+      <div className="wf-fork-stem" aria-hidden>
+        <span className="wf-fork-stem-line" />
+        <span className="wf-fork-stem-head" />
+      </div>
+      <div className="wf-fork-y" aria-hidden>
+        <svg viewBox="0 0 100 28" preserveAspectRatio="none">
+          <path d="M50 0 V10 C50 18 8 18 8 28" />
+          <path d="M50 10 C50 18 92 18 92 28" />
+        </svg>
+      </div>
+
+      <div className={`wf-fork-lanes${openId ? ' is-picked' : ''}`} role="tablist" aria-label="Alt akışlar">
+        {branches.map((b) => {
+          const selected = openId === b.id
+          const collapsed = Boolean(openId && !selected)
+          return (
+            <motion.div
+              key={b.id}
+              layout
+              initial={false}
+              animate={{
+                flexGrow: collapsed ? 0 : 1,
+                flexBasis: collapsed ? 0 : '0%',
+                opacity: collapsed ? 0 : 1,
+              }}
+              transition={layoutSpring}
+              className={`wf-fork-lane${selected ? ' is-open' : ''}${collapsed ? ' is-collapsed' : ''}`}
+              role="tab"
+              aria-selected={selected}
+              aria-hidden={collapsed}
+            >
+              <div className="wf-fork-lane-top">
+                <span className="wf-canvas-index">{forkIndex + 1}</span>
+                <span className="wf-fork-lane-mark" aria-hidden>
+                  <WorkflowFolderGlyph icon={b.icon ?? 'flow'} size={16} />
+                </span>
+                <strong className="wf-fork-lane-name">{b.name}</strong>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className="sc-icon-btn sc-icon-btn-danger wf-fork-lane-remove"
+                    title="Akışı sil"
+                    aria-label={`${b.name} akışını sil`}
+                    onClick={() => {
+                      onStore(deleteWorkflowFolder(b.id))
+                      if (openId === b.id) setOpenId(undefined)
+                    }}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </div>
+              {canEdit ? (
+                <textarea
+                  className="wf-fork-lane-summary"
+                  rows={3}
+                  value={b.summary ?? ''}
+                  placeholder="Bu akış nerede kullanılır, ne işe yarar?"
+                  onChange={(e) => onStore(setWorkflowFolderSummary(b.id, e.target.value))}
+                />
+              ) : b.summary ? (
+                <p className="wf-fork-lane-summary is-static">{b.summary}</p>
+              ) : (
+                <p className="wf-fork-lane-hint">Bu akış için henüz açıklama yok.</p>
+              )}
+              <p className="wf-fork-lane-hint">
+                {selected
+                  ? 'Bu senaryonun adımları aşağıda. Kapatınca diğer akışlar geri gelir.'
+                  : 'Bu senaryodan devam etmek için seç.'}
+              </p>
+              <button
+                type="button"
+                className={`wf-fork-continue${selected ? ' is-close' : ''}`}
+                onClick={() => setOpenId((cur) => (cur === b.id ? undefined : b.id))}
+              >
+                {selected ? 'Kapat' : 'Bu akıştan devam et'}
+              </button>
+            </motion.div>
+          )
+        })}
+      </div>
+
+      <AutoHeight open={Boolean(openFolder)} deps={[openId, openSequence.length]} className="wf-branch-body">
+        {openFolder ? (
+          <>
+            {anchorStep && firstOpenStep ? (
               <EdgeEditor
-                key={pairKey}
-                from={step}
-                to={next}
-                edge={edgeBetween(store, step.id, next.id)}
+                from={anchorStep}
+                to={firstOpenStep}
+                edge={edgeBetween(store, anchorStep.id, firstOpenStep.id)}
                 canEdit={canEdit}
-                expanded={openKey === pairKey}
-                onToggle={() =>
-                  setOpenKey((cur) => (cur === pairKey ? undefined : pairKey))
-                }
+                expanded={entryOpen}
+                onToggle={() => setEntryOpen((v) => !v)}
+                onStore={onStore}
+              />
+            ) : (
+              <FlowArrow />
+            )}
+
+            {openSequence.length > 0 ? (
+              <WorkflowFlowCanvas
+                store={store}
+                items={openSequence}
+                startIndex={startIndex + 1}
+                canEdit={canEdit}
+                onStore={onStore}
+                onSelectService={onSelectService}
+              />
+            ) : (
+              <p className="wf-canvas-docs-empty">
+                {canEdit
+                  ? 'Henüz adım yok. Aşağıdan servis arayıp bu akışa ekleyin.'
+                  : 'Henüz adım yok.'}
+              </p>
+            )}
+
+            {canEdit ? <AddBranchStep folderId={openFolder.id} onStore={onStore} /> : null}
+
+            <p className="wf-fork-end">{openFolder.name} akışı sonu</p>
+
+            {lastOpenStep && mergeStep ? (
+              <EdgeEditor
+                from={lastOpenStep}
+                to={mergeStep}
+                edge={edgeBetween(store, lastOpenStep.id, mergeStep.id)}
+                canEdit={canEdit}
+                expanded={exitOpen}
+                onToggle={() => setExitOpen((v) => !v)}
                 onStore={onStore}
               />
             ) : null}
-          </div>
-        )
-      })}
-      {pairs.length === 0 ? (
+          </>
+        ) : null}
+      </AutoHeight>
+
+      {!openFolder && tail.length > 0 ? (
+        <div className="wf-fork-resume">
+          <span className="wf-fork-resume-line" aria-hidden />
+          <span className="wf-fork-resume-label">Ortak adımlar aşağıda devam eder</span>
+          <span className="wf-fork-resume-head" aria-hidden />
+        </div>
+      ) : null}
+
+      {tail.length > 0 ? (
+        <WorkflowFlowCanvas
+          store={store}
+          items={tail}
+          startIndex={tailStart}
+          canEdit={canEdit}
+          onStore={onStore}
+          onSelectService={onSelectService}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+export function WorkflowFlowCanvas({
+  store,
+  items,
+  canEdit,
+  onStore,
+  onSelectService,
+  startIndex = 0,
+}: Props) {
+  const [openKey, setOpenKey] = useState<string>()
+  const blocks: ReactNode[] = []
+  let stepCount = 0
+  let i = 0
+
+  while (i < items.length) {
+    const item = items[i]
+    if (item.kind === 'step') {
+      const index = startIndex + stepCount
+      stepCount += 1
+      const next = items[i + 1]
+      const nextStep = next?.kind === 'step' ? next.step : undefined
+      const pairKey = nextStep ? `${item.id}→${nextStep.id}` : undefined
+      blocks.push(
+        <div key={item.id} className="wf-canvas-block">
+          <StepCard
+            step={item.step}
+            index={index}
+            canEdit={canEdit}
+            onStore={onStore}
+            onSelectService={onSelectService}
+          />
+          {nextStep && pairKey ? (
+            <EdgeEditor
+              key={pairKey}
+              from={item.step}
+              to={nextStep}
+              edge={edgeBetween(store, item.id, nextStep.id)}
+              canEdit={canEdit}
+              expanded={openKey === pairKey}
+              onToggle={() => setOpenKey((cur) => (cur === pairKey ? undefined : pairKey))}
+              onStore={onStore}
+            />
+          ) : null}
+        </div>,
+      )
+      i += 1
+      continue
+    }
+
+    const runStart = i
+    const branchFolders: WorkflowFolder[] = []
+    while (i < items.length && items[i].kind === 'folder') {
+      branchFolders.push((items[i] as Extract<WorkflowSequenceItem, { kind: 'folder' }>).folder)
+      i += 1
+    }
+    const prevItem = items[runStart - 1]
+    const anchorStep = prevItem?.kind === 'step' ? prevItem.step : undefined
+    const tail = items.slice(i)
+    blocks.push(
+      <BranchGroup
+        key={`branch-${branchFolders.map((f) => f.id).join('-')}`}
+        anchorStep={anchorStep}
+        branches={branchFolders}
+        tail={tail}
+        startIndex={startIndex + stepCount}
+        store={store}
+        canEdit={canEdit}
+        onStore={onStore}
+        onSelectService={onSelectService}
+      />,
+    )
+    break
+  }
+
+  return (
+    <div className="wf-canvas">
+      {blocks}
+      {stepCount <= 1 && items.every((it) => it.kind !== 'folder') && startIndex === 0 ? (
         <p className="wf-canvas-one">Tek adım. Geçiş notu en az iki serviste görünür.</p>
       ) : null}
     </div>

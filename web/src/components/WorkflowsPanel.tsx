@@ -19,18 +19,19 @@ import {
   addWorkflowStep,
   beginWorkflowDrag,
   canNestUnder,
-  childFolders,
   deleteWorkflowFolder,
   endWorkflowDrag,
   folderAcceptsSteps,
   moveWorkflowFolder,
   moveWorkflowStep,
   peekWorkflowDrag,
+  placeWorkflowFolder,
   placeWorkflowStep,
+  pureOrganizerChildren,
   readWorkflows,
   removeWorkflowStep,
   renameWorkflowFolder,
-  stepsInFolder,
+  sequenceInFolder,
   WORKFLOWS_CHANGED_EVENT,
   type WorkflowFolder,
   type WorkflowFolderIcon,
@@ -171,6 +172,10 @@ function DropZone({
         if (!isWorkflowDrag(e) || !allowsCurrent()) return
         e.preventDefault()
         e.stopPropagation()
+        const t = e.target
+        if (t instanceof Element && (t.closest('.wf-reorder-row') || t.closest('.sc-folder-body'))) {
+          return
+        }
         setOver(true)
       }}
       onDragOver={(e) => {
@@ -230,7 +235,8 @@ function FolderBlock({
   onRemove,
   onMove,
   onMoveFolder,
-  onPlace,
+  onPlaceStep,
+  onPlaceFolder,
   onOpenInfo,
   editingFolderId,
   onStartEdit,
@@ -252,7 +258,8 @@ function FolderBlock({
   onRemove: (id: string) => void
   onMove: (id: string, folderId?: string) => void
   onMoveFolder: (dragId: string, folderId?: string) => void
-  onPlace: (stepId: string, folderId: string | undefined, index: number) => void
+  onPlaceStep: (stepId: string, folderId: string | undefined, index: number) => void
+  onPlaceFolder: (folderId: string, parentId: string | undefined, index: number) => void
   onOpenInfo: (id: string) => void
   editingFolderId?: string
   onStartEdit: (id: string) => void
@@ -260,8 +267,8 @@ function FolderBlock({
   canEdit?: boolean
 }) {
   const editing = editingFolderId === folder.id
-  const items = stepsInFolder(store, folder.id)
-  const children = childFolders(store, folder.id)
+  const sequence = sequenceInFolder(store, folder.id)
+  const organizerKids = pureOrganizerChildren(store, folder.id)
   const collapsed = collapsedFolders.has(folder.id)
   const selected = selectedFolderId === folder.id
   const allowChild = canNestUnder(store, folder.id)
@@ -365,22 +372,50 @@ function FolderBlock({
       </DropZone>
       {!collapsed ? (
         <div className="sc-folder-body">
-          {items.length > 0 ? (
+          {sequence.length > 0 ? (
             <WorkflowStepReorder
-              folderId={folder.id}
-              steps={items}
+              parentId={folder.id}
+              items={sequence}
               variant="drawer"
-              onPlace={onPlace}
+              onPlaceStep={onPlaceStep}
+              onPlaceFolder={onPlaceFolder}
               onSelect={onSelectService}
               onRemove={canEdit ? onRemove : undefined}
               focusServiceId={focusServiceId}
               readOnly={!canEdit}
+              renderFolder={(childFolder) => (
+                <FolderBlock
+                  key={childFolder.id}
+                  folder={childFolder}
+                  store={store}
+                  nested
+                  selectedFolderId={selectedFolderId}
+                  collapsedFolders={collapsedFolders}
+                  focusServiceId={focusServiceId}
+                  onSelectFolder={onSelectFolder}
+                  onToggle={onToggle}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onAddChild={onAddChild}
+                  onSelectService={onSelectService}
+                  onRemove={onRemove}
+                  onMove={onMove}
+                  onMoveFolder={onMoveFolder}
+                  onPlaceStep={onPlaceStep}
+                  onPlaceFolder={onPlaceFolder}
+                  onOpenInfo={onOpenInfo}
+                  editingFolderId={editingFolderId}
+                  onStartEdit={onStartEdit}
+                  onStopEdit={onStopEdit}
+                  canEdit={canEdit}
+                />
+              )}
             />
           ) : null}
         </div>
       ) : null}
       {!collapsed
-        ? children.map((child) => (
+        ? organizerKids.map((child) => (
             <FolderBlock
               key={child.id}
               folder={child}
@@ -398,7 +433,8 @@ function FolderBlock({
               onRemove={onRemove}
               onMove={onMove}
               onMoveFolder={onMoveFolder}
-              onPlace={onPlace}
+              onPlaceStep={onPlaceStep}
+              onPlaceFolder={onPlaceFolder}
               onOpenInfo={onOpenInfo}
               editingFolderId={editingFolderId}
               onStartEdit={onStartEdit}
@@ -479,8 +515,8 @@ export function WorkflowsPanel({
     }
   }, [query, open])
 
-  const rootFolders = useMemo(() => childFolders(store, undefined), [store])
-  const rootSteps = useMemo(() => stepsInFolder(store, undefined), [store])
+  const rootFolders = useMemo(() => pureOrganizerChildren(store, undefined), [store])
+  const rootSequence = useMemo(() => sequenceInFolder(store, undefined), [store])
   const searchingMode = query.trim().length >= 2
   const highlightId = infoFolderId ?? selectedFolderId
 
@@ -688,17 +724,48 @@ export function WorkflowsPanel({
             onDropFolder={(id) => setStore(moveWorkflowFolder(id, undefined))}
           >
             <div className="sc-section-label">Kök</div>
-            {rootSteps.length > 0 ? (
-              <WorkflowStepReorder
-                steps={rootSteps}
-                variant="drawer"
-                onPlace={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
-                onSelect={openService}
-                onRemove={canEdit ? (id) => setStore(removeWorkflowStep(id)) : undefined}
-                readOnly={!canEdit}
-              />
-            ) : null}
           </DropZone>
+          {rootSequence.length > 0 ? (
+            <WorkflowStepReorder
+              parentId={undefined}
+              items={rootSequence}
+              variant="drawer"
+              onPlaceStep={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
+              onPlaceFolder={(id, fid, index) => setStore(placeWorkflowFolder(id, fid, index))}
+              onSelect={openService}
+              onRemove={canEdit ? (id) => setStore(removeWorkflowStep(id)) : undefined}
+              readOnly={!canEdit}
+              renderFolder={(folder) => (
+                <FolderBlock
+                  key={folder.id}
+                  folder={folder}
+                  store={store}
+                  selectedFolderId={highlightId}
+                  collapsedFolders={collapsedFolders}
+                  onSelectFolder={setSelectedFolderId}
+                  onToggle={toggleCollapsed}
+                  onRename={(id, name) => setStore(renameWorkflowFolder(id, name))}
+                  onDelete={(id) => {
+                    setStore(deleteWorkflowFolder(id))
+                    if (selectedFolderId === id) setSelectedFolderId(undefined)
+                    if (editingFolderId === id) setEditingFolderId(undefined)
+                  }}
+                  onAddChild={(parentId) => createNode('flow', parentId)}
+                  onSelectService={openService}
+                  onRemove={(id) => setStore(removeWorkflowStep(id))}
+                  onMove={(id, folderId) => setStore(moveWorkflowStep(id, folderId))}
+                  onMoveFolder={(id, folderId) => setStore(moveWorkflowFolder(id, folderId))}
+                  onPlaceStep={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
+                  onPlaceFolder={(id, fid, index) => setStore(placeWorkflowFolder(id, fid, index))}
+                  onOpenInfo={onOpenFolder}
+                  editingFolderId={editingFolderId}
+                  onStartEdit={setEditingFolderId}
+                  onStopEdit={() => setEditingFolderId(undefined)}
+                  canEdit={canEdit}
+                />
+              )}
+            />
+          ) : null}
 
           {rootFolders.map((folder) => (
             <FolderBlock
@@ -720,7 +787,8 @@ export function WorkflowsPanel({
               onRemove={(id) => setStore(removeWorkflowStep(id))}
               onMove={(id, folderId) => setStore(moveWorkflowStep(id, folderId))}
               onMoveFolder={(id, folderId) => setStore(moveWorkflowFolder(id, folderId))}
-              onPlace={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
+              onPlaceStep={(id, fid, index) => setStore(placeWorkflowStep(id, fid, index))}
+              onPlaceFolder={(id, fid, index) => setStore(placeWorkflowFolder(id, fid, index))}
               onOpenInfo={onOpenFolder}
               editingFolderId={editingFolderId}
               onStartEdit={setEditingFolderId}

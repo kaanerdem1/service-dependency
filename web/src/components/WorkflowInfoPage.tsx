@@ -5,7 +5,10 @@ import {
   WORKFLOWS_CHANGED_EVENT,
   childFolders,
   folderAcceptsSteps,
+  pureOrganizerChildren,
   readWorkflows,
+  sequenceInFolder,
+  setWorkflowFolderSummary,
   stepsInFolder,
   type WorkflowsStore,
 } from '../workflowStore'
@@ -42,12 +45,18 @@ export function WorkflowInfoPage({
   const parent = folder?.parentId
     ? store.folders.find((f) => f.id === folder.parentId)
     : undefined
+  const folderMode = folder ? !folderAcceptsSteps(store, folder) : false
   const nested = useMemo(
-    () => (folder ? childFolders(store, folder.id) : []),
-    [folder, store],
+    () =>
+      folder
+        ? folderMode
+          ? childFolders(store, folder.id)
+          : pureOrganizerChildren(store, folder.id)
+        : [],
+    [folder, folderMode, store],
   )
-  const steps = useMemo(
-    () => (folder ? stepsInFolder(store, folder.id) : []),
+  const sequence = useMemo(
+    () => (folder ? sequenceInFolder(store, folder.id) : []),
     [folder, store],
   )
 
@@ -63,8 +72,6 @@ export function WorkflowInfoPage({
       </article>
     )
   }
-
-  const folderMode = !folderAcceptsSteps(store, folder)
 
   return (
     <article className="wf-info">
@@ -87,6 +94,19 @@ export function WorkflowInfoPage({
             </span>
             <h1 className="wf-info-title">{folder.name}</h1>
           </div>
+          {folderMode ? null : canEdit ? (
+            <label className="wf-info-summary">
+              <span className="wf-info-summary-label">Akış özeti</span>
+              <textarea
+                rows={3}
+                value={folder.summary ?? ''}
+                placeholder="Bu akış nerede kullanılır, ne işe yarar? (ör. bireysel kredi başvurusunda limit ve belge kontrolü)"
+                onChange={(e) => setStore(setWorkflowFolderSummary(folder.id, e.target.value))}
+              />
+            </label>
+          ) : folder.summary ? (
+            <p className="wf-info-lede">{folder.summary}</p>
+          ) : null}
         </div>
         <div className="wf-info-hero-side">
           <button type="button" className="ce-dismiss" onClick={onDismiss}>
@@ -115,9 +135,11 @@ export function WorkflowInfoPage({
                     <span className="wf-info-card-copy">
                       <strong>{child.name}</strong>
                       <span>
-                        {childNested.length > 0
-                          ? `${childNested.length} alt öge`
-                          : `${childSteps.length} adım`}
+                        {child.summary?.trim()
+                          ? child.summary
+                          : childNested.length > 0
+                            ? `${childNested.length} alt öge`
+                            : `${childSteps.length} adım`}
                       </span>
                     </span>
                   </button>
@@ -133,7 +155,7 @@ export function WorkflowInfoPage({
           <div className="wf-info-block-head">
             <h2 className="wf-info-h">Sıra</h2>
           </div>
-          {steps.length === 0 ? (
+          {sequence.length === 0 ? (
             <div className="wf-info-blank">
               <p>
                 {canEdit
@@ -144,7 +166,7 @@ export function WorkflowInfoPage({
           ) : (
             <WorkflowFlowCanvas
               store={store}
-              steps={steps}
+              items={sequence}
               canEdit={canEdit}
               onStore={setStore}
               onSelectService={onSelectService}
