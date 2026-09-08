@@ -1198,10 +1198,25 @@
   font-variant-numeric: tabular-nums;
 }
 
-.wf-folder-nested {
-  margin-left: 10px;
-  padding-left: 6px;
-  border-left: 1px solid color-mix(in srgb, var(--shell-sidebar-fg, var(--line)) 18%, transparent);
+.wf-tree-body {
+  position: relative;
+  margin: 2px 0 2px 12px;
+  padding: 2px 0 4px 12px;
+  border-left: 1px solid color-mix(in srgb, var(--shell-sidebar-fg, var(--line)) 26%, transparent);
+}
+
+.wf-tree-body .wf-reorder-item {
+  position: relative;
+}
+
+.wf-tree-body .wf-reorder-item::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 16px;
+  width: 10px;
+  height: 1px;
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--line)) 26%, transparent);
 }
 
 .sc-folder-chev-btn {
@@ -1584,7 +1599,22 @@
 }
 
 .sc-folder {
-  margin-top: 10px;
+  margin-top: 8px;
+}
+
+.sc-folder.is-nested {
+  margin-top: 4px;
+}
+
+.wf-reorder .sc-folder {
+  margin-top: 2px;
+}
+
+.sc-folder.is-nested.is-flow {
+  padding: 3px 4px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 10%, transparent);
 }
 
 .sc-folder-head {

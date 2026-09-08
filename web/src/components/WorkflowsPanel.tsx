@@ -223,8 +223,9 @@ function FolderBlock({
   folder,
   store,
   nested,
+  depth = 0,
   selectedFolderId,
-  collapsedFolders,
+  expandedFolders,
   focusServiceId,
   onSelectFolder,
   onToggle,
@@ -246,8 +247,9 @@ function FolderBlock({
   folder: WorkflowFolder
   store: WorkflowsStore
   nested?: boolean
+  depth?: number
   selectedFolderId?: string
-  collapsedFolders: Set<string>
+  expandedFolders: Set<string>
   focusServiceId?: string
   onSelectFolder: (id: string) => void
   onToggle: (id: string) => void
@@ -269,7 +271,7 @@ function FolderBlock({
   const editing = editingFolderId === folder.id
   const sequence = sequenceInFolder(store, folder.id)
   const organizerKids = pureOrganizerChildren(store, folder.id)
-  const collapsed = collapsedFolders.has(folder.id)
+  const collapsed = !expandedFolders.has(folder.id)
   const selected = selectedFolderId === folder.id
   const allowChild = canNestUnder(store, folder.id)
   const organizer = !folderAcceptsSteps(store, folder)
@@ -282,7 +284,10 @@ function FolderBlock({
   }
 
   return (
-    <section className={`sc-folder${nested ? ' wf-folder-nested' : ''}${selected ? ' is-selected' : ''}`}>
+    <section
+      className={`sc-folder${nested ? ' is-nested' : ''}${organizer ? ' is-organizer' : ' is-flow'}${selected ? ' is-selected' : ''}`}
+      style={{ ['--wf-depth' as string]: String(depth) }}
+    >
       <DropZone
         folderId={folder.id}
         acceptSteps={!organizer}
@@ -371,7 +376,7 @@ function FolderBlock({
         </div>
       </DropZone>
       {!collapsed ? (
-        <div className="sc-folder-body">
+        <div className="sc-folder-body wf-tree-body">
           {sequence.length > 0 ? (
             <WorkflowStepReorder
               parentId={folder.id}
@@ -389,8 +394,9 @@ function FolderBlock({
                   folder={childFolder}
                   store={store}
                   nested
+                  depth={depth + 1}
                   selectedFolderId={selectedFolderId}
-                  collapsedFolders={collapsedFolders}
+                  expandedFolders={expandedFolders}
                   focusServiceId={focusServiceId}
                   onSelectFolder={onSelectFolder}
                   onToggle={onToggle}
@@ -421,8 +427,9 @@ function FolderBlock({
               folder={child}
               store={store}
               nested
+              depth={depth + 1}
               selectedFolderId={selectedFolderId}
-              collapsedFolders={collapsedFolders}
+              expandedFolders={expandedFolders}
               focusServiceId={focusServiceId}
               onSelectFolder={onSelectFolder}
               onToggle={onToggle}
@@ -461,7 +468,7 @@ export function WorkflowsPanel({
   canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set())
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(() => new Set())
   const [selectedFolderId, setSelectedFolderId] = useState<string>()
   const [editingFolderId, setEditingFolderId] = useState<string>()
   const [query, setQuery] = useState('')
@@ -474,6 +481,7 @@ export function WorkflowsPanel({
     if (!open) {
       setQuery('')
       setHits([])
+      setExpandedFolders(new Set())
       return
     }
     const data = readWorkflows()
@@ -552,16 +560,16 @@ export function WorkflowsPanel({
     setSelectedFolderId(created.id)
     setEditingFolderId(created.id)
     onOpenFolder(created.id)
-    setCollapsedFolders((prev) => {
+    setExpandedFolders((prev) => {
       const copy = new Set(prev)
-      if (parentId) copy.delete(parentId)
-      copy.delete(created.id)
+      if (parentId) copy.add(parentId)
+      copy.add(created.id)
       return copy
     })
   }
 
   const toggleCollapsed = (id: string) => {
-    setCollapsedFolders((prev) => {
+    setExpandedFolders((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -741,7 +749,7 @@ export function WorkflowsPanel({
                   folder={folder}
                   store={store}
                   selectedFolderId={highlightId}
-                  collapsedFolders={collapsedFolders}
+                  expandedFolders={expandedFolders}
                   onSelectFolder={setSelectedFolderId}
                   onToggle={toggleCollapsed}
                   onRename={(id, name) => setStore(renameWorkflowFolder(id, name))}
@@ -773,7 +781,7 @@ export function WorkflowsPanel({
               folder={folder}
               store={store}
               selectedFolderId={highlightId}
-              collapsedFolders={collapsedFolders}
+              expandedFolders={expandedFolders}
               onSelectFolder={setSelectedFolderId}
               onToggle={toggleCollapsed}
               onRename={(id, name) => setStore(renameWorkflowFolder(id, name))}
