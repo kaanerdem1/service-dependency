@@ -45,6 +45,8 @@ type ColumnNodeData = {
 type ColumnNodeStatementRef = {
   statementId: number
   relation: string
+  direction: 'fills' | 'source'
+  relatedColumnName: string
   transformationType?: string | null
   confidence?: string | null
   packageName?: string | null
@@ -93,6 +95,12 @@ function statementProcedureLabel(statement: DwhSqlStatement | ColumnNodeStatemen
   return proc || pkg || 'Prosedür bilgisi yok'
 }
 
+function qualifiedColumnName(tableName: string | null | undefined, columnName: string) {
+  const table = tableName?.trim()
+  const column = columnName.trim()
+  return table ? `${table}.${column}` : column
+}
+
 function dmlClass(dmlType: string | null | undefined) {
   const normalized = dmlType?.toLowerCase() ?? ''
   if (normalized.includes('insert')) return 'is-insert'
@@ -103,7 +111,13 @@ function dmlClass(dmlType: string | null | undefined) {
   return 'is-other'
 }
 
-function refsFromSources(sources: DwhColumnLineageSource[], relation: string): ColumnNodeStatementRef[] {
+function refsFromSources(
+  sources: DwhColumnLineageSource[],
+  relation: string,
+  direction: ColumnNodeStatementRef['direction'],
+  relatedColumnName: string,
+  relatedTableName?: string | null,
+): ColumnNodeStatementRef[] {
   const seen = new Set<number>()
   return sources
     .filter((source): source is DwhColumnLineageSource & { statementId: number } => typeof source.statementId === 'number')
@@ -115,6 +129,8 @@ function refsFromSources(sources: DwhColumnLineageSource[], relation: string): C
     .map((source) => ({
       statementId: source.statementId,
       relation,
+      direction,
+      relatedColumnName: qualifiedColumnName(relatedTableName, relatedColumnName),
       transformationType: source.transformationType,
       confidence: source.confidence,
       packageName: source.packageName,
@@ -269,24 +285,33 @@ function edgeDataForGroup(
 function buildAncestryGraph(
   target: DwhColumnLineageTarget | undefined,
   ancestry: DwhColumnAncestryResponse | undefined,
+  targetTableName?: string | null,
 ): ColumnLineageGraph {
   if (!target) return { nodes: [], edges: [] }
 
   const steps = ancestry?.steps ?? []
-  if (!target.targetColumnId || !steps.length) return buildDirectGraph(target)
+  if (!target.targetColumnId || !steps.length) return buildDirectGraph(target, ancestry?.tableName ?? targetTableName)
 
   const levels = Array.from(new Set(steps.map((step) => step.level))).sort((a, b) => a - b)
   const maxLevel = Math.max(...levels)
   const columnIds = new Set<number>([target.targetColumnId])
   steps.forEach((step) => columnIds.add(step.sourceColumnId))
   const targetId = nodeIdForColumn(target.targetColumnId)
-  const targetStatementRefs = refsFromSources(target.sources, 'Hedef kolonu dolduruyor')
+  const targetStatementRefs = refsFromSources(
+    target.sources,
+    'Hedef kolonu dolduruyor',
+    'fills',
+    target.targetColumnName,
+    ancestry.tableName,
+  )
   const statementRefsByColumnId = new Map<number, ColumnNodeStatementRef[]>()
   for (const source of target.sources) {
     if (typeof source.sourceColumnId !== 'number' || typeof source.statementId !== 'number') continue
     addStatementRef(statementRefsByColumnId, source.sourceColumnId, {
       statementId: source.statementId,
       relation: `${target.targetColumnName} kolonuna kaynak oluyor`,
+      direction: 'source',
+      relatedColumnName: qualifiedColumnName(ancestry.tableName, target.targetColumnName),
       transformationType: source.transformationType,
       confidence: source.confidence,
       packageName: source.packageName,
@@ -306,10 +331,14 @@ function buildAncestryGraph(
     addStatementRef(statementRefsByColumnId, step.sourceColumnId, {
       ...refBase,
       relation: `${step.downstreamColumnName} kolonuna kaynak oluyor`,
+      direction: 'source',
+      relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
     })
     addStatementRef(statementRefsByColumnId, step.downstreamColumnId, {
       ...refBase,
       relation: 'Kolonu dolduruyor',
+      direction: 'fills',
+      relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
     })
   }
   const metaByColumnId = new Map<number, ColumnNodeData>()
@@ -462,9 +491,15 @@ function buildAncestryGraph(
   return { nodes, edges }
 }
 
-function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
+function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: string | null): ColumnLineageGraph {
   const shownSources = target.sources
-  const targetStatementRefs = refsFromSources(shownSources, 'Hedef kolonu dolduruyor')
+  const targetStatementRefs = refsFromSources(
+    shownSources,
+    'Hedef kolonu dolduruyor',
+    'fills',
+    target.targetColumnName,
+    targetTableName,
+  )
   const targetY = COLUMN_FLOW_TOP_Y + ((Math.max(1, shownSources.length) - 1) * COLUMN_FLOW_ROW_GAP) / 2
   const nodes: Node<ColumnNodeData>[] = [
     {
@@ -497,7 +532,13 @@ function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
         confidence: source.confidence,
         columnId: source.sourceColumnId,
         tableName: source.sourceTableName,
-        statementRefs: refsFromSources([source], `${target.targetColumnName} kolonuna kaynak oluyor`),
+        statementRefs: refsFromSources(
+          [source],
+          `${target.targetColumnName} kolonuna kaynak oluyor`,
+          'source',
+          target.targetColumnName,
+          targetTableName,
+        ),
       },
       style: { width: COLUMN_FLOW_SOURCE_W },
       sourcePosition: Position.Right,
@@ -557,8 +598,12 @@ function DmlBadge({ dmlType }: { dmlType?: string | null }) {
 
 function ColumnSqlBlock({
   statement,
+  columnName,
+  columnTableName,
 }: {
   statement: DwhSqlStatement
+  columnName: string
+  columnTableName?: string | null
 }) {
   const [view, setView] = useState<'summary' | 'full'>('full')
   const hasSummary = Boolean(statement.simplifiedSql)
@@ -572,9 +617,9 @@ function ColumnSqlBlock({
     <div className="dwh-col-sql-detail">
       <div className="dwh-col-sql-detail-head">
         <div>
-          <span className="dwh-eyebrow">Prosedür</span>
-          <h3>{statementProcedureLabel(statement)}</h3>
-          <p>{statement.targetTable ? `${statement.targetTable} hedefleniyor` : 'Hedef tablo bilgisi yok'}</p>
+          <span className="dwh-eyebrow">Kolon</span>
+          <h3>{qualifiedColumnName(columnTableName, columnName)}</h3>
+          <p>{statementProcedureLabel(statement)}</p>
         </div>
         <DmlBadge dmlType={statement.dmlType} />
       </div>
@@ -657,6 +702,31 @@ function ColumnSqlModal({
   const selectedStatement =
     statements.find((statement) => statement.statementId === selectedStatementId) ?? statements[0]
   const refs = node.statementRefs ?? []
+  const fillingRefs = refs.filter((ref) => ref.direction === 'fills')
+  const downstreamRefs = refs.filter((ref) => ref.direction === 'source')
+  const renderStatementRefs = (items: ColumnNodeStatementRef[]) =>
+    items.map((ref, index) => {
+      const statement = statements.find((item) => item.statementId === ref.statementId)
+      return (
+        <button
+          key={`${ref.statementId}:${index}`}
+          type="button"
+          className={selectedStatement?.statementId === ref.statementId ? 'is-selected' : undefined}
+          onClick={() => onSelectStatement(ref.statementId)}
+        >
+          <strong>{ref.relatedColumnName}</strong>
+          <small>{statement ? statementProcedureLabel(statement) : statementProcedureLabel(ref)}</small>
+          <span>
+            {statement ? <DmlBadge dmlType={statement.dmlType} /> : null}
+            {ref.transformationType ? (
+              <span className={`dwh-transform-badge${ref.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}`}>
+                {transformLabel(ref.transformationType)}
+              </span>
+            ) : null}
+          </span>
+        </button>
+      )
+    })
   const body = (
     <div className="dwh-col-sql-backdrop" role="presentation" onClick={onClose}>
       <section
@@ -684,32 +754,17 @@ function ColumnSqlModal({
           refs.length && statements.length ? (
             <div className="dwh-col-sql-layout">
               <aside className="dwh-col-sql-list">
-                <h3>İlişkili Sorgular</h3>
-                {refs.map((ref, index) => {
-                  const statement = statements.find((item) => item.statementId === ref.statementId)
-                  return (
-                    <button
-                      key={`${ref.statementId}:${index}`}
-                      type="button"
-                      className={selectedStatement?.statementId === ref.statementId ? 'is-selected' : undefined}
-                      onClick={() => onSelectStatement(ref.statementId)}
-                    >
-                      <strong>{statement ? statementProcedureLabel(statement) : statementProcedureLabel(ref)}</strong>
-                      <small>{ref.relation}</small>
-                      <span>
-                        {statement ? <DmlBadge dmlType={statement.dmlType} /> : null}
-                        {ref.transformationType ? (
-                          <span className={`dwh-transform-badge${ref.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}`}>
-                            {transformLabel(ref.transformationType)}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  )
-                })}
+                <h3>Bu kolonu dolduranlar</h3>
+                {renderStatementRefs(fillingRefs)}
+                <h3>Bu kolonun doldurdukları</h3>
+                {renderStatementRefs(downstreamRefs)}
               </aside>
               {selectedStatement ? (
-                <ColumnSqlBlock statement={selectedStatement} />
+                <ColumnSqlBlock
+                  statement={selectedStatement}
+                  columnName={node.label}
+                  columnTableName={node.tableName}
+                />
               ) : (
                 <div className="dwh-col-sql-state">Seçili sorgu bulunamadı.</div>
               )}
@@ -870,8 +925,14 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
   }, [selectedTarget?.targetColumnId])
 
   const graph = useMemo(
-    () => buildAncestryGraph(selectedTarget, ancestry),
-    [ancestry, selectedTarget],
+    () => buildAncestryGraph(
+      selectedTarget,
+      ancestry,
+      lineage?.table
+        ? `${lineage.table.schemaName ? `${lineage.table.schemaName}.` : ''}${lineage.table.tableName}`
+        : undefined,
+    ),
+    [ancestry, lineage?.table, selectedTarget],
   )
 
   useEffect(() => {
@@ -1154,10 +1215,7 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
           <div>
             <span className="dwh-eyebrow">Seçili Kolon</span>
             <h3>{selectedTarget?.targetColumnName ?? 'Kolon seçin'}</h3>
-            <p>
-              {selectedTarget?.sources.length ?? 0} doğrudan kaynak
-              {ancestry?.steps.length ? ` · ${ancestry.steps.length} soykütük adımı` : ''}
-            </p>
+            <p>{selectedTarget?.sources.length ?? 0} doğrudan kaynak</p>
           </div>
           <div className="dwh-col-view-toggle" role="group" aria-label="Lineage görünümü">
             <button
@@ -1202,6 +1260,8 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
                         {
                           statementId: step.statementId,
                           relation: `${step.downstreamTableName}.${step.downstreamColumnName} kolonuna kaynak oluyor`,
+                          direction: 'source',
+                          relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
                           transformationType: step.transformationType,
                           confidence: step.confidence,
                           packageName: step.packageName,

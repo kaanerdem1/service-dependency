@@ -5,7 +5,11 @@ import {
   getReportColumnLineage,
   getTableColumnLineage,
 } from './columnLineageService.js'
-import { buildReportLineageGraph, buildTableLineageGraph } from './graphService.js'
+import {
+  buildReportLineageGraph,
+  buildTableLineageGraph,
+  DWH_GRAPH_LIMITS_ENABLED,
+} from './graphService.js'
 import { getTableImpact } from './impactService.js'
 import { getReportMapSummary, getTableMapSummary } from './mapSummaryService.js'
 import { getReport, listReports } from './reportService.js'
@@ -26,7 +30,8 @@ function parseId(raw: string | undefined) {
 
 function parseDepth(raw: unknown) {
   const depth = Number(raw ?? 25)
-  return Number.isInteger(depth) ? Math.min(Math.max(depth, 1), 25) : 25
+  if (!Number.isInteger(depth) || depth < 1) return 25
+  return DWH_GRAPH_LIMITS_ENABLED ? Math.min(depth, 25) : depth
 }
 
 dwhRouter.get('/health', async (_req, res) => {

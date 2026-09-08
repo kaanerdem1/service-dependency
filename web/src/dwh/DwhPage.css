@@ -1014,8 +1014,125 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   --map-surface: #fff;
   --map-focus: #1f5a42;
   --line: #dfe3e7;
+  position: relative;
   height: 100%;
   min-height: 420px;
+}
+
+.dwh-map-search {
+  position: absolute;
+  top: 8px;
+  left: 128px;
+  z-index: 16;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(360px, calc(100% - 112px));
+  padding: 4px 6px;
+  border: 1px solid rgba(214, 220, 226, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 3px 12px rgba(24, 31, 38, 0.1);
+}
+
+.dwh-map-search input {
+  width: 190px;
+  min-width: 0;
+  height: 26px;
+  padding: 3px 8px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+  appearance: none;
+}
+
+.dwh-map-search input::placeholder {
+  color: #7b858f;
+}
+
+.dwh-map-search input::-webkit-search-cancel-button {
+  appearance: none;
+  display: none;
+}
+
+.dwh-map-search-clear {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #7b858f;
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.dwh-map-search-clear:hover {
+  background: #edf7f1;
+  color: #1f5a42;
+}
+
+.dwh-map-search-count {
+  min-width: 34px;
+  color: #6f5a25;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dwh-map-search-nav {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #d8dee3;
+  border-radius: 50%;
+  background: #fff;
+  color: #34404a;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dwh-map-search-nav:hover:not(:disabled) {
+  border-color: #2f8e62;
+  background: #edf7f1;
+}
+
+.dwh-map-search-nav:disabled {
+  cursor: default;
+  opacity: 0.38;
+}
+
+.dwh-lineage-map .react-flow__node.dwh-search-match {
+  z-index: 4 !important;
+}
+
+.dwh-lineage-map .react-flow__node.dwh-search-match .dd-node-body,
+.dwh-lineage-map .react-flow__node.dwh-search-match .dd-radial-core {
+  border-color: #c9822b;
+  box-shadow: 0 0 0 2px rgba(201, 130, 43, 0.24), 0 7px 16px rgba(151, 101, 28, 0.18);
+}
+
+.dwh-lineage-map .react-flow__node.dwh-search-active .dd-node-body,
+.dwh-lineage-map .react-flow__node.dwh-search-active .dd-radial-core {
+  border-color: #1f5a42;
+  box-shadow: 0 0 0 3px rgba(47, 142, 98, 0.28), 0 9px 20px rgba(31, 90, 66, 0.24);
+}
+
+@media (max-width: 680px) {
+  .dwh-map-search {
+    left: 112px;
+    max-width: calc(100% - 120px);
+  }
+
+  .dwh-map-search input {
+    width: 130px;
+  }
 }
 
 .map-stage .dwh-map-canvas-row {
@@ -1470,6 +1587,60 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-lineage-map .react-flow__edge.dwh-edge.subquery-link marker path {
   fill: #9a7428;
+}
+
+/* DWH edge dili: ilişki türü değil, yalnızca hover yönü renklenir. */
+.dwh-lineage-map .react-flow__edge.dwh-edge .react-flow__edge-path {
+  stroke: #8a9691 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: none !important;
+  opacity: 0.62;
+}
+
+.dwh-lineage-map .react-flow__edge.dwh-edge marker path {
+  fill: #8a9691 !important;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-on .react-flow__edge-path {
+  stroke: #2f8e62 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 8 6 !important;
+  animation: dwh-edge-flow 0.95s linear infinite;
+  opacity: 1;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-source .react-flow__edge-path {
+  stroke: #d97706 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 8 6 !important;
+  animation: dwh-edge-flow 0.95s linear infinite;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-source marker path {
+  fill: #d97706 !important;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-target .react-flow__edge-path {
+  stroke: #2f8e62 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 8 6 !important;
+  animation: dwh-edge-flow 0.95s linear infinite;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-target marker path {
+  fill: #2f8e62 !important;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-source .dd-radial-mid-arrow {
+  fill: #d97706 !important;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__edge.dwh-edge.dd-edge-target .dd-radial-mid-arrow {
+  fill: #2f8e62 !important;
+}
+
+@keyframes dwh-edge-flow {
+  to { stroke-dashoffset: -28; }
 }
 
 .dwh-map-node {
@@ -3741,4 +3912,26 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   .dwh-metrics {
     justify-content: flex-start;
   }
+}
+
+.dwh-lineage-map.is-focusing .react-flow__node.rf-path-source:not(.rf-path-focus) .dd-node-ring {
+  border-color: #2f8e62 !important;
+  box-shadow:
+    0 0 0 3px rgba(47, 142, 98, 0.22),
+    0 8px 18px rgba(31, 90, 66, 0.14);
+}
+
+.dwh-lineage-map.is-focusing .react-flow__node.rf-path-source:not(.rf-path-focus) .dd-node-body {
+  border-color: #2f8e62 !important;
+}
+
+.dwh-lineage-map.is-focusing .react-flow__node.rf-path-target:not(.rf-path-focus) .dd-node-ring {
+  border-color: #d97706 !important;
+  box-shadow:
+    0 0 0 3px rgba(217, 119, 6, 0.24),
+    0 8px 18px rgba(154, 91, 10, 0.16);
+}
+
+.dwh-lineage-map.is-focusing .react-flow__node.rf-path-target:not(.rf-path-focus) .dd-node-body {
+  border-color: #d97706 !important;
 }

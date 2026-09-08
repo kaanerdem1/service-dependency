@@ -46,6 +46,7 @@ export function MapViewportSync({
   topAligned = false,
   readableMinZoom,
   rightAlignOnLayerChange = false,
+  suppressAutoFit = false,
 }: {
   centerId: string
   visibleMaxHop: number
@@ -61,6 +62,7 @@ export function MapViewportSync({
   topAligned?: boolean
   readableMinZoom?: number
   rightAlignOnLayerChange?: boolean
+  suppressAutoFit?: boolean
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
@@ -250,6 +252,7 @@ export function MapViewportSync({
   }
 
   useEffect(() => {
+    if (suppressAutoFit) return
     const centerChanged =
       prevCenter.current !== null && prevCenter.current !== centerId
     const hopChanged = prevHop.current !== visibleMaxHop
@@ -344,6 +347,7 @@ export function MapViewportSync({
     topAligned,
     readableMinZoom,
     rightAlignOnLayerChange,
+    suppressAutoFit,
     rf,
   ])
 

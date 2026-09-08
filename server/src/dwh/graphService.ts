@@ -1,3 +1,4 @@
+import 'dotenv/config'
 import { getReport } from './reportService.js'
 import { getTable } from './tableService.js'
 import {
@@ -16,7 +17,9 @@ import type {
   DwhTreeChildrenResponse,
 } from './types.js'
 
+export const DWH_GRAPH_LIMITS_ENABLED = process.env.DWH_GRAPH_LIMITS_ENABLED !== 'false'
 const MAX_GRAPH_NODES = 900
+const MAX_GRAPH_DEPTH = 25
 
 type WalkContext = {
   graph: ReturnType<typeof graphBuilder>
@@ -60,7 +63,7 @@ function graphBuilder(rootId: string, rootKind: DwhLineageGraph['rootKind'], max
   let truncated = false
 
   const addNode = (node: DwhLineageNode) => {
-    if (!nodes.has(node.id) && nodes.size >= MAX_GRAPH_NODES) {
+    if (DWH_GRAPH_LIMITS_ENABLED && !nodes.has(node.id) && nodes.size >= MAX_GRAPH_NODES) {
       truncated = true
       return false
     }
@@ -69,7 +72,7 @@ function graphBuilder(rootId: string, rootKind: DwhLineageGraph['rootKind'], max
   }
 
   const addEdge = (edge: DwhLineageEdge) => {
-    if (edges.size >= MAX_GRAPH_NODES * 2) {
+    if (DWH_GRAPH_LIMITS_ENABLED && edges.size >= MAX_GRAPH_NODES * 2) {
       truncated = true
       return
     }
@@ -82,7 +85,7 @@ function graphBuilder(rootId: string, rootKind: DwhLineageGraph['rootKind'], max
     markTruncated() {
       truncated = true
     },
-    hasNodeCapacity: () => nodes.size < MAX_GRAPH_NODES,
+    hasNodeCapacity: () => !DWH_GRAPH_LIMITS_ENABLED || nodes.size < MAX_GRAPH_NODES,
     toGraph: (): DwhLineageGraph => ({
       rootId,
       rootKind,
@@ -90,6 +93,7 @@ function graphBuilder(rootId: string, rootKind: DwhLineageGraph['rootKind'], max
       edges: Array.from(edges.values()),
       truncated,
       maxDepth,
+      limitsEnabled: DWH_GRAPH_LIMITS_ENABLED,
     }),
   }
 }
@@ -212,7 +216,7 @@ async function addChildBranch(
   context.graph.addEdge(edgeFromChild(child, childNode.id, parentNodeId))
 
   if (isCycle || isReference) return
-  if (childDepth >= context.maxDepth) {
+  if (DWH_GRAPH_LIMITS_ENABLED && childDepth >= context.maxDepth) {
     if (child.hasChildren) context.graph.markTruncated()
     return
   }
@@ -239,7 +243,10 @@ async function addChildBranch(
 }
 
 async function walkDepthFirst(initialTask: WalkTask, context: WalkContext): Promise<void> {
-  if (!context.graph.hasNodeCapacity() || initialTask.depth >= context.maxDepth) {
+  if (
+    !context.graph.hasNodeCapacity() ||
+    (DWH_GRAPH_LIMITS_ENABLED && initialTask.depth >= context.maxDepth)
+  ) {
     if (!context.graph.hasNodeCapacity()) context.graph.markTruncated()
     return
   }
@@ -282,7 +289,9 @@ export async function buildTableLineageGraph(
   const table = await getTable(tableId)
   if (!table) return undefined
 
-  const maxDepth = Math.min(Math.max(options.maxDepth ?? 25, 1), 25)
+  const maxDepth = DWH_GRAPH_LIMITS_ENABLED
+    ? Math.min(Math.max(options.maxDepth ?? MAX_GRAPH_DEPTH, 1), MAX_GRAPH_DEPTH)
+    : Number.MAX_SAFE_INTEGER
   const rootId = `table:${table.tableId}`
   const rootEntityKey = `table:${table.tableId}`
   const graph = graphBuilder(rootId, 'table', maxDepth)
@@ -316,7 +325,9 @@ export async function buildReportLineageGraph(
   const report = await getReport(reportId)
   if (!report) return undefined
 
-  const maxDepth = Math.min(Math.max(options.maxDepth ?? 25, 1), 25)
+  const maxDepth = DWH_GRAPH_LIMITS_ENABLED
+    ? Math.min(Math.max(options.maxDepth ?? MAX_GRAPH_DEPTH, 1), MAX_GRAPH_DEPTH)
+    : Number.MAX_SAFE_INTEGER
   const rootId = `report:${report.reportId}`
   const rootEntityKey = `report:${report.reportId}`
   const graph = graphBuilder(rootId, 'report', maxDepth)

@@ -202,6 +202,7 @@ function DwhFanEdge({
   sourcePosition,
   targetPosition,
   style,
+  markerStart,
   markerEnd,
   data,
 }: EdgeProps<DwhEdgeData>) {
@@ -236,6 +237,7 @@ function DwhFanEdge({
       id={id}
       path={edgePath}
       style={style}
+      markerStart={markerStart}
       markerEnd={markerEnd}
       interactionWidth={28}
     />
@@ -268,7 +270,7 @@ function DwhRadialEdge({
         className="dd-radial-mid-arrow"
         points="-9,-7 16,0 -9,7 -2,0"
         fill={fill}
-        transform={`translate(${geom.mx},${geom.my}) rotate(${(geom.angle * 180) / Math.PI})`}
+        transform={`translate(${geom.mx},${geom.my}) rotate(${((geom.angle + Math.PI) * 180) / Math.PI})`}
         pointerEvents="none"
       />
     </>
@@ -359,7 +361,7 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
         {!radial && (
           <>
             {label}
-            <span className="dd-node-hop">{isCollapsed ? `Aç · ${data.count} node daha` : data.sub}</span>
+            {!isCollapsed && data.sub ? <span className="dd-node-hop">{data.sub}</span> : null}
           </>
         )}
       </div>
@@ -668,9 +670,11 @@ function splitLayer(
   all: DwhVisualLineageNode[],
   expanded: boolean,
   layoutMode: DwhLayoutMode,
+  limitsEnabled = true,
 ) {
   if (layoutMode === 'swimlane') return { visible: all, hidden: [] as DwhVisualLineageNode[] }
   if (expanded) return { visible: all, hidden: [] as DwhVisualLineageNode[] }
+  if (!limitsEnabled) return { visible: all, hidden: [] as DwhVisualLineageNode[] }
   const cap = layoutMode === 'radial' ? RADIAL_VISIBLE_CAP : MAX_VISIBLE_PER_LAYER
   const hidden = all.length > cap ? all.slice(cap) : []
   if (hidden.length < MIN_COLLAPSE_COUNT) return { visible: all, hidden: [] as DwhVisualLineageNode[] }
@@ -877,7 +881,7 @@ function buildDwhSwimlaneEdges(
     const fanKey = `${edge.source}->${edge.target}`
     const fanIndex = fanIndexes.get(fanKey) ?? 0
     fanIndexes.set(fanKey, fanIndex + 1)
-    const stroke = edge.kind === 'reportSql' ? '#60438b' : EDGE_COLOR
+    const stroke = EDGE_COLOR
     edges.push({
       id: edge.id,
       source: edge.source,
@@ -886,16 +890,14 @@ function buildDwhSwimlaneEdges(
       targetHandle: 'in',
       type: 'fan',
       className: [
-        'dd-edge dwh-edge direct',
-        edge.kind === 'reportSql' && 'report-link',
-        edge.relationCount > 1 && 'is-aggregated',
+        'dd-edge dwh-edge',
       ]
         .filter(Boolean)
         .join(' '),
-      markerEnd: { ...EDGE_MARKER, color: stroke },
+      markerStart: { ...EDGE_MARKER, color: stroke },
       style: {
         stroke,
-        strokeWidth: Math.min(3.2, 1.7 + Math.log2(edge.relationCount + 1) * 0.32),
+        strokeWidth: 2,
         opacity: 0.62,
       },
       data: {
@@ -1056,7 +1058,12 @@ function buildDwhMap(
       return aParentOrder - bParentOrder || a.label.localeCompare(b.label, 'tr')
     })
     sorted.forEach((node, row) => rowOrderByNodeId.set(node.id, row))
-    const { visible, hidden } = splitLayer(sorted, expandedLayers.has(hop), layoutMode)
+    const { visible, hidden } = splitLayer(
+      sorted,
+      expandedLayers.has(hop),
+      layoutMode,
+      graph.limitsEnabled !== false,
+    )
     visibleByHop.set(hop, visible)
     if (hidden.length) collapsedMeta.set(hop, hidden)
   }
@@ -1207,13 +1214,10 @@ function buildDwhMap(
       className: [
         'dd-edge dwh-edge',
         radialTree && 'radial-link',
-        edge.kind === 'reportSql' && 'report-link',
-        edge.kind === 'subquery' && 'subquery-link',
-        childHop === 1 ? 'direct' : 'indirect',
       ]
         .filter(Boolean)
         .join(' '),
-      markerEnd: radialTree
+      markerStart: radialTree
         ? {
             type: MarkerType.ArrowClosed,
             width: 18,
@@ -1222,22 +1226,10 @@ function buildDwhMap(
           }
         : EDGE_MARKER,
       style: {
-        stroke: radialTree
-          ? '#6a645a'
-          : edge.kind === 'reportSql'
-            ? '#60438b'
-            : childHop === 1
-              ? EDGE_COLOR
-              : '#8a847a',
-        strokeWidth: radialTree ? 2 : childHop === 1 ? 2.4 : 1.7,
-        strokeDasharray: radialTree
-          ? undefined
-          : edge.kind === 'subquery'
-            ? '5 4'
-            : childHop === 1
-              ? undefined
-              : '6 5',
-        opacity: radialTree ? 0.55 : undefined,
+        stroke: EDGE_COLOR,
+        strokeWidth: 2,
+        strokeDasharray: undefined,
+        opacity: radialTree ? 0.55 : 0.62,
         fill: radialTree ? 'none' : undefined,
       },
       data: {
@@ -1533,6 +1525,9 @@ function DwhLineageMapInner({
   const [tidyNonce, setTidyNonce] = useState(0)
   const [viewportSyncKey, setViewportSyncKey] = useState(0)
   const [mapSize, setMapSize] = useState({ width: 0, height: 0 })
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchIndex, setSearchIndex] = useState(0)
+  const [searchFocusId, setSearchFocusId] = useState<string | null>(null)
   const mapRef = useRef<HTMLDivElement>(null)
   const nodeDragged = useRef(false)
   const layoutDirtyRef = useRef(false)
@@ -1541,6 +1536,115 @@ function DwhLineageMapInner({
   const prevRootRef = useRef(graph?.rootId ?? '')
   const skipNextViewportSyncRef = useRef(false)
   const rfInstance = useRef<ReactFlowInstance | null>(null)
+  const mapReady = active && mapSize.width > 0 && mapSize.height > 0
+
+  const searchMatches = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('tr-TR')
+    if (!query || !activeGraph) return []
+    return activeGraph.nodes
+      .filter((node) => node.kind !== 'layerGroup')
+      .filter((node) => node.entityKind !== 'subquery')
+      .filter((node) => {
+        const label = `${node.label} ${node.subtitle ?? ''}`.toLocaleLowerCase('tr-TR')
+        return label.includes(query)
+      })
+      .map((node) => node.id)
+  }, [activeGraph, searchQuery])
+
+  const activeSearchId = searchMatches.length
+    ? searchMatches[Math.min(searchIndex, searchMatches.length - 1)]
+    : null
+
+  useEffect(() => {
+    setSearchIndex((current) => Math.min(current, Math.max(0, searchMatches.length - 1)))
+  }, [searchMatches.length])
+
+  useEffect(() => {
+    if (!searchQuery.trim() || !activeSearchId) {
+      setSearchFocusId(null)
+      return
+    }
+    const target = activeGraph?.nodes.find((node) => node.id === activeSearchId)
+    if (!target) {
+      setSearchFocusId(null)
+      return
+    }
+    if (layoutMode === 'swimlane') {
+      const availableLayerKeys = swimlaneKeysForGraph(graph as DwhLineageGraph).filter((key) => contentFilters.includes(key))
+      const layerIndex = availableLayerKeys.indexOf(normalizeDwhLayer(target))
+      if (layerIndex >= 0 && visibleSwimlaneCount <= layerIndex) {
+        setSearchFocusId(null)
+        setVisibleSwimlaneCount((current) => Math.min(availableLayerKeys.length, layerIndex + 1))
+        return
+      }
+    } else if (target.depth > visibleMaxHop) {
+      setSearchFocusId(null)
+      setVisibleMaxHop((current) => Math.max(current, Math.min(graphMaxHop, target.depth)))
+      return
+    }
+    const hasClosedIntermediateLayer =
+      layoutMode !== 'swimlane' &&
+      target.depth > 0 &&
+      Array.from({ length: target.depth }, (_, index) => index + 1).some((depth) => !expandedLayers.has(depth))
+    if (hasClosedIntermediateLayer) {
+      setSearchFocusId(null)
+      setExpandedLayers((current) => {
+        const next = new Set(current)
+        for (let depth = 1; depth <= target.depth; depth += 1) next.add(depth)
+        return next.size === current.size ? current : next
+      })
+      return
+    }
+    setSearchFocusId(activeSearchId)
+    setInspectedNodeId(activeSearchId)
+    setInfoPanelOpen(true)
+  }, [activeGraph, activeSearchId, contentFilters, expandedLayers, graph, graphMaxHop, layoutMode, searchQuery, visibleMaxHop, visibleSwimlaneCount])
+
+  const activeFocusId = searchQuery.trim() ? searchFocusId : focusId
+
+  useEffect(() => {
+    const root = mapRef.current
+    if (!root) return
+    const syncSearchClasses = () => {
+      root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
+        const id = el.getAttribute('data-id') ?? ''
+        el.classList.toggle('dwh-search-match', searchMatches.includes(id))
+        el.classList.toggle('dwh-search-active', id === activeSearchId)
+      })
+    }
+    syncSearchClasses()
+    const observer = new MutationObserver(syncSearchClasses)
+    observer.observe(root, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [activeSearchId, searchMatches])
+
+  useEffect(() => {
+    if (!activeSearchId || !mapReady) return
+    let frame: number | null = null
+    const timeout = window.setTimeout(() => {
+      frame = window.requestAnimationFrame(() => {
+        const node = rfInstance.current?.getNode(activeSearchId)
+        if (!node) return
+        const width = node.width ?? (typeof node.style?.width === 'number' ? node.style.width : 220)
+        const height = node.height ?? (typeof node.style?.height === 'number' ? node.style.height : 72)
+        const zoom = rfInstance.current.getViewport().zoom
+        void rfInstance.current?.setCenter(
+          node.position.x + width / 2,
+          node.position.y + height / 2,
+          { duration: 900, zoom },
+        )
+      })
+    }, 80)
+    return () => {
+      window.clearTimeout(timeout)
+      if (frame !== null) window.cancelAnimationFrame(frame)
+    }
+  }, [activeSearchId, mapReady, viewportSyncKey])
+
+  const moveSearch = useCallback((direction: -1 | 1) => {
+    if (!searchMatches.length) return
+    setSearchIndex((current) => (current + direction + searchMatches.length) % searchMatches.length)
+  }, [searchMatches.length])
 
   useEffect(() => {
     const root = document.documentElement
@@ -1562,6 +1666,7 @@ function DwhLineageMapInner({
     setContentFilters(allContentFilterIds)
     setHideSubqueries(false)
     setFocusId(null)
+    setSearchFocusId(null)
     setInspectedNodeId(graph?.rootId ?? null)
     setInfoPanelOpen(true)
     layoutDirtyRef.current = false
@@ -1570,14 +1675,14 @@ function DwhLineageMapInner({
   const inspectedNode = useMemo(
     () => {
       if (!graph) return undefined
-      const hoverNode = focusId
-        ? activeGraph?.nodes.find((node) => node.id === focusId)
+      const hoverNode = activeFocusId
+        ? activeGraph?.nodes.find((node) => node.id === activeFocusId)
         : undefined
       if (isRealLineageNode(hoverNode)) return hoverNode
       const selectedNode = activeGraph?.nodes.find((node) => node.id === inspectedNodeId)
       return isRealLineageNode(selectedNode) ? selectedNode : undefined
     },
-    [activeGraph, focusId, graph, inspectedNodeId],
+    [activeFocusId, activeGraph, graph, inspectedNodeId],
   )
   const inspectedNodeRenderId = inspectedNode?.id ?? null
 
@@ -1833,18 +1938,21 @@ function DwhLineageMapInner({
   useEffect(() => {
     const root = mapRef.current
     if (!root) return
-    const active = Boolean(focusId)
+    const active = Boolean(activeFocusId)
     const focusNodeIds = new Set<string>()
+    const sourceNodeIds = new Set<string>()
+    const targetNodeIds = new Set<string>()
     const focusEdgeIds = new Set<string>()
-    if (focusId) {
-      focusNodeIds.add(focusId)
-      const queue = [focusId]
+    if (activeFocusId) {
+      focusNodeIds.add(activeFocusId)
+      const queue = [activeFocusId]
       while (queue.length) {
         const currentId = queue.shift()
         if (!currentId) break
         for (const edge of edges) {
           if (edge.target !== currentId || focusEdgeIds.has(edge.id)) continue
           focusEdgeIds.add(edge.id)
+          sourceNodeIds.add(edge.source)
           if (!focusNodeIds.has(edge.source)) {
             focusNodeIds.add(edge.source)
             queue.push(edge.source)
@@ -1852,31 +1960,44 @@ function DwhLineageMapInner({
         }
       }
       for (const edge of edges) {
-        if (edge.source !== focusId) continue
+        if (edge.source !== activeFocusId) continue
         focusEdgeIds.add(edge.id)
+        targetNodeIds.add(edge.target)
         focusNodeIds.add(edge.target)
       }
     }
-    root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
-      const id = el.getAttribute('data-id') ?? ''
-      el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus')
-      el.classList.toggle('dwh-node-inspected', id === inspectedNodeRenderId)
-      if (!active) return
-      const on = focusNodeIds.has(id)
-      el.classList.add(on ? 'rf-path-on' : 'rf-path-off')
-      if (id === focusId) el.classList.add('rf-path-focus')
-    })
-    root.querySelectorAll<HTMLElement>('.react-flow__edge').forEach((el) => {
-      el.classList.remove('dd-edge-on', 'dd-edge-off')
-      if (!active) return
-      const edgeId =
-        el.getAttribute('data-testid')?.replace(/^rf__edge-/, '') ??
-        el.getAttribute('data-id') ??
-        ''
-      const on = focusEdgeIds.has(edgeId)
-      el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
-    })
-  }, [edges, focusId, inspectedNodeRenderId])
+    const syncFocusClasses = () => {
+      root.querySelectorAll<HTMLElement>('.react-flow__node').forEach((el) => {
+        const id = el.getAttribute('data-id') ?? ''
+        el.classList.remove('rf-path-on', 'rf-path-off', 'rf-path-focus', 'rf-path-source', 'rf-path-target')
+        el.classList.toggle('dwh-node-inspected', id === inspectedNodeRenderId)
+        if (!active) return
+        const on = focusNodeIds.has(id)
+        el.classList.add(on ? 'rf-path-on' : 'rf-path-off')
+        if (sourceNodeIds.has(id)) el.classList.add('rf-path-source')
+        if (targetNodeIds.has(id)) el.classList.add('rf-path-target')
+        if (id === activeFocusId) el.classList.add('rf-path-focus')
+      })
+      root.querySelectorAll<HTMLElement>('.react-flow__edge').forEach((el) => {
+        el.classList.remove('dd-edge-on', 'dd-edge-off', 'dd-edge-source', 'dd-edge-target')
+        if (!active) return
+        const edgeId =
+          el.getAttribute('data-testid')?.replace(/^rf__edge-/, '') ??
+          el.getAttribute('data-id') ??
+          ''
+        const on = focusEdgeIds.has(edgeId)
+        el.classList.add(on ? 'dd-edge-on' : 'dd-edge-off')
+        if (!on) return
+        const edge = edges.find((candidate) => candidate.id === edgeId)
+        if (edge?.source === activeFocusId) el.classList.add('dd-edge-source')
+        if (edge?.target === activeFocusId) el.classList.add('dd-edge-target')
+      })
+    }
+    syncFocusClasses()
+    const observer = new MutationObserver(syncFocusClasses)
+    observer.observe(root, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [activeFocusId, edges, inspectedNodeRenderId])
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node<DwhNodeData>) => {
@@ -1924,12 +2045,10 @@ function DwhLineageMapInner({
     )
   }
 
-  const mapReady = active && mapSize.width > 0 && mapSize.height > 0
-
   return (
     <div
       ref={mapRef}
-      className={`impact-map dd-map dwh-lineage-map ${focusId ? 'is-focusing' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${layoutMode === 'swimlane' ? ' is-swimlane' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
+      className={`impact-map dd-map dwh-lineage-map ${activeFocusId ? 'is-focusing' : ''}${layoutMode === 'radial' ? ' is-radial' : ''}${layoutMode === 'swimlane' ? ' is-swimlane' : ''}${infoPanelOpen ? '' : ' is-drawer-collapsed'}`}
       onMouseLeave={() => setFocusId(null)}
     >
       {graph.truncated ? (
@@ -1937,6 +2056,61 @@ function DwhLineageMapInner({
           Grafik güvenlik sınırında kesildi (en fazla 900 düğüm ve {graph.maxDepth} seviye); görünmeyen lineage dalları olabilir.
         </p>
       ) : null}
+      <div className="dwh-map-search" role="search" aria-label="Haritada tablo ara">
+        <input
+          type="search"
+          value={searchQuery}
+          placeholder="Haritada tablo ara..."
+          aria-label="Haritada tablo ara"
+          onChange={(event) => {
+            setSearchQuery(event.target.value)
+            setFocusId(null)
+            setSearchIndex(0)
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return
+            event.preventDefault()
+            moveSearch(event.shiftKey ? -1 : 1)
+          }}
+        />
+        <button
+          type="button"
+          className="dwh-map-search-clear"
+          aria-label="Aramayı temizle"
+          title="Aramayı temizle"
+          onClick={() => {
+            setSearchQuery('')
+            setFocusId(null)
+            setSearchFocusId(null)
+            setSearchIndex(0)
+          }}
+        >
+          ×
+        </button>
+        <span className="dwh-map-search-count" aria-live="polite">
+          {searchQuery.trim() ? `${searchMatches.length ? Math.min(searchIndex + 1, searchMatches.length) : 0} / ${searchMatches.length}` : ''}
+        </span>
+        <button
+          type="button"
+          className="dwh-map-search-nav"
+          aria-label="Önceki eşleşme"
+          title="Önceki eşleşme"
+          disabled={searchMatches.length === 0}
+          onClick={() => moveSearch(-1)}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="dwh-map-search-nav"
+          aria-label="Sonraki eşleşme"
+          title="Sonraki eşleşme"
+          disabled={searchMatches.length === 0}
+          onClick={() => moveSearch(1)}
+        >
+          ↓
+        </button>
+      </div>
       <div className="dwh-map-canvas-row">
       <div className="map-canvas map-canvas-dock-host">
         {layoutMode === 'swimlane' && built.swimlaneSummary ? (
@@ -2003,7 +2177,7 @@ function DwhLineageMapInner({
                 layoutDirtyRef.current = true
               }}
               onNodeMouseEnter={(_, node) => {
-                if (node.data.kind !== 'layerHeader') setFocusId(node.id)
+                if (!searchQuery.trim() && node.data.kind !== 'layerHeader') setFocusId(node.id)
               }}
               onNodeMouseLeave={() => setFocusId(null)}
               onPaneClick={() => {
@@ -2012,7 +2186,7 @@ function DwhLineageMapInner({
               }}
               defaultEdgeOptions={{
                 style: { stroke: EDGE_COLOR, strokeWidth: 2.5 },
-                markerEnd: EDGE_MARKER,
+                markerStart: EDGE_MARKER,
               }}
               proOptions={{ hideAttribution: true }}
             >
@@ -2031,6 +2205,7 @@ function DwhLineageMapInner({
                 topAligned={layoutMode !== 'radial'}
                 readableMinZoom={layoutMode === 'swimlane' ? 0.46 : 0.42}
                 rightAlignOnLayerChange
+                suppressAutoFit={Boolean(searchQuery.trim() && activeSearchId)}
               />
               <Background
                 variant={BackgroundVariant.Dots}

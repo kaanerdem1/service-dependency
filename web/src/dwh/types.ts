@@ -201,6 +201,7 @@ export type DwhLineageGraph = {
   edges: DwhLineageEdge[]
   truncated: boolean
   maxDepth: number
+  limitsEnabled?: boolean
 }
 
 export type DwhImpactTable = {
