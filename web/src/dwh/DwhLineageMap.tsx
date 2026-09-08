@@ -865,9 +865,18 @@ function buildDwhSwimlaneEdges(
       .filter((node) => node.data.kind !== 'layerHeader')
       .map((node) => node.id),
   )
+  const fanCounts = new Map<string, number>()
+  for (const edge of projectionEdges) {
+    const key = `${edge.source}->${edge.target}`
+    fanCounts.set(key, (fanCounts.get(key) ?? 0) + 1)
+  }
+  const fanIndexes = new Map<string, number>()
   const edges: Edge[] = []
   for (const edge of projectionEdges) {
     if (!visibleIds.has(edge.source) || !visibleIds.has(edge.target)) continue
+    const fanKey = `${edge.source}->${edge.target}`
+    const fanIndex = fanIndexes.get(fanKey) ?? 0
+    fanIndexes.set(fanKey, fanIndex + 1)
     const stroke = edge.kind === 'reportSql' ? '#60438b' : EDGE_COLOR
     edges.push({
       id: edge.id,
@@ -894,6 +903,8 @@ function buildDwhSwimlaneEdges(
         targetEntityId: edge.source,
         statementIds: edge.statementIds,
         hop: edge.minDepth,
+        fanIndex,
+        fanCount: fanCounts.get(fanKey) ?? 1,
         relationCount: edge.relationCount,
         originalEdgeIds: edge.originalEdgeIds,
       },
@@ -1579,7 +1590,10 @@ function DwhLineageMapInner({
   )
 
   const flowLayoutMode: MapLayoutMode = layoutMode === 'swimlane' ? 'ltr' : layoutMode
-  const swimlaneKeys = useMemo(() => swimlaneKeysForGraph(graph), [graph])
+  const swimlaneKeys = useMemo(
+    () => swimlaneKeysForGraph(graph).filter((key) => contentFilters.includes(key)),
+    [contentFilters, graph],
+  )
   const swimlaneMaxLayer = Math.max(1, swimlaneKeys.length)
   const visibleSwimlaneKeys = useMemo(
     () => swimlaneKeys.slice(0, Math.min(visibleSwimlaneCount, swimlaneMaxLayer)),
@@ -2077,8 +2091,8 @@ function DwhLineageMapInner({
                 setLayoutMode((mode) => (mode === 'radial' ? 'ltr' : 'radial'))
                 setTidyNonce((nonce) => nonce + 1)
               }}
-              contentFilters={layoutMode === 'swimlane' ? undefined : contentFilters}
-              contentFilterOptions={layoutMode === 'swimlane' ? undefined : contentFilterOptions}
+              contentFilters={contentFilters}
+              contentFilterOptions={contentFilterOptions}
               contentExtraFilter={
                 layoutMode === 'swimlane'
                   ? undefined
@@ -2094,18 +2108,14 @@ function DwhLineageMapInner({
                       },
                     }
               }
-              onContentFiltersChange={
-                layoutMode === 'swimlane'
-                  ? undefined
-                  : (ids) => {
-                      layoutDirtyRef.current = false
-                      setFocusId(null)
-                      setContentFilters(ids)
-                      setTidyNonce((nonce) => nonce + 1)
-                    }
-              }
+              onContentFiltersChange={(ids) => {
+                layoutDirtyRef.current = false
+                setFocusId(null)
+                setContentFilters(ids)
+                setTidyNonce((nonce) => nonce + 1)
+              }}
               contentFilterTitle="DWH filtresi"
-              contentFilterDescription="Ağaç ve halka görünümünde katmanları ve alt sorgusuz modu yönetir"
+              contentFilterDescription="Görünümde yer alacak DWH katmanlarını seçer"
               layerTitle={layoutMode === 'swimlane' ? 'DWH Katmanı' : 'Seviye'}
               collapseAllLabel={
                 layoutMode === 'swimlane'

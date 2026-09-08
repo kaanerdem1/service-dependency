@@ -23,7 +23,7 @@ function node(
   }
 }
 
-test('merges occurrences by entity key and preserves SQL evidence', () => {
+test('keeps occurrences separate and preserves the layer lane', () => {
   const graph: DwhLineageGraph = {
     rootId: 'report:1',
     rootKind: 'report',
@@ -69,19 +69,23 @@ test('merges occurrences by entity key and preserves SQL evidence', () => {
   const projection = buildDwhSwimlaneProjection(graph, ['LD', 'TR'])
   const tableA = projection.nodes.find((item) => item.node.entityKey === 'table:10')
   const tableB = projection.nodes.find((item) => item.node.entityKey === 'table:20')
-  assert.equal(tableA?.occurrenceCount, 2)
-  assert.equal(tableA?.referenceCount, 1)
-  assert.equal(projection.nodes.length, 3)
+  assert.equal(tableA?.occurrenceCount, 1)
+  assert.equal(projection.nodes.find((item) => item.node.id === 'a-ref')?.referenceCount, 1)
+  assert.equal(projection.nodes.length, 4)
+  assert.equal(tableA?.layer, 'LD')
+  assert.equal(tableB?.layer, 'TR')
 
-  const reportEdge = projection.edges.find((edge) => edge.source === 'report:1')
-  assert.equal(reportEdge?.target, tableA?.id)
-  assert.equal(reportEdge?.relationCount, 2)
+  const reportEdges = projection.edges.filter((edge) => edge.source === 'report:1')
+  assert.equal(reportEdges.length, 2)
+  assert.deepEqual(new Set(reportEdges.map((edge) => edge.target)), new Set(['a-main', 'a-ref']))
 
   const statementEdge = projection.edges.find(
     (edge) => edge.source === tableA?.id && edge.target === tableB?.id,
   )
   assert.deepEqual(statementEdge?.statementIds, [41, 42])
   assert.equal(statementEdge?.kind, 'statement')
+  assert.equal(statementEdge?.relationCount, 1)
+  assert.equal(projection.edges.some((edge) => edge.source === 'subquery:7'), false)
 })
 
 test('does not bridge across a hidden real table', () => {

@@ -1038,25 +1038,26 @@ export function DwhPage({
     [entityNameByVisitKey],
   )
 
-  const applyDwhVisit = useCallback((entry: DwhVisitEntry) => {
-    if (entry.kind === 'table') {
-      setRootTableId(entry.id)
-      setSelectedTableId(entry.id)
-      setRootReportId(undefined)
-      setSelectedReportId(undefined)
-      setCatalogTab('tables')
-      setDetailKind('table')
-    } else {
-      setRootReportId(entry.id)
-      setSelectedReportId(entry.id)
-      setRootTableId(undefined)
-      setSelectedTableId(undefined)
-      setCatalogTab('reports')
-      setDetailKind('report')
-    }
-    setStageTab('map')
-    setQuery('')
-  }, [])
+  const applyDwhVisit = useCallback(
+    (entry: DwhVisitEntry, options?: { preserveStageTab?: boolean }) => {
+      if (entry.kind === 'table') {
+        setRootTableId(entry.id)
+        setSelectedTableId(entry.id)
+        setRootReportId(undefined)
+        setSelectedReportId(undefined)
+        setCatalogTab('tables')
+        setDetailKind('table')
+      } else {
+        setRootReportId(entry.id)
+        setSelectedReportId(entry.id)
+        setRootTableId(undefined)
+        setSelectedTableId(undefined)
+        setCatalogTab('reports')
+        setDetailKind('report')
+      }
+      if (!options?.preserveStageTab) setStageTab('map')
+      setQuery('')
+    }, [])
 
   const selectDwhVisit = useCallback(
     (entry: DwhVisitEntry, options?: { resetHistory?: boolean }) => {
@@ -1086,7 +1087,7 @@ export function DwhPage({
       if (!entry) return
       setVisitIndex(index)
       setMapExpanded(false)
-      applyDwhVisit(entry)
+      applyDwhVisit(entry, { preserveStageTab: true })
     },
     [applyDwhVisit, visitHistory],
   )
@@ -1404,13 +1405,11 @@ export function DwhPage({
             setStageTab(next)
           }}
         />
-        {stageTab === 'map' ? (
-          <DwhStageVisitPath
-            steps={visitSteps}
-            currentIndex={visitIndex}
-            onSelect={selectDwhVisitIndex}
-          />
-        ) : null}
+        <DwhStageVisitPath
+          steps={visitSteps}
+          currentIndex={visitIndex}
+          onSelect={selectDwhVisitIndex}
+        />
       </div>
 
       {error ? <div className="dwh-error">{error}</div> : null}
