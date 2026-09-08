@@ -1106,11 +1106,9 @@ function buildDwhMap(
     visible.forEach((node, i) => {
       visibleIds.add(node.id)
       const size =
-        node.kind === 'layerGroup'
-          ? 'sm'
-          : layoutMode === 'radial'
-            ? 'md'
-            : mapNodeSizeFor('service', hop, visibleMaxHop)
+        layoutMode === 'radial'
+          ? 'md'
+          : 'lg'
       const w = layoutMode === 'radial' ? layout.nodeW : mapNodeWidth(size)
       nodes.push({
         id: node.id,
@@ -1144,7 +1142,7 @@ function buildDwhMap(
     if (hidden?.length) {
       const collapseId = `dwh-collapsed-hop-${hop}`
       const label = `+${hidden.length} node daha`
-      const size = layoutMode === 'radial' ? 'md' : mapNodeSizeFor('collapsed', hop, visibleMaxHop)
+      const size = layoutMode === 'radial' ? 'md' : 'lg'
       const w = layoutMode === 'radial' ? Math.round(layout.nodeW * 0.88) : mapNodeWidth(size)
       nodes.push({
         id: collapseId,
@@ -1722,7 +1720,8 @@ function DwhLineageMapInner({
       }
       return {
         ...baseLayout,
-        colGap: visibleControlLayer >= 3 ? 150 : 220,
+        nodeW: mapNodeWidth('lg'),
+        colGap: 220,
         rowGap: visibleControlLayer >= 3 ? 88 : 104,
         minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM),
       }
