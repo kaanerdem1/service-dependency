@@ -86,6 +86,9 @@ export type DwhColumnAncestryStep = {
   downstreamColumnName: string
   transformationType?: string | null
   confidence?: DwhConfidence | null
+  statementId?: number | null
+  packageName?: string | null
+  procedureName?: string | null
   pathText: string
   original: boolean
 }

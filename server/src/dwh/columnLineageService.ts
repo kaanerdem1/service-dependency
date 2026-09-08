@@ -50,6 +50,9 @@ type AncestryRow = {
   downstream_column: string
   donusum_tipi: string | null
   guven_seviyesi: 'KESIN' | 'TAHMIN' | null
+  statement_id: number | null
+  paket_adi: string | null
+  procedure_adi: string | null
   yol_metin: string
   orijinal_mi: boolean
 }
@@ -226,6 +229,9 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
       downstream_column,
       donusum_tipi,
       guven_seviyesi,
+      statement_id,
+      paket_adi,
+      procedure_adi,
       seviye,
       yol,
       yol_metin
@@ -242,6 +248,9 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
         dc.kolon_adi,
         cl.donusum_tipi,
         cl.guven_seviyesi,
+        cl.statement_id,
+        u.paket_adi,
+        u.procedure_adi,
         1,
         ARRAY[cl.hedef_column_id, cl.kaynak_column_id],
         (COALESCE(st.schema_adi || '.', '') || st.tablo_adi || '.' || sc.kolon_adi)::text
@@ -250,6 +259,8 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
       JOIN ${tableName('katalog_tablo')} st ON st.table_id = sc.table_id
       JOIN ${tableName('katalog_kolon')} dc ON dc.column_id = cl.hedef_column_id
       JOIN ${tableName('katalog_tablo')} dt ON dt.table_id = dc.table_id
+      LEFT JOIN ${tableName('katalog_unit_statement')} us ON us.statement_id = cl.statement_id
+      LEFT JOIN ${tableName('katalog_unit')} u ON u.unit_id = us.unit_id
       WHERE cl.hedef_column_id = $1
       UNION ALL
       SELECT
@@ -264,6 +275,9 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
         dc2.kolon_adi,
         cl2.donusum_tipi,
         cl2.guven_seviyesi,
+        cl2.statement_id,
+        u2.paket_adi,
+        u2.procedure_adi,
         s.seviye + 1,
         s.yol || cl2.kaynak_column_id,
         s.yol_metin || ' <- ' || COALESCE(st2.schema_adi || '.', '') || st2.tablo_adi || '.' || sc2.kolon_adi
@@ -273,6 +287,8 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
       JOIN ${tableName('katalog_tablo')} st2 ON st2.table_id = sc2.table_id
       JOIN ${tableName('katalog_kolon')} dc2 ON dc2.column_id = cl2.hedef_column_id
       JOIN ${tableName('katalog_tablo')} dt2 ON dt2.table_id = dc2.table_id
+      LEFT JOIN ${tableName('katalog_unit_statement')} us2 ON us2.statement_id = cl2.statement_id
+      LEFT JOIN ${tableName('katalog_unit')} u2 ON u2.unit_id = us2.unit_id
       WHERE s.seviye < 20 AND NOT (cl2.kaynak_column_id = ANY(s.yol))
     )
     SELECT DISTINCT
@@ -288,6 +304,9 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
       s.downstream_column,
       s.donusum_tipi,
       s.guven_seviyesi,
+      s.statement_id,
+      s.paket_adi,
+      s.procedure_adi,
       s.yol_metin,
       NOT EXISTS (
         SELECT 1
@@ -315,6 +334,9 @@ export async function getColumnAncestry(columnId: number): Promise<DwhColumnAnce
       downstreamColumnName: row.downstream_column,
       transformationType: row.donusum_tipi,
       confidence: row.guven_seviyesi,
+      statementId: row.statement_id,
+      packageName: row.paket_adi,
+      procedureName: row.procedure_adi,
       pathText: row.yol_metin,
       original: row.orijinal_mi,
     }

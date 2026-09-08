@@ -1,4 +1,5 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import ReactFlow, {
   BaseEdge,
   Background,
@@ -14,13 +15,14 @@ import ReactFlow, {
   type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { getDwhColumnAncestry } from './api'
+import { getDwhColumnAncestry, getDwhStatement } from './api'
 import type {
   DwhColumnAncestryResponse,
   DwhColumnAncestryStep,
   DwhColumnLineageResponse,
   DwhColumnLineageSource,
   DwhColumnLineageTarget,
+  DwhSqlStatement,
 } from './types'
 
 type Props = {
@@ -35,6 +37,18 @@ type ColumnNodeData = {
   sub: string
   kind: 'source' | 'target' | 'original'
   confidence?: string | null
+  columnId?: number | null
+  tableName?: string | null
+  statementRefs?: ColumnNodeStatementRef[]
+}
+
+type ColumnNodeStatementRef = {
+  statementId: number
+  relation: string
+  transformationType?: string | null
+  confidence?: string | null
+  packageName?: string | null
+  procedureName?: string | null
 }
 
 type ColumnEdgeData = {
@@ -61,23 +75,63 @@ const COLUMN_FLOW_SOURCE_W = 284
 const COLUMN_FLOW_COL_PITCH = 398
 const COLUMN_FLOW_ROW_GAP = 88
 
-function procedureLabel(source: DwhColumnLineageSource) {
-  const pkg = source.packageName?.trim()
-  const proc = source.procedureName?.trim()
-  if (pkg && proc) return `${pkg}.${proc}`
-  return proc || pkg || 'Prosedür bilgisi yok'
-}
-
 function transformLabel(type?: string | null) {
   if (type === 'TURETILMIS') return 'Türetilmiş'
   if (type === 'DIREKT_KOPYA') return 'Direkt'
   return type || 'Bilinmiyor'
 }
 
-function fullColumnName(source: DwhColumnLineageSource) {
-  const tableName = source.sourceTableName ?? 'Kaynak tablo yok'
-  const columnName = source.sourceColumnName ?? 'Kolon yok'
-  return `${tableName}.${columnName}`
+function compactSql(sql: string | null | undefined) {
+  if (!sql) return 'SQL metni yok'
+  return sql.replace(/\s+/g, ' ').trim()
+}
+
+function statementProcedureLabel(statement: DwhSqlStatement | ColumnNodeStatementRef) {
+  const pkg = statement.packageName?.trim()
+  const proc = statement.procedureName?.trim()
+  if (pkg && proc) return `${pkg}.${proc}`
+  return proc || pkg || 'Prosedür bilgisi yok'
+}
+
+function dmlClass(dmlType: string | null | undefined) {
+  const normalized = dmlType?.toLowerCase() ?? ''
+  if (normalized.includes('insert')) return 'is-insert'
+  if (normalized.includes('update')) return 'is-update'
+  if (normalized.includes('delete')) return 'is-delete'
+  if (normalized.includes('merge')) return 'is-merge'
+  if (normalized.includes('truncate')) return 'is-truncate'
+  return 'is-other'
+}
+
+function refsFromSources(sources: DwhColumnLineageSource[], relation: string): ColumnNodeStatementRef[] {
+  const seen = new Set<number>()
+  return sources
+    .filter((source): source is DwhColumnLineageSource & { statementId: number } => typeof source.statementId === 'number')
+    .filter((source) => {
+      if (seen.has(source.statementId)) return false
+      seen.add(source.statementId)
+      return true
+    })
+    .map((source) => ({
+      statementId: source.statementId,
+      relation,
+      transformationType: source.transformationType,
+      confidence: source.confidence,
+      packageName: source.packageName,
+      procedureName: source.procedureName,
+    }))
+}
+
+function addStatementRef(
+  refsByColumnId: Map<number, ColumnNodeStatementRef[]>,
+  columnId: number,
+  ref: ColumnNodeStatementRef,
+) {
+  const refs = refsByColumnId.get(columnId) ?? []
+  if (!refs.some((item) => item.statementId === ref.statementId && item.relation === ref.relation)) {
+    refs.push(ref)
+  }
+  refsByColumnId.set(columnId, refs)
 }
 
 function targetKey(target: DwhColumnLineageTarget) {
@@ -96,7 +150,10 @@ function ColumnLineageNode({ data }: NodeProps<ColumnNodeData>) {
         ? 'Orijinal'
         : 'Kaynak'
   return (
-    <div className={`dwh-col-flow-node is-${data.kind}${data.confidence === 'TAHMIN' ? ' is-estimated' : ''}`}>
+    <div
+      className={`dwh-col-flow-node is-${data.kind}${data.confidence === 'TAHMIN' ? ' is-estimated' : ''}${data.statementRefs?.length ? ' has-sql' : ''}`}
+      title={data.statementRefs?.length ? 'SQL detayını aç' : undefined}
+    >
       <Handle type="target" position={Position.Left} className="dwh-col-flow-handle" />
       <span className="dwh-col-flow-kicker">{label}</span>
       <strong title={data.label}>{data.label}</strong>
@@ -140,6 +197,50 @@ function ColumnLineageFanEdge({
 const ColumnLineageFanEdgeMemo = memo(ColumnLineageFanEdge)
 const EDGE_TYPES: EdgeTypes = { columnFan: ColumnLineageFanEdgeMemo }
 
+function FullscreenGlyph({ expanded }: { expanded: boolean }) {
+  return (
+    <span className="tl-zoom-glyph" aria-hidden>
+      {expanded ? (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M4.5 1.5H1.5v3M7.5 1.5h3v3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M1.5 1.5l3 3M10.5 1.5l-3 3M1.5 10.5l3-3M10.5 10.5l-3-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M4.5 1.5L1.5 4.5M7.5 1.5l3 3M4.5 10.5L1.5 7.5M7.5 10.5l3-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </span>
+  )
+}
+
 function edgeStyle(step: ColumnEdgeSemantic) {
   const derived = step.transformationType === 'TURETILMIS'
   return {
@@ -179,6 +280,38 @@ function buildAncestryGraph(
   const columnIds = new Set<number>([target.targetColumnId])
   steps.forEach((step) => columnIds.add(step.sourceColumnId))
   const targetId = nodeIdForColumn(target.targetColumnId)
+  const targetStatementRefs = refsFromSources(target.sources, 'Hedef kolonu dolduruyor')
+  const statementRefsByColumnId = new Map<number, ColumnNodeStatementRef[]>()
+  for (const source of target.sources) {
+    if (typeof source.sourceColumnId !== 'number' || typeof source.statementId !== 'number') continue
+    addStatementRef(statementRefsByColumnId, source.sourceColumnId, {
+      statementId: source.statementId,
+      relation: `${target.targetColumnName} kolonuna kaynak oluyor`,
+      transformationType: source.transformationType,
+      confidence: source.confidence,
+      packageName: source.packageName,
+      procedureName: source.procedureName,
+    })
+  }
+
+  for (const step of steps) {
+    if (typeof step.statementId !== 'number') continue
+    const refBase = {
+      statementId: step.statementId,
+      transformationType: step.transformationType,
+      confidence: step.confidence,
+      packageName: step.packageName,
+      procedureName: step.procedureName,
+    }
+    addStatementRef(statementRefsByColumnId, step.sourceColumnId, {
+      ...refBase,
+      relation: `${step.downstreamColumnName} kolonuna kaynak oluyor`,
+    })
+    addStatementRef(statementRefsByColumnId, step.downstreamColumnId, {
+      ...refBase,
+      relation: 'Kolonu dolduruyor',
+    })
+  }
   const metaByColumnId = new Map<number, ColumnNodeData>()
   const visualColumnById = new Map<string, number>([[targetId, maxLevel]])
   const idsByVisualColumn = new Map<number, string[]>()
@@ -197,6 +330,9 @@ function buildAncestryGraph(
       sub: step.sourceTableName,
       kind: step.original ? 'original' : 'source',
       confidence: step.confidence,
+      columnId: step.sourceColumnId,
+      tableName: step.sourceTableName,
+      statementRefs: statementRefsByColumnId.get(step.sourceColumnId),
     })
     const downstream = downstreamBySourceId.get(sourceId) ?? []
     downstream.push(nodeIdForColumn(step.downstreamColumnId))
@@ -223,6 +359,9 @@ function buildAncestryGraph(
         label: target.targetColumnName,
         sub: ancestry.tableName,
         kind: 'target',
+        columnId: target.targetColumnId,
+        tableName: ancestry.tableName,
+        statementRefs: statementRefsByColumnId.get(target.targetColumnId) ?? targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
       sourcePosition: Position.Right,
@@ -325,6 +464,7 @@ function buildAncestryGraph(
 
 function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
   const shownSources = target.sources
+  const targetStatementRefs = refsFromSources(shownSources, 'Hedef kolonu dolduruyor')
   const targetY = COLUMN_FLOW_TOP_Y + ((Math.max(1, shownSources.length) - 1) * COLUMN_FLOW_ROW_GAP) / 2
   const nodes: Node<ColumnNodeData>[] = [
     {
@@ -335,6 +475,8 @@ function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
         label: target.targetColumnName,
         sub: `${target.sources.length} kaynak kolon`,
         kind: 'target',
+        columnId: target.targetColumnId,
+        statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
       sourcePosition: Position.Right,
@@ -353,6 +495,9 @@ function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
         sub: source.sourceTableName ?? 'Kaynak tablo yok',
         kind: 'source',
         confidence: source.confidence,
+        columnId: source.sourceColumnId,
+        tableName: source.sourceTableName,
+        statementRefs: refsFromSources([source], `${target.targetColumnName} kolonuna kaynak oluyor`),
       },
       style: { width: COLUMN_FLOW_SOURCE_W },
       sourcePosition: Position.Right,
@@ -387,21 +532,6 @@ function buildDirectGraph(target: DwhColumnLineageTarget): ColumnLineageGraph {
   return { nodes, edges }
 }
 
-function SourceBadges({ source }: { source: DwhColumnLineageSource }) {
-  return (
-    <span className="dwh-col-source-badges">
-      <span className={`dwh-transform-badge${source.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}`}>
-        {transformLabel(source.transformationType)}
-      </span>
-      {source.confidence ? (
-        <span className={`dwh-confidence-badge ${source.confidence === 'TAHMIN' ? 'is-estimated' : 'is-exact'}`}>
-          {source.confidence}
-        </span>
-      ) : null}
-    </span>
-  )
-}
-
 function ColumnLineageLegend() {
   return (
     <div className="dwh-col-flow-legend" aria-label="Kolon lineage çizgi anlamları">
@@ -421,46 +551,206 @@ function ColumnLineageLegend() {
   )
 }
 
+function DmlBadge({ dmlType }: { dmlType?: string | null }) {
+  return <span className={`dwh-dml-badge ${dmlClass(dmlType)}`}>{dmlType || 'SQL'}</span>
+}
+
+function ColumnSqlBlock({
+  statement,
+}: {
+  statement: DwhSqlStatement
+}) {
+  const [view, setView] = useState<'summary' | 'full'>('full')
+  const hasSummary = Boolean(statement.simplifiedSql)
+  const sqlText = hasSummary && view === 'summary' ? statement.simplifiedSql : statement.sqlText
+
+  useEffect(() => {
+    setView(hasSummary ? 'summary' : 'full')
+  }, [hasSummary, statement.statementId, statement.simplifiedSql])
+
+  return (
+    <div className="dwh-col-sql-detail">
+      <div className="dwh-col-sql-detail-head">
+        <div>
+          <span className="dwh-eyebrow">Prosedür</span>
+          <h3>{statementProcedureLabel(statement)}</h3>
+          <p>{statement.targetTable ? `${statement.targetTable} hedefleniyor` : 'Hedef tablo bilgisi yok'}</p>
+        </div>
+        <DmlBadge dmlType={statement.dmlType} />
+      </div>
+      <div className="dwh-sql-meta-grid">
+        <span>
+          <strong>Satır</strong>
+          {statement.lineNo ?? 'bilgi yok'}
+        </span>
+        <span>
+          <strong>Hedef</strong>
+          {statement.targetTable ?? '-'}
+        </span>
+      </div>
+      {statement.sources.length ? (
+        <details className="dwh-sql-source-details" open={statement.sources.length <= 5}>
+          <summary>Prosedürün kullandığı kaynak tablolar ({statement.sources.length})</summary>
+          <div className="dwh-sql-source-list">
+            {statement.sources.map((source) => (
+              <span key={source}>{source}</span>
+            ))}
+          </div>
+        </details>
+      ) : null}
+      <div className="dwh-sql-view-head">
+        <h4>SQL</h4>
+        {hasSummary ? (
+          <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
+            <button
+              type="button"
+              className={view === 'summary' ? 'on' : undefined}
+              onClick={() => setView('summary')}
+            >
+              Sade
+            </button>
+            <button
+              type="button"
+              className={view === 'full' ? 'on' : undefined}
+              onClick={() => setView('full')}
+            >
+              Tam SQL
+            </button>
+          </div>
+        ) : null}
+      </div>
+      <pre className="dwh-sql-block">{sqlText || compactSql(sqlText)}</pre>
+    </div>
+  )
+}
+
+function ColumnSqlModal({
+  node,
+  statements,
+  selectedStatementId,
+  loading,
+  error,
+  onSelectStatement,
+  onClose,
+}: {
+  node?: ColumnNodeData
+  statements: DwhSqlStatement[]
+  selectedStatementId?: number
+  loading: boolean
+  error?: string
+  onSelectStatement: (statementId: number) => void
+  onClose: () => void
+}) {
+  useEffect(() => {
+    if (!node) return undefined
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [node, onClose])
+
+  if (!node) return null
+
+  const selectedStatement =
+    statements.find((statement) => statement.statementId === selectedStatementId) ?? statements[0]
+  const refs = node.statementRefs ?? []
+  const body = (
+    <div className="dwh-col-sql-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="dwh-col-sql-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="dwh-col-sql-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="dwh-col-sql-modal-head">
+          <div>
+            <span className="dwh-eyebrow">Kolon SQL Detayı</span>
+            <h2 id="dwh-col-sql-modal-title">{node.label}</h2>
+            <p>{node.tableName ?? node.sub}</p>
+          </div>
+          <button type="button" className="btn ghost" onClick={onClose}>
+            Kapat
+          </button>
+        </header>
+
+        {loading ? <div className="dwh-col-sql-state">SQL bilgisi yükleniyor...</div> : null}
+        {error ? <div className="dwh-col-sql-state is-error">{error}</div> : null}
+
+        {!loading && !error ? (
+          refs.length && statements.length ? (
+            <div className="dwh-col-sql-layout">
+              <aside className="dwh-col-sql-list">
+                <h3>İlişkili Sorgular</h3>
+                {refs.map((ref, index) => {
+                  const statement = statements.find((item) => item.statementId === ref.statementId)
+                  return (
+                    <button
+                      key={`${ref.statementId}:${index}`}
+                      type="button"
+                      className={selectedStatement?.statementId === ref.statementId ? 'is-selected' : undefined}
+                      onClick={() => onSelectStatement(ref.statementId)}
+                    >
+                      <strong>{statement ? statementProcedureLabel(statement) : statementProcedureLabel(ref)}</strong>
+                      <small>{ref.relation}</small>
+                      <span>
+                        {statement ? <DmlBadge dmlType={statement.dmlType} /> : null}
+                        {ref.transformationType ? (
+                          <span className={`dwh-transform-badge${ref.transformationType === 'TURETILMIS' ? ' is-derived' : ' is-direct'}`}>
+                            {transformLabel(ref.transformationType)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  )
+                })}
+              </aside>
+              {selectedStatement ? (
+                <ColumnSqlBlock statement={selectedStatement} />
+              ) : (
+                <div className="dwh-col-sql-state">Seçili sorgu bulunamadı.</div>
+              )}
+            </div>
+          ) : (
+            <div className="dwh-col-sql-state">
+              Bu kolon için doğrudan bağlı SQL kaydı bulunamadı.
+            </div>
+          )
+        ) : null}
+      </section>
+    </div>
+  )
+
+  if (typeof document === 'undefined') return body
+  return createPortal(body, document.body)
+}
+
 function AncestryTable({
   target,
   ancestry,
   loading,
   error,
+  onSelectStep,
 }: {
   target?: DwhColumnLineageTarget
   ancestry?: DwhColumnAncestryResponse
   loading: boolean
   error?: string
+  onSelectStep: (step: DwhColumnAncestryStep) => void
 }) {
   if (!target) return <div className="dwh-detail-empty">Detay için bir kolon seçin.</div>
 
   return (
     <div className="dwh-col-ancestry-view">
-      <section className="dwh-col-direct-section">
-        <h4>Doğrudan Kaynaklar</h4>
-        {target.sources.length ? (
-          <div className="dwh-col-source-list">
-            {target.sources.map((source, index) => (
-              <article key={`${source.id}-${index}`} className="dwh-col-source-card">
-                <div>
-                  <strong title={fullColumnName(source)}>{fullColumnName(source)}</strong>
-                  <small>{procedureLabel(source)}</small>
-                </div>
-                <SourceBadges source={source} />
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="dwh-empty-line">Bu kolon için kayıtlı kaynak bulunamadı.</p>
-        )}
-      </section>
-
       <section className="dwh-col-ancestry">
         <h4>Tam Soykütük</h4>
         {loading ? <p className="dwh-empty-line">Soykütük yükleniyor...</p> : null}
         {error ? <p className="dwh-empty-line">{error}</p> : null}
         {!target.targetColumnId ? (
-          <p className="dwh-empty-line">Rapor kolonları için hedef kolon katalog id’si yok; doğrudan kaynaklar gösteriliyor.</p>
+          <p className="dwh-empty-line">Rapor kolonu için tam soykütük adımları bulunmuyor.</p>
         ) : null}
         {!loading && !error && target.targetColumnId && ancestry?.steps.length === 0 ? (
           <p className="dwh-empty-line">Bu kolon için kayıtlı bir üst kaynak bulunamadı.</p>
@@ -479,7 +769,19 @@ function AncestryTable({
               </thead>
               <tbody>
                 {ancestry.steps.map((step) => (
-                  <tr key={step.id} className={step.original ? 'is-original' : undefined}>
+                  <tr
+                    key={step.id}
+                    className={step.original ? 'is-original' : undefined}
+                    onClick={() => onSelectStep(step)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        onSelectStep(step)
+                      }
+                    }}
+                    tabIndex={0}
+                    title="SQL detayını aç"
+                  >
                     <td>{step.level}</td>
                     <td title={`${step.sourceTableName}.${step.sourceColumnName}`}>
                       {step.sourceTableName}.{step.sourceColumnName}
@@ -504,6 +806,14 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
   const [filter, setFilter] = useState('')
   const [selectedKey, setSelectedKey] = useState<string>()
   const [viewMode, setViewMode] = useState<ViewMode>('map')
+  const [focusNodeId, setFocusNodeId] = useState<string | null>(null)
+  const [mapExpanded, setMapExpanded] = useState(false)
+  const focusClearTimer = useRef<number | undefined>(undefined)
+  const [sqlNode, setSqlNode] = useState<ColumnNodeData>()
+  const [sqlStatements, setSqlStatements] = useState<DwhSqlStatement[]>([])
+  const [selectedSqlStatementId, setSelectedSqlStatementId] = useState<number>()
+  const [sqlLoading, setSqlLoading] = useState(false)
+  const [sqlError, setSqlError] = useState<string>()
   const [ancestry, setAncestry] = useState<DwhColumnAncestryResponse>()
   const [ancestryLoading, setAncestryLoading] = useState(false)
   const [ancestryError, setAncestryError] = useState<string>()
@@ -563,6 +873,135 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
     () => buildAncestryGraph(selectedTarget, ancestry),
     [ancestry, selectedTarget],
   )
+
+  useEffect(() => {
+    setFocusNodeId(null)
+    setSqlNode(undefined)
+    setMapExpanded(false)
+  }, [selectedKey, viewMode])
+
+  useEffect(() => {
+    if (!mapExpanded) return undefined
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      setMapExpanded(false)
+    }
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [mapExpanded])
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(focusClearTimer.current)
+    }
+  }, [])
+
+  const focusNode = (nodeId: string) => {
+    window.clearTimeout(focusClearTimer.current)
+    setFocusNodeId((current) => (current === nodeId ? current : nodeId))
+  }
+
+  const clearFocusSoon = () => {
+    window.clearTimeout(focusClearTimer.current)
+    focusClearTimer.current = window.setTimeout(() => {
+      setFocusNodeId(null)
+    }, 80)
+  }
+
+  useEffect(() => {
+    setSqlStatements([])
+    setSqlError(undefined)
+    const ids = Array.from(new Set(sqlNode?.statementRefs?.map((ref) => ref.statementId) ?? []))
+    setSelectedSqlStatementId(ids[0])
+
+    if (!sqlNode || !ids.length) {
+      setSqlLoading(false)
+      return undefined
+    }
+
+    let alive = true
+    setSqlLoading(true)
+    void Promise.all(ids.map((id) => getDwhStatement(id)))
+      .then((statements) => {
+        if (!alive) return
+        setSqlStatements(statements)
+      })
+      .catch((e: Error) => {
+        if (!alive) return
+        setSqlError(e.message)
+      })
+      .finally(() => {
+        if (!alive) return
+        setSqlLoading(false)
+      })
+
+    return () => {
+      alive = false
+    }
+  }, [sqlNode])
+
+  const focusSet = useMemo(() => {
+    if (!focusNodeId) return { nodeIds: new Set<string>(), edgeIds: new Set<string>() }
+
+    const nodeIds = new Set<string>([focusNodeId])
+    const edgeIds = new Set<string>()
+    const queue = [focusNodeId]
+
+    while (queue.length) {
+      const currentId = queue.shift()
+      if (!currentId) continue
+      for (const edge of graph.edges) {
+        if (edge.target !== currentId || edgeIds.has(edge.id)) continue
+        edgeIds.add(edge.id)
+        if (!nodeIds.has(edge.source)) {
+          nodeIds.add(edge.source)
+          queue.push(edge.source)
+        }
+      }
+    }
+
+    for (const edge of graph.edges) {
+      if (edge.source !== focusNodeId) continue
+      edgeIds.add(edge.id)
+      nodeIds.add(edge.target)
+    }
+
+    return { nodeIds, edgeIds }
+  }, [focusNodeId, graph.edges])
+
+  const flowNodes = useMemo(() => {
+    if (!focusNodeId) return graph.nodes
+    return graph.nodes.map((node) => ({
+      ...node,
+      className: [
+        node.className,
+        focusSet.nodeIds.has(node.id) ? 'rf-path-on' : 'rf-path-off',
+        node.id === focusNodeId ? 'rf-path-focus' : undefined,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    }))
+  }, [focusNodeId, focusSet.nodeIds, graph.nodes])
+
+  const flowEdges = useMemo(() => {
+    if (!focusNodeId) return graph.edges
+    return graph.edges.map((edge) => ({
+      ...edge,
+      className: [
+        edge.className,
+        focusSet.edgeIds.has(edge.id) ? 'dd-edge-on' : 'dd-edge-off',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    }))
+  }, [focusNodeId, focusSet.edgeIds, graph.edges])
+
   const entityName =
     lineage?.entityKind === 'report'
       ? lineage.report?.reportName
@@ -572,6 +1011,70 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
           : lineage.table.tableName
         : undefined
   const lineageStepCount = ancestry?.steps.length ?? selectedTarget?.sources.length ?? 0
+  const renderMapCanvas = (expanded = false) => (
+    <div
+      className={`dwh-col-flow-canvas${focusNodeId ? ' is-focusing' : ''}${expanded ? ' is-expanded' : ''}`}
+      onMouseLeave={() => setFocusNodeId(null)}
+    >
+      <div className="dwh-col-map-chrome">
+        <button
+          type="button"
+          className="tl-zoom"
+          title={expanded ? 'Küçült (Esc)' : 'Haritayı tam ekran aç'}
+          aria-label={expanded ? 'Haritayı küçült' : 'Haritayı tam ekran aç'}
+          onClick={() => setMapExpanded(!expanded)}
+        >
+          <FullscreenGlyph expanded={expanded} />
+        </button>
+        <span className="tl-zoom-label">{expanded ? `${selectedTarget?.targetColumnName ?? 'Kolon'} lineage` : 'Tam ekran'}</span>
+      </div>
+      <ColumnLineageLegend />
+      {ancestryLoading && selectedTarget?.targetColumnId ? (
+        <div className="dwh-col-map-status">Tam soykütük haritası yükleniyor...</div>
+      ) : null}
+      {ancestryError ? <div className="dwh-col-map-status is-error">{ancestryError}</div> : null}
+      <ReactFlow
+        key={`${selectedKey ?? 'empty-column-lineage'}:${lineageStepCount}:${expanded ? 'expanded' : 'inline'}`}
+        nodes={flowNodes}
+        edges={flowEdges}
+        nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
+        fitView
+        fitViewOptions={{ padding: expanded ? 0.12 : 0.28, duration: 250, maxZoom: expanded ? 0.9 : 1.25 }}
+        minZoom={0.2}
+        maxZoom={1.25}
+        onInit={(instance) => {
+          window.requestAnimationFrame(() => {
+            instance.fitView({
+              padding: expanded ? 0.12 : 0.28,
+              duration: 0,
+              maxZoom: expanded ? 0.9 : 1.25,
+            })
+          })
+        }}
+        nodesDraggable={false}
+        nodesConnectable={false}
+        elementsSelectable={false}
+        onNodeMouseEnter={(_, node) => focusNode(node.id)}
+        onNodeMouseMove={(_, node) => focusNode(node.id)}
+        onNodeMouseLeave={clearFocusSoon}
+        onNodeClick={(_, node) => setSqlNode(node.data)}
+        onPaneClick={() => setFocusNodeId(null)}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(106,116,140,.25)" />
+      </ReactFlow>
+    </div>
+  )
+  const expandedMap =
+    mapExpanded && typeof document !== 'undefined'
+      ? createPortal(
+          <div className="dwh-col-map-fullscreen">
+            {renderMapCanvas(true)}
+          </div>,
+          document.body,
+        )
+      : null
 
   if (loading) {
     return (
@@ -675,39 +1178,51 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
         </div>
 
         {viewMode === 'map' ? (
-          <div className="dwh-col-flow-canvas">
-            <ColumnLineageLegend />
-            {ancestryLoading && selectedTarget?.targetColumnId ? (
-              <div className="dwh-col-map-status">Tam soykütük haritası yükleniyor...</div>
-            ) : null}
-            {ancestryError ? <div className="dwh-col-map-status is-error">{ancestryError}</div> : null}
-            <ReactFlow
-              key={`${selectedKey ?? 'empty-column-lineage'}:${lineageStepCount}`}
-              nodes={graph.nodes}
-              edges={graph.edges}
-              nodeTypes={NODE_TYPES}
-              edgeTypes={EDGE_TYPES}
-              fitView
-              fitViewOptions={{ padding: 0.28, duration: 250 }}
-              minZoom={0.2}
-              maxZoom={1.25}
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable={false}
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(106,116,140,.25)" />
-            </ReactFlow>
-          </div>
+          <>
+            {mapExpanded ? <div className="dwh-col-flow-placeholder" /> : renderMapCanvas()}
+            {expandedMap}
+          </>
         ) : (
           <AncestryTable
             target={selectedTarget}
             ancestry={ancestry}
             loading={ancestryLoading}
             error={ancestryError}
+            onSelectStep={(step) => {
+              setSqlNode({
+                label: step.sourceColumnName,
+                sub: step.sourceTableName,
+                kind: step.original ? 'original' : 'source',
+                confidence: step.confidence,
+                columnId: step.sourceColumnId,
+                tableName: step.sourceTableName,
+                statementRefs:
+                  typeof step.statementId === 'number'
+                    ? [
+                        {
+                          statementId: step.statementId,
+                          relation: `${step.downstreamTableName}.${step.downstreamColumnName} kolonuna kaynak oluyor`,
+                          transformationType: step.transformationType,
+                          confidence: step.confidence,
+                          packageName: step.packageName,
+                          procedureName: step.procedureName,
+                        },
+                      ]
+                    : [],
+              })
+            }}
           />
         )}
       </section>
+      <ColumnSqlModal
+        node={sqlNode}
+        statements={sqlStatements}
+        selectedStatementId={selectedSqlStatementId}
+        loading={sqlLoading}
+        error={sqlError}
+        onSelectStatement={setSelectedSqlStatementId}
+        onClose={() => setSqlNode(undefined)}
+      />
     </div>
   )
 }
