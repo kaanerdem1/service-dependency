@@ -3095,6 +3095,47 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   fill: #2f8e62 !important;
 }
 
+.map-legend-pop .dwh-map-edge-default {
+  background: #8a9691;
+}
+
+.map-legend-pop .dwh-map-edge-incoming,
+.map-legend-pop .dwh-map-edge-outgoing {
+  height: 3px;
+  animation: dwh-legend-flow 0.95s linear infinite;
+}
+
+.map-legend-pop .dwh-map-edge-incoming {
+  background: repeating-linear-gradient(90deg, #d97706 0 6px, transparent 6px 10px);
+}
+
+.map-legend-pop .dwh-map-edge-outgoing {
+  background: repeating-linear-gradient(90deg, #2f8e62 0 6px, transparent 6px 10px);
+}
+
+.map-legend-pop .dwh-map-edge-muted {
+  background: #c4cbc8;
+  opacity: 0.55;
+}
+
+@keyframes dwh-legend-flow {
+  to { background-position: 20px 0; }
+}
+
+.dwh-lineage-map .map-legend-pop {
+  width: min(430px, calc(100vw - 32px));
+}
+
+.dwh-lineage-map .map-legend-pop .path-legend-item {
+  align-items: flex-start;
+  line-height: 1.35;
+}
+
+.dwh-lineage-map .map-legend-pop .path-legend-item > span:last-child {
+  min-width: 0;
+  white-space: normal;
+}
+
 .dwh-col-flow-edge.is-derived .react-flow__edge-path {
   stroke: #9a6a16;
 }

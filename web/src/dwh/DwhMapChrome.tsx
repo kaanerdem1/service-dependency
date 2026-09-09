@@ -464,26 +464,32 @@ function MapLegendContent({ cascadeCount }: { cascadeCount?: number }) {
     <>
       <p className="map-legend-pop-title">Oklar</p>
       <p className="map-legend-pop-lede">
-        <strong>Düz</strong> = doğrudan bağ · <strong>Kesikli</strong> = dolaylı veya alternatif
+        Bir node'un üzerine gelince o node'un bağlantı yönleri renklenir.
       </p>
       <div className="path-legend-block">
         <span className="path-legend-item">
-          <span className="legend-swatch tree" aria-hidden />
+          <span className="legend-swatch dwh-map-edge-default" aria-hidden />
           <span>
-            <strong>Yeşil düz ok</strong> — ana yol, doğrudan (1. katman)
+            <strong>Nötr gri düz ok</strong> — normal bağlantı
           </span>
         </span>
         <span className="path-legend-item">
-          <span className="legend-swatch indirect" aria-hidden />
+          <span className="legend-swatch dwh-map-edge-incoming" aria-hidden />
           <span>
-            <strong>Gri kesikli ok</strong> — ana yol, dolaylı (2+ katman)
+            <strong>Turuncu hareketli kesik</strong> — odaklanan node'a gelen bağlantı
           </span>
         </span>
         <span className="path-legend-item">
-          <span className="legend-swatch cascade" aria-hidden />
+          <span className="legend-swatch dwh-map-edge-outgoing" aria-hidden />
           <span>
-            <strong>Turuncu kesikli ok</strong> — yan bağ (alternatif rota)
-            {cascadeSuffix}
+            <strong>Yeşil hareketli kesik</strong> — odaklanan node'dan çıkan bağlantı
+          </span>
+        </span>
+        <span className="path-legend-item">
+          <span className="legend-swatch dwh-map-edge-muted" aria-hidden />
+          <span>
+            <strong>Soluk bağlantı</strong> — odak yolunun dışında kalan edge
+            {cascadeSuffix ? ` · ${cascadeSuffix.replace(' · ', '')}` : ''}
           </span>
         </span>
       </div>
