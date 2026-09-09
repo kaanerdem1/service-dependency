@@ -185,19 +185,45 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
   }
 }
 
+/**
+ * Katmanlı (Sugiyama tarzı) yerleşim: her düğüm başlangıçtan en UZUN yol
+ * mesafesine (longest-path) göre bir sütuna (depth) yerleşir — böylece bir
+ * yakınsama düğümü (örn. "Sil"), onu besleyen tüm dalların ötesinde durur ve
+ * ok geriye/üste doğru kesişmez. Her sütun içinde satır sırası, önceki
+ * sütundaki ebeveynlerinin ortalama satırına göre (barycenter) belirlenir ve
+ * o sütun ebeveynlerin ortalamasına ortalanır — bu, tek bir karardan çıkan
+ * çoklu dalların simetrik şekilde açılıp aynı hedefte simetrik toplanmasını
+ * sağlar (kullanıcının elle dizdiği örnekteki görünüm).
+ */
 export function layoutProcessFlow(graph: ProcessFlowGraph): ProcessFlowGraph & {
   positions: Record<string, { x: number; y: number }>
 } {
   const outgoing = new Map<string, string[]>()
+  const incoming = new Map<string, string[]>()
   for (const e of graph.edges) {
-    const list = outgoing.get(e.from) ?? []
-    list.push(e.to)
-    outgoing.set(e.from, list)
+    const outList = outgoing.get(e.from) ?? []
+    outList.push(e.to)
+    outgoing.set(e.from, outList)
+    const inList = incoming.get(e.to) ?? []
+    inList.push(e.from)
+    incoming.set(e.to, inList)
   }
+
+  // 1) En-uzun-yol katmanlama (topological relaxation, döngülere karşı korumalı).
   const depth = new Map<string, number>()
+  const seedIds = graph.nodes.filter((n) => n.kind === 'start').map((n) => n.id)
+  const indegree = new Map<string, number>()
+  for (const n of graph.nodes) indegree.set(n.id, 0)
+  for (const e of graph.edges) {
+    if (indegree.has(e.to)) indegree.set(e.to, (indegree.get(e.to) ?? 0) + 1)
+  }
   const queue: string[] = []
+  for (const id of seedIds) {
+    depth.set(id, 0)
+    queue.push(id)
+  }
   for (const n of graph.nodes) {
-    if (n.kind === 'start') {
+    if (!depth.has(n.id) && (indegree.get(n.id) ?? 0) === 0) {
       depth.set(n.id, 0)
       queue.push(n.id)
     }
@@ -206,25 +232,30 @@ export function layoutProcessFlow(graph: ProcessFlowGraph): ProcessFlowGraph & {
     depth.set(graph.nodes[0].id, 0)
     queue.push(graph.nodes[0].id)
   }
-  while (queue.length) {
+  const guardLimit = graph.nodes.length * 4 + 64
+  let guard = 0
+  while (queue.length && guard < guardLimit) {
+    guard += 1
     const id = queue.shift()!
     const d = depth.get(id) ?? 0
     for (const to of outgoing.get(id) ?? []) {
       const next = d + 1
       const prev = depth.get(to)
-      if (prev == null || next < prev) {
+      if (prev == null || next > prev) {
         depth.set(to, next)
         queue.push(to)
       }
     }
   }
+  const maxDepth = Math.max(0, ...[...depth.values()])
   let extra = 0
   for (const n of graph.nodes) {
     if (!depth.has(n.id)) {
-      depth.set(n.id, extra + 50)
+      depth.set(n.id, maxDepth + 1 + extra)
       extra += 1
     }
   }
+
   const layers = new Map<number, string[]>()
   for (const n of graph.nodes) {
     const d = depth.get(n.id) ?? 0
@@ -232,13 +263,39 @@ export function layoutProcessFlow(graph: ProcessFlowGraph): ProcessFlowGraph & {
     list.push(n.id)
     layers.set(d, list)
   }
-  const positions: Record<string, { x: number; y: number }> = {}
-  const colW = 240
-  const rowH = 92
-  for (const [d, ids] of [...layers.entries()].sort((a, b) => a[0] - b[0])) {
-    ids.forEach((id, i) => {
-      positions[id] = { x: 48 + d * colW, y: 48 + i * rowH }
+  const orderedLayers = [...layers.entries()].sort((a, b) => a[0] - b[0])
+
+  // 2) Barycenter satır sırası + ebeveyn ortalamasına ortalama.
+  const rowOf = new Map<string, number>()
+  orderedLayers.forEach(([, ids], layerIdx) => {
+    if (layerIdx === 0) {
+      ids.forEach((id, i) => rowOf.set(id, i))
+      return
+    }
+    const scored = ids.map((id) => {
+      const preds = incoming.get(id) ?? []
+      const rows = preds.map((p) => rowOf.get(p)).filter((r): r is number => r != null)
+      const bary = rows.length ? rows.reduce((a, b) => a + b, 0) / rows.length : 0
+      return { id, bary }
     })
+    scored.sort((a, b) => a.bary - b.bary)
+    scored.forEach((s, i) => rowOf.set(s.id, i))
+    const layerAvgRow = scored.reduce((a, s) => a + (rowOf.get(s.id) ?? 0), 0) / scored.length
+    const targetAvg = scored.reduce((a, s) => a + s.bary, 0) / scored.length
+    const shift = targetAvg - layerAvgRow
+    scored.forEach((s) => rowOf.set(s.id, (rowOf.get(s.id) ?? 0) + shift))
+  })
+
+  const allRows = [...rowOf.values()]
+  const minRow = allRows.length ? Math.min(...allRows) : 0
+  const colW = 260
+  const rowH = 100
+  const positions: Record<string, { x: number; y: number }> = {}
+  for (const [d, ids] of orderedLayers) {
+    for (const id of ids) {
+      const r = (rowOf.get(id) ?? 0) - minRow
+      positions[id] = { x: 48 + d * colW, y: 48 + r * rowH }
+    }
   }
   return { ...graph, positions }
 }

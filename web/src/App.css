@@ -3811,18 +3811,22 @@
 }
 
 .react-flow__edge.pf-edge-offpath .react-flow__edge-path {
-  opacity: 0.18;
+  opacity: 0.15;
+  stroke-width: 1.1px;
   transition: opacity 0.12s ease;
 }
 
 .react-flow__edge.pf-edge-onpath .react-flow__edge-path {
   stroke: #2f6fed;
-  stroke-width: 2.4;
+  stroke-width: 2.6;
   opacity: 1;
+  filter: drop-shadow(0 0 1px color-mix(in srgb, #2f6fed 35%, transparent));
 }
 
 /* Ok üzerindeki etiket: kaynağa (çıkış ucuna) yakın — aynı düğümden çıkan
- * birden çok ok, kesişme bölgesinde değil kendi kaynağının yanında okunsun */
+ * birden çok ok, kesişme bölgesinde değil kendi kaynağının yanında okunsun.
+ * Sönük durumda arka planı da kaldırıyoruz — sadece opaklık düşürmek,
+ * beyaz zemin üzerinde yeterince "sönük" görünmüyordu. */
 .pf-edge-label {
   padding: 1px 6px;
   border-radius: 5px;
@@ -3832,16 +3836,22 @@
   font-weight: 650;
   color: var(--muted);
   white-space: nowrap;
+  transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
 }
 
 .pf-edge-label.is-dim {
-  opacity: 0.22;
+  background: transparent;
+  border-color: transparent;
+  color: color-mix(in srgb, var(--muted) 55%, transparent);
+  opacity: 0.55;
 }
 
 .pf-edge-label.is-onpath {
-  background: #eaf0ff;
-  border-color: color-mix(in srgb, #2f6fed 45%, var(--line));
-  color: #1d3fa3;
+  background: #2f6fed;
+  border-color: #2f6fed;
+  color: #fff;
+  font-weight: 750;
+  box-shadow: 0 1px 4px color-mix(in srgb, #2f6fed 45%, transparent);
 }
 
 .pf-node-kind {

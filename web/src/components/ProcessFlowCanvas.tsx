@@ -11,7 +11,6 @@ import ReactFlow, {
   NodeResizer,
   Position,
   ReactFlowProvider,
-  getSmoothStepPath,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -110,6 +109,46 @@ type ProcessEdgeData = {
   active?: boolean
 }
 
+type Point = [number, number]
+
+/** Düğümler yeniden konumlandırılsa da esnek kalan kübik bezier: sabit
+ * dik-açı köşeleri yerine kaynak/hedef doğrultusuna göre uzayan bir kontrol
+ * kolu kullanır — Sugiyama tarzı yerleşimde dallanan/yakınsayan oklar iç içe
+ * geçmeden ayrı eğriler olarak görünür (servis haritasındaki mantık). */
+function bezierControlOffset(dx: number, dy: number) {
+  return Math.max(56, Math.abs(dx) * 0.42, Math.abs(dy) * 0.3)
+}
+
+function bezierControlPoint(x: number, y: number, position: Position, offset: number): Point {
+  switch (position) {
+    case Position.Left:
+      return [x - offset, y]
+    case Position.Right:
+      return [x + offset, y]
+    case Position.Top:
+      return [x, y - offset]
+    case Position.Bottom:
+      return [x, y + offset]
+    default:
+      return [x, y]
+  }
+}
+
+/** t parametresindeki noktayı AYNI eğri üzerinden hesaplar (kontrol
+ * noktalarını paylaşır) — bu yüzden etiket, düğüm sürüklendiğinde de tam
+ * olarak okun üzerinde kalır, doğrusal bir yaklaşıklık kaymaz. */
+function cubicBezierPoint(t: number, p0: Point, p1: Point, p2: Point, p3: Point): Point {
+  const mt = 1 - t
+  const a = mt * mt * mt
+  const b = 3 * mt * mt * t
+  const c = 3 * mt * t * t
+  const d = t * t * t
+  return [
+    a * p0[0] + b * p1[0] + c * p2[0] + d * p3[0],
+    a * p0[1] + b * p1[1] + c * p2[1] + d * p3[1],
+  ]
+}
+
 /** Etiketi kenarın orta noktası yerine çıkış ucuna yakın konumlandırır:
  * aynı düğümden çıkan “Onayla/Reddet” gibi birden çok ok, kesişme bölgesinde
  * değil kendi kaynağının yanında okunur. */
@@ -126,18 +165,13 @@ function ProcessEdge({
   label,
   data,
 }: EdgeProps<ProcessEdgeData>) {
-  const [edgePath] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-    borderRadius: 14,
-  })
-  const t = 0.22
-  const lx = sourceX + (targetX - sourceX) * t
-  const ly = sourceY + (targetY - sourceY) * t
+  const offset = bezierControlOffset(targetX - sourceX, targetY - sourceY)
+  const p0: Point = [sourceX, sourceY]
+  const p3: Point = [targetX, targetY]
+  const p1 = bezierControlPoint(sourceX, sourceY, sourcePosition, offset)
+  const p2 = bezierControlPoint(targetX, targetY, targetPosition, offset)
+  const edgePath = `M${p0[0]},${p0[1]} C${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]}`
+  const [lx, ly] = cubicBezierPoint(0.2, p0, p1, p2, p3)
   const stateClass = data?.active ? ' is-onpath' : data?.dim ? ' is-dim' : ''
   return (
     <>
@@ -633,16 +667,22 @@ function FlowInner({ graph }: Props) {
 
   const displayNodes = useMemo(() => {
     if (!pathHighlight) return nodes
-    return nodes.map((n) => {
+    const decorated = nodes.map((n) => {
       if (n.type === 'processNote') return n
       const active = pathHighlight.nodeIds.has(n.id)
       return { ...n, className: active ? 'pf-node-onpath' : 'pf-node-offpath' }
     })
+    const rest = decorated.filter((n) => n.className !== 'pf-node-onpath')
+    const active = decorated.filter((n) => n.className === 'pf-node-onpath')
+    return [...rest, ...active]
   }, [nodes, pathHighlight])
 
   const displayEdges = useMemo(() => {
     if (!pathHighlight) return edges
-    return edges.map((e) => {
+    // Aktif (vurgulanan) kenarları listenin SONUNA taşı: React Flow kenarları
+    // tek bir SVG içinde DOM sırasına göre çizer, z-index'in etkisi olmaz —
+    // bu yüzden üstte görünmesi gereken ok, dizide en son olmalı.
+    const decorated = edges.map((e) => {
       const active = pathHighlight.edgeIds.has(e.id)
       return {
         ...e,
@@ -654,6 +694,9 @@ function FlowInner({ graph }: Props) {
           : e.markerEnd,
       }
     })
+    const dimmed = decorated.filter((e) => !e.data.active)
+    const active = decorated.filter((e) => e.data.active)
+    return [...dimmed, ...active]
   }, [edges, pathHighlight])
 
   const selected = graph.nodes.find((n) => n.id === selectedId)
