@@ -197,50 +197,6 @@ function impactProcedureLabel(statement: DwhTableImpact['affectedTables'][number
   return proc || pkg || 'Prosedür bilgisi yok'
 }
 
-function ImpactSqlBlock({
-  sqlText,
-  simplifiedSql,
-}: {
-  sqlText?: string | null
-  simplifiedSql?: string | null
-}) {
-  const [view, setView] = useState<'summary' | 'full'>('full')
-  const hasSummary = Boolean(simplifiedSql)
-  const shownSql = hasSummary && view === 'summary' ? simplifiedSql : sqlText
-
-  useEffect(() => {
-    setView(hasSummary ? 'summary' : 'full')
-  }, [hasSummary, sqlText, simplifiedSql])
-
-  if (!sqlText) return <p className="dwh-empty-line">SQL metni yok.</p>
-  return (
-    <div className="dwh-impact-sql">
-      <div className="dwh-sql-view-head">
-        <h4>SQL</h4>
-        {hasSummary ? (
-          <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
-            <button
-              type="button"
-              className={view === 'summary' ? 'on' : undefined}
-              onClick={() => setView('summary')}
-            >
-              Sade
-            </button>
-            <button
-              type="button"
-              className={view === 'full' ? 'on' : undefined}
-              onClick={() => setView('full')}
-            >
-              Tam SQL
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <DwhSqlCode sql={shownSql || compactSql(shownSql)} />
-    </div>
-  )
-}
-
 function dmlClass(dmlType: string | null | undefined) {
   const normalized = dmlType?.toLowerCase() ?? ''
   if (normalized.includes('insert')) return 'is-insert'
@@ -382,9 +338,11 @@ function StatementTable({
 function SqlDetailPanel({
   statement,
   focusTable,
+  sourceTable,
 }: {
   statement?: DwhSqlStatement
   focusTable?: string
+  sourceTable?: string
 }) {
   const [view, setView] = useState<'summary' | 'full'>('full')
 
@@ -424,7 +382,7 @@ function SqlDetailPanel({
         </span>
         <span>
           <strong>Kaynak</strong>
-          {focusTable ?? '-'}
+          {sourceTable ?? focusTable ?? '-'}
         </span>
       </div>
 
@@ -506,10 +464,12 @@ function DwhSqlModalBackdrop({
 function StatementDetailModal({
   statement,
   focusTable,
+  sourceTable,
   onClose,
 }: {
   statement?: DwhSqlStatement
   focusTable?: string
+  sourceTable?: string
   onClose: () => void
 }) {
   return (
@@ -527,7 +487,7 @@ function StatementDetailModal({
                 Kapat
               </button>
             </header>
-            <SqlDetailPanel statement={statement} focusTable={focusTable} />
+            <SqlDetailPanel statement={statement} focusTable={focusTable} sourceTable={sourceTable} />
           </MotionModalPanel>
         </DwhSqlModalBackdrop>
       ) : null}
@@ -809,9 +769,11 @@ function ImpactPanel({
   loading: boolean
 }) {
   const [activeImpactTable, setActiveImpactTable] = useState<DwhImpactTable>()
+  const [activeImpactStatement, setActiveImpactStatement] = useState<DwhSqlStatement>()
 
   useEffect(() => {
     setActiveImpactTable(undefined)
+    setActiveImpactStatement(undefined)
   }, [detailKind, table?.tableId, impact])
 
   useEffect(() => {
@@ -861,6 +823,24 @@ function ImpactPanel({
 
   const activeTableName = activeImpactTable ? fullTableName(activeImpactTable) : ''
 
+  const openImpactStatement = (statement: DwhImpactTable['statements'][number]) => {
+    if (!activeImpactTable) return
+    setActiveImpactStatement({
+      id: statement.id,
+      statementId: statement.statementId,
+      packageName: statement.packageName,
+      procedureName: statement.procedureName,
+      dmlType: statement.dmlType ?? 'SQL',
+      lineNo: statement.lineNo,
+      sqlText: statement.sqlText,
+      simplifiedSql: statement.simplifiedSql,
+      targetTable: activeTableName,
+      role: 'writer',
+      relatedTable: statement.sourceTableName,
+      sources: statement.sourceTableName ? [statement.sourceTableName] : [],
+    })
+  }
+
   return (
     <div className="dwh-tab-content dwh-impact-content">
       <div className={`dwh-impact-workspace${activeImpactTable ? ' has-detail' : ''}`}>
@@ -886,7 +866,10 @@ function ImpactPanel({
                             key={`${affected.id}-${affected.level}`}
                             type="button"
                             className={`dwh-impact-table-row${selected ? ' is-selected' : ''}`}
-                            onClick={() => setActiveImpactTable(selected ? undefined : affected)}
+                            onClick={() => {
+                              setActiveImpactStatement(undefined)
+                              setActiveImpactTable(selected ? undefined : affected)
+                            }}
                             title={fullTableName(affected)}
                           >
                             <span className="dwh-kind-badge is-dwh-table" aria-hidden>T</span>
@@ -943,7 +926,10 @@ function ImpactPanel({
               <button
                 type="button"
                 className="dwh-impact-detail-close"
-                onClick={() => setActiveImpactTable(undefined)}
+                onClick={() => {
+                  setActiveImpactStatement(undefined)
+                  setActiveImpactTable(undefined)
+                }}
               >
                 Kapat
               </button>
@@ -951,21 +937,32 @@ function ImpactPanel({
 
             <div className="dwh-impact-statement-accordion">
               {activeImpactTable.statements.map((statement) => (
-                <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
-                  <summary>
+                <button
+                  key={`${activeImpactTable.id}-${statement.id}`}
+                  type="button"
+                  className="dwh-impact-statement-detail"
+                  onClick={() => openImpactStatement(statement)}
+                >
+                  <span className="dwh-impact-statement-summary">
                     <span>
                       <strong>{impactProcedureLabel(statement)}</strong>
                       <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
                     </span>
                     <DmlBadge dmlType={statement.dmlType} />
-                  </summary>
-                  <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
-                </details>
+                  </span>
+                  <span className="dwh-impact-statement-open">SQL göster</span>
+                </button>
               ))}
             </div>
           </article>
         ) : null}
       </div>
+      <StatementDetailModal
+        statement={activeImpactStatement}
+        focusTable={activeTableName}
+        sourceTable={activeImpactStatement?.relatedTable}
+        onClose={() => setActiveImpactStatement(undefined)}
+      />
     </div>
   )
 }

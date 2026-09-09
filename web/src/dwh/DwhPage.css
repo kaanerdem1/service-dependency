@@ -3858,82 +3858,6 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   gap: 8px;
 }
 
-.dwh-impact-statement-detail {
-  overflow: visible;
-  border: 1px solid #e2e5e8;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.dwh-impact-statement-detail summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 9px 10px;
-  background: #fbfcfd;
-  cursor: pointer;
-  list-style: none;
-}
-
-.dwh-impact-statement-detail summary::-webkit-details-marker {
-  display: none;
-}
-
-.dwh-impact-statement-detail summary > span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.dwh-impact-statement-detail summary strong,
-.dwh-impact-statement-detail summary small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dwh-impact-statement-detail summary strong {
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 850;
-}
-
-.dwh-impact-statement-detail summary small {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.dwh-impact-statement-detail[open] summary {
-  border-bottom: 1px solid #edf0f2;
-}
-
-.dwh-impact-sql {
-  margin: 0;
-  background: #fff;
-}
-
-.dwh-impact-sql .dwh-sql-view-head {
-  padding: 9px 10px 8px;
-}
-
-.dwh-impact-sql pre {
-  margin: 0;
-  overflow: visible;
-  padding: 10px;
-  border-top: 1px solid #edf0f2;
-  background: #f7f8f9;
-  color: #26312d;
-  font-size: 11.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .dwh-impact-report-main {
   display: flex;
   min-width: 0;
@@ -4012,6 +3936,55 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.dwh-impact-statement-detail {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid #e1e5e8;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dwh-impact-statement-detail:hover {
+  border-color: #a9c9ba;
+  box-shadow: 0 3px 10px rgba(37, 73, 57, 0.08);
+}
+
+.dwh-impact-statement-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 8px;
+}
+
+.dwh-impact-statement-summary > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dwh-impact-statement-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dwh-impact-statement-summary small {
+  color: var(--muted);
+}
+
+.dwh-impact-statement-open {
+  display: block;
+  padding: 0 14px 11px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 750;
 }
 
 .dwh-sql-code {
