@@ -3651,6 +3651,46 @@
   background: color-mix(in srgb, var(--accent) 8%, #fff);
 }
 
+.react-flow__node.pf-node-offpath {
+  opacity: 0.28;
+  transition: opacity 0.12s ease;
+}
+
+.react-flow__node.pf-node-onpath {
+  opacity: 1;
+  z-index: 2;
+}
+
+.react-flow__node.pf-node-onpath .pf-node {
+  border-color: color-mix(in srgb, #2f6fed 60%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 22%, transparent);
+}
+
+.react-flow__edge.pf-edge-offpath .react-flow__edge-path {
+  opacity: 0.18;
+  transition: opacity 0.12s ease;
+}
+
+.react-flow__edge.pf-edge-offpath .react-flow__edge-textbg,
+.react-flow__edge.pf-edge-offpath .react-flow__edge-text {
+  opacity: 0.18;
+}
+
+.react-flow__edge.pf-edge-onpath .react-flow__edge-path {
+  stroke: #2f6fed;
+  stroke-width: 2.4;
+  opacity: 1;
+}
+
+.react-flow__edge.pf-edge-onpath .react-flow__edge-text {
+  fill: #1d3fa3;
+  font-weight: 650;
+}
+
+.react-flow__edge.pf-edge-onpath .react-flow__edge-textbg {
+  fill: #eaf0ff;
+}
+
 .pf-node-kind {
   display: block;
   font-size: 10px;
@@ -3691,8 +3731,13 @@
 
 .pf-note {
   position: relative;
-  width: 168px;
-  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 140px;
+  min-height: 90px;
+  box-sizing: border-box;
   padding: 8px 22px 8px 8px;
   border-radius: 8px;
   background: #fff6c8;
@@ -3701,8 +3746,9 @@
 }
 
 .pf-note textarea {
+  flex: 1;
   width: 100%;
-  min-height: 72px;
+  min-height: 0;
   resize: none;
   border: 0;
   background: transparent;

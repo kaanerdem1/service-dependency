@@ -498,6 +498,21 @@ export function WorkflowsPanel({
   useEffect(() => {
     if (!open) return
     let cancelled = false
+    listPocProcesses()
+      .then((rows) => {
+        if (!cancelled) setPocProcesses(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setPocProcesses([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
     void listPocProcesses()
       .then((rows) => {
         if (!cancelled) setPocProcesses(rows)

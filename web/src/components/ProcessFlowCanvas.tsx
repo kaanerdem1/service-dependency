@@ -6,6 +6,7 @@ import ReactFlow, {
   Handle,
   MarkerType,
   MiniMap,
+  NodeResizer,
   Position,
   ReactFlowProvider,
   useEdgesState,
@@ -33,6 +34,7 @@ type NoteNodeData = {
   text: string
   onChange: (text: string) => void
   onRemove: () => void
+  onResizeEnd: () => void
 }
 
 const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
@@ -66,6 +68,14 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
 function NoteNode({ data, selected }: NodeProps<NoteNodeData>) {
   return (
     <div className={`pf-note${selected ? ' is-selected' : ''}`}>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={140}
+        minHeight={90}
+        color="#e3b341"
+        handleStyle={{ width: 9, height: 9, borderRadius: 2 }}
+        onResizeEnd={() => data.onResizeEnd()}
+      />
       <Handle type="target" position={Position.Top} />
       <textarea
         value={data.text}
@@ -87,7 +97,7 @@ const nodeTypes: NodeTypes = {
 }
 
 type UiState = {
-  notes: { id: string; text: string; x: number; y: number }[]
+  notes: { id: string; text: string; x: number; y: number; width?: number; height?: number }[]
   positions: Record<string, { x: number; y: number }>
 }
 
@@ -139,6 +149,58 @@ function outgoingMap(graph: ProcessFlowGraph) {
   return m
 }
 
+function incomingMap(graph: ProcessFlowGraph) {
+  const m = new Map<string, string[]>()
+  for (const e of graph.edges) {
+    const list = m.get(e.to) ?? []
+    if (!list.includes(e.from)) list.push(e.from)
+    m.set(e.to, list)
+  }
+  return m
+}
+
+/** Bir düğümden başlayıp geriye (atalar) ve ileriye (soyundan gelenler) doğru ulaşılan
+ * tüm düğüm/kenar kimliklerini toplar — sadece 1 komşuluk değil, bütün yol. */
+function fullPathFrom(
+  hoveredId: string,
+  childrenOf: Map<string, string[]>,
+  incomingOf: Map<string, string[]>,
+  edges: ProcessFlowGraph['edges'],
+) {
+  const ancestors = new Set<string>()
+  const stackA = [hoveredId]
+  while (stackA.length) {
+    const cur = stackA.pop()!
+    for (const p of incomingOf.get(cur) ?? []) {
+      if (p !== hoveredId && !ancestors.has(p)) {
+        ancestors.add(p)
+        stackA.push(p)
+      }
+    }
+  }
+  const descendants = new Set<string>()
+  const stackD = [hoveredId]
+  while (stackD.length) {
+    const cur = stackD.pop()!
+    for (const c of childrenOf.get(cur) ?? []) {
+      if (c !== hoveredId && !descendants.has(c)) {
+        descendants.add(c)
+        stackD.push(c)
+      }
+    }
+  }
+  const nodeIds = new Set<string>([hoveredId, ...ancestors, ...descendants])
+  const edgeIds = new Set<string>()
+  for (const e of edges) {
+    const fromLeadsIn = e.from === hoveredId || ancestors.has(e.from)
+    const toLeadsOut = e.to === hoveredId || descendants.has(e.to)
+    if ((fromLeadsIn && nodeIds.has(e.to)) || (toLeadsOut && nodeIds.has(e.from))) {
+      edgeIds.add(e.id)
+    }
+  }
+  return { nodeIds, edgeIds }
+}
+
 type Props = {
   graph: ProcessFlowGraph
 }
@@ -148,7 +210,14 @@ function FlowInner({ graph }: Props) {
   const [selectedId, setSelectedId] = useState<string>()
   const [expanded, setExpanded] = useState(false)
   const [revealed, setRevealed] = useState(() => seedRevealed(graph))
+  const [hoveredId, setHoveredId] = useState<string>()
   const childrenOf = useMemo(() => outgoingMap(graph), [graph])
+  const incomingOf = useMemo(() => incomingMap(graph), [graph])
+
+  const pathHighlight = useMemo(
+    () => (hoveredId ? fullPathFrom(hoveredId, childrenOf, incomingOf, graph.edges) : null),
+    [hoveredId, childrenOf, incomingOf, graph.edges],
+  )
 
   const hiddenChildCount = useCallback(
     (id: string) => (childrenOf.get(id) ?? []).filter((to) => !revealed.has(to)).length,
@@ -180,6 +249,8 @@ function FlowInner({ graph }: Props) {
             text: (n.data as NoteNodeData).text ?? '',
             x: n.position.x,
             y: n.position.y,
+            width: typeof n.width === 'number' ? n.width : undefined,
+            height: typeof n.height === 'number' ? n.height : undefined,
           })
         } else {
           positions[n.id] = n.position
@@ -213,7 +284,14 @@ function FlowInner({ graph }: Props) {
         id: note.id,
         type: 'processNote',
         position: { x: note.x, y: note.y },
-        data: { text: note.text, onChange: () => undefined, onRemove: () => undefined },
+        width: note.width,
+        height: note.height,
+        data: {
+          text: note.text,
+          onChange: () => undefined,
+          onRemove: () => undefined,
+          onResizeEnd: () => undefined,
+        },
         draggable: true,
       })
     }
@@ -223,7 +301,7 @@ function FlowInner({ graph }: Props) {
       target: e.to,
       label: e.label,
       hidden: !revealed.has(e.from) || !revealed.has(e.to),
-      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+      markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
     }))
     return { nodes, edges }
   }, [graph, revealed])
@@ -231,6 +309,13 @@ function FlowInner({ graph }: Props) {
   const initial = useMemo(() => buildBase(), [graph.no])
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initial.edges)
+
+  const persistCurrent = useCallback(() => {
+    setNodes((rows) => {
+      persistFromNodes(rows)
+      return rows
+    })
+  }, [persistFromNodes, setNodes])
 
   useEffect(() => {
     const seed = seedRevealed(graph)
@@ -260,7 +345,14 @@ function FlowInner({ graph }: Props) {
         id: note.id,
         type: 'processNote',
         position: { x: note.x, y: note.y },
-        data: { text: note.text, onChange: () => undefined, onRemove: () => undefined },
+        width: note.width,
+        height: note.height,
+        data: {
+          text: note.text,
+          onChange: () => undefined,
+          onRemove: () => undefined,
+          onResizeEnd: () => undefined,
+        },
         draggable: true,
       })
     }
@@ -272,7 +364,7 @@ function FlowInner({ graph }: Props) {
         target: e.to,
         label: e.label,
         hidden: !seed.has(e.from) || !seed.has(e.to),
-        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
       })),
     )
   }, [graph, setNodes, setEdges])
@@ -311,11 +403,12 @@ function FlowInner({ graph }: Props) {
                 return next
               })
             },
+            onResizeEnd: persistCurrent,
           },
         }
       }),
     )
-  }, [graph.no, persistFromNodes, setNodes])
+  }, [graph.no, persistFromNodes, persistCurrent, setNodes])
 
   useEffect(() => {
     if (!expanded) return
@@ -375,6 +468,8 @@ function FlowInner({ graph }: Props) {
             text: (n.data as NoteNodeData).text ?? '',
             x: n.position.x,
             y: n.position.y,
+            width: typeof n.width === 'number' ? n.width : undefined,
+            height: typeof n.height === 'number' ? n.height : undefined,
           })),
         positions: {},
       })
@@ -394,6 +489,8 @@ function FlowInner({ graph }: Props) {
           id,
           type: 'processNote',
           position: { x: 48, y: 48 },
+          width: 168,
+          height: 108,
           data: {
             text: '',
             onChange: (text: string) => {
@@ -412,6 +509,7 @@ function FlowInner({ graph }: Props) {
                 return mapped
               })
             },
+            onResizeEnd: persistCurrent,
           },
           draggable: true,
         },
@@ -424,6 +522,37 @@ function FlowInner({ graph }: Props) {
   const handleNodesChange = (changes: NodeChange[]) => {
     onNodesChange(changes)
   }
+
+  const handleNodeMouseEnter = (_e: unknown, node: Node) => {
+    if (node.type === 'processNote') return
+    setHoveredId(node.id)
+  }
+
+  const handleNodeMouseLeave = () => setHoveredId(undefined)
+
+  const displayNodes = useMemo(() => {
+    if (!pathHighlight) return nodes
+    return nodes.map((n) => {
+      if (n.type === 'processNote') return n
+      const active = pathHighlight.nodeIds.has(n.id)
+      return { ...n, className: active ? 'pf-node-onpath' : 'pf-node-offpath' }
+    })
+  }, [nodes, pathHighlight])
+
+  const displayEdges = useMemo(() => {
+    if (!pathHighlight) return edges
+    return edges.map((e) => {
+      const active = pathHighlight.edgeIds.has(e.id)
+      return {
+        ...e,
+        className: active ? 'pf-edge-onpath' : 'pf-edge-offpath',
+        zIndex: active ? 1 : 0,
+        markerEnd: active
+          ? { type: MarkerType.ArrowClosed, width: 20, height: 20, color: '#2f6fed' }
+          : e.markerEnd,
+      }
+    })
+  }, [edges, pathHighlight])
 
   const selected = graph.nodes.find((n) => n.id === selectedId)
   const collapsed = graph.nodes.length > COLLAPSE_AT && revealed.size < graph.nodes.length
@@ -487,8 +616,8 @@ function FlowInner({ graph }: Props) {
           ) : null}
         </div>
         <ReactFlow
-          nodes={nodes}
-          edges={edges}
+          nodes={displayNodes}
+          edges={displayEdges}
           nodeTypes={nodeTypes}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
@@ -498,9 +627,16 @@ function FlowInner({ graph }: Props) {
               return curr
             })
           }}
+          onNodeMouseEnter={handleNodeMouseEnter}
+          onNodeMouseLeave={handleNodeMouseLeave}
           nodesConnectable={false}
           minZoom={0.15}
           maxZoom={1.8}
+          defaultEdgeOptions={{
+            type: 'smoothstep',
+            pathOptions: { borderRadius: 14 },
+            style: { stroke: '#94a3b8', strokeWidth: 1.4 },
+          }}
           defaultViewport={{ x: 24, y: 24, zoom: 0.85 }}
           proOptions={{ hideAttribution: true }}
           onNodeClick={onNodeClick}
@@ -528,6 +664,10 @@ function FlowInner({ graph }: Props) {
             {collapsed
               ? '“+N adım” olan düğüme tıkla; yeni adımlar yerinde açılır, ekran kaymaz.'
               : 'Sürükle, zoom ve not ekle. XML’e yazılmaz.'}
+          </p>
+          <p className="pf-detail-hint">
+            Bir düğümün üzerine gel: baştan sona bütün yolu (tüm atalar ve tüm soyundan gelenler)
+            vurgular.
           </p>
         </aside>
       ) : null}
