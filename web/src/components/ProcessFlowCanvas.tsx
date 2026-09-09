@@ -23,7 +23,7 @@ import ReactFlow, {
   type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
+import type { ProcessDecisionInfo, ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 
 const COLLAPSE_AT = 8
 
@@ -32,6 +32,23 @@ type ProcessNodeData = {
   kind: ProcessFlowNodeKind
   services: string[]
   hiddenChildCount: number
+  decisionInfo?: ProcessDecisionInfo
+}
+
+/** XML'deki handler kriter alan adlarını okunur Türkçe etiketlere çevirir. */
+const CRITERIA_LABEL: Record<string, string> = {
+  organization: 'Organizasyon',
+  organizationType: 'Org. tipi',
+  organizationGroup: 'Org. grubu',
+  profile: 'Profil',
+  channelCode: 'Kanal',
+  unit: 'Birim',
+}
+
+function formatDecisionCriteria(criteria: Record<string, string>): string {
+  const entries = Object.entries(criteria)
+  if (!entries.length) return 'kriter yok (diğer / varsayılan)'
+  return entries.map(([k, v]) => `${CRITERIA_LABEL[k] ?? k}: ${v}`).join(' · ')
 }
 
 type NoteNodeData = {
@@ -71,6 +88,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
   }
 
   if (data.kind === 'decision') {
+    const rules = data.decisionInfo?.rules ?? []
     return (
       <div className={`pf-node pf-node-gateway is-decision${selected ? ' is-selected' : ''}`}>
         <Handle type="target" position={Position.Left} />
@@ -80,6 +98,22 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
           {badge}
         </div>
         <strong className="pf-gateway-label">{data.label}</strong>
+        {rules.length > 0 ? (
+          <div className="pf-decision-info" title="Karar kriterleri">
+            <span className="pf-decision-badge">i</span>
+            <div className="pf-decision-tooltip">
+              <div className="pf-decision-tooltip-title">
+                Hangi ok neden seçilir? (istek sahibinin bilgilerine göre)
+              </div>
+              {rules.map((r) => (
+                <div className="pf-decision-rule" key={r.transition}>
+                  <span className="pf-decision-rule-key">{r.transition}</span>
+                  <span className="pf-decision-rule-val">{formatDecisionCriteria(r.criteria)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <Handle type="source" position={Position.Right} />
       </div>
     )
@@ -111,6 +145,33 @@ type ProcessEdgeData = {
    * noktadan başladığı için etiketi kaynağa yakın koyarsak hepsi dip dibe
    * biner — bu yüzden karardan çıkanlarda etiket eğrinin ortasına konur. */
   sourceKind?: ProcessFlowNodeKind
+  /** Aynı kaynak→hedef çiftine sahip birden fazla geçiş varsa (örn. bir
+   * karardan aynı adıma giden iki farklı koşul kodu), bu okların ve
+   * etiketlerinin BİREBİR üst üste binmemesi için eğriler birbirinden
+   * ayrıştırılır (parallelIndex/parallelTotal). */
+  parallelIndex?: number
+  parallelTotal?: number
+}
+
+/** Aynı kaynak+hedef çiftini paylaşan geçişleri (örn. bir karardan aynı bir
+ * sonraki adıma giden birden çok koşul kodu) tespit eder — bunlar aksi halde
+ * tıpatıp aynı eğri/etiket konumuna denk gelip birbirini "kesiyormuş" gibi
+ * görünürdü. */
+function computeParallelEdgeInfo(
+  edges: { id: string; from: string; to: string }[],
+): Map<string, { index: number; total: number }> {
+  const groups = new Map<string, string[]>()
+  for (const e of edges) {
+    const key = `${e.from}→${e.to}`
+    const list = groups.get(key) ?? []
+    list.push(e.id)
+    groups.set(key, list)
+  }
+  const info = new Map<string, { index: number; total: number }>()
+  for (const ids of groups.values()) {
+    ids.forEach((id, index) => info.set(id, { index, total: ids.length }))
+  }
+  return info
 }
 
 type Point = [number, number]
@@ -197,8 +258,23 @@ function ProcessEdge({
   const offset = bezierControlOffset(targetX - sourceX, targetY - sourceY)
   const p0: Point = [sourceX, sourceY]
   const p3: Point = [targetX, targetY]
-  const p1 = bezierControlPoint(sourceX, sourceY, sourcePosition, offset)
-  const p2 = bezierControlPoint(targetX, targetY, targetPosition, offset)
+  let p1 = bezierControlPoint(sourceX, sourceY, sourcePosition, offset)
+  let p2 = bezierControlPoint(targetX, targetY, targetPosition, offset)
+  const total = data?.parallelTotal ?? 1
+  if (total > 1) {
+    // Aynı kaynak+hedefi paylaşan geçişler: kontrol noktalarını
+    // kaynak→hedef doğrultusuna dik yönde yelpaze gibi ayır ki eğriler
+    // (ve etiketleri) birebir üst üste binmesin.
+    const dx = targetX - sourceX
+    const dy = targetY - sourceY
+    const len = Math.hypot(dx, dy) || 1
+    const nx = -dy / len
+    const ny = dx / len
+    const index = data?.parallelIndex ?? 0
+    const fan = (index - (total - 1) / 2) * 30
+    p1 = [p1[0] + nx * fan, p1[1] + ny * fan]
+    p2 = [p2[0] + nx * fan, p2[1] + ny * fan]
+  }
   const edgePath = `M${p0[0]},${p0[1]} C${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]}`
   const t = data?.sourceKind === 'decision' ? 0.5 : 0.24
   const point = cubicBezierPoint(t, p0, p1, p2, p3)
@@ -383,6 +459,7 @@ function FlowInner({ graph }: Props) {
     for (const n of graph.nodes) map.set(n.id, n.kind)
     return map
   }, [graph])
+  const parallelInfoById = useMemo(() => computeParallelEdgeInfo(graph.edges), [graph])
 
   const pathHighlight = useMemo(
     () => (hoveredId ? fullPathFrom(hoveredId, childrenOf, incomingOf, graph.edges) : null),
@@ -445,6 +522,7 @@ function FlowInner({ graph }: Props) {
           kind: n.kind,
           services: n.services,
           hiddenChildCount: 0,
+          decisionInfo: n.decisionInfo,
         },
         draggable: true,
       }
@@ -472,11 +550,15 @@ function FlowInner({ graph }: Props) {
       label: e.label,
       type: 'processEdge',
       hidden: !revealed.has(e.from) || !revealed.has(e.to),
-      data: { sourceKind: nodeKindById.get(e.from) },
+      data: {
+        sourceKind: nodeKindById.get(e.from),
+        parallelIndex: parallelInfoById.get(e.id)?.index ?? 0,
+        parallelTotal: parallelInfoById.get(e.id)?.total ?? 1,
+      },
       markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
     }))
     return { nodes, edges }
-  }, [graph, revealed, nodeKindById])
+  }, [graph, revealed, nodeKindById, parallelInfoById])
 
   const initial = useMemo(() => buildBase(), [graph.no])
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes)
@@ -508,6 +590,7 @@ function FlowInner({ graph }: Props) {
           services: n.services,
           hiddenChildCount: (outgoingMap(graph).get(n.id) ?? []).filter((to) => !seed.has(to))
             .length,
+          decisionInfo: n.decisionInfo,
         },
         draggable: true,
       }
@@ -537,11 +620,15 @@ function FlowInner({ graph }: Props) {
         label: e.label,
         type: 'processEdge',
         hidden: !seed.has(e.from) || !seed.has(e.to),
-        data: { sourceKind: nodeKindById.get(e.from) },
+        data: {
+          sourceKind: nodeKindById.get(e.from),
+          parallelIndex: parallelInfoById.get(e.id)?.index ?? 0,
+          parallelTotal: parallelInfoById.get(e.id)?.total ?? 1,
+        },
         markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
       })),
     )
-  }, [graph, setNodes, setEdges, nodeKindById])
+  }, [graph, setNodes, setEdges, nodeKindById, parallelInfoById])
 
   useEffect(() => {
     setNodes((curr) => applyVisibility(curr))

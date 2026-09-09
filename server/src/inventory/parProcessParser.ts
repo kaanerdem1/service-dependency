@@ -6,11 +6,31 @@ export type ProcessFlowNodeKind =
   | 'service'
   | 'other'
 
+/** Bir karar (decision) düğümünün handler'ı, hangi kriter (organizasyon,
+ * profil, kanal...) hangi geçişe (transition) eşleniyor bilgisini taşır —
+ * XML'deki <handler>/<makers>/<maker> bloklarından çıkarılır. Amaç: BPM
+ * sürecindeki "KBPFYET", "TRMBP" gibi kodların NEYE göre seçildiğini UI'da
+ * gösterebilmek (bkz. ProcessFlowCanvas karar düğümü ipucu). */
+export type ProcessDecisionRule = {
+  /** Geçişin adı — ProcessFlowEdge.label ile eşleşir (örn. "KBPFYET"). */
+  transition: string
+  /** Boş olmayan kriter alanları, örn. { organization: '794', profile: '384' }. */
+  criteria: Record<string, string>
+}
+
+export type ProcessDecisionInfo = {
+  /** jBPM handler sınıfı (örn. tr.com.cs.foja.bpm.core.decision.MakerDecisionHandler). */
+  handlerClass?: string
+  rules: ProcessDecisionRule[]
+}
+
 export type ProcessFlowNode = {
   id: string
   name: string
   kind: ProcessFlowNodeKind
   services: string[]
+  /** Sadece kind === 'decision' için: XML handler'ından çıkarılan kural seti. */
+  decisionInfo?: ProcessDecisionInfo
 }
 
 export type ProcessFlowEdge = {
@@ -128,6 +148,42 @@ function extractTransitions(inner: string, open: string): { name?: string; to: s
   return rows
 }
 
+/** Karar (decision) düğümünün <handler class="..."> bloğunu okur. Çoğu BPM
+ * karar handler'ı (örn. MakerDecisionHandler) tekrarlayan "kayıt" blokları
+ * kullanır (<maker>...<transitionRef>X</transitionRef></maker>) — hangi
+ * geçişin hangi kriterle seçildiğini generic biçimde çıkarır: aynı adı
+ * tekrar eden, öznitesiz (attribute'suz) her `<tag>...</tag>` bloğunu bir
+ * "kayıt" say, içinde transitionRef/transition/ref/outcome benzeri bir alan
+ * varsa onu geçiş adı, diğer boş olmayan yaprakları kriter olarak al. */
+function extractDecisionInfo(inner: string): ProcessDecisionInfo | undefined {
+  const handlerMatch = inner.match(/<handler\s+class\s*=\s*"([^"]+)"/i)
+  if (!handlerMatch) return undefined
+  const handlerClass = decode(handlerMatch[1])
+  const rules: ProcessDecisionRule[] = []
+  const refFieldRe = /^(transitionRef|transition-ref|outcome|ref)$/i
+  const blockRe = /<(\w+)>((?:(?!<\/?\1\b)[\s\S])*?)<\/\1>/g
+  let m: RegExpExecArray | null
+  while ((m = blockRe.exec(inner))) {
+    const body = m[2]
+    const refMatch = body.match(/<(transitionRef|transition-ref|outcome|ref)>([^<]*)<\/\1>/i)
+    if (!refMatch) continue
+    const transition = decode(refMatch[2]).trim()
+    if (!transition) continue
+    const criteria: Record<string, string> = {}
+    const leafRe = /<(\w+)>([^<]*)<\/\1>/g
+    let lm: RegExpExecArray | null
+    while ((lm = leafRe.exec(body))) {
+      const key = lm[1]
+      if (refFieldRe.test(key)) continue
+      const value = decode(lm[2]).trim()
+      if (!value) continue
+      criteria[key] = value
+    }
+    rules.push({ transition, criteria })
+  }
+  return { handlerClass, rules }
+}
+
 function extractServices(inner: string): string[] {
   const names: string[] = []
   const re = /service-name\s*=\s*"([^"]+)"/gi
@@ -154,11 +210,13 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
     const id = decode(name)
     if (seen.has(id)) continue
     seen.add(id)
+    const kind = kindFromTag(child.tag, child.inner)
     nodes.push({
       id,
       name: id,
-      kind: kindFromTag(child.tag, child.inner),
+      kind,
       services: extractServices(child.inner),
+      decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
       edges.push({

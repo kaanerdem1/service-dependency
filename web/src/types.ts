@@ -370,6 +370,18 @@ export type ProcessFlowNodeKind =
   | 'service'
   | 'other'
 
+/** Bir karar (decision) düğümünün handler'ından çıkarılan kural seti — hangi
+ * kriter (organizasyon/profil/kanal...) hangi geçişi tetikliyor. */
+export type ProcessDecisionRule = {
+  transition: string
+  criteria: Record<string, string>
+}
+
+export type ProcessDecisionInfo = {
+  handlerClass?: string
+  rules: ProcessDecisionRule[]
+}
+
 export type ProcessFlowGraph = {
   no: string
   oid: string
@@ -379,6 +391,7 @@ export type ProcessFlowGraph = {
     name: string
     kind: ProcessFlowNodeKind
     services: string[]
+    decisionInfo?: ProcessDecisionInfo
   }[]
   edges: { id: string; from: string; to: string; label?: string }[]
   positions: Record<string, { x: number; y: number }>

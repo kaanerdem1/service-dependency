@@ -3787,6 +3787,85 @@
   right: -22px;
 }
 
+/* Karar (gateway) düğümündeki "i" ipucu: hangi ok NEDEN seçiliyor (istek
+ * sahibinin organizasyon/profil bilgisine göre) — XML handler'ından
+ * çıkarılan kurallar, hover ile okunabilir bir liste olarak gösterilir. */
+.pf-decision-info {
+  position: relative;
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 22%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--line));
+  color: color-mix(in srgb, var(--accent) 75%, var(--ink));
+  font-size: 10px;
+  font-weight: 800;
+  font-style: italic;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: help;
+  pointer-events: auto;
+}
+
+.pf-decision-badge {
+  pointer-events: none;
+}
+
+.pf-decision-tooltip {
+  display: none;
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  width: 260px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #f1f5f9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  text-align: left;
+  cursor: auto;
+}
+
+.pf-decision-info:hover .pf-decision-tooltip,
+.pf-decision-info:focus-within .pf-decision-tooltip {
+  display: block;
+}
+
+.pf-decision-tooltip-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #cbd5e1;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.pf-decision-rule {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 10.5px;
+}
+
+.pf-decision-rule:first-of-type {
+  border-top: none;
+}
+
+.pf-decision-rule-key {
+  font-weight: 750;
+  color: #93c5fd;
+}
+
+.pf-decision-rule-val {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
 .react-flow__node.pf-node-offpath {
   opacity: 0.28;
   transition: opacity 0.12s ease;
