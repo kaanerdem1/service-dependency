@@ -3288,6 +3288,158 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font-size: 12px;
 }
 
+.dwh-col-ancestry-matrix {
+  min-width: max-content;
+}
+
+.dwh-col-ancestry-matrix th,
+.dwh-col-ancestry-matrix td {
+  min-width: 240px;
+}
+
+.dwh-col-ancestry-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.dwh-col-ancestry-cell strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.dwh-col-ancestry-cell small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dwh-col-ancestry-cell-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dwh-col-ancestry-cell-wrap .dwh-col-ancestry-cell {
+  min-width: 0;
+}
+
+.dwh-col-ancestry-cell-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dwh-col-ancestry-toggle-spacer {
+  display: block;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+.dwh-col-ancestry-chevron {
+  display: block;
+  font-size: 18px;
+  line-height: 20px;
+  transition: transform 140ms ease;
+}
+
+.dwh-col-ancestry-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.dwh-col-ancestry-cell-toggle:hover,
+.dwh-col-ancestry-cell-toggle:focus-visible {
+  border: 0;
+  background: #f1f7f4;
+  color: var(--ink);
+  outline: 0;
+}
+
+.dwh-col-ancestry-cell:hover,
+.dwh-col-ancestry-cell:focus-visible {
+  color: var(--ink);
+  outline: 0;
+}
+
+.dwh-col-ancestry-cell:hover strong,
+.dwh-col-ancestry-cell:focus-visible strong {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Keep the matrix dense like the service relationship table. */
+.dwh-col-ancestry-cell-toggle + .dwh-col-ancestry-cell {
+  width: calc(100% - 26px);
+}
+
+/* The target has no branch control, but its text keeps the same rhythm. */
+.dwh-col-ancestry-cell-wrap > .dwh-col-ancestry-toggle-spacer + .dwh-col-ancestry-cell {
+  width: calc(100% - 26px);
+}
+
+.dwh-col-ancestry-cell-toggle:disabled {
+  cursor: default;
+}
+
+.dwh-col-ancestry-cell-toggle[aria-expanded='true'] {
+  color: var(--ink);
+}
+
+.dwh-col-ancestry-cell-toggle[aria-expanded='false'] {
+  color: var(--muted);
+}
+
+.dwh-col-ancestry-cell-toggle::after {
+  content: none;
+}
+
+.dwh-col-ancestry-empty-cell {
+  display: block;
+  padding: 8px 10px;
+  color: #a1a9ad;
+  text-align: center;
+}
+
+.dwh-col-ancestry-empty-cell.is-continuation {
+  color: transparent;
+}
+
+.dwh-col-ancestry-empty-cell.is-missing {
+  color: var(--muted);
+}
+
 .dwh-col-ancestry-table th,
 .dwh-col-ancestry-table td {
   padding: 8px 10px;
@@ -3309,6 +3461,10 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-col-ancestry-table tr:last-child td {
   border-bottom: 0;
+}
+
+.dwh-col-ancestry-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
 .dwh-col-ancestry-table tr.is-original td {
