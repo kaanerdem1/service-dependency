@@ -355,6 +355,35 @@ export type ServiceProcessLink = {
   descriptionTr: string | null
 }
 
+export type ProcessCatalogItem = {
+  oid: string
+  no: string
+  name: string | null
+  descriptionTr: string | null
+}
+
+export type ProcessFlowNodeKind =
+  | 'start'
+  | 'end'
+  | 'task'
+  | 'decision'
+  | 'service'
+  | 'other'
+
+export type ProcessFlowGraph = {
+  no: string
+  oid: string
+  label: string | null
+  nodes: {
+    id: string
+    name: string
+    kind: ProcessFlowNodeKind
+    services: string[]
+  }[]
+  edges: { id: string; from: string; to: string; label?: string }[]
+  positions: Record<string, { x: number; y: number }>
+}
+
 export type ModuleChildrenResult = {
   items: ModuleNode[]
   total: number

@@ -25,6 +25,8 @@ import type {
   ServiceCatalogContext,
   ServiceScreenLink,
   ServiceProcessLink,
+  ProcessCatalogItem,
+  ProcessFlowGraph,
   Snapshot,
   SnapshotClientPayload,
 } from '../types'
@@ -107,6 +109,14 @@ export function getServiceProcesses(serviceId: string) {
   return request<ServiceProcessLink[]>(
     `/services/${encodeURIComponent(serviceId)}/processes`,
   )
+}
+
+export function listPocProcesses() {
+  return request<ProcessCatalogItem[]>('/processes')
+}
+
+export function getProcessFlow(no: string) {
+  return request<ProcessFlowGraph>(`/processes/${encodeURIComponent(no)}/flow`)
 }
 
 export function getServiceTreePath(serviceId: string) {

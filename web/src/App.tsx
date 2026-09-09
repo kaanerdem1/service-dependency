@@ -63,6 +63,7 @@ import { TreeKindIcon } from './components/TreeKindIcon'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
+import { ProcessFlowPage } from './components/ProcessFlowPage'
 import { FavoriteStarButton } from './components/FavoriteStarButton'
 import { ServiceWorkflowChip } from './components/ServiceWorkflowChip'
 import { CatalogHelp } from './components/CatalogHelp'
@@ -316,6 +317,7 @@ export default function App() {
   const [workflowsOpen, setWorkflowsOpen] = useState(false)
   const [workflowInfoId, setWorkflowInfoId] = useState<string>()
   const [workflowResumeId, setWorkflowResumeId] = useState<string>()
+  const [processFlowNo, setProcessFlowNo] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
@@ -326,6 +328,7 @@ export default function App() {
       setWorkflowsOpen(false)
       setWorkflowInfoId(undefined)
       setWorkflowResumeId(undefined)
+      setProcessFlowNo(undefined)
     }
   }, [surface])
 
@@ -619,6 +622,7 @@ export default function App() {
     setNavHover(true)
     setWorkflowInfoId(undefined)
     setWorkflowResumeId(undefined)
+    setProcessFlowNo(undefined)
   }, [])
 
   const returnToWorkflow = useCallback(() => {
@@ -653,8 +657,17 @@ export default function App() {
   }, [clearSelection, returnToWorkflow, workflowResumeId])
 
   const openWorkflowFolder = useCallback((id: string) => {
+    setProcessFlowNo(undefined)
     setWorkflowResumeId(id)
     setWorkflowInfoId(id)
+  }, [])
+
+  const openProcessFlow = useCallback((no: string) => {
+    setWorkflowInfoId(undefined)
+    setWorkflowResumeId(undefined)
+    setPivotId(undefined)
+    setCatalogNode(null)
+    setProcessFlowNo(no)
   }, [])
 
   const selectCatalogNode = useCallback(
@@ -680,6 +693,7 @@ export default function App() {
       setCatalogNode({ id: node.id, kind: node.kind, name: node.name })
       setWorkflowInfoId(undefined)
       setWorkflowResumeId(undefined)
+      setProcessFlowNo(undefined)
       setAllowNavCollapse(true)
     },
     [catalogNode?.id, pivotId, clearSelection, trail],
@@ -692,6 +706,7 @@ export default function App() {
     ) => {
       setCatalogNode(null)
       setWorkflowInfoId(undefined)
+      setProcessFlowNo(undefined)
       if (opts?.source !== 'workflow') setWorkflowResumeId(undefined)
       setTreePinServiceId(
         opts?.source === 'search' || opts?.source === 'table' ? id : undefined,
@@ -847,8 +862,8 @@ export default function App() {
     historyIndex >= 0 && historyIndex < history.length
       ? history[historyIndex]
       : undefined
-  const hasSelection = !!pivotId || !!catalogNode || !!workflowInfoId
-  const hasServiceSelection = !!pivotId && !workflowInfoId
+  const hasSelection = !!pivotId || !!catalogNode || !!workflowInfoId || !!processFlowNo
+  const hasServiceSelection = !!pivotId && !workflowInfoId && !processFlowNo
 
   const serviceNameById = useMemo(() => {
     const m = new Map(catalogServices.map((s) => [s.id, s.name]))
@@ -1259,7 +1274,9 @@ export default function App() {
               selectPivot(id, { resetHistory: true, source: 'tree' })
             }}
             onOpenFolder={openWorkflowFolder}
+            onOpenProcess={openProcessFlow}
             infoFolderId={workflowInfoId}
+            processFlowNo={processFlowNo}
             canEdit={canEditCatalog}
           />
           </div>
@@ -1275,12 +1292,21 @@ export default function App() {
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId ? ' main-catalog-entity main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
+          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId || processFlowNo ? ' main-catalog-entity main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
           {!hasSelection && <WelcomeScreen />}
 
-          {workflowInfoId ? (
+          {processFlowNo ? (
+            <div className="stage-body wf-info-stage">
+              <ProcessFlowPage
+                processNo={processFlowNo}
+                onDismiss={() => setProcessFlowNo(undefined)}
+              />
+            </div>
+          ) : null}
+
+          {workflowInfoId && !processFlowNo ? (
             <div className="stage-body wf-info-stage">
               <WorkflowInfoPage
                 folderId={workflowInfoId}
@@ -1297,7 +1323,7 @@ export default function App() {
             </div>
           ) : null}
 
-          {catalogNode && !pivotId && !workflowInfoId ? (
+          {catalogNode && !pivotId && !workflowInfoId && !processFlowNo ? (
             <div className="stage-body">
               <CatalogEntityOverview
                 nodeId={catalogNode.id}

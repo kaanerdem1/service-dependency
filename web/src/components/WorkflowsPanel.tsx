@@ -7,7 +7,7 @@ import {
   type DragEvent as ReactDragEvent,
   type ReactNode,
 } from 'react'
-import { searchServices } from '../api/client'
+import { searchServices, listPocProcesses } from '../api/client'
 import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
 import { TreeKindIcon } from './TreeKindIcon'
 import { GitBranchIcon, WorkflowFolderGlyph } from './WorkflowIcons'
@@ -37,7 +37,7 @@ import {
   type WorkflowFolderIcon,
   type WorkflowsStore,
 } from '../workflowStore'
-import type { Service } from '../types'
+import type { ProcessCatalogItem, Service } from '../types'
 
 type Props = {
   open: boolean
@@ -49,7 +49,9 @@ type Props = {
   onClose: () => void
   onSelectService: (serviceId: string) => void
   onOpenFolder: (folderId: string) => void
+  onOpenProcess: (processNo: string) => void
   infoFolderId?: string
+  processFlowNo?: string
   canEdit?: boolean
 }
 
@@ -464,7 +466,9 @@ export function WorkflowsPanel({
   onClose,
   onSelectService,
   onOpenFolder,
+  onOpenProcess,
   infoFolderId,
+  processFlowNo,
   canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
@@ -474,6 +478,7 @@ export function WorkflowsPanel({
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
   const [searching, setSearching] = useState(false)
+  const [pocProcesses, setPocProcesses] = useState<ProcessCatalogItem[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
 
@@ -488,6 +493,21 @@ export function WorkflowsPanel({
     setStore(data)
     const t = window.setTimeout(() => searchRef.current?.focus(), 180)
     return () => window.clearTimeout(t)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    void listPocProcesses()
+      .then((rows) => {
+        if (!cancelled) setPocProcesses(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setPocProcesses([])
+      })
+    return () => {
+      cancelled = true
+    }
   }, [open])
 
   useEffect(() => {
@@ -718,6 +738,33 @@ export function WorkflowsPanel({
         )}
 
         <div className="shortcuts-drawer-body">
+          <div className="sc-process-block">
+            <div className="sc-section-label">Süreçler</div>
+            <p className="sc-process-hint">
+              BPM süreçleri — tıklayınca sağda akış açılır (deneme: 2 kayıt).
+            </p>
+            {pocProcesses.length === 0 ? (
+              <p className="sc-process-hint">Liste yüklenemedi veya boş.</p>
+            ) : (
+              <ul className="sc-process-list">
+                {pocProcesses.map((p) => (
+                  <li key={p.no}>
+                    <button
+                      type="button"
+                      className={`sc-process-item${processFlowNo === p.no ? ' is-active' : ''}`}
+                      onClick={() => onOpenProcess(p.no)}
+                    >
+                      <span className="sc-process-item-no">{p.no}</span>
+                      <span className="sc-process-item-name">
+                        {p.descriptionTr || p.name || p.no}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           {store.steps.length === 0 && store.folders.length === 0 ? (
             <p className="shortcuts-panel-empty">
               {canEdit

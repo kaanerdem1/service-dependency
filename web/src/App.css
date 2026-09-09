@@ -1573,6 +1573,64 @@
   color: var(--shell-sidebar-muted, var(--muted));
 }
 
+.sc-process-block {
+  margin: 0 0 14px;
+  padding: 0 4px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+
+.sc-process-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.sc-process-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sc-process-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, #fff 70%, var(--surface));
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sc-process-item:hover,
+.sc-process-item.is-active {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+
+.sc-process-item-no {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.sc-process-item-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
 .sc-drop-zone {
   border-radius: 9px;
   transition: background 0.12s ease, box-shadow 0.12s ease;
@@ -3499,6 +3557,211 @@
 
 .main.main-catalog-entity .stage-body.wf-info-stage {
   padding: 20px 24px 32px;
+}
+
+.pf-page {
+  display: flex;
+  flex-direction: column;
+  min-height: min(72vh, 820px);
+  gap: 12px;
+}
+
+.pf-shell {
+  display: flex;
+  gap: 12px;
+  min-height: 560px;
+  flex: 1;
+}
+
+.pf-canvas-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 560px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #f7f8fa;
+}
+
+.pf-canvas-wrap.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+  border: 0;
+}
+
+.pf-canvas-wrap .react-flow {
+  width: 100%;
+  height: 100%;
+}
+
+.pf-canvas-tools {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-add-note {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pf-node {
+  min-width: 168px;
+  max-width: 220px;
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent);
+}
+
+.pf-node.is-selected {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.pf-node.is-start {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+
+.pf-node.is-end {
+  background: color-mix(in srgb, var(--ink) 4%, #fff);
+}
+
+.pf-node.is-decision {
+  background: color-mix(in srgb, #e3b341 12%, #fff);
+}
+
+.pf-node.is-service {
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+
+.pf-node-kind {
+  display: block;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-node-title {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.pf-node-svc {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-node-more {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, #fff);
+  color: #2f5d4a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pf-note {
+  position: relative;
+  width: 168px;
+  min-height: 88px;
+  padding: 8px 22px 8px 8px;
+  border-radius: 8px;
+  background: #fff6c8;
+  border: 1px solid color-mix(in srgb, #e3b341 45%, #ccc);
+  box-shadow: 1px 2px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.pf-note textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.pf-note-x {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.pf-detail {
+  flex: 0 0 220px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  background: #fff;
+}
+
+.pf-detail-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-detail-title {
+  margin: 4px 0 10px;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.pf-detail-svcs {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pf-detail-empty,
+.pf-detail-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pf-detail-hint {
+  margin-top: 12px;
 }
 
 .catalog-stage-top {
