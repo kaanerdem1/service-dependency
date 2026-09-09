@@ -107,6 +107,10 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
 type ProcessEdgeData = {
   dim?: boolean
   active?: boolean
+  /** Kaynak düğümün türü: karar (gateway) düğümünden çıkan oklar aynı
+   * noktadan başladığı için etiketi kaynağa yakın koyarsak hepsi dip dibe
+   * biner — bu yüzden karardan çıkanlarda etiket eğrinin ortasına konur. */
+  sourceKind?: ProcessFlowNodeKind
 }
 
 type Point = [number, number]
@@ -149,9 +153,34 @@ function cubicBezierPoint(t: number, p0: Point, p1: Point, p2: Point, p3: Point)
   ]
 }
 
-/** Etiketi kenarın orta noktası yerine çıkış ucuna yakın konumlandırır:
- * aynı düğümden çıkan “Onayla/Reddet” gibi birden çok ok, kesişme bölgesinde
- * değil kendi kaynağının yanında okunur. */
+/** t noktasındaki teğet (hız) vektörü — etiketi eğrinin normali boyunca
+ * kaydırıp okun üstüne bindirmeden hemen üzerine koymak için kullanılır. */
+function cubicBezierTangent(t: number, p0: Point, p1: Point, p2: Point, p3: Point): Point {
+  const mt = 1 - t
+  const a = 3 * mt * mt
+  const b = 6 * mt * t
+  const c = 3 * t * t
+  return [
+    a * (p1[0] - p0[0]) + b * (p2[0] - p1[0]) + c * (p3[0] - p2[0]),
+    a * (p1[1] - p0[1]) + b * (p2[1] - p1[1]) + c * (p3[1] - p2[1]),
+  ]
+}
+
+/** Etiket noktasını, eğrinin teğetine dik yönde biraz kaldırır — böylece ok
+ * çizgisi yazının tam ortasından geçmez, etiket okun hemen üstünde durur. */
+function liftAboveCurve([x, y]: Point, [tx, ty]: Point, distance: number): Point {
+  const len = Math.hypot(tx, ty) || 1
+  const nx = -ty / len
+  const ny = tx / len
+  const sign = ny > 0 ? -1 : 1
+  return [x + nx * distance * sign, y + ny * distance * sign]
+}
+
+/** Etiketi karar (gateway) düğümünden çıkan oklarda eğrinin ORTASINA,
+ * diğerlerinde ise çıkış ucuna yakın konumlandırır: aynı düğümden çıkan
+ * “Onayla/Reddet” gibi birden çok ok kesişme bölgesinde değil kendi
+ * kaynağının yanında okunur; karardan çıkan oklar ise aynı noktadan
+ * başladığı için dip dibe binmesin diye eğri ayrışırken ortalanır. */
 function ProcessEdge({
   id,
   sourceX,
@@ -171,7 +200,10 @@ function ProcessEdge({
   const p1 = bezierControlPoint(sourceX, sourceY, sourcePosition, offset)
   const p2 = bezierControlPoint(targetX, targetY, targetPosition, offset)
   const edgePath = `M${p0[0]},${p0[1]} C${p1[0]},${p1[1]} ${p2[0]},${p2[1]} ${p3[0]},${p3[1]}`
-  const [lx, ly] = cubicBezierPoint(0.2, p0, p1, p2, p3)
+  const t = data?.sourceKind === 'decision' ? 0.5 : 0.24
+  const point = cubicBezierPoint(t, p0, p1, p2, p3)
+  const tangent = cubicBezierTangent(t, p0, p1, p2, p3)
+  const [lx, ly] = liftAboveCurve(point, tangent, 11)
   const stateClass = data?.active ? ' is-onpath' : data?.dim ? ' is-dim' : ''
   return (
     <>
@@ -346,6 +378,11 @@ function FlowInner({ graph }: Props) {
   const [hoveredId, setHoveredId] = useState<string>()
   const childrenOf = useMemo(() => outgoingMap(graph), [graph])
   const incomingOf = useMemo(() => incomingMap(graph), [graph])
+  const nodeKindById = useMemo(() => {
+    const map = new Map<string, ProcessFlowNodeKind>()
+    for (const n of graph.nodes) map.set(n.id, n.kind)
+    return map
+  }, [graph])
 
   const pathHighlight = useMemo(
     () => (hoveredId ? fullPathFrom(hoveredId, childrenOf, incomingOf, graph.edges) : null),
@@ -435,10 +472,11 @@ function FlowInner({ graph }: Props) {
       label: e.label,
       type: 'processEdge',
       hidden: !revealed.has(e.from) || !revealed.has(e.to),
+      data: { sourceKind: nodeKindById.get(e.from) },
       markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
     }))
     return { nodes, edges }
-  }, [graph, revealed])
+  }, [graph, revealed, nodeKindById])
 
   const initial = useMemo(() => buildBase(), [graph.no])
   const [nodes, setNodes, onNodesChange] = useNodesState(initial.nodes)
@@ -499,10 +537,11 @@ function FlowInner({ graph }: Props) {
         label: e.label,
         type: 'processEdge',
         hidden: !seed.has(e.from) || !seed.has(e.to),
+        data: { sourceKind: nodeKindById.get(e.from) },
         markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
       })),
     )
-  }, [graph, setNodes, setEdges])
+  }, [graph, setNodes, setEdges, nodeKindById])
 
   useEffect(() => {
     setNodes((curr) => applyVisibility(curr))
@@ -688,7 +727,7 @@ function FlowInner({ graph }: Props) {
         ...e,
         className: active ? 'pf-edge-onpath' : 'pf-edge-offpath',
         zIndex: active ? 1 : 0,
-        data: { active, dim: !active },
+        data: { ...e.data, active, dim: !active },
         markerEnd: active
           ? { type: MarkerType.ArrowClosed, width: 20, height: 20, color: '#2f6fed' }
           : e.markerEnd,
