@@ -5,7 +5,6 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Handle,
-  MarkerType,
   Position,
   type Edge,
   type EdgeProps,
@@ -190,11 +189,11 @@ function ColumnLineageNode({ data }: NodeProps<ColumnNodeData>) {
       className={`dwh-col-flow-node is-${data.kind}${data.confidence === 'TAHMIN' ? ' is-estimated' : ''}${data.statementRefs?.length ? ' has-sql' : ''}`}
       title={data.statementRefs?.length ? 'SQL detayını aç' : undefined}
     >
-      <Handle type="target" position={Position.Left} className="dwh-col-flow-handle" />
+      <Handle type="target" position={Position.Right} className="dwh-col-flow-handle" />
       <span className="dwh-col-flow-kicker">{label}</span>
       <strong title={data.label}>{data.label}</strong>
       <small title={data.sub}>{data.sub}</small>
-      <Handle type="source" position={Position.Right} className="dwh-col-flow-handle" />
+      <Handle type="source" position={Position.Left} className="dwh-col-flow-handle" />
     </div>
   )
 }
@@ -209,7 +208,6 @@ function ColumnLineageFanEdge({
   targetX,
   targetY,
   style,
-  markerEnd,
   data,
 }: EdgeProps<ColumnEdgeData>) {
   const fanIndex = data?.fanIndex ?? 0
@@ -217,16 +215,30 @@ function ColumnLineageFanEdge({
   const mid = (fanCount - 1) / 2
   const spread = Math.max(-76, Math.min(76, (fanIndex - mid) * 14))
   const dx = Math.max(120, Math.abs(targetX - sourceX) * 0.42)
-  const path = `M ${sourceX},${sourceY} C ${sourceX + dx},${sourceY + spread} ${targetX - dx},${targetY + spread} ${targetX},${targetY}`
+  const direction = targetX >= sourceX ? 1 : -1
+  const path = `M ${sourceX},${sourceY} C ${sourceX + direction * dx},${sourceY + spread} ${targetX - direction * dx},${targetY + spread} ${targetX},${targetY}`
+  const tangentX = direction * dx
+  const tangentY = -spread
+  const tangentLength = Math.max(1, Math.hypot(tangentX, tangentY))
+  const ux = tangentX / tangentLength
+  const uy = tangentY / tangentLength
+  const arrowLength = 11
+  const arrowWidth = 5
+  const baseX = targetX - ux * arrowLength
+  const baseY = targetY - uy * arrowLength
+  const arrowPath = `M ${targetX},${targetY} L ${baseX - uy * arrowWidth},${baseY + ux * arrowWidth} L ${baseX + uy * arrowWidth},${baseY - ux * arrowWidth} Z`
 
   return (
-    <BaseEdge
-      id={id}
-      path={path}
-      style={style}
-      markerEnd={markerEnd}
-      interactionWidth={24}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        style={style}
+        markerEnd={undefined}
+        interactionWidth={24}
+      />
+      <path className="dwh-column-edge-arrow" d={arrowPath} pointerEvents="none" />
+    </>
   )
 }
 
@@ -363,14 +375,14 @@ function buildAncestryGraph(
     })
   }
   const metaByColumnId = new Map<number, ColumnNodeData>()
-  const visualColumnById = new Map<string, number>([[targetId, maxLevel]])
+  const visualColumnById = new Map<string, number>([[targetId, 0]])
   const idsByVisualColumn = new Map<number, string[]>()
   const downstreamBySourceId = new Map<string, string[]>()
 
   for (const step of steps) {
     const sourceId = nodeIdForColumn(step.sourceColumnId)
     const currentColumn = visualColumnById.get(sourceId)
-    const visualColumn = maxLevel - step.level
+    const visualColumn = step.level
     visualColumnById.set(
       sourceId,
       currentColumn === undefined ? visualColumn : Math.min(currentColumn, visualColumn),
@@ -404,7 +416,7 @@ function buildAncestryGraph(
     {
       id: targetId,
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X + maxLevel * COLUMN_FLOW_COL_PITCH, y: targetY },
+      position: { x: COLUMN_FLOW_LEFT_X, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: ancestry.tableName,
@@ -414,13 +426,13 @@ function buildAncestryGraph(
         statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     },
   ]
 
-  for (let visualColumn = maxLevel - 1; visualColumn >= 0; visualColumn -= 1) {
+  for (let visualColumn = 1; visualColumn <= maxLevel; visualColumn += 1) {
     const ids = idsByVisualColumn.get(visualColumn) ?? []
     const score = (id: string) => {
       const yValues = (downstreamBySourceId.get(id) ?? [])
@@ -459,8 +471,8 @@ function buildAncestryGraph(
         },
         data: meta,
         style: { width: COLUMN_FLOW_NODE_W },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        sourcePosition: Position.Left,
+        targetPosition: Position.Right,
         draggable: false,
       })
     })
@@ -493,12 +505,6 @@ function buildAncestryGraph(
       source: edge.source,
       target: edge.target,
       type: 'columnFan',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 18,
-        height: 18,
-        color: style.color,
-      },
       className: edgeClassName(edge.step),
       style: {
         stroke: style.color,
@@ -527,7 +533,7 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
     {
       id: 'target',
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X + COLUMN_FLOW_COL_PITCH, y: targetY },
+      position: { x: COLUMN_FLOW_LEFT_X, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: `${target.sources.length} kaynak kolon`,
@@ -536,8 +542,8 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
         statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     },
   ]
@@ -546,7 +552,7 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
     nodes.push({
       id: `source:${index}`,
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X, y: COLUMN_FLOW_TOP_Y + index * COLUMN_FLOW_ROW_GAP },
+      position: { x: COLUMN_FLOW_LEFT_X + COLUMN_FLOW_COL_PITCH, y: COLUMN_FLOW_TOP_Y + index * COLUMN_FLOW_ROW_GAP },
       data: {
         label: source.sourceColumnName ?? 'Kolon yok',
         sub: source.sourceTableName ?? 'Kaynak tablo yok',
@@ -563,8 +569,8 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
         ),
       },
       style: { width: COLUMN_FLOW_SOURCE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     })
   })
@@ -576,12 +582,6 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
       source: `source:${index}`,
       target: 'target',
       type: 'columnFan',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 18,
-        height: 18,
-        color: style.color,
-      },
       className: edgeClassName(source),
       style: {
         stroke: style.color,
@@ -1326,32 +1326,46 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
   }, [sqlNode])
 
   const focusSet = useMemo(() => {
-    if (!focusNodeId) return { nodeIds: new Set<string>(), edgeIds: new Set<string>() }
+    if (!focusNodeId) {
+      return {
+        nodeIds: new Set<string>(),
+        edgeIds: new Set<string>(),
+        sourceNodeIds: new Set<string>(),
+        targetNodeIds: new Set<string>(),
+      }
+    }
 
     const nodeIds = new Set<string>([focusNodeId])
     const edgeIds = new Set<string>()
-    const queue = [focusNodeId]
+    const sourceNodeIds = new Set<string>()
+    const targetNodeIds = new Set<string>()
+    // Kaynak tarafında yalnızca seçili kolona doğrudan gelenler gösterilir.
+    for (const edge of graph.edges) {
+      if (edge.target !== focusNodeId) continue
+      edgeIds.add(edge.id)
+      sourceNodeIds.add(edge.source)
+      nodeIds.add(edge.source)
+    }
 
+    // Hedef tarafında seçili kolondan aşağı doğru tüm zincir gösterilir.
+    const queue = [focusNodeId]
+    const visited = new Set<string>([focusNodeId])
     while (queue.length) {
       const currentId = queue.shift()
       if (!currentId) continue
       for (const edge of graph.edges) {
-        if (edge.target !== currentId || edgeIds.has(edge.id)) continue
+        if (edge.source !== currentId) continue
         edgeIds.add(edge.id)
-        if (!nodeIds.has(edge.source)) {
-          nodeIds.add(edge.source)
-          queue.push(edge.source)
+        targetNodeIds.add(edge.target)
+        nodeIds.add(edge.target)
+        if (!visited.has(edge.target)) {
+          visited.add(edge.target)
+          queue.push(edge.target)
         }
       }
     }
 
-    for (const edge of graph.edges) {
-      if (edge.source !== focusNodeId) continue
-      edgeIds.add(edge.id)
-      nodeIds.add(edge.target)
-    }
-
-    return { nodeIds, edgeIds }
+    return { nodeIds, edgeIds, sourceNodeIds, targetNodeIds }
   }, [focusNodeId, graph.edges])
 
   const flowNodes = useMemo(() => {
@@ -1361,12 +1375,14 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
       className: [
         node.className,
         focusSet.nodeIds.has(node.id) ? 'rf-path-on' : 'rf-path-off',
+        focusSet.sourceNodeIds.has(node.id) ? 'rf-path-source' : undefined,
+        focusSet.targetNodeIds.has(node.id) ? 'rf-path-target' : undefined,
         node.id === focusNodeId ? 'rf-path-focus' : undefined,
       ]
         .filter(Boolean)
         .join(' '),
     }))
-  }, [focusNodeId, focusSet.nodeIds, graph.nodes])
+  }, [focusNodeId, focusSet.nodeIds, focusSet.sourceNodeIds, focusSet.targetNodeIds, graph.nodes])
 
   const flowEdges = useMemo(() => {
     if (!focusNodeId) return graph.edges
@@ -1375,6 +1391,8 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
       className: [
         edge.className,
         focusSet.edgeIds.has(edge.id) ? 'dd-edge-on' : 'dd-edge-off',
+        edge.source === focusNodeId ? 'dd-edge-target' : undefined,
+        edge.target === focusNodeId ? 'dd-edge-source' : undefined,
       ]
         .filter(Boolean)
         .join(' '),

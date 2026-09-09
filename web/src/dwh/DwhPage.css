@@ -2998,6 +2998,14 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   stroke-linejoin: round;
 }
 
+.dwh-col-flow-edge .dwh-column-edge-arrow {
+  fill: #2f6f55;
+}
+
+.dwh-col-flow-edge.is-derived .dwh-column-edge-arrow {
+  fill: #9a6a16;
+}
+
 .dwh-col-flow-canvas.is-focusing .react-flow__node,
 .dwh-col-flow-canvas.is-focusing .react-flow__edge {
   transition:
@@ -3006,8 +3014,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-off {
-  opacity: 0.2;
-  filter: saturate(0.65);
+  opacity: 0.16;
+  filter: saturate(0.55);
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-on {
@@ -3020,14 +3028,35 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-focus .dwh-col-flow-node {
-  border-color: #27986c;
+  border-color: #1e3a2f;
   box-shadow:
-    0 0 0 3px rgba(47, 111, 85, 0.16),
-    0 10px 24px rgba(40, 35, 28, 0.14);
+    0 0 0 4px rgba(45, 90, 69, 0.28),
+    0 10px 22px rgba(30, 58, 47, 0.18);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-on:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #3d7a60;
+  box-shadow:
+    0 0 0 3px rgba(61, 122, 96, 0.2),
+    0 8px 18px rgba(30, 58, 47, 0.12);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-source:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #d97706;
+  box-shadow:
+    0 0 0 3px rgba(217, 119, 6, 0.24),
+    0 8px 18px rgba(154, 91, 10, 0.16);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-target:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #3d7a60;
+  box-shadow:
+    0 0 0 3px rgba(61, 122, 96, 0.2),
+    0 8px 18px rgba(30, 58, 47, 0.12);
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-off {
-  opacity: 0.11;
+  opacity: 0.16;
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-on {
@@ -3035,8 +3064,35 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-on .react-flow__edge-path {
-  stroke-width: 3px;
+  stroke: #2f8e62 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 8 6 !important;
+  animation: dwh-edge-flow 0.95s linear infinite;
   filter: drop-shadow(0 2px 4px rgba(47, 111, 85, 0.18));
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source .react-flow__edge-path {
+  stroke: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target .react-flow__edge-path {
+  stroke: #2f8e62 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source marker path {
+  fill: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target marker path {
+  fill: #2f8e62 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source .dwh-column-edge-arrow {
+  fill: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target .dwh-column-edge-arrow {
+  fill: #2f8e62 !important;
 }
 
 .dwh-col-flow-edge.is-derived .react-flow__edge-path {
