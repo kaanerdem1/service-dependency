@@ -1755,16 +1755,18 @@ function DwhLineageMapInner({
         .map((node) => [node.id, node]),
     )
     const collect = (direction: 'source' | 'target') => {
-      const useFullGraph = direction === 'source'
-      const edgeList = useFullGraph ? (graph?.edges ?? []) : built.edges
-      const fullNodeById = useFullGraph
-        ? new Map((graph?.nodes ?? []).map((node) => [node.id, node]))
-        : undefined
+      // Drawer relations must follow the raw lineage direction. Rendered edges
+      // can be projected/reversed by the selected layout and are not suitable
+      // for deciding which entities the inspected node reads or fills.
+      const edgeList = graph?.edges ?? []
+      const fullNodeById = new Map((graph?.nodes ?? []).map((node) => [node.id, node]))
       const items = new Map<string, DwhDrawerConnection>()
       for (const edge of edgeList) {
-        const matches = edge.target === inspectedNodeRenderId
+        const matches = direction === 'source'
+          ? edge.target === inspectedNodeRenderId
+          : edge.source === inspectedNodeRenderId
         if (!matches) continue
-        const neighborId = useFullGraph ? edge.source : edge.target
+        const neighborId = direction === 'source' ? edge.source : edge.target
         const fullNeighbor = fullNodeById?.get(neighborId)
         const visibleNeighbor = nodeById.get(neighborId)
         if (!fullNeighbor && !visibleNeighbor) continue
@@ -1794,9 +1796,7 @@ function DwhLineageMapInner({
           : item.reportId
             ? `report:${item.reportId}`
             : item.id
-        const relationCount = useFullGraph
-          ? 1
-          : (((edge as Edge).data as DwhEdgeData | undefined)?.relationCount ?? 1)
+        const relationCount = 1
         const existing = items.get(itemKey)
         if (existing) {
           existing.relationCount += relationCount
