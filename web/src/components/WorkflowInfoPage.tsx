@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Button } from '../ui'
 import { WorkflowFolderGlyph } from './WorkflowIcons'
 import { WorkflowFlowCanvas } from './WorkflowFlowCanvas'
 import {
@@ -29,6 +30,12 @@ export function WorkflowInfoPage({
   canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
+  const [editing, setEditing] = useState(false)
+  const writable = Boolean(canEdit && editing)
+
+  useEffect(() => {
+    setEditing(false)
+  }, [folderId])
 
   useEffect(() => {
     const refresh = () => setStore(readWorkflows())
@@ -94,7 +101,7 @@ export function WorkflowInfoPage({
             </span>
             <h1 className="wf-info-title">{folder.name}</h1>
           </div>
-          {folderMode ? null : canEdit ? (
+          {folderMode ? null : writable ? (
             <label className="wf-info-summary">
               <span className="wf-info-summary-label">Akış özeti</span>
               <textarea
@@ -109,6 +116,17 @@ export function WorkflowInfoPage({
           ) : null}
         </div>
         <div className="wf-info-hero-side">
+          {canEdit ? (
+            editing ? (
+              <Button variant="primary" compact onClick={() => setEditing(false)}>
+                Bitir
+              </Button>
+            ) : (
+              <Button variant="ghost" compact onClick={() => setEditing(true)}>
+                Düzenle
+              </Button>
+            )
+          ) : null}
           <button type="button" className="ce-dismiss" onClick={onDismiss}>
             Kapat
           </button>
@@ -158,7 +176,7 @@ export function WorkflowInfoPage({
           {sequence.length === 0 ? (
             <div className="wf-info-blank">
               <p>
-                {canEdit
+                {writable
                   ? 'Henüz adım yok. Drawer’dan bu akışın üzerine sürükleyin.'
                   : 'Henüz adım yok.'}
               </p>
@@ -167,7 +185,7 @@ export function WorkflowInfoPage({
             <WorkflowFlowCanvas
               store={store}
               items={sequence}
-              canEdit={canEdit}
+              canEdit={writable}
               onStore={setStore}
               onSelectService={onSelectService}
             />
