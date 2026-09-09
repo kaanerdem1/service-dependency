@@ -2112,6 +2112,11 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-query-row:hover {
   background: #f8fbf9;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.dwh-query-row:hover td {
+  color: #184f3a;
 }
 
 .dwh-query-row:focus-visible {
@@ -2133,14 +2138,14 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font-weight: 800;
   text-align: left;
   text-overflow: ellipsis;
+  text-decoration: none;
   white-space: nowrap;
 }
 
 .dwh-query-row:hover .dwh-query-procedure-link,
 .dwh-query-procedure-link:hover {
   color: #184f3a;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .dwh-query-table-empty {

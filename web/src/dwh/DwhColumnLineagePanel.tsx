@@ -101,6 +101,16 @@ function qualifiedColumnName(tableName: string | null | undefined, columnName: s
   return table ? `${table}.${column}` : column
 }
 
+function splitQualifiedColumnName(value: string) {
+  if (value.includes(' · ')) return { tableName: undefined, columnName: value }
+  const separator = value.lastIndexOf('.')
+  if (separator < 0) return { tableName: undefined, columnName: value }
+  return {
+    tableName: value.slice(0, separator),
+    columnName: value.slice(separator + 1),
+  }
+}
+
 function dmlClass(dmlType: string | null | undefined) {
   const normalized = dmlType?.toLowerCase() ?? ''
   if (normalized.includes('insert')) return 'is-insert'
@@ -117,25 +127,31 @@ function refsFromSources(
   direction: ColumnNodeStatementRef['direction'],
   relatedColumnName: string,
   relatedTableName?: string | null,
+  relatedColumnNameForSource?: (source: DwhColumnLineageSource) => string,
 ): ColumnNodeStatementRef[] {
-  const seen = new Set<number>()
-  return sources
-    .filter((source): source is DwhColumnLineageSource & { statementId: number } => typeof source.statementId === 'number')
-    .filter((source) => {
-      if (seen.has(source.statementId)) return false
-      seen.add(source.statementId)
-      return true
-    })
-    .map((source) => ({
+  const refsByKey = new Map<string, ColumnNodeStatementRef>()
+  for (const source of sources) {
+    if (typeof source.statementId !== 'number') continue
+    const columnName = relatedColumnNameForSource
+      ? relatedColumnNameForSource(source)
+      : qualifiedColumnName(relatedTableName, relatedColumnName)
+    const key = `${source.statementId}:${columnName}`
+    const existing = refsByKey.get(key)
+    if (existing) {
+      continue
+    }
+    refsByKey.set(key, {
       statementId: source.statementId,
       relation,
       direction,
-      relatedColumnName: qualifiedColumnName(relatedTableName, relatedColumnName),
+      relatedColumnName: columnName,
       transformationType: source.transformationType,
       confidence: source.confidence,
       packageName: source.packageName,
       procedureName: source.procedureName,
-    }))
+    })
+  }
+  return Array.from(refsByKey.values())
 }
 
 function addStatementRef(
@@ -144,7 +160,11 @@ function addStatementRef(
   ref: ColumnNodeStatementRef,
 ) {
   const refs = refsByColumnId.get(columnId) ?? []
-  if (!refs.some((item) => item.statementId === ref.statementId && item.relation === ref.relation)) {
+  if (!refs.some((item) =>
+    item.statementId === ref.statementId &&
+    item.relation === ref.relation &&
+    item.relatedColumnName === ref.relatedColumnName
+  )) {
     refs.push(ref)
   }
   refsByColumnId.set(columnId, refs)
@@ -303,6 +323,7 @@ function buildAncestryGraph(
     'fills',
     target.targetColumnName,
     ancestry.tableName,
+    (source) => qualifiedColumnName(source.sourceTableName, source.sourceColumnName ?? 'Kaynak kolon yok'),
   )
   const statementRefsByColumnId = new Map<number, ColumnNodeStatementRef[]>()
   for (const source of target.sources) {
@@ -338,7 +359,7 @@ function buildAncestryGraph(
       ...refBase,
       relation: 'Kolonu dolduruyor',
       direction: 'fills',
-      relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
+      relatedColumnName: qualifiedColumnName(step.sourceTableName, step.sourceColumnName),
     })
   }
   const metaByColumnId = new Map<number, ColumnNodeData>()
@@ -390,7 +411,7 @@ function buildAncestryGraph(
         kind: 'target',
         columnId: target.targetColumnId,
         tableName: ancestry.tableName,
-        statementRefs: statementRefsByColumnId.get(target.targetColumnId) ?? targetStatementRefs,
+        statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
       sourcePosition: Position.Right,
@@ -499,6 +520,7 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
     'fills',
     target.targetColumnName,
     targetTableName,
+    (source) => qualifiedColumnName(source.sourceTableName, source.sourceColumnName ?? 'Kaynak kolon yok'),
   )
   const targetY = COLUMN_FLOW_TOP_Y + ((Math.max(1, shownSources.length) - 1) * COLUMN_FLOW_ROW_GAP) / 2
   const nodes: Node<ColumnNodeData>[] = [
@@ -686,6 +708,8 @@ function ColumnSqlModal({
   onSelectStatement: (statementId: number) => void
   onClose: () => void
 }) {
+  const [selectedRefKey, setSelectedRefKey] = useState<string>()
+
   useEffect(() => {
     if (!node) return undefined
     const onKey = (event: KeyboardEvent) => {
@@ -697,22 +721,38 @@ function ColumnSqlModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [node, onClose])
 
+  useEffect(() => {
+    setSelectedRefKey(undefined)
+  }, [node])
+
   if (!node) return null
 
+  const refs = node.statementRefs ?? []
+  const refKey = (ref: ColumnNodeStatementRef) =>
+    `${ref.statementId}:${ref.direction}:${ref.relatedColumnName}`
   const selectedStatement =
     statements.find((statement) => statement.statementId === selectedStatementId) ?? statements[0]
-  const refs = node.statementRefs ?? []
   const fillingRefs = refs.filter((ref) => ref.direction === 'fills')
   const downstreamRefs = refs.filter((ref) => ref.direction === 'source')
+  const selectedRef = refs.find((ref) => refKey(ref) === selectedRefKey)
+    ?? refs.find((ref) => ref.statementId === selectedStatementId)
+    ?? refs[0]
+  const selectedColumn = selectedRef
+    ? splitQualifiedColumnName(selectedRef.relatedColumnName)
+    : { tableName: node.tableName, columnName: node.label }
   const renderStatementRefs = (items: ColumnNodeStatementRef[]) =>
-    items.map((ref, index) => {
+    items.map((ref) => {
       const statement = statements.find((item) => item.statementId === ref.statementId)
+      const key = refKey(ref)
       return (
         <button
-          key={`${ref.statementId}:${index}`}
+          key={key}
           type="button"
-          className={selectedStatement?.statementId === ref.statementId ? 'is-selected' : undefined}
-          onClick={() => onSelectStatement(ref.statementId)}
+          className={selectedRef === ref ? 'is-selected' : undefined}
+          onClick={() => {
+            setSelectedRefKey(key)
+            onSelectStatement(ref.statementId)
+          }}
         >
           <strong>{ref.relatedColumnName}</strong>
           <small>{statement ? statementProcedureLabel(statement) : statementProcedureLabel(ref)}</small>
@@ -762,8 +802,8 @@ function ColumnSqlModal({
               {selectedStatement ? (
                 <ColumnSqlBlock
                   statement={selectedStatement}
-                  columnName={node.label}
-                  columnTableName={node.tableName}
+                  columnName={selectedColumn.columnName}
+                  columnTableName={selectedColumn.tableName}
                 />
               ) : (
                 <div className="dwh-col-sql-state">Seçili sorgu bulunamadı.</div>

@@ -183,6 +183,12 @@ function procedureLabel(statement: DwhSqlStatement) {
   return proc || pkg || 'Prosedür bilgisi yok'
 }
 
+function relationCellLabel(value: string) {
+  const trimmed = value.trim()
+  const separator = trimmed.lastIndexOf('.')
+  return separator >= 0 ? trimmed.slice(separator + 1) : trimmed
+}
+
 function impactProcedureLabel(statement: DwhTableImpact['affectedTables'][number]['statements'][number]) {
   const pkg = statement.packageName?.trim()
   const proc = statement.procedureName?.trim()
@@ -357,7 +363,7 @@ function StatementTable({
                     <td>
                       <span className="dwh-query-procedure-link">{procedureLabel(statement)}</span>
                     </td>
-                    <td title={relation}>{relation}</td>
+                    <td title={relation}>{relationCellLabel(relation)}</td>
                     <td><DmlBadge dmlType={statement.dmlType} /></td>
                   </tr>
                 )
@@ -648,14 +654,14 @@ function TableQueryPanel({
     <>
       <div className="dwh-tab-content dwh-query-layout">
         <StatementTable
-          title="Çağıranlar"
+          title={`${tableName} tablosunu kaynak olarak kullanan sorgular`}
           empty={`${tableName} tablosunu kaynak olarak kullanan sorgu yok.`}
           statements={readers}
           relationLabel={(statement) => statement.relatedTable ?? statement.targetTable ?? 'Hedef tablo yok'}
           onOpen={setActiveStatement}
         />
         <StatementTable
-          title="Çağrılanlar"
+          title={`${tableName} tablosunu dolduran sorgular`}
           empty={`${tableName} tablosunu dolduran sorgu yok.`}
           statements={writers}
           relationLabel={(statement) => statement.targetTable ?? tableName}
