@@ -3644,7 +3644,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-impact-workspace.has-detail {
-  grid-template-columns: minmax(300px, 380px) minmax(520px, 1fr);
+  grid-template-columns: minmax(300px, 420px) minmax(480px, 1fr);
 }
 
 .dwh-impact-list-panel {
@@ -3960,7 +3960,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 14px 8px;
+  padding: 9px 11px 6px;
 }
 
 .dwh-impact-statement-summary > span:first-child {
@@ -3973,6 +3973,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .dwh-impact-statement-summary small {
@@ -3981,9 +3982,9 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-impact-statement-open {
   display: block;
-  padding: 0 14px 11px;
+  padding: 0 11px 8px;
   color: var(--accent);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 750;
 }
 
