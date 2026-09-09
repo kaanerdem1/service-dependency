@@ -112,9 +112,9 @@ function optFieldMap(value: unknown): WorkflowFieldMap | undefined {
   if (!value || typeof value !== 'object') return undefined
   const out: WorkflowFieldMap = {}
   for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof k === 'string' && k.trim() && typeof v === 'string' && v.trim()) {
-      out[k.trim()] = v.trim()
-    }
+    if (typeof k !== 'string' || !k.trim() || typeof v !== 'string') continue
+    // Boş değer de kalsın — alan eklenince henüz doldurulmamış satır silinmesin.
+    out[k.trim()] = v
   }
   return Object.keys(out).length ? out : undefined
 }
@@ -214,9 +214,7 @@ function normalize(raw: unknown): WorkflowsStore {
             : {}),
           ...(typeof f.parentId === 'string' ? { parentId: f.parentId } : {}),
           ...(typeof f.order === 'number' ? { order: f.order } : {}),
-          ...(typeof f.summary === 'string' && f.summary.trim()
-            ? { summary: f.summary.trim() }
-            : {}),
+          ...(typeof f.summary === 'string' ? { summary: f.summary } : {}),
         }))
         .slice(0, MAX_FOLDERS)
     : []
@@ -407,16 +405,15 @@ export function renameWorkflowFolder(folderId: string, name: string): WorkflowsS
 export function setWorkflowFolderSummary(folderId: string, summary: string): WorkflowsStore {
   const store = readWorkflows()
   if (!store.folders.some((f) => f.id === folderId)) return store
-  const trimmed = summary.trim()
   return writeWorkflows({
     ...store,
     folders: store.folders.map((f) => {
       if (f.id !== folderId) return f
-      if (!trimmed) {
+      if (summary === '') {
         const { summary: _drop, ...rest } = f
         return rest
       }
-      return { ...f, summary: trimmed }
+      return { ...f, summary }
     }),
   })
 }

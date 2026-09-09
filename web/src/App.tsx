@@ -315,6 +315,7 @@ export default function App() {
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [workflowsOpen, setWorkflowsOpen] = useState(false)
   const [workflowInfoId, setWorkflowInfoId] = useState<string>()
+  const [workflowResumeId, setWorkflowResumeId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
@@ -324,6 +325,7 @@ export default function App() {
       setShortcutsOpen(false)
       setWorkflowsOpen(false)
       setWorkflowInfoId(undefined)
+      setWorkflowResumeId(undefined)
     }
   }, [surface])
 
@@ -616,6 +618,43 @@ export default function App() {
     setAllowNavCollapse(false)
     setNavHover(true)
     setWorkflowInfoId(undefined)
+    setWorkflowResumeId(undefined)
+  }, [])
+
+  const returnToWorkflow = useCallback(() => {
+    const resume = workflowResumeId
+    if (!resume) {
+      clearSelection()
+      return
+    }
+    setPivotId(undefined)
+    setCatalogNode(null)
+    setTreePinServiceId(undefined)
+    setSelectedMethodId(undefined)
+    setMethodImpact(undefined)
+    setHistory([])
+    setHistoryIndex(-1)
+    setService(undefined)
+    setAffected([])
+    setCallees([])
+    setImpact(undefined)
+    setMapExpanded(false)
+    setAllowNavCollapse(false)
+    setNavHover(true)
+    setWorkflowInfoId(resume)
+  }, [clearSelection, workflowResumeId])
+
+  const leaveServiceSelection = useCallback(() => {
+    if (workflowResumeId) {
+      returnToWorkflow()
+      return
+    }
+    clearSelection()
+  }, [clearSelection, returnToWorkflow, workflowResumeId])
+
+  const openWorkflowFolder = useCallback((id: string) => {
+    setWorkflowResumeId(id)
+    setWorkflowInfoId(id)
   }, [])
 
   const selectCatalogNode = useCallback(
@@ -640,6 +679,7 @@ export default function App() {
       setMapExpanded(false)
       setCatalogNode({ id: node.id, kind: node.kind, name: node.name })
       setWorkflowInfoId(undefined)
+      setWorkflowResumeId(undefined)
       setAllowNavCollapse(true)
     },
     [catalogNode?.id, pivotId, clearSelection, trail],
@@ -648,14 +688,16 @@ export default function App() {
   const selectPivot = useCallback(
     (
       id: string,
-      opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' | 'table' },
+      opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' | 'table' | 'workflow' },
     ) => {
       setCatalogNode(null)
       setWorkflowInfoId(undefined)
+      if (opts?.source !== 'workflow') setWorkflowResumeId(undefined)
       setTreePinServiceId(
         opts?.source === 'search' || opts?.source === 'table' ? id : undefined,
       )
       if (id === pivotId && !selectedMethodId) {
+        if (opts?.source === 'workflow') return
         clearSelection()
         return
       }
@@ -1216,7 +1258,7 @@ export default function App() {
               setQuery('')
               selectPivot(id, { resetHistory: true, source: 'tree' })
             }}
-            onOpenFolder={setWorkflowInfoId}
+            onOpenFolder={openWorkflowFolder}
             infoFolderId={workflowInfoId}
             canEdit={canEditCatalog}
           />
@@ -1242,11 +1284,12 @@ export default function App() {
             <div className="stage-body wf-info-stage">
               <WorkflowInfoPage
                 folderId={workflowInfoId}
-                onOpenFolder={setWorkflowInfoId}
+                onOpenFolder={openWorkflowFolder}
                 onSelectService={(id) => {
+                  setWorkflowResumeId(workflowInfoId)
                   setTreePinServiceId(undefined)
                   setQuery('')
-                  selectPivot(id, { resetHistory: true, source: 'tree' })
+                  selectPivot(id, { resetHistory: true, source: 'workflow' })
                 }}
                 onDismiss={() => setWorkflowInfoId(undefined)}
                 canEdit={canEditCatalog}
@@ -1290,7 +1333,7 @@ export default function App() {
                             onOpenFlow={(folderId) => {
                               setShortcutsOpen(false)
                               setWorkflowsOpen(false)
-                              setWorkflowInfoId(folderId)
+                              openWorkflowFolder(folderId)
                             }}
                             onOpenRoot={() => {
                               setShortcutsOpen(false)
@@ -1303,13 +1346,23 @@ export default function App() {
                     </div>
                   </div>
                   <div className="stage-actions">
-                    <button
-                      type="button"
-                      className="btn ghost clear-sel"
-                      onClick={clearSelection}
-                    >
-                      Seçimi bırak
-                    </button>
+                    {workflowResumeId ? (
+                      <button
+                        type="button"
+                        className="btn ghost clear-sel"
+                        onClick={returnToWorkflow}
+                      >
+                        Geri
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn ghost clear-sel"
+                        onClick={clearSelection}
+                      >
+                        Seçimi bırak
+                      </button>
+                    )}
                     {session && service && (
                       <button
                         type="button"
@@ -1427,7 +1480,7 @@ export default function App() {
                           onPivot={(id) => selectPivot(id, { source: 'map' })}
                           onSelectMethod={selectMethod}
                           onBrowseMethods={browseServiceMethods}
-                          onClearCenter={clearSelection}
+                          onClearCenter={leaveServiceSelection}
                           onPivotBack={goBack}
                           onPivotForward={goForward}
                           canPivotBack={historyIndex > 0}

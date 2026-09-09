@@ -127,6 +127,13 @@ export function WorkflowInfoPage({
               </Button>
             )
           ) : null}
+          <button
+            type="button"
+            className="ce-dismiss"
+            onClick={() => (parent ? onOpenFolder(parent.id) : onDismiss())}
+          >
+            Geri
+          </button>
           <button type="button" className="ce-dismiss" onClick={onDismiss}>
             Kapat
           </button>

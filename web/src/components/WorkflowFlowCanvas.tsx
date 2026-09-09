@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'motion/react'
 import { AutoHeight } from '../motion/AutoHeight'
 import { layoutSpring } from '../motion/config'
@@ -176,6 +176,73 @@ function DocField({
   )
 }
 
+function FieldAddDropdown({
+  label,
+  options,
+  onPick,
+}: {
+  label: string
+  options: WorkflowFieldDef[]
+  onPick: (key: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
+  return (
+    <div className="wf-canvas-dd" ref={rootRef}>
+      <button
+        type="button"
+        className={`wf-canvas-dd-btn${open ? ' is-open' : ''}`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        aria-label={`${label} alanı seç`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Alan seç…</span>
+        <span className="wf-canvas-dd-chev" aria-hidden>
+          {open ? '▴' : '▾'}
+        </span>
+      </button>
+      {open ? (
+        <ul className="wf-canvas-dd-menu" role="listbox">
+          {options.map((d) => (
+            <li key={d.key} role="presentation">
+              <button
+                type="button"
+                role="option"
+                className="wf-canvas-dd-opt"
+                onClick={() => {
+                  onPick(d.key)
+                  setOpen(false)
+                }}
+              >
+                <span className="wf-canvas-dd-opt-label">{d.label}</span>
+                <span className="wf-canvas-dd-opt-key">{d.key}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  )
+}
+
 /** Girdi / Çıktı — önceden tanımlı (mock; ileride DB) alan seti üzerinden key-value düzenleyici. */
 function FieldMapEditor({
   stepId,
@@ -196,73 +263,73 @@ function FieldMapEditor({
   canEdit: boolean
   onStore: (next: WorkflowsStore) => void
 }) {
-  const [draftKey, setDraftKey] = useState('')
+  const [justAdded, setJustAdded] = useState<string | null>(null)
   const entries = Object.entries(value ?? {})
   const usedKeys = new Set(entries.map(([k]) => k))
   const available = defs.filter((d) => !usedKeys.has(d.key))
   const labelFor = (key: string) => defs.find((d) => d.key === key)?.label ?? key
 
-  if (!canEdit) {
-    if (entries.length === 0) return null
-    return (
-      <div className="wf-canvas-doc">
-        <h3 className="wf-canvas-doc-label">{label}</h3>
-        <dl className="wf-canvas-fields">
-          {entries.map(([k, v]) => (
-            <div key={k} className="wf-canvas-field-row is-static">
-              <dt>{labelFor(k)}</dt>
-              <dd>{v || '—'}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    )
+  const addField = (key: string) => {
+    onStore(setWorkflowStepField(stepId, kind, key, ''))
+    setJustAdded(key)
   }
+
+  if (!canEdit && entries.length === 0) return null
 
   return (
     <div className="wf-canvas-doc">
-      <span className="wf-canvas-doc-label">{label}</span>
-      <span className="wf-canvas-doc-hint">{hint}</span>
+      {canEdit ? (
+        <>
+          <span className="wf-canvas-doc-label">{label}</span>
+          <span className="wf-canvas-doc-hint">{hint}</span>
+        </>
+      ) : (
+        <h3 className="wf-canvas-doc-label">{label}</h3>
+      )}
       <div className="wf-canvas-fields">
+        {entries.length > 0 ? (
+          <div className="wf-canvas-kv-head" aria-hidden>
+            <span>Alan</span>
+            <span>Değer</span>
+          </div>
+        ) : null}
         {entries.map(([k, v]) => (
-          <div key={k} className="wf-canvas-field-row">
-            <span className="wf-canvas-field-key">{labelFor(k)}</span>
-            <input
-              type="text"
-              className="wf-canvas-field-value"
-              value={v}
-              onChange={(e) => onStore(setWorkflowStepField(stepId, kind, k, e.target.value))}
-            />
-            <button
-              type="button"
-              className="sc-icon-btn sc-icon-btn-danger"
-              aria-label={`${labelFor(k)} alanını kaldır`}
-              onClick={() => onStore(removeWorkflowStepField(stepId, kind, k))}
-            >
-              ×
-            </button>
+          <div key={k} className={`wf-canvas-field-row${canEdit ? '' : ' is-static'}`}>
+            <span className="wf-canvas-field-key" title={k}>
+              {labelFor(k)}
+            </span>
+            {canEdit ? (
+              <input
+                type="text"
+                className="wf-canvas-field-value"
+                value={v}
+                placeholder="Değer"
+                autoFocus={justAdded === k}
+                onFocus={() => {
+                  if (justAdded === k) setJustAdded(null)
+                }}
+                onChange={(e) => onStore(setWorkflowStepField(stepId, kind, k, e.target.value))}
+              />
+            ) : (
+              <span className="wf-canvas-field-value is-read">{v.trim() ? v : '—'}</span>
+            )}
+            {canEdit ? (
+              <button
+                type="button"
+                className="sc-icon-btn sc-icon-btn-danger"
+                aria-label={`${labelFor(k)} alanını kaldır`}
+                onClick={() => onStore(removeWorkflowStepField(stepId, kind, k))}
+              >
+                ×
+              </button>
+            ) : null}
           </div>
         ))}
-        {available.length > 0 ? (
-          <div className="wf-canvas-field-add">
-            <select
-              value={draftKey}
-              aria-label={`${label} alanı ekle`}
-              onChange={(e) => {
-                const key = e.target.value
-                if (!key) return
-                onStore(setWorkflowStepField(stepId, kind, key, ''))
-                setDraftKey('')
-              }}
-            >
-              <option value="">+ alan ekle…</option>
-              {available.map((d) => (
-                <option key={d.key} value={d.key}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
-          </div>
+        {canEdit && available.length > 0 ? (
+          <FieldAddDropdown label={label} options={available} onPick={addField} />
+        ) : null}
+        {canEdit && available.length === 0 && entries.length > 0 ? (
+          <p className="wf-canvas-field-add-done">Listedeki alanlar eklendi.</p>
         ) : null}
       </div>
     </div>

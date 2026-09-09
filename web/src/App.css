@@ -3923,6 +3923,7 @@
   flex-direction: column;
   gap: 4px;
   min-width: 0;
+  overflow: visible;
   padding: 8px 10px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--surface) 88%, #fff);
@@ -4151,43 +4152,49 @@
   margin: 0;
 }
 
+.wf-canvas-kv-head {
+  display: grid;
+  grid-template-columns: minmax(88px, 36%) minmax(0, 1fr);
+  gap: 8px;
+  padding: 0 2px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .wf-canvas-field-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(88px, 36%) minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
 }
 
 .wf-canvas-field-row.is-static {
-  padding: 2px 0;
-}
-
-.wf-canvas-field-row.is-static dt {
-  color: var(--muted);
-  font-weight: 650;
-  min-width: 110px;
-}
-
-.wf-canvas-field-row.is-static dd {
-  margin: 0;
-  overflow-wrap: anywhere;
+  grid-template-columns: minmax(88px, 36%) minmax(0, 1fr);
 }
 
 .wf-canvas-field-key {
-  min-width: 110px;
-  flex: 0 0 auto;
-  color: var(--muted);
-  font-weight: 650;
-  font-size: 11.5px;
-}
-
-.wf-canvas-field-value {
-  flex: 1 1 auto;
   min-width: 0;
   padding: 5px 8px;
   border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+  color: color-mix(in srgb, var(--ink) 78%, var(--muted));
+  font-weight: 650;
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.wf-canvas-field-value {
+  min-width: 0;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--line) 82%, transparent);
-  background: var(--surface);
+  background: #fff;
   font-size: 12.5px;
   color: var(--ink);
 }
@@ -4195,15 +4202,112 @@
 .wf-canvas-field-value:focus {
   outline: none;
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
-.wf-canvas-field-add select {
-  padding: 4px 8px;
-  border-radius: 8px;
-  border: 1px dashed color-mix(in srgb, var(--line) 82%, transparent);
-  background: transparent;
+.wf-canvas-field-value.is-read {
+  display: block;
+  border-color: transparent;
+  background: color-mix(in srgb, var(--surface) 70%, #fff);
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.wf-canvas-field-add-done {
+  margin: 2px 0 0;
+  font-size: 11px;
   color: var(--muted);
-  font-size: 12px;
+}
+
+.wf-canvas-dd {
+  position: relative;
+  margin-top: 2px;
+}
+
+.wf-canvas-dd-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 85%, transparent);
+  background: #fff;
+  color: color-mix(in srgb, var(--ink) 62%, var(--muted));
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-canvas-dd-btn.is-open,
+.wf-canvas-dd-btn:hover {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: var(--ink);
+}
+
+.wf-canvas-dd-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 1px;
+}
+
+.wf-canvas-dd-chev {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.wf-canvas-dd-menu {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  max-height: 220px;
+  overflow: auto;
+  list-style: none;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: #fff;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--ink) 12%, transparent);
+}
+
+.wf-canvas-dd-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wf-canvas-dd-opt:hover {
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+}
+
+.wf-canvas-dd-opt-label {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.wf-canvas-dd-opt-key {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Dallanma — Y çatal + seçilince satırı dolduran sütunlar */
