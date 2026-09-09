@@ -222,15 +222,6 @@ function TransformationBadge({ type }: { type?: string | null }) {
   return <span className={`dwh-transform-badge ${derived ? 'is-derived' : 'is-direct'}`}>{derived ? 'Türetilmiş' : type}</span>
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <span className="dwh-metric">
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </span>
-  )
-}
-
 function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-pin-icon">
@@ -1378,26 +1369,6 @@ export function DwhPage({
             <h1 className="main-heading" title={stageHeading}>
               {stageHeading}
             </h1>
-          </div>
-          <div className="dwh-header-metrics">
-            {stageTab === 'impact' && detailKind === 'table' && selectedTable ? (
-              <>
-                <Metric label="Etkilenen tablo" value={loadingImpact ? '...' : (impact?.affectedTables.length ?? 0)} />
-                <Metric label="Etkilenen rapor" value={loadingImpact ? '...' : (impact?.affectedReports.length ?? 0)} />
-              </>
-            ) : detailKind === 'table' && selectedTable ? (
-              <>
-                <Metric label="Kolon" value={selectedTable.columnCount} />
-                <Metric label="Kaynak" value={selectedTable.sourceCount} />
-                <Metric label="Hedef" value={selectedTable.targetCount} />
-              </>
-            ) : null}
-            {stageTab !== 'impact' && detailKind === 'report' && selectedReport ? (
-              <>
-                <Metric label="Kaynak" value={selectedReport.sourceCount} />
-                <Metric label="Kolon" value={selectedReport.columnCount} />
-              </>
-            ) : null}
           </div>
         </div>
         <StageTabs<DwhStageTab>

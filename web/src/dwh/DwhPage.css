@@ -755,6 +755,22 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   min-width: 0;
 }
 
+/* Açık DWH dallarında parent okunun hizasını gösteren indent kılavuzu. */
+.dwh-tree-item > .tree-accordion-body {
+  position: relative;
+}
+
+.dwh-tree-item > .tree-accordion-body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(8px + (var(--dwh-tree-depth, 0) * 12px) + 10px);
+  border-left: 1px dashed color-mix(in srgb, var(--shell-tree-chev, #9aa3a0) 58%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .dwh-tree-row {
   position: relative;
   display: grid;
