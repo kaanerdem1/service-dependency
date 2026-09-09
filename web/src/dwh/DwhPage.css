@@ -4014,6 +4014,38 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   word-break: break-word;
 }
 
+.dwh-sql-code {
+  tab-size: 2;
+  font-family: 'Cascadia Code', 'Consolas', 'SFMono-Regular', monospace;
+  font-variant-ligatures: none;
+}
+
+.dwh-sql-token-keyword {
+  color: #276c58;
+  font-weight: 800;
+}
+
+.dwh-sql-token-string {
+  color: #a14f2f;
+}
+
+.dwh-sql-token-number {
+  color: #996b18;
+}
+
+.dwh-sql-token-comment {
+  color: #7d8783;
+  font-style: italic;
+}
+
+.dwh-sql-token-highlight {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #f3d56b;
+  color: #2d2a1c;
+  font-weight: 800;
+}
+
 .dwh-statement-foot {
   display: flex;
   flex-wrap: wrap;

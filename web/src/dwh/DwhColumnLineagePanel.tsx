@@ -15,6 +15,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { getDwhColumnAncestry, getDwhStatement } from './api'
+import { DwhSqlCode } from './DwhSqlCode'
 import type {
   DwhColumnAncestryResponse,
   DwhColumnAncestryStep,
@@ -869,7 +870,11 @@ function ColumnSqlBlock({
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || compactSql(sqlText)}</pre>
+      <DwhSqlCode
+        sql={sqlText || compactSql(sqlText)}
+        highlightTable={columnTableName}
+        highlightColumn={columnName}
+      />
     </div>
   )
 }

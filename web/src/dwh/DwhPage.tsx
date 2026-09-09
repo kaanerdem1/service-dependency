@@ -32,6 +32,7 @@ import {
 import { DwhColumnLineagePanel } from './DwhColumnLineagePanel'
 import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
+import { DwhSqlCode } from './DwhSqlCode'
 import { type AppSurface } from '../components/SurfaceSwitch'
 import type {
   DwhColumn,
@@ -235,7 +236,7 @@ function ImpactSqlBlock({
           </div>
         ) : null}
       </div>
-      <pre>{shownSql || compactSql(shownSql)}</pre>
+      <DwhSqlCode sql={shownSql || compactSql(shownSql)} />
     </div>
   )
 }
@@ -461,7 +462,7 @@ function SqlDetailPanel({
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || compactSql(sqlText)}</pre>
+      <DwhSqlCode sql={sqlText || compactSql(sqlText)} highlightTable={focusTable ?? statement.targetTable} />
     </article>
   )
 }
@@ -590,7 +591,7 @@ function ReportSqlDetailPanel({ report }: { report: DwhReportDetail }) {
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || 'SQL metni yok'}</pre>
+      <DwhSqlCode sql={sqlText || 'SQL metni yok'} />
     </article>
   )
 }
