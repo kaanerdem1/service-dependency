@@ -1305,13 +1305,12 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-map-info-drawer-scroll {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
-  padding: 0 14px 16px;
+  overflow: hidden;
+  padding: 0 14px 10px;
 }
 
 .dwh-map-info-section {
-  padding: 12px 0;
+  padding: 9px 0;
   border-top: 1px solid rgba(120, 132, 143, 0.28);
 }
 
@@ -1456,11 +1455,11 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-map-connections {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .dwh-map-connection-group + .dwh-map-connection-group {
-  padding-top: 10px;
+  padding-top: 8px;
   border-top: 1px solid rgba(120, 132, 143, 0.18);
 }
 
@@ -1491,7 +1490,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-map-connection-item {
   min-width: 0;
-  padding: 6px 0;
+  padding: 4px 0;
   border-top: 1px dashed rgba(120, 132, 143, 0.16);
 }
 

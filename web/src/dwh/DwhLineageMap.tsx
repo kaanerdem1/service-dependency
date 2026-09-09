@@ -421,6 +421,14 @@ function entityLabel(kind?: DwhLineageEntityKind) {
   return 'Node'
 }
 
+function drawerNodeMeta(node: DwhLineageNode) {
+  if (node.entityKind === 'report') return 'Rapor'
+  const layer = node.layer
+    ? (DWH_SWIMLANE_LABELS[node.layer as DwhSwimlaneKey] ?? node.layer).replace(/\s+Katmanı$/i, '')
+    : node.subtitle?.trim()
+  return [layer, entityLabel(node.entityKind)].filter(Boolean).join(' · ')
+}
+
 function countReachableTables(
   graph: DwhReadableLineageGraph,
   startId: string,
@@ -515,7 +523,7 @@ function DwhDrawerConnectionGroup({
   title: string
   items: DwhDrawerConnection[]
 }) {
-  const visibleItems = items.slice(0, 12)
+  const visibleItems = items.slice(0, 3)
   return (
     <div className="dwh-map-connection-group">
       <div className="dwh-map-connection-group-head">
@@ -606,12 +614,11 @@ function DwhMapInfoDrawer({
           ) : (
             <>
               <section className="dwh-map-info-section dwh-map-info-identity">
-                <span className={`dwh-map-kind-badge kind-${node.entityKind}`}>{entityLabel(node.entityKind)}</span>
                 <strong className="dwh-map-info-node-name" title={node.label}>
                   {node.label}
                 </strong>
                 <span className="dwh-map-info-node-meta">
-                  {node.subtitle || node.layer || entityLabel(node.entityKind)}
+                  {drawerNodeMeta(node)}
                 </span>
               </section>
 
@@ -623,7 +630,6 @@ function DwhMapInfoDrawer({
               ) : null}
 
               <section className="dwh-map-info-section">
-                <h5>Tablo etkisi</h5>
                 <DwhDrawerMetric
                   label="Etkilendiği tablolar"
                   direct={source.direct}
@@ -638,20 +644,16 @@ function DwhMapInfoDrawer({
                 />
               </section>
 
-              {node.entityKind === 'table' ? (
-                <section className="dwh-map-info-section">
-                  <h5>Rapor etkisi</h5>
-                  <DwhDrawerMetric
-                    label="Etkilenen raporlar"
-                    direct={reports.direct}
-                    indirect={reports.indirect}
-                    total={reports.total}
-                  />
-                </section>
-              ) : null}
+              <section className="dwh-map-info-section">
+                <DwhDrawerMetric
+                  label="Etkilenen raporlar"
+                  direct={reports.direct}
+                  indirect={reports.indirect}
+                  total={reports.total}
+                />
+              </section>
 
               <section className="dwh-map-info-section">
-                <h5>Doğrudan bağlantılar</h5>
                 <div className="dwh-map-connections">
                   <DwhDrawerConnectionGroup title="Kaynak aldığı" items={connections.sources} />
                   <DwhDrawerConnectionGroup title="Doldurduğu" items={connections.targets} />
@@ -1753,21 +1755,48 @@ function DwhLineageMapInner({
         .map((node) => [node.id, node]),
     )
     const collect = (direction: 'source' | 'target') => {
+      const useFullGraph = direction === 'source'
+      const edgeList = useFullGraph ? (graph?.edges ?? []) : built.edges
+      const fullNodeById = useFullGraph
+        ? new Map((graph?.nodes ?? []).map((node) => [node.id, node]))
+        : undefined
       const items = new Map<string, DwhDrawerConnection>()
-      for (const edge of built.edges) {
-        const matches = direction === 'source'
-          ? edge.source === inspectedNodeRenderId
-          : edge.target === inspectedNodeRenderId
+      for (const edge of edgeList) {
+        const matches = edge.target === inspectedNodeRenderId
         if (!matches) continue
-        const neighborId = direction === 'source' ? edge.target : edge.source
-        const neighbor = nodeById.get(neighborId)
-        if (!neighbor) continue
-        const itemKey = neighbor.data.tableId
-          ? `table:${neighbor.data.tableId}`
-          : neighbor.data.reportId
-            ? `report:${neighbor.data.reportId}`
-            : neighbor.id
-        const relationCount = ((edge.data as DwhEdgeData | undefined)?.relationCount ?? 1)
+        const neighborId = useFullGraph ? edge.source : edge.target
+        const fullNeighbor = fullNodeById?.get(neighborId)
+        const visibleNeighbor = nodeById.get(neighborId)
+        if (!fullNeighbor && !visibleNeighbor) continue
+        const item = fullNeighbor
+          ? {
+              id: fullNeighbor.id,
+              label: fullNeighbor.label,
+              tableId: fullNeighbor.tableId,
+              reportId: fullNeighbor.reportId,
+              entityKind: fullNeighbor.entityKind,
+              meta: `${entityLabel(fullNeighbor.entityKind)} · ${fullNeighbor.layer
+                ? DWH_SWIMLANE_LABELS[normalizeDwhLayer(fullNeighbor)]
+                : fullNeighbor.subtitle ?? entityLabel(fullNeighbor.entityKind)}`,
+            }
+          : {
+              id: visibleNeighbor!.id,
+              label: visibleNeighbor!.data.fullLabel || visibleNeighbor!.data.label,
+              tableId: visibleNeighbor!.data.tableId,
+              reportId: visibleNeighbor!.data.reportId,
+              entityKind: visibleNeighbor!.data.entityKind,
+              meta: `${entityLabel(visibleNeighbor!.data.entityKind)} · ${visibleNeighbor!.data.layer
+                ? DWH_SWIMLANE_LABELS[visibleNeighbor!.data.layer]
+                : visibleNeighbor!.data.sub}`,
+            }
+        const itemKey = item.tableId
+          ? `table:${item.tableId}`
+          : item.reportId
+            ? `report:${item.reportId}`
+            : item.id
+        const relationCount = useFullGraph
+          ? 1
+          : (((edge as Edge).data as DwhEdgeData | undefined)?.relationCount ?? 1)
         const existing = items.get(itemKey)
         if (existing) {
           existing.relationCount += relationCount
@@ -1775,10 +1804,8 @@ function DwhLineageMapInner({
         }
         items.set(itemKey, {
           id: itemKey,
-          label: neighbor.data.fullLabel || neighbor.data.label,
-          meta: neighbor.data.layer
-            ? DWH_SWIMLANE_LABELS[neighbor.data.layer]
-            : neighbor.data.sub,
+          label: item.label,
+          meta: item.meta,
           relationCount,
         })
       }
@@ -1788,7 +1815,7 @@ function DwhLineageMapInner({
       sources: collect('source'),
       targets: collect('target'),
     }
-  }, [built.edges, built.nodes, inspectedNodeRenderId])
+  }, [built.edges, built.nodes, graph, inspectedNodeRenderId])
 
   useLayoutEffect(() => {
     if (!active) return
