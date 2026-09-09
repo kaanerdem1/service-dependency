@@ -3622,6 +3622,7 @@
 }
 
 .pf-node {
+  position: relative;
   min-width: 168px;
   max-width: 220px;
   padding: 8px 10px 10px;
@@ -3635,20 +3636,155 @@
   border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
 }
 
-.pf-node.is-start {
-  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
-}
-
-.pf-node.is-end {
-  background: color-mix(in srgb, var(--ink) 4%, #fff);
-}
-
-.pf-node.is-decision {
-  background: color-mix(in srgb, #e3b341 12%, #fff);
+.pf-node.is-task {
+  border-radius: 12px;
 }
 
 .pf-node.is-service {
   background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+
+.pf-node.is-other {
+  border-style: dashed;
+}
+
+.pf-node-icon {
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+}
+
+/* BPMN olay (start/end): daire — şekil türü tek bakışta ayırt edilsin */
+.pf-node-event {
+  min-width: 0;
+  max-width: 108px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-event-kicker {
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-event-circle {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.pf-node-event.is-start .pf-event-circle {
+  border: 2px solid color-mix(in srgb, #2f9e58 65%, var(--line));
+  background: color-mix(in srgb, #2f9e58 10%, #fff);
+}
+
+.pf-node-event.is-end .pf-event-circle {
+  border: 3px solid color-mix(in srgb, #c1443c 65%, var(--line));
+  background: color-mix(in srgb, #c1443c 8%, #fff);
+}
+
+.pf-node-event.is-selected .pf-event-circle {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.pf-event-label {
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 108px;
+  overflow-wrap: anywhere;
+}
+
+/* BPMN karar (gateway): baklava/diamond — onay/reddet dallanması görsel olarak ayrışsın */
+.pf-node-gateway {
+  min-width: 0;
+  max-width: 128px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.pf-gateway-diamond {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 6px;
+  border: 2px solid color-mix(in srgb, #e3b341 70%, var(--line));
+  background: color-mix(in srgb, #e3b341 14%, #fff);
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-node-gateway.is-selected .pf-gateway-diamond {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.pf-gateway-mark {
+  transform: rotate(-45deg);
+  font-size: 15px;
+  font-weight: 800;
+  color: #8a6d1d;
+}
+
+.pf-gateway-label {
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: center;
+  max-width: 128px;
+  overflow-wrap: anywhere;
+}
+
+.pf-node-more-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 20%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+  color: #2f5d4a;
+  font-size: 9.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+/* Baklava 45° döndürülmüş; rozeti dik göstermek için ters döndür */
+.pf-gateway-diamond .pf-node-more-badge {
+  transform: rotate(-45deg);
+  top: 2px;
+  right: -22px;
 }
 
 .react-flow__node.pf-node-offpath {
@@ -3666,14 +3802,17 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 22%, transparent);
 }
 
+.react-flow__node.pf-node-onpath .pf-event-circle {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 30%, transparent);
+}
+
+.react-flow__node.pf-node-onpath .pf-gateway-diamond {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 30%, transparent);
+}
+
 .react-flow__edge.pf-edge-offpath .react-flow__edge-path {
   opacity: 0.18;
   transition: opacity 0.12s ease;
-}
-
-.react-flow__edge.pf-edge-offpath .react-flow__edge-textbg,
-.react-flow__edge.pf-edge-offpath .react-flow__edge-text {
-  opacity: 0.18;
 }
 
 .react-flow__edge.pf-edge-onpath .react-flow__edge-path {
@@ -3682,13 +3821,27 @@
   opacity: 1;
 }
 
-.react-flow__edge.pf-edge-onpath .react-flow__edge-text {
-  fill: #1d3fa3;
+/* Ok üzerindeki etiket: kaynağa (çıkış ucuna) yakın — aynı düğümden çıkan
+ * birden çok ok, kesişme bölgesinde değil kendi kaynağının yanında okunsun */
+.pf-edge-label {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: 10.5px;
   font-weight: 650;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.react-flow__edge.pf-edge-onpath .react-flow__edge-textbg {
-  fill: #eaf0ff;
+.pf-edge-label.is-dim {
+  opacity: 0.22;
+}
+
+.pf-edge-label.is-onpath {
+  background: #eaf0ff;
+  border-color: color-mix(in srgb, #2f6fed 45%, var(--line));
+  color: #1d3fa3;
 }
 
 .pf-node-kind {

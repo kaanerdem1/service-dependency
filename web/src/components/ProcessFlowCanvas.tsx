@@ -2,17 +2,22 @@ import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   MarkerType,
   MiniMap,
   NodeResizer,
   Position,
   ReactFlowProvider,
+  getSmoothStepPath,
   useEdgesState,
   useNodesState,
   useReactFlow,
   type Edge,
+  type EdgeProps,
+  type EdgeTypes,
   type Node,
   type NodeChange,
   type NodeProps,
@@ -46,10 +51,45 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   other: 'Adım',
 }
 
+/** BPMN benzeri gösterim: olaylar (start/end) daire, karar (gateway) baklava,
+ * görev/servis dikdörtgen. Şekil türü tek bakışta ayırt edilsin. */
 function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
+  const badge =
+    data.hiddenChildCount > 0 ? (
+      <span className="pf-node-more-badge">+{data.hiddenChildCount}</span>
+    ) : null
+
+  if (data.kind === 'start' || data.kind === 'end') {
+    return (
+      <div className={`pf-node pf-node-event is-${data.kind}${selected ? ' is-selected' : ''}`}>
+        <Handle type="target" position={Position.Left} />
+        <span className="pf-event-kicker">{KIND_LABEL[data.kind]}</span>
+        <div className="pf-event-circle">{badge}</div>
+        <strong className="pf-event-label">{data.label}</strong>
+        <Handle type="source" position={Position.Right} />
+      </div>
+    )
+  }
+
+  if (data.kind === 'decision') {
+    return (
+      <div className={`pf-node pf-node-gateway is-decision${selected ? ' is-selected' : ''}`}>
+        <Handle type="target" position={Position.Left} />
+        <span className="pf-event-kicker">{KIND_LABEL.decision}</span>
+        <div className="pf-gateway-diamond">
+          <span className="pf-gateway-mark">✕</span>
+          {badge}
+        </div>
+        <strong className="pf-gateway-label">{data.label}</strong>
+        <Handle type="source" position={Position.Right} />
+      </div>
+    )
+  }
+
   return (
     <div className={`pf-node is-${data.kind}${selected ? ' is-selected' : ''}`}>
       <Handle type="target" position={Position.Left} />
+      {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
       {data.services[0] ? (
@@ -63,6 +103,65 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       <Handle type="source" position={Position.Right} />
     </div>
   )
+}
+
+type ProcessEdgeData = {
+  dim?: boolean
+  active?: boolean
+}
+
+/** Etiketi kenarın orta noktası yerine çıkış ucuna yakın konumlandırır:
+ * aynı düğümden çıkan “Onayla/Reddet” gibi birden çok ok, kesişme bölgesinde
+ * değil kendi kaynağının yanında okunur. */
+function ProcessEdge({
+  id,
+  sourceX,
+  sourceY,
+  sourcePosition,
+  targetX,
+  targetY,
+  targetPosition,
+  style,
+  markerEnd,
+  label,
+  data,
+}: EdgeProps<ProcessEdgeData>) {
+  const [edgePath] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+    borderRadius: 14,
+  })
+  const t = 0.22
+  const lx = sourceX + (targetX - sourceX) * t
+  const ly = sourceY + (targetY - sourceY) * t
+  const stateClass = data?.active ? ' is-onpath' : data?.dim ? ' is-dim' : ''
+  return (
+    <>
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      {label ? (
+        <EdgeLabelRenderer>
+          <div
+            className={`pf-edge-label${stateClass}`}
+            style={{
+              position: 'absolute',
+              pointerEvents: 'none',
+              transform: `translate(-50%, -50%) translate(${lx}px, ${ly}px)`,
+            }}
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      ) : null}
+    </>
+  )
+}
+
+const edgeTypes: EdgeTypes = {
+  processEdge: memo(ProcessEdge),
 }
 
 function NoteNode({ data, selected }: NodeProps<NoteNodeData>) {
@@ -300,6 +399,7 @@ function FlowInner({ graph }: Props) {
       source: e.from,
       target: e.to,
       label: e.label,
+      type: 'processEdge',
       hidden: !revealed.has(e.from) || !revealed.has(e.to),
       markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
     }))
@@ -363,6 +463,7 @@ function FlowInner({ graph }: Props) {
         source: e.from,
         target: e.to,
         label: e.label,
+        type: 'processEdge',
         hidden: !seed.has(e.from) || !seed.has(e.to),
         markerEnd: { type: MarkerType.ArrowClosed, width: 18, height: 18, color: '#64748b' },
       })),
@@ -547,6 +648,7 @@ function FlowInner({ graph }: Props) {
         ...e,
         className: active ? 'pf-edge-onpath' : 'pf-edge-offpath',
         zIndex: active ? 1 : 0,
+        data: { active, dim: !active },
         markerEnd: active
           ? { type: MarkerType.ArrowClosed, width: 20, height: 20, color: '#2f6fed' }
           : e.markerEnd,
@@ -619,6 +721,7 @@ function FlowInner({ graph }: Props) {
           nodes={displayNodes}
           edges={displayEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={handleNodesChange}
           onEdgesChange={onEdgesChange}
           onNodeDragStop={() => {
@@ -633,8 +736,6 @@ function FlowInner({ graph }: Props) {
           minZoom={0.15}
           maxZoom={1.8}
           defaultEdgeOptions={{
-            type: 'smoothstep',
-            pathOptions: { borderRadius: 14 },
             style: { stroke: '#94a3b8', strokeWidth: 1.4 },
           }}
           defaultViewport={{ x: 24, y: 24, zoom: 0.85 }}
