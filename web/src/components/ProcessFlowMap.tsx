@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -11,6 +11,7 @@ import ReactFlow, {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Edge,
   type EdgeProps,
   type EdgeTypes,
@@ -23,12 +24,16 @@ import type { ProcessDecisionInfo, ProcessFlowGraph, ProcessFlowNodeKind } from 
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 
 const RANK_SEP = 250
-const NODE_SEP = 82
+const NODE_SEP = 108
+const FAN_GAP = 122
+const COL_GAP = 112
 const ORIGIN = { x: 60, y: 49.2 }
 const NODE_W = 168
 const RAIL_PAD = 36
 const RAIL_GAP = 16
 const CORNER = 14
+const WIDE_SPAN = 1600
+const START_ZOOM = 0.9
 
 type ProcessNodeData = {
   label: string
@@ -43,6 +48,7 @@ type ProcessEdgeData = {
   originalId?: string
   labels?: string[]
   route?: RouteKind
+  lane?: number
   active?: boolean
   dim?: boolean
 }
@@ -167,23 +173,25 @@ function kitEdgePath(
   targetY: number,
   route: RouteKind,
   slotKey: string,
+  lane = 0,
 ) {
+  const lift = lane * 18
   if (route === 'direct') {
-    const path = `M ${sourceX},${sourceY} C ${sourceX + 50},${sourceY} ${targetX - 50},${targetY} ${targetX},${targetY}`
+    const path = `M ${sourceX},${sourceY} C ${sourceX + 50},${sourceY + lift} ${targetX - 50},${targetY + lift} ${targetX},${targetY}`
     return {
       path,
       labelX: (sourceX + targetX) / 2,
-      labelY: (sourceY + targetY) / 2,
+      labelY: (sourceY + targetY) / 2 + lift,
     }
   }
   const slot = railSlot(slotKey)
   const r = CORNER
   if (route === 'back') {
-    const railY = Math.min(sourceY, targetY) - RAIL_PAD - slot * RAIL_GAP
+    const railY = Math.min(sourceY, targetY) - RAIL_PAD - slot * RAIL_GAP + lift
     const path = `M ${sourceX},${sourceY} L ${sourceX},${railY + r} Q ${sourceX},${railY} ${sourceX - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
-  const railY = Math.max(sourceY, targetY) + RAIL_PAD + slot * RAIL_GAP
+  const railY = Math.max(sourceY, targetY) + RAIL_PAD + slot * RAIL_GAP + lift
   const path = `M ${sourceX},${sourceY} L ${sourceX},${railY - r} Q ${sourceX},${railY} ${sourceX + r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
   return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
 }
@@ -206,6 +214,7 @@ function ProcessEdge({
     targetY,
     route,
     data?.originalId ?? id,
+    data?.lane ?? 0,
   )
   const active = !!data?.active
   const dim = !!data?.dim
@@ -255,32 +264,38 @@ function isDummyId(id: string) {
   return id.startsWith('d:')
 }
 
-function bundleLabel(labels: string[]) {
-  const filled = labels.filter(Boolean)
-  const uniq = [...new Set(filled)]
-  if (uniq.length === 0) return labels.length > 1 ? `${labels.length} geçiş` : undefined
-  if (uniq.length === 1) return filled.length > 1 ? `${uniq[0]} ×${filled.length}` : uniq[0]
-  if (uniq.length <= 3) return uniq.join(' · ')
-  return `${uniq.length} geçiş`
-}
-
-function visualSegments(graph: ProcessFlowGraph) {
-  const groups = new Map<string, { from: string; to: string; ids: string[]; labels: string[] }>()
+function visualEdges(graph: ProcessFlowGraph) {
+  const totals = new Map<string, number>()
+  const seen = new Map<string, number>()
   for (const e of graph.edges) {
     if (isDummyId(e.from) || isDummyId(e.to)) continue
     const key = `${e.from}\0${e.to}`
-    const g = groups.get(key) ?? { from: e.from, to: e.to, ids: [], labels: [] }
-    g.ids.push(e.id)
-    if (e.label) g.labels.push(e.label)
-    groups.set(key, g)
+    totals.set(key, (totals.get(key) ?? 0) + 1)
   }
-  return [...groups.values()].map((g) => ({
-    from: g.from,
-    to: g.to,
-    label: bundleLabel(g.labels),
-    originalId: g.ids[0]!,
-    labels: g.labels,
-  }))
+  const out: {
+    from: string
+    to: string
+    label?: string
+    originalId: string
+    labels: string[]
+    lane: number
+  }[] = []
+  for (const e of graph.edges) {
+    if (isDummyId(e.from) || isDummyId(e.to)) continue
+    const key = `${e.from}\0${e.to}`
+    const n = totals.get(key) ?? 1
+    const i = seen.get(key) ?? 0
+    seen.set(key, i + 1)
+    out.push({
+      from: e.from,
+      to: e.to,
+      label: e.label,
+      originalId: e.id,
+      labels: e.label ? [e.label] : [],
+      lane: n <= 1 ? 0 : i - (n - 1) / 2,
+    })
+  }
+  return out
 }
 
 function layeredLayout(graph: ProcessFlowGraph) {
@@ -331,15 +346,73 @@ function layeredLayout(graph: ProcessFlowGraph) {
   return positions
 }
 
+function resolveColumns(positions: Record<string, { x: number; y: number }>) {
+  const cols = new Map<number, string[]>()
+  for (const [id, p] of Object.entries(positions)) {
+    const col = Math.round(p.x / 50)
+    const list = cols.get(col) ?? []
+    list.push(id)
+    cols.set(col, list)
+  }
+  for (const ids of cols.values()) {
+    ids.sort((a, b) => positions[a]!.y - positions[b]!.y || a.localeCompare(b, 'tr'))
+    for (let i = 1; i < ids.length; i++) {
+      const prev = positions[ids[i - 1]!]!
+      const cur = positions[ids[i]!]!
+      if (cur.y < prev.y + COL_GAP) {
+        positions[ids[i]!] = { x: cur.x, y: prev.y + COL_GAP }
+      }
+    }
+  }
+}
+
+/** Sağa giden 2–4 uç aynı satırda kalmasın; biraz dikeye açılsın. */
+function spreadForwardFans(
+  graph: ProcessFlowGraph,
+  positions: Record<string, { x: number; y: number }>,
+) {
+  const children = new Map<string, string[]>()
+  for (const e of graph.edges) {
+    if (isDummyId(e.from) || isDummyId(e.to)) continue
+    const list = children.get(e.from) ?? []
+    if (!list.includes(e.to)) list.push(e.to)
+    children.set(e.from, list)
+  }
+  const order = Object.keys(positions).sort((a, b) => positions[a]!.x - positions[b]!.x)
+  for (const id of order) {
+    const from = positions[id]
+    if (!from) continue
+    const near = (children.get(id) ?? []).filter((to) => {
+      const p = positions[to]
+      return p && p.x > from.x + 40 && p.x - from.x < RANK_SEP * 1.7
+    })
+    if (near.length < 2) continue
+    near.sort((a, b) => positions[a]!.y - positions[b]!.y || a.localeCompare(b, 'tr'))
+    const mid = near.reduce((s, k) => s + positions[k]!.y, 0) / near.length
+    near.forEach((k, i) => {
+      const p = positions[k]!
+      positions[k] = {
+        x: p.x,
+        y: mid + (i - (near.length - 1) / 2) * FAN_GAP,
+      }
+    })
+  }
+  resolveColumns(positions)
+}
+
 function positionsFor(graph: ProcessFlowGraph) {
   const fallback = layeredLayout(graph)
-  if (graph.no !== '105116') return fallback
+  if (graph.no !== '105116') {
+    spreadForwardFans(graph, fallback)
+    return fallback
+  }
   const out = { ...fallback }
   for (const n of graph.nodes) {
     if (n.kind === 'dummy') continue
     const ref = KTF_REFERENCE_POSITIONS[n.id] ?? KTF_REFERENCE_POSITIONS[n.name]
-    if (ref) out[n.id] = ref
+    if (ref) out[n.id] = { ...ref }
   }
+  spreadForwardFans(graph, out)
   return out
 }
 
@@ -368,10 +441,10 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
       draggable: true,
     }))
   const posOf = (id: string) => nodes.find((n) => n.id === id)?.position ?? ORIGIN
-  const edges: Edge[] = visualSegments(graph).map((e) => {
+  const edges: Edge[] = visualEdges(graph).map((e) => {
     const route = routeFor(graph, e.from, e.to, posOf(e.from).x, posOf(e.to).x)
     return {
-      id: `b:${e.from}>${e.to}`,
+      id: `b:${e.originalId}`,
       source: e.from,
       target: e.to,
       label: e.label,
@@ -381,6 +454,7 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
         originalId: e.originalId,
         labels: e.labels,
         route,
+        lane: e.lane,
       } satisfies ProcessEdgeData,
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#a8b0bc' },
     }
@@ -409,14 +483,86 @@ function EdgeMarkers() {
   )
 }
 
-function ProcessFlowMapInner({ graph }: { graph: ProcessFlowGraph }) {
+function startCamera(nodes: Node[]) {
+  const start =
+    nodes.find((n) => (n.data as ProcessNodeData | undefined)?.kind === 'start') ?? nodes[0]
+  const zoom = START_ZOOM
+  return {
+    x: 72 - (start?.position.x ?? ORIGIN.x) * zoom,
+    y: 120 - (start?.position.y ?? ORIGIN.y) * zoom,
+    zoom,
+  }
+}
+
+function graphSpanX(nodes: Node[]) {
+  let minX = Infinity
+  let maxX = -Infinity
+  for (const n of nodes) {
+    minX = Math.min(minX, n.position.x)
+    maxX = Math.max(maxX, n.position.x)
+  }
+  return Number.isFinite(minX) ? maxX - minX : 0
+}
+
+function FullscreenGlyph({ expanded }: { expanded: boolean }) {
+  return (
+    <span className="tl-zoom-glyph" aria-hidden>
+      {expanded ? (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M4.5 1.5H1.5v3M7.5 1.5h3v3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </span>
+  )
+}
+
+function ProcessFlowMapInner({
+  graph,
+  onDismiss,
+}: {
+  graph: ProcessFlowGraph
+  onDismiss?: () => void
+}) {
   const seed = useMemo(() => buildGraph(graph), [graph])
   const [nodes, , onNodesChange] = useNodesState(seed.nodes)
   const [edges] = useEdgesState(seed.edges)
   const [hoverId, setHoverId] = useState<string>()
   const [dragId, setDragId] = useState<string>()
+  const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string>()
+  const { setViewport } = useReactFlow()
   const focusId = dragId ?? hoverId
+  const wide = seed.nodes.length > 18 || graphSpanX(seed.nodes) > WIDE_SPAN
+
+  useEffect(() => {
+    if (!wide) return
+    setViewport(startCamera(seed.nodes), { duration: 0 })
+  }, [graph.no, seed.nodes, setViewport, wide])
+
+  useEffect(() => {
+    if (!expanded) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExpanded(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [expanded])
 
   const neighborhood = useMemo(() => {
     if (!focusId) return null
@@ -486,7 +632,23 @@ function ProcessFlowMapInner({ graph }: { graph: ProcessFlowGraph }) {
   }, [])
 
   return (
-    <div className="pf-map-wrap">
+    <div className={`pf-map-wrap${expanded ? ' is-expanded' : ''}`}>
+      <div className="pf-map-tools">
+        <button
+          type="button"
+          className="tl-zoom"
+          title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
+          aria-label={expanded ? 'Küçült' : 'Tam ekran'}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          <FullscreenGlyph expanded={expanded} />
+        </button>
+      </div>
+      {onDismiss ? (
+        <button type="button" className="pf-map-close" onClick={onDismiss}>
+          Kapat
+        </button>
+      ) : null}
       <EdgeMarkers />
       <ReactFlow
         nodes={shownNodes}
@@ -506,8 +668,9 @@ function ProcessFlowMapInner({ graph }: { graph: ProcessFlowGraph }) {
         zoomOnScroll
         minZoom={0.06}
         maxZoom={1.8}
-        fitView
-        fitViewOptions={{ padding: 0.12 }}
+        fitView={!wide}
+        fitViewOptions={{ padding: 0.16 }}
+        defaultViewport={wide ? startCamera(seed.nodes) : undefined}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={null}
       >
@@ -518,10 +681,16 @@ function ProcessFlowMapInner({ graph }: { graph: ProcessFlowGraph }) {
   )
 }
 
-export function ProcessFlowMap({ graph }: { graph: ProcessFlowGraph }) {
+export function ProcessFlowMap({
+  graph,
+  onDismiss,
+}: {
+  graph: ProcessFlowGraph
+  onDismiss?: () => void
+}) {
   return (
     <ReactFlowProvider>
-      <ProcessFlowMapInner key={graph.no} graph={graph} />
+      <ProcessFlowMapInner key={graph.no} graph={graph} onDismiss={onDismiss} />
     </ReactFlowProvider>
   )
 }

@@ -755,9 +755,6 @@ export function WorkflowsPanel({
         <div className="shortcuts-drawer-body">
           <div className="sc-process-block">
             <div className="sc-section-label">Süreçler</div>
-            <p className="sc-process-hint">
-              BPM süreçleri — tıklayınca sağda akış açılır (deneme: 3 kayıt).
-            </p>
             {pocProcesses.length === 0 ? (
               <p className="sc-process-hint">Liste yüklenemedi veya boş.</p>
             ) : (

@@ -1602,19 +1602,19 @@
   gap: 2px;
   width: 100%;
   margin: 0;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  border-radius: 9px;
-  background: color-mix(in srgb, #fff 70%, var(--surface));
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   text-align: left;
   cursor: pointer;
   font: inherit;
+  color: inherit;
 }
 
 .sc-process-item:hover,
 .sc-process-item.is-active {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
-  background: color-mix(in srgb, var(--accent) 8%, #fff);
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 8%, transparent);
 }
 
 .sc-process-item-no {
@@ -3930,6 +3930,24 @@
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
+}
+
+.pf-map-tools {
+  position: absolute;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pf-map-wrap.is-expanded {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  height: 100%;
+  min-height: 0;
 }
 
 .pf-map-status {

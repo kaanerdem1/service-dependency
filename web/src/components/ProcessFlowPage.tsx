@@ -30,12 +30,14 @@ export function ProcessFlowPage({ processNo, onDismiss }: Props) {
 
   return (
     <article className="pf-map-page">
-      <button type="button" className="pf-map-close" onClick={onDismiss}>
-        Kapat
-      </button>
+      {!graph ? (
+        <button type="button" className="pf-map-close" onClick={onDismiss}>
+          Kapat
+        </button>
+      ) : null}
       {error ? <p className="pf-map-status">{error}</p> : null}
       {!error && !graph ? <p className="pf-map-status">Yükleniyor…</p> : null}
-      {graph ? <ProcessFlowMap key={graph.no} graph={graph} /> : null}
+      {graph ? <ProcessFlowMap key={graph.no} graph={graph} onDismiss={onDismiss} /> : null}
     </article>
   )
 }
