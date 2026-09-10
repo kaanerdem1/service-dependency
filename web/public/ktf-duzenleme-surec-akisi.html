@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="tr"><head><meta charset="utf-8"/><title>KTF Düzenleme – Süreç Akışı</title>
+<style>
+  :root{--bg:#f7f8fa;--grid:#e6e9ee;}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;overflow:hidden}
+  #topbar{position:fixed;top:0;left:0;right:0;height:56px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:10;font-size:14px}
+  #topbar h1{font-size:15px;margin:0;font-weight:650;color:#111827}
+  #topbar .sub{color:#6b7280;font-size:12.5px;margin-left:10px}
+  #legend{display:flex;gap:14px;align-items:center;font-size:12px;color:#4b5563}
+  #legend .sw{display:inline-flex;align-items:center;gap:5px}
+  #legend .line{width:20px;height:0;border-top:2px solid #94a3b8;display:inline-block}
+  #legend .line.jump{border-top:2px dashed #2f6fed}
+  #legend .line.back{border-top:2px dashed #e05b4f}
+  #controls{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:6px;z-index:10}
+  #controls button{width:34px;height:34px;border-radius:8px;border:1px solid #d1d5db;background:#fff;font-size:16px;cursor:pointer;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  #controls button:hover{background:#f3f4f6}
+  #viewport{position:absolute;top:56px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab}
+  #viewport.dragging{cursor:grabbing}
+  #stage{transform-origin:0 0;position:absolute;top:0;left:0}
+  svg{display:block;background:
+    linear-gradient(var(--grid) 1px, transparent 1px) 0 0/22px 22px,
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0/22px 22px,
+    var(--bg);}
+  .pnode{cursor:pointer;transition:opacity .15s}
+  .pnode text{pointer-events:none;font-family:inherit}
+  .node-kind{font-size:9px;letter-spacing:.04em;fill:#6b7280;text-anchor:middle;text-transform:uppercase}
+  .node-title{font-size:11.5px;font-weight:600;fill:#111827;text-anchor:middle}
+  .node-title-d{font-size:10.5px;font-weight:600;fill:#111827;text-anchor:middle}
+  .node-svc{font-size:9px;fill:#7c6fe0;text-anchor:middle}
+  .node-x{font-size:13px;fill:#c8952e;text-anchor:middle;font-weight:700}
+  .kind-task .node-kind, .kind-service .node-kind{text-anchor:start}
+  .kind-task .node-title, .kind-service .node-title{text-anchor:start}
+  .kind-other .node-kind{text-anchor:start}
+  .kind-other .node-title{text-anchor:start}
+  .edge path{fill:none;stroke:#a8b0bc;stroke-width:1.5}
+  .edge.edge-jump path{stroke:#2f6fed;stroke-width:1.3;stroke-dasharray:5 4;opacity:.55}
+  .edge.edge-back path{stroke:#e05b4f;stroke-width:1.3;stroke-dasharray:5 4;opacity:.55}
+  .edge-label-bg{fill:#fff;opacity:.9}
+  .edge-label{font-size:9.5px;fill:#475569;text-anchor:start}
+  .edge.dim{opacity:.08}
+  .pnode.dim{opacity:.16}
+  .edge.onpath path{stroke:#2f6fed !important;stroke-width:2.4 !important;opacity:1 !important;stroke-dasharray:none !important}
+  .pnode.onpath{opacity:1}
+  .pnode.onpath rect, .pnode.onpath polygon, .pnode.onpath circle{stroke:#2f6fed;stroke-width:2.6}
+
+  .node-label-box{overflow:hidden;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;word-break:break-word;font:600 11px/1.2 -apple-system,'Segoe UI',sans-serif;color:#111827;width:100%;height:100%}
+  .node-svc-box{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:9px/1.2 -apple-system,'Segoe UI',sans-serif;color:#7c6fe0;width:100%}
+</style></head>
+<body>
+<div id="topbar">
+  <div><h1>KTF Düzenleme <span class="sub">105116 · 63 adım · 137 geçiş</span></h1></div>
+  <div id="legend">
+    <span class="sw"><span class="line"></span> Yakın adım (doğrudan)</span>
+    <span class="sw"><span class="line jump"></span> Uzak/ileri sıçrama (alt ray)</span>
+    <span class="sw"><span class="line back"></span> Geri dönüş / red döngüsü (üst ray)</span>
+    <span class="sw">Hover → sadece doğrudan komşular</span>
+    <span class="sw">Tıkla → tüm yolu sabitle</span>
+    <span class="sw" id="pinhint" style="display:none;color:#2f6fed;font-weight:600">● Sabitlendi — boş alana tıkla</span>
+  </div>
+</div>
+<div id="viewport">
+  <div id="stage">
+    <svg id="svg" width="9038" height="970" viewBox="0 -120 9038 970">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+        </marker>
+      </defs>
+      <g id="edges"><g class="edge edge-direct" data-from="n_start" data-to="n_Takip_32_m_252__351_terisi_32_mi_63_"><path d="M228,88 C278,88 260,88 310,88" marker-end="url(#arrow)"/><title>start → Takip müşterisi mi?</title></g>
+<g class="edge edge-direct" data-from="n_Oran_32_Vade_32_Kontrol" data-to="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay"><path d="M1228,88 C1278,88 1260,88 1310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1269,88)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Tamam</text></g><title>Oran Vade Kontrol → PY veya YPY veya SBM Onay [Tamam]</title></g>
+<g class="edge edge-jump" data-from="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M1394,88 L1394,646 Q1394,660 1408,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>PY veya YPY veya SBM Onay → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-direct" data-from="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay" data-to="n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_"><path d="M1478,88 C1528,88 1510,88 1560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1519,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>PY veya YPY veya SBM Onay → Kredi kullandırılacak firmanın tahsisi Finansal Kurumlar tarafından mı yapılmış? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay" data-to="n_Reddet"><path d="M1394,88 L1394,586 Q1394,600 1408,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>PY veya YPY veya SBM Onay → Reddet [Reddet]</title></g>
+<g class="edge edge-back" data-from="n__350_ube_32_Havuzu" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M8144,32 L8144,-26 Q8144,-40 8130,-40 L1158,-40 Q1144,-40 1144,-26 L1144,32" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4644,-40)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Şube Havuzu → Oran Vade Kontrol [Onayla]</title></g>
+<g class="edge edge-direct" data-from="n__350_ube_32_Havuzu" data-to="n_Reddet"><path d="M8228,88 C8278,88 8260,88 8310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(8269,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Reddet</text></g><title>Şube Havuzu → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_" data-to="n_Finansal_32_Kurumlar_32_Onay_305_"><path d="M1728,88 C1778,88 1760,88 1810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1769,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Evet</text></g><title>Kredi kullandırılacak firmanın tahsisi Finansal Kurumlar tarafından mı yapılmış? → Finansal Kurumlar Onayı [Evet]</title></g>
+<g class="edge edge-direct" data-from="n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_" data-to="n__214_zel_32_Maliyet_32_mi_63_"><path d="M1728,88 C1778,88 1760,188 1810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1769,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Hayır</text></g><title>Kredi kullandırılacak firmanın tahsisi Finansal Kurumlar tarafından mı yapılmış? → Özel Maliyet mi? [Hayır]</title></g>
+<g class="edge edge-jump" data-from="n_Finansal_32_Kurumlar_32_Onay_305_" data-to="n_runActionServices"><path d="M1894,88 L1894,616 Q1894,630 1908,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Finansal Kurumlar Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_Finansal_32_Kurumlar_32_Onay_305_" data-to="n_Reddet"><path d="M1894,88 L1894,586 Q1894,600 1908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Finansal Kurumlar Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Reddet" data-to="n_end1"><path d="M8478,88 C8528,88 8510,88 8560,88" marker-end="url(#arrow)"/><title>Reddet → end1</title></g>
+<g class="edge edge-jump" data-from="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"><path d="M2394,88 L2394,706 Q2394,720 2408,720 L2880,720 Q2894,720 2894,706 L2894,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2644,720)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi? → Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge"><path d="M2478,88 C2528,88 2510,88 2560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2519,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi? → Ürün-Kampanya Kontrolleri - Bölge [true]</title></g>
+<g class="edge edge-jump" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M4894,88 L4894,646 Q4894,660 4908,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Bölge Müdürlüğü Pazarlama Servisi → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-direct" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi" data-to="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"><path d="M4978,88 C5028,88 5010,88 5060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5019,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Bölge Müdürlüğü Pazarlama Servisi → Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi" data-to="n_Reddet"><path d="M4894,88 L4894,586 Q4894,600 4908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Bölge Müdürlüğü Pazarlama Servisi → Reddet [Reddet]</title></g>
+<g class="edge edge-jump" data-from="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M2894,88 L2894,736 Q2894,750 2908,750 L4130,750 Q4144,750 4144,736 L4144,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3519,750)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? → Fiyatlama Şube Yetkisinde mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_" data-to="n_Ticari__350_ube_Mi_63_"><path d="M2978,88 C3028,88 3010,88 3060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3019,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? → Ticari_Şube_Mi? [true]</title></g>
+<g class="edge edge-direct" data-from="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M4228,88 C4278,88 4260,88 4310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4269,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Fiyatlama Şube Yetkisinde mi? → Masraf Şube Yetkisinde mi? [true]</title></g>
+<g class="edge edge-jump" data-from="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n_Ticari_32__350_ube_32_Mi_63_"><path d="M4144,88 L4144,706 Q4144,720 4158,720 L4630,720 Q4644,720 4644,706 L4644,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4394,720)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Fiyatlama Şube Yetkisinde mi? → Ticari Şube Mi? [false]</title></g>
+<g class="edge edge-jump" data-from="n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"><path d="M4394,88 L4394,736 Q4394,750 4408,750 L5130,750 Q5144,750 5144,736 L5144,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4769,750)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Masraf Şube Yetkisinde mi? → Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi? [true]</title></g>
+<g class="edge edge-direct" data-from="n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_" data-to="n_Ticari_32__350_ube_32_Mi_63_"><path d="M4478,88 C4528,88 4510,88 4560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4519,88)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Masraf Şube Yetkisinde mi? → Ticari Şube Mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_" data-to="n_M_252__351_teri_32_Segmenti2"><path d="M5228,88 C5278,88 5260,88 5310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5269,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi? → Müşteri Segmenti2 [true]</title></g>
+<g class="edge edge-jump" data-from="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5144,88 L5144,706 Q5144,720 5158,720 L5880,720 Q5894,720 5894,706 L5894,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5519,720)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi? → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_Krediler_32_Y_246_netimi_32_Onay" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M228,648 C2572.44,648 3465.56,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3019,368)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Krediler Yönetimi Onay → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-direct" data-from="n_Krediler_32_Y_246_netimi_32_Onay" data-to="n_Reddet"><path d="M228,648 C3622.44,648 4915.5599999999995,88 8310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4269,368)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Reddet</text></g><title>Krediler Yönetimi Onay → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_" data-to="n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5978,88 C6028,88 6010,88 6060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6019,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? → Masraf Bölge Yetkisinde mi? [true]</title></g>
+<g class="edge edge-jump" data-from="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"><path d="M5894,88 L5894,736 Q5894,750 5908,750 L6630,750 Q6644,750 6644,736 L6644,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6269,750)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? → Yapılandırma KTF simi?(GMY kontrol) [false]</title></g>
+<g class="edge edge-direct" data-from="n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama"><path d="M6228,88 C6278,88 6260,88 6310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6269,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Masraf Bölge Yetkisinde mi? → Ürün-Kampanya Kontrolleri - Pazarlama [true]</title></g>
+<g class="edge edge-jump" data-from="n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"><path d="M6144,88 L6144,736 Q6144,750 6158,750 L6630,750 Q6644,750 6644,736 L6644,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6394,750)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Masraf Bölge Yetkisinde mi? → Yapılandırma KTF simi?(GMY kontrol) [false]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32__304_BPMUD_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7394,88 L7394,646 Q7394,660 7408,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF İBPMUD Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32__304_BPMUD_32_Onay_305_" data-to="n_runActionServices"><path d="M7394,88 L7394,616 Q7394,630 7408,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF İBPMUD Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32__304_BPMUD_32_Onay_305_" data-to="n_Reddet"><path d="M7394,88 L7394,586 Q7394,600 7408,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF İBPMUD Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_TRMBPMUD_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7394,188 L7394,646 Q7394,660 7408,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF TRMBPMUD Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_TRMBPMUD_32_Onay_305_" data-to="n_runActionServices"><path d="M7394,188 L7394,616 Q7394,630 7408,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF TRMBPMUD Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_TRMBPMUD_32_Onay_305_" data-to="n_Reddet"><path d="M7394,188 L7394,586 Q7394,600 7408,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF TRMBPMUD Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7728,88 C7778,88 7760,188 7810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,138)"><rect x="-2" y="-9" width="90.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Değişiklik Yap</text></g><title>KTF KOBİPAZMUD Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-direct" data-from="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_" data-to="n_runActionServices"><path d="M7728,88 C7778,88 7760,88 7810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>KTF KOBİPAZMUD Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_" data-to="n_Reddet"><path d="M7644,88 L7644,586 Q7644,600 7658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF KOBİPAZMUD Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_KTF_32_T_304_BPMUD_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7728,188 C7778,188 7760,188 7810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,188)"><rect x="-2" y="-9" width="90.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Değişiklik Yap</text></g><title>KTF TİBPMUD Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-direct" data-from="n_KTF_32_T_304_BPMUD_32_Onay_305_" data-to="n_runActionServices"><path d="M7728,188 C7778,188 7760,88 7810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,138)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>KTF TİBPMUD Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_T_304_BPMUD_32_Onay_305_" data-to="n_Reddet"><path d="M7644,188 L7644,586 Q7644,600 7658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF TİBPMUD Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-jump" data-from="n_runActionServices" data-to="n_end1"><path d="M7894,88 L7894,676 Q7894,690 7908,690 L8630,690 Q8644,690 8644,676 L8644,88" marker-end="url(#arrow)"/><title>runActionServices → end1</title></g>
+<g class="edge edge-direct" data-from="n__214_zel_32_Maliyet_32_mi_63_" data-to="n_Fon_32_Y_246_netimi"><path d="M1978,188 C2028,188 2010,88 2060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2019,138)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Özel Maliyet mi? → Fon Yönetimi [true]</title></g>
+<g class="edge edge-jump" data-from="n__214_zel_32_Maliyet_32_mi_63_" data-to="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M1894,188 L1894,676 Q1894,690 1908,690 L2380,690 Q2394,690 2394,676 L2394,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2144,690)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Özel Maliyet mi? → Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_Fon_32_Y_246_netimi" data-to="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M2228,88 C2278,88 2260,88 2310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2269,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onay</text></g><title>Fon Yönetimi → Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi? [Onay]</title></g>
+<g class="edge edge-jump" data-from="n_Fon_32_Y_246_netimi" data-to="n_Reddet"><path d="M2144,88 L2144,586 Q2144,600 2158,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Fon Yönetimi → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti" data-to="n_KTF_32_TRMBPMUD_32_Onay_305_"><path d="M7228,188 C7278,188 7260,188 7310,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,188)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">4</text></g><title>Müşteri Segmenti → KTF TRMBPMUD Onayı [4]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti" data-to="n_KTF_32__304_BPMUD_32_Onay_305_"><path d="M7228,188 C7278,188 7260,88 7310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Müşteri Segmenti → KTF İBPMUD Onayı [3]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti" data-to="n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_"><path d="M7228,188 C7288,188 7250,388 7310,388" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,288)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Müşteri Segmenti → Müşteri Segmenti Kobi Mi? [2]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti" data-to="n_KTF_32__304_BPMUD_32_Onay_305_"><path d="M7228,188 C7278,188 7260,88 7310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">other</text></g><title>Müşteri Segmenti → KTF İBPMUD Onayı [other]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti" data-to="n_KTF_32_PBSMUD_32_Onay_305_"><path d="M7228,188 C7278,188 7260,288 7310,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,238)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">5</text></g><title>Müşteri Segmenti → KTF PBSMUD Onayı [5]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_" data-to="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_"><path d="M7478,388 C7568,388 7470,88 7560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7519,238)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Kobi</text></g><title>Müşteri Segmenti Kobi Mi? → KTF KOBİPAZMUD Onayı [Kobi]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_" data-to="n_KTF_32_T_304_BPMUD_32_Onay_305_"><path d="M7478,388 C7538,388 7500,188 7560,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7519,288)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Other</text></g><title>Müşteri Segmenti Kobi Mi? → KTF TİBPMUD Onayı [Other]</title></g>
+<g class="edge edge-back" data-from="n_Ba_351_latan_32_Kontrol" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M4144,132 L4144,-26 Q4144,-40 4130,-40 L1158,-40 Q1144,-40 1144,-26 L1144,32" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2644,-40)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Başlatan Kontrol → Oran Vade Kontrol [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_Ba_351_latan_32_Kontrol" data-to="n_Reddet"><path d="M4144,188 L4144,586 Q4144,600 4158,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Başlatan Kontrol → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Ba_351_latan_32_D_252_zeltme" data-to="n__304_ptal_32_Et"><path d="M228,1048 C3832.44,1048 5205.5599999999995,88 8810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4519,568)"><rect x="-2" y="-9" width="53.6" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">İptal Et</text></g><title>Başlatan Düzeltme → İptal Et [İptal Et]</title></g>
+<g class="edge edge-direct" data-from="n_Ticari_32__350_ube_32_Mi_63_" data-to="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi"><path d="M4728,88 C4778,88 4760,88 4810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4769,88)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Ticari Şube Mi? → Bölge Müdürlüğü Pazarlama Servisi [false]</title></g>
+<g class="edge edge-jump" data-from="n_Ticari_32__350_ube_32_Mi_63_" data-to="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"><path d="M4644,88 L4644,736 Q4644,750 4658,750 L5130,750 Q5144,750 5144,736 L5144,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4894,750)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Ticari Şube Mi? → Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi? [true]</title></g>
+<g class="edge edge-direct" data-from="n_Ticari__350_ube_Mi_63_" data-to="n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_"><path d="M3228,88 C3278,88 3260,88 3310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3269,88)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Ticari_Şube_Mi? → BOTAH Onayı Gerekli Mi? [false]</title></g>
+<g class="edge edge-jump" data-from="n_Ticari__350_ube_Mi_63_" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M3144,88 L3144,736 Q3144,750 3158,750 L4130,750 Q4144,750 4144,736 L4144,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3644,750)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Ticari_Şube_Mi? → Fiyatlama Şube Yetkisinde mi? [true]</title></g>
+<g class="edge edge-jump" data-from="n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M3394,88 L3394,736 Q3394,750 3408,750 L4130,750 Q4144,750 4144,736 L4144,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,750)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>BOTAH Onayı Gerekli Mi? → Fiyatlama Şube Yetkisinde mi? [false]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_" data-to="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"><path d="M3478,88 C3528,88 3510,88 3560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3519,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>BOTAH Onayı Gerekli Mi? → BOTAH Onayı Tarım-İşletme Kontrolü [true]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_PK_304__350_L_45_PKONAY_32_B_246_lge"><path d="M3728,88 C3778,88 3760,88 3810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">5</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → PKİŞL-PKONAY Bölge [5]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_TARYET_32_B_246_lge"><path d="M3728,88 C3778,88 3760,188 3810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">4</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → TARYET Bölge [4]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"><path d="M3728,88 C3788,88 3750,288 3810,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,188)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → Bölge Müdürlüğü Tahsis Servisi [3]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"><path d="M3728,88 C3788,88 3750,288 3810,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,188)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → Bölge Müdürlüğü Tahsis Servisi [2]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"><path d="M3728,88 C3788,88 3750,288 3810,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,188)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">BOTAH</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → Bölge Müdürlüğü Tahsis Servisi [BOTAH]</title></g>
+<g class="edge edge-direct" data-from="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" data-to="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"><path d="M3728,88 C3788,88 3750,288 3810,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3769,188)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">other</text></g><title>BOTAH Onayı Tarım-İşletme Kontrolü → Bölge Müdürlüğü Tahsis Servisi [other]</title></g>
+<g class="edge edge-direct" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M3978,288 C4038,288 4000,88 4060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4019,188)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Bölge Müdürlüğü Tahsis Servisi → Fiyatlama Şube Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi" data-to="n_Reddet"><path d="M3894,288 L3894,586 Q3894,600 3908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Bölge Müdürlüğü Tahsis Servisi → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi" data-to="n_Ba_351_latan_32_Kontrol"><path d="M3978,288 C4028,288 4010,188 4060,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4019,238)"><rect x="-2" y="-9" width="103.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Başlatan Kontrol</text></g><title>Bölge Müdürlüğü Tahsis Servisi → Başlatan Kontrol [Başlatan Kontrol]</title></g>
+<g class="edge edge-direct" data-from="n_PK_304__350_L_45_PKONAY_32_B_246_lge" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M3978,88 C4028,88 4010,88 4060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4019,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>PKİŞL-PKONAY Bölge → Fiyatlama Şube Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_PK_304__350_L_45_PKONAY_32_B_246_lge" data-to="n_Reddet"><path d="M3894,88 L3894,586 Q3894,600 3908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>PKİŞL-PKONAY Bölge → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_TARYET_32_B_246_lge" data-to="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><path d="M3978,188 C4028,188 4010,88 4060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4019,138)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>TARYET Bölge → Fiyatlama Şube Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_TARYET_32_B_246_lge" data-to="n_Reddet"><path d="M3894,188 L3894,586 Q3894,600 3908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>TARYET Bölge → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Ticari_350_ubeMi_63_" data-to="n_KTF_32_KBPFYET_32_Onay_305_"><path d="M6978,88 C7028,88 7010,88 7060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7019,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>TicariŞubeMi? → KTF KBPFYET Onayı [true]</title></g>
+<g class="edge edge-direct" data-from="n_Ticari_350_ubeMi_63_" data-to="n_M_252__351_teri_32_Segmenti"><path d="M6978,88 C7028,88 7010,188 7060,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7019,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>TicariŞubeMi? → Müşteri Segmenti [false]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_KBPFYET_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7144,88 L7144,646 Q7144,660 7158,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF KBPFYET Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_KBPFYET_32_Onay_305_" data-to="n_runActionServices"><path d="M7144,88 L7144,616 Q7144,630 7158,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF KBPFYET Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_KBPFYET_32_Onay_305_" data-to="n_Reddet"><path d="M7144,88 L7144,586 Q7144,600 7158,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF KBPFYET Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge" data-to="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"><path d="M2728,88 C2778,88 2760,88 2810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2769,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">1</text></g><title>Ürün-Kampanya Kontrolleri - Bölge → Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? [1]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge" data-to="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"><path d="M2728,88 C2778,88 2760,88 2810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2769,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Ürün-Kampanya Kontrolleri - Bölge → Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? [3]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge" data-to="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"><path d="M2728,88 C2778,88 2760,88 2810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(2769,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Ürün-Kampanya Kontrolleri - Bölge → Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi? [2]</title></g>
+<g class="edge edge-jump" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63_"><path d="M2644,88 L2644,676 Q2644,690 2658,690 L6630,690 Q6644,690 6644,676 L6644,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4644,690)"><rect x="-2" y="-9" width="22.6" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">200</text></g><title>Ürün-Kampanya Kontrolleri - Bölge → Yapılandırma KTF simi? [200]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63_"><path d="M6478,88 C6528,88 6510,88 6560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6519,88)"><rect x="-2" y="-9" width="22.6" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">200</text></g><title>Ürün-Kampanya Kontrolleri - Pazarlama → Yapılandırma KTF simi? [200]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63_"><path d="M6478,88 C6528,88 6510,88 6560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6519,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">1</text></g><title>Ürün-Kampanya Kontrolleri - Pazarlama → Yapılandırma KTF simi? [1]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"><path d="M6478,88 C6528,88 6510,188 6560,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6519,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Ürün-Kampanya Kontrolleri - Pazarlama → Yapılandırma KTF simi?(GMY kontrol) [2]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama" data-to="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"><path d="M6478,88 C6528,88 6510,188 6560,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6519,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Ürün-Kampanya Kontrolleri - Pazarlama → Yapılandırma KTF simi?(GMY kontrol) [3]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M978,88 C1028,88 1010,88 1060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1019,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Ürün-Kampanya Kontrolleri → Oran Vade Kontrol [2]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M978,88 C1028,88 1010,88 1060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1019,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Ürün-Kampanya Kontrolleri → Oran Vade Kontrol [3]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M978,88 C1028,88 1010,88 1060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1019,88)"><rect x="-2" y="-9" width="22.6" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">200</text></g><title>Ürün-Kampanya Kontrolleri → Oran Vade Kontrol [200]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri" data-to="n_Oran_32_Vade_32_Kontrol"><path d="M978,88 C1028,88 1010,88 1060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(1019,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">1</text></g><title>Ürün-Kampanya Kontrolleri → Oran Vade Kontrol [1]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu" data-to="n__350_ube_32_Havuzu"><path d="M7978,188 C8028,188 8010,88 8060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(8019,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">1</text></g><title>Ürün-Kampanya Kontrolleri - Şube Havuzu → Şube Havuzu [1]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu" data-to="n__350_ube_32_Havuzu"><path d="M7978,188 C8028,188 8010,88 8060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(8019,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Ürün-Kampanya Kontrolleri - Şube Havuzu → Şube Havuzu [2]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu" data-to="n__350_ube_32_Havuzu"><path d="M7978,188 C8028,188 8010,88 8060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(8019,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Ürün-Kampanya Kontrolleri - Şube Havuzu → Şube Havuzu [3]</title></g>
+<g class="edge edge-direct" data-from="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu" data-to="n__350_ube_32_Havuzu"><path d="M7978,188 C8028,188 8010,88 8060,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(8019,138)"><rect x="-2" y="-9" width="22.6" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">200</text></g><title>Ürün-Kampanya Kontrolleri - Şube Havuzu → Şube Havuzu [200]</title></g>
+<g class="edge edge-direct" data-from="n_Otomatik_32_KTF_32_mi_63_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri"><path d="M728,188 C778,188 760,88 810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(769,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Otomatik KTF mi? → Ürün-Kampanya Kontrolleri [false]</title></g>
+<g class="edge edge-direct" data-from="n_Otomatik_32_KTF_32_mi_63_" data-to="n_end2"><path d="M728,188 C778,188 760,288 810,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(769,238)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Otomatik KTF mi? → end2 [true]</title></g>
+<g class="edge edge-direct" data-from="n_Yap_305_land_305_rma_32_KTF_32_simi_63_" data-to="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_"><path d="M6728,88 C6778,88 6760,188 6810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6769,138)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Evet</text></g><title>Yapılandırma KTF simi? → Ticari şube mi?(IZL) [Evet]</title></g>
+<g class="edge edge-jump" data-from="n_Yap_305_land_305_rma_32_KTF_32_simi_63_" data-to="n_runActionServices"><path d="M6644,88 L6644,616 Q6644,630 6658,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Yapılandırma KTF simi? → runActionServices [Hayır]</title></g>
+<g class="edge edge-jump" data-from="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_" data-to="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2"><path d="M6894,188 L6894,676 Q6894,690 6908,690 L7630,690 Q7644,690 7644,676 L7644,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,690)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">true</text></g><title>Ticari şube mi?(IZL) → YTYET veya YTMUD veya KİBŞK onayı2 [true]</title></g>
+<g class="edge edge-direct" data-from="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_" data-to="n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_"><path d="M6978,188 C7028,188 7010,288 7060,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7019,238)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">false</text></g><title>Ticari şube mi?(IZL) → Daha önce BOPAZ onayladı mı? [false]</title></g>
+<g class="edge edge-direct" data-from="n_BOPAZ_40_IZL_41_" data-to="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2"><path d="M7478,488 C7538,488 7500,288 7560,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7519,388)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>BOPAZ(IZL) → YTYET veya YTMUD veya KİBŞK onayı2 [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_BOPAZ_40_IZL_41_" data-to="n_Reddet"><path d="M7394,488 L7394,586 Q7394,600 7408,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>BOPAZ(IZL) → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7728,288 C7778,288 7760,188 7810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,238)"><rect x="-2" y="-9" width="90.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Değişiklik yap</text></g><title>YTYET veya YTMUD veya KİBŞK onayı2 → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik yap]</title></g>
+<g class="edge edge-direct" data-from="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2" data-to="n_runActionServices"><path d="M7728,288 C7788,288 7750,88 7810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7769,188)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>YTYET veya YTMUD veya KİBŞK onayı2 → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2" data-to="n_Reddet"><path d="M7644,288 L7644,586 Q7644,600 7658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>YTYET veya YTMUD veya KİBŞK onayı2 → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_" data-to="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_"><path d="M6728,188 C6778,188 6760,188 6810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6769,188)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Evet</text></g><title>Yapılandırma KTF simi?(GMY kontrol) → Ticari şube mi?(IZL) [Evet]</title></g>
+<g class="edge edge-direct" data-from="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_" data-to="n_Ticari_350_ubeMi_63_"><path d="M6728,188 C6778,188 6760,88 6810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(6769,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Hayır</text></g><title>Yapılandırma KTF simi?(GMY kontrol) → TicariŞubeMi? [Hayır]</title></g>
+<g class="edge edge-direct" data-from="n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_" data-to="n_BOPAZ_40_IZL_41_"><path d="M7228,288 C7288,288 7250,488 7310,488" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7269,388)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Hayır</text></g><title>Daha önce BOPAZ onayladı mı? → BOPAZ(IZL) [Hayır]</title></g>
+<g class="edge edge-jump" data-from="n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_" data-to="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2"><path d="M7144,288 L7144,676 Q7144,690 7158,690 L7630,690 Q7644,690 7644,676 L7644,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(7394,690)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Evet</text></g><title>Daha önce BOPAZ onayladı mı? → YTYET veya YTMUD veya KİBŞK onayı2 [Evet]</title></g>
+<g class="edge edge-direct" data-from="n_Takip_32_m_252__351_terisi_32_mi_63_" data-to="n__350_ube_32_Onay_305_"><path d="M478,88 C528,88 510,88 560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(519,88)"><rect x="-2" y="-9" width="28.8" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Evet</text></g><title>Takip müşterisi mi? → Şube Onayı [Evet]</title></g>
+<g class="edge edge-direct" data-from="n_Takip_32_m_252__351_terisi_32_mi_63_" data-to="n_Otomatik_32_KTF_32_mi_63_"><path d="M478,88 C528,88 510,188 560,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(519,138)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Hayır</text></g><title>Takip müşterisi mi? → Otomatik KTF mi? [Hayır]</title></g>
+<g class="edge edge-direct" data-from="n__350_ube_32_Onay_305_" data-to="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_"><path d="M728,88 C778,88 760,188 810,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(769,138)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>Şube Onayı → YTYET veya YTMUD veya KİBŞK onayı [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n__350_ube_32_Onay_305_" data-to="n_Reddet"><path d="M644,88 L644,586 Q644,600 658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>Şube Onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-jump" data-from="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_" data-to="n_runActionServices"><path d="M894,188 L894,616 Q894,630 908,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>YTYET veya YTMUD veya KİBŞK onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_" data-to="n_Reddet"><path d="M894,188 L894,586 Q894,600 908,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>YTYET veya YTMUD veya KİBŞK onayı → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti2" data-to="n_KRDY"><path d="M5478,88 C5528,88 5510,88 5560,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5519,88)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">2</text></g><title>Müşteri Segmenti2 → KRDY [2]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti2" data-to="n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY"><path d="M5478,88 C5538,88 5500,288 5560,288" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5519,188)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">3</text></g><title>Müşteri Segmenti2 → PKİŞL-KRDİŞL-PKONAY [3]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti2" data-to="n_TARYET"><path d="M5478,88 C5568,88 5470,388 5560,388" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5519,238)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">4</text></g><title>Müşteri Segmenti2 → TARYET [4]</title></g>
+<g class="edge edge-jump" data-from="n_M_252__351_teri_32_Segmenti2" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5394,88 L5394,706 Q5394,720 5408,720 L5880,720 Q5894,720 5894,706 L5894,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5644,720)"><rect x="-2" y="-9" width="35" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">other</text></g><title>Müşteri Segmenti2 → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [other]</title></g>
+<g class="edge edge-direct" data-from="n_M_252__351_teri_32_Segmenti2" data-to="n_PK_304__350_L_45_PKONAY"><path d="M5478,88 C5528,88 5510,188 5560,188" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5519,138)"><rect x="-2" y="-9" width="18" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">5</text></g><title>Müşteri Segmenti2 → PKİŞL-PKONAY [5]</title></g>
+<g class="edge edge-jump" data-from="n_KRDY" data-to="n_Reddet"><path d="M5644,88 L5644,586 Q5644,600 5658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KRDY → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_KRDY" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5728,88 C5778,88 5760,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5769,88)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>KRDY → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_PK_304__350_L_45_PKONAY" data-to="n_Reddet"><path d="M5644,188 L5644,586 Q5644,600 5658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>PKİŞL-PKONAY → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_PK_304__350_L_45_PKONAY" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5728,188 C5778,188 5760,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5769,138)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>PKİŞL-PKONAY → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY" data-to="n_Reddet"><path d="M5644,288 L5644,586 Q5644,600 5658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>PKİŞL-KRDİŞL-PKONAY → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5728,288 C5788,288 5750,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5769,188)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>PKİŞL-KRDİŞL-PKONAY → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_TARYET" data-to="n_Reddet"><path d="M5644,388 L5644,586 Q5644,600 5658,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>TARYET → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_TARYET" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M5728,388 C5818,388 5720,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(5769,238)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>TARYET → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-direct" data-from="n_PBSMUD" data-to="n_Reddet"><path d="M228,1148 C3622.44,1148 4915.5599999999995,88 8310,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(4269,618)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Reddet</text></g><title>PBSMUD → Reddet [Reddet]</title></g>
+<g class="edge edge-direct" data-from="n_PBSMUD" data-to="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><path d="M228,1148 C2572.44,1148 3465.56,88 5810,88" marker-end="url(#arrow)"/><g class="edge-label-g" transform="translate(3019,618)"><rect x="-2" y="-9" width="41.2" height="14" rx="4" class="edge-label-bg"/><text class="edge-label" x="0" y="2">Onayla</text></g><title>PBSMUD → Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi? [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_PBSMUD_32_Onay_305_" data-to="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><path d="M7394,288 L7394,646 Q7394,660 7408,660 L7880,660 Q7894,660 7894,646 L7894,188" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF PBSMUD Onayı → Ürün-Kampanya Kontrolleri - Şube Havuzu [Değişiklik Yap]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_PBSMUD_32_Onay_305_" data-to="n_runActionServices"><path d="M7394,288 L7394,616 Q7394,630 7408,630 L7880,630 Q7894,630 7894,616 L7894,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF PBSMUD Onayı → runActionServices [Onayla]</title></g>
+<g class="edge edge-jump" data-from="n_KTF_32_PBSMUD_32_Onay_305_" data-to="n_Reddet"><path d="M7394,288 L7394,586 Q7394,600 7408,600 L8380,600 Q8394,600 8394,586 L8394,88" marker-end="url(#arrow)" style="stroke-width:3.2"/><title>KTF PBSMUD Onayı → Reddet [Reddet]</title></g></g>
+      <g id="nodes"><g class="pnode kind-start" id="n_start" transform="translate(60,60)" data-id="n_start"><title>start
+CCS_CRD_CREDIT_ADD_DEFAULT_FOOTNOTE
+CCS_CRD_CREDIT_COPY_TO</title><circle cx="84" cy="28" r="22" fill="#e7f6ec" stroke="#3fa66a" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Başlangıç</text>
+      <text class="node-title" x="84" y="66">start</text></g>
+<g class="pnode kind-service" id="n_Oran_32_Vade_32_Kontrol" transform="translate(1060,60)" data-id="n_Oran_32_Vade_32_Kontrol"><title>Oran Vade Kontrol
+CCS_CRD_CONTROL_CREDIT_RATE_MATURITY
+CCS_CRD_CREDIT_CHANGE_STATE_TO_APPROVE</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#f3f0ff" stroke="#a78bfa" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">⚙ Servis</text>
+      <text class="node-title" x="10" y="33">Oran Vade Kontrol</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CONTROL_CREDIT_RATE_MATURITY</text></g>
+<g class="pnode kind-task" id="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay" transform="translate(1310,60)" data-id="n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay"><title>PY veya YPY veya SBM Onay
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT
+CCS_UTILITY_SEND_MAIL_ON_CRF_APPROVE</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">PY veya YPY veya SBM Onay</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-task" id="n__350_ube_32_Havuzu" transform="translate(8060,60)" data-id="n__350_ube_32_Havuzu"><title>Şube Havuzu
+CCS_CRD_CREDIT_COPY_TO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Şube Havuzu</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-decision" id="n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_" transform="translate(1560,60)" data-id="n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_"><title>Kredi kullandırılacak firmanın tahsisi Finansal Kurumlar tarafından mı yapılmış?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Kredi kullandırılacak firmanın tahsisi Finansal Kurumlar tarafından mı yapılmış?</text></g>
+<g class="pnode kind-task" id="n_Finansal_32_Kurumlar_32_Onay_305_" transform="translate(1810,60)" data-id="n_Finansal_32_Kurumlar_32_Onay_305_"><title>Finansal Kurumlar Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CRF_SEND_FINANCIAL_CRF_MAIL</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Finansal Kurumlar Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-service" id="n_Reddet" transform="translate(8310,60)" data-id="n_Reddet"><title>Reddet
+CCS_CRD_CREDIT_USAGE_STATE_REFUSED</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#f3f0ff" stroke="#a78bfa" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">⚙ Servis</text>
+      <text class="node-title" x="10" y="33">Reddet</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_USAGE_STATE_REFUSED</text></g>
+<g class="pnode kind-decision" id="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_" transform="translate(2310,60)" data-id="n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_"><title>Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Fiyatlama _ Risk Vadesi _ Mektup_ Metni _ Muhattap_Amir Risk Şube Yetkisinde mi?</text></g>
+<g class="pnode kind-task" id="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi" transform="translate(4810,60)" data-id="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi"><title>Bölge Müdürlüğü Pazarlama Servisi
+CCS_BPM_RM_APPROVE_ORGANIZATION_CODE_GET
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT
+CCS_CRD_CREDIT_SET_BAG_APPROVED_BOPAZ</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Bölge Müdürlüğü Pazarlama Ser…</text>
+      <text class="node-svc" x="84" y="46">CCS_BPM_RM_APPROVE_ORGANIZATION_CODE_GET</text></g>
+<g class="pnode kind-decision" id="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_" transform="translate(2810,60)" data-id="n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"><title>Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Risk Vadesi _ Mektup Metni _ Muhattap_Amir Risk_Dipnot Şube Yetkisi Üzerinde mi?</text></g>
+<g class="pnode kind-decision" id="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_" transform="translate(4060,60)" data-id="n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"><title>Fiyatlama Şube Yetkisinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Fiyatlama Şube Yetkisinde mi?</text></g>
+<g class="pnode kind-decision" id="n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_" transform="translate(4310,60)" data-id="n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_"><title>Masraf Şube Yetkisinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Masraf Şube Yetkisinde mi?</text></g>
+<g class="pnode kind-decision" id="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_" transform="translate(5060,60)" data-id="n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"><title>Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Amir Risk ve Kullandırım, Amir Risk Bölge İşlem Limiti üzerinde mi?</text></g>
+<g class="pnode kind-task" id="n_Krediler_32_Y_246_netimi_32_Onay" transform="translate(60,620)" data-id="n_Krediler_32_Y_246_netimi_32_Onay"><title>Krediler Yönetimi Onay
+CCS_CRD_CREDIT_COPY_TO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Krediler Yönetimi Onay</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-decision" id="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_" transform="translate(5810,60)" data-id="n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"><title>Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?</text></g>
+<g class="pnode kind-decision" id="n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_" transform="translate(6060,60)" data-id="n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_"><title>Masraf Bölge Yetkisinde mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Masraf Bölge Yetkisinde mi?</text></g>
+<g class="pnode kind-task" id="n_KTF_32__304_BPMUD_32_Onay_305_" transform="translate(7310,60)" data-id="n_KTF_32__304_BPMUD_32_Onay_305_"><title>KTF İBPMUD Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF İBPMUD Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-task" id="n_KTF_32_TRMBPMUD_32_Onay_305_" transform="translate(7310,160)" data-id="n_KTF_32_TRMBPMUD_32_Onay_305_"><title>KTF TRMBPMUD Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF TRMBPMUD Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-task" id="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_" transform="translate(7560,60)" data-id="n_KTF_32_KOB_304_PAZMUD_32_Onay_305_"><title>KTF KOBİPAZMUD Onayı
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF KOBİPAZMUD Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-task" id="n_KTF_32_T_304_BPMUD_32_Onay_305_" transform="translate(7560,160)" data-id="n_KTF_32_T_304_BPMUD_32_Onay_305_"><title>KTF TİBPMUD Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF TİBPMUD Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-service" id="n_runActionServices" transform="translate(7810,60)" data-id="n_runActionServices"><title>runActionServices
+CCS_CRD_CREDIT_USAGE_STATE_ACTIVE
+CCS_CRD_CREDIT_SET_KRM_INFO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#f3f0ff" stroke="#a78bfa" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">⚙ Servis</text>
+      <text class="node-title" x="10" y="33">runActionServices</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_USAGE_STATE_ACTIVE</text></g>
+<g class="pnode kind-end" id="n_end1" transform="translate(8560,60)" data-id="n_end1"><title>end1</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">end1</text></g>
+<g class="pnode kind-decision" id="n__214_zel_32_Maliyet_32_mi_63_" transform="translate(1810,160)" data-id="n__214_zel_32_Maliyet_32_mi_63_"><title>Özel Maliyet mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Özel Maliyet mi?</text></g>
+<g class="pnode kind-task" id="n_Fon_32_Y_246_netimi" transform="translate(2060,60)" data-id="n_Fon_32_Y_246_netimi"><title>Fon Yönetimi
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Fon Yönetimi</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-decision" id="n_M_252__351_teri_32_Segmenti" transform="translate(7060,160)" data-id="n_M_252__351_teri_32_Segmenti"><title>Müşteri Segmenti</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Müşteri Segmenti</text></g>
+<g class="pnode kind-decision" id="n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_" transform="translate(7310,360)" data-id="n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_"><title>Müşteri Segmenti Kobi Mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Müşteri Segmenti Kobi Mi?</text></g>
+<g class="pnode kind-task" id="n_Ba_351_latan_32_Kontrol" transform="translate(4060,160)" data-id="n_Ba_351_latan_32_Kontrol"><title>Başlatan Kontrol
+CCSUTIL_MAKER_CONTROL_GET_ONE
+CCS_BPM_SET_APPROVE_ORG_CODE_CREATOR_ORG_CODE
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_USAGE_VALIDATE</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Başlatan Kontrol</text>
+      <text class="node-svc" x="84" y="46">CCSUTIL_MAKER_CONTROL_GET_ONE</text></g>
+<g class="pnode kind-end" id="n_Programatik_32_Reddet" transform="translate(60,720)" data-id="n_Programatik_32_Reddet"><title>Programatik Reddet</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">Programatik Reddet</text></g>
+<g class="pnode kind-end" id="n_Manuel_32_Reddet" transform="translate(60,820)" data-id="n_Manuel_32_Reddet"><title>Manuel Reddet</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">Manuel Reddet</text></g>
+<g class="pnode kind-end" id="n_Otomatik_32_Reddet" transform="translate(60,920)" data-id="n_Otomatik_32_Reddet"><title>Otomatik Reddet</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">Otomatik Reddet</text></g>
+<g class="pnode kind-task" id="n_Ba_351_latan_32_D_252_zeltme" transform="translate(60,1020)" data-id="n_Ba_351_latan_32_D_252_zeltme"><title>Başlatan Düzeltme
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_CRF_STATE_TO_CANCEL</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Başlatan Düzeltme</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-end" id="n__304_ptal_32_Et" transform="translate(8810,60)" data-id="n__304_ptal_32_Et"><title>İptal Et</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">İptal Et</text></g>
+<g class="pnode kind-decision" id="n_Ticari_32__350_ube_32_Mi_63_" transform="translate(4560,60)" data-id="n_Ticari_32__350_ube_32_Mi_63_"><title>Ticari Şube Mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ticari Şube Mi?</text></g>
+<g class="pnode kind-decision" id="n_Ticari__350_ube_Mi_63_" transform="translate(3060,60)" data-id="n_Ticari__350_ube_Mi_63_"><title>Ticari_Şube_Mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ticari_Şube_Mi?</text></g>
+<g class="pnode kind-decision" id="n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_" transform="translate(3310,60)" data-id="n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_"><title>BOTAH Onayı Gerekli Mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">BOTAH Onayı Gerekli Mi?</text></g>
+<g class="pnode kind-decision" id="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_" transform="translate(3560,60)" data-id="n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"><title>BOTAH Onayı Tarım-İşletme Kontrolü</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">BOTAH Onayı Tarım-İşletme Kontrolü</text></g>
+<g class="pnode kind-task" id="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi" transform="translate(3810,260)" data-id="n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"><title>Bölge Müdürlüğü Tahsis Servisi
+CCS_ALL_GET_BOTMUD_ORGANIZATION_CODE
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SET_BAG_APPROVED_BOTAH</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Bölge Müdürlüğü Tahsis Servisi</text>
+      <text class="node-svc" x="84" y="46">CCS_ALL_GET_BOTMUD_ORGANIZATION_CODE</text></g>
+<g class="pnode kind-task" id="n_PK_304__350_L_45_PKONAY_32_B_246_lge" transform="translate(3810,60)" data-id="n_PK_304__350_L_45_PKONAY_32_B_246_lge"><title>PKİŞL-PKONAY Bölge
+CCS_CRD_CREDIT_SET_BAG_APPROVED_BOTAH_TARYET_PKISL</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">PKİŞL-PKONAY Bölge</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_SET_BAG_APPROVED_BOTAH_TARYET_PKISL</text></g>
+<g class="pnode kind-task" id="n_TARYET_32_B_246_lge" transform="translate(3810,160)" data-id="n_TARYET_32_B_246_lge"><title>TARYET Bölge
+CCS_CRD_CREDIT_SET_BAG_APPROVED_BOTAH_TARYET_PKISL</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">TARYET Bölge</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_SET_BAG_APPROVED_BOTAH_TARYET_PKISL</text></g>
+<g class="pnode kind-decision" id="n_Ticari_350_ubeMi_63_" transform="translate(6810,60)" data-id="n_Ticari_350_ubeMi_63_"><title>TicariŞubeMi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">TicariŞubeMi?</text></g>
+<g class="pnode kind-task" id="n_KTF_32_KBPFYET_32_Onay_305_" transform="translate(7060,60)" data-id="n_KTF_32_KBPFYET_32_Onay_305_"><title>KTF KBPFYET Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF KBPFYET Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-decision" id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge" transform="translate(2560,60)" data-id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge"><title>Ürün-Kampanya Kontrolleri - Bölge</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ürün-Kampanya Kontrolleri - Bölge</text></g>
+<g class="pnode kind-decision" id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama" transform="translate(6310,60)" data-id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama"><title>Ürün-Kampanya Kontrolleri - Pazarlama</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ürün-Kampanya Kontrolleri - Pazarlama</text></g>
+<g class="pnode kind-decision" id="n__220_r_252_n_45_Kampanya_32_Kontrolleri" transform="translate(810,60)" data-id="n__220_r_252_n_45_Kampanya_32_Kontrolleri"><title>Ürün-Kampanya Kontrolleri</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ürün-Kampanya Kontrolleri</text></g>
+<g class="pnode kind-decision" id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu" transform="translate(7810,160)" data-id="n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"><title>Ürün-Kampanya Kontrolleri - Şube Havuzu</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ürün-Kampanya Kontrolleri - Şube Havuzu</text></g>
+<g class="pnode kind-decision" id="n_Otomatik_32_KTF_32_mi_63_" transform="translate(560,160)" data-id="n_Otomatik_32_KTF_32_mi_63_"><title>Otomatik KTF mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Otomatik KTF mi?</text></g>
+<g class="pnode kind-end" id="n_end2" transform="translate(810,260)" data-id="n_end2"><title>end2</title><circle cx="84" cy="28" r="22" fill="#fdecea" stroke="#e05b4f" stroke-width="2"/>
+      <text class="node-kind" x="84" y="-2">Bitiş</text>
+      <text class="node-title" x="84" y="66">end2</text></g>
+<g class="pnode kind-decision" id="n_Yap_305_land_305_rma_32_KTF_32_simi_63_" transform="translate(6560,60)" data-id="n_Yap_305_land_305_rma_32_KTF_32_simi_63_"><title>Yapılandırma KTF simi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Yapılandırma KTF simi?</text></g>
+<g class="pnode kind-decision" id="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_" transform="translate(6810,160)" data-id="n_Ticari_32__351_ube_32_mi_63__40_IZL_41_"><title>Ticari şube mi?(IZL)</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Ticari şube mi?(IZL)</text></g>
+<g class="pnode kind-task" id="n_BOPAZ_40_IZL_41_" transform="translate(7310,460)" data-id="n_BOPAZ_40_IZL_41_"><title>BOPAZ(IZL)
+CCS_BPM_RM_APPROVE_ORGANIZATION_CODE_GET
+CCS_CRD_CREDIT_COPY_TO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">BOPAZ(IZL)</text>
+      <text class="node-svc" x="84" y="46">CCS_BPM_RM_APPROVE_ORGANIZATION_CODE_GET</text></g>
+<g class="pnode kind-task" id="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2" transform="translate(7560,260)" data-id="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2"><title>YTYET veya YTMUD veya KİBŞK onayı2
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">YTYET veya YTMUD veya KİBŞK o…</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-decision" id="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_" transform="translate(6560,160)" data-id="n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"><title>Yapılandırma KTF simi?(GMY kontrol)</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Yapılandırma KTF simi?(GMY kontrol)</text></g>
+<g class="pnode kind-decision" id="n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_" transform="translate(7060,260)" data-id="n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_"><title>Daha önce BOPAZ onayladı mı?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Daha önce BOPAZ onayladı mı?</text></g>
+<g class="pnode kind-decision" id="n_Takip_32_m_252__351_terisi_32_mi_63_" transform="translate(310,60)" data-id="n_Takip_32_m_252__351_terisi_32_mi_63_"><title>Takip müşterisi mi?</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Takip müşterisi mi?</text></g>
+<g class="pnode kind-task" id="n__350_ube_32_Onay_305_" transform="translate(560,60)" data-id="n__350_ube_32_Onay_305_"><title>Şube Onayı
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_CHANGE_STATE_TO_APPROVE</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">Şube Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_CREDIT_COPY_TO</text></g>
+<g class="pnode kind-task" id="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_" transform="translate(810,160)" data-id="n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_"><title>YTYET veya YTMUD veya KİBŞK onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">YTYET veya YTMUD veya KİBŞK o…</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g>
+<g class="pnode kind-decision" id="n_M_252__351_teri_32_Segmenti2" transform="translate(5310,60)" data-id="n_M_252__351_teri_32_Segmenti2"><title>Müşteri Segmenti2</title><polygon points="84,2 110,28 84,54 58,28" fill="#fff6df" stroke="#e0b23e" stroke-width="2"/>
+      <text class="node-x" x="84" y="33">✕</text>
+      <text class="node-kind" x="84" y="-6">KARAR</text>
+      <text class="node-title-d" x="84" y="70">Müşteri Segmenti2</text></g>
+<g class="pnode kind-task" id="n_KRDY" transform="translate(5560,60)" data-id="n_KRDY"><title>KRDY</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KRDY</text>
+      </g>
+<g class="pnode kind-task" id="n_PK_304__350_L_45_PKONAY" transform="translate(5560,160)" data-id="n_PK_304__350_L_45_PKONAY"><title>PKİŞL-PKONAY</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">PKİŞL-PKONAY</text>
+      </g>
+<g class="pnode kind-task" id="n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY" transform="translate(5560,260)" data-id="n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY"><title>PKİŞL-KRDİŞL-PKONAY</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">PKİŞL-KRDİŞL-PKONAY</text>
+      </g>
+<g class="pnode kind-task" id="n_TARYET" transform="translate(5560,360)" data-id="n_TARYET"><title>TARYET</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">TARYET</text>
+      </g>
+<g class="pnode kind-task" id="n_PBSMUD" transform="translate(60,1120)" data-id="n_PBSMUD"><title>PBSMUD</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">PBSMUD</text>
+      </g>
+<g class="pnode kind-task" id="n_KTF_32_PBSMUD_32_Onay_305_" transform="translate(7310,260)" data-id="n_KTF_32_PBSMUD_32_Onay_305_"><title>KTF PBSMUD Onayı
+CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER
+CCS_CRD_CREDIT_COPY_TO
+CCS_CRD_CREDIT_SEND_MAIL_TO_BRANCH_ABOUT_CRF_CHANGES
+CCS_CRD_CREDIT_CONTROL_CRF_CHANGES_BEFORE_APPROVEMENT</title><rect x="0" y="0" width="168" height="56" rx="9" fill="#ffffff" stroke="#c8cdd6" stroke-width="1.6"/>
+      <text class="node-kind" x="10" y="15">Görev</text>
+      <text class="node-title" x="10" y="33">KTF PBSMUD Onayı</text>
+      <text class="node-svc" x="84" y="46">CCS_CRD_RISK_DECLARATION_UPDATE_BPM_BAG_FOR_LAST_APPROVER</text></g></g>
+    </svg>
+  </div>
+</div>
+<div id="controls">
+  <button id="zin">+</button>
+  <button id="zout">−</button>
+  <button id="zfit">⤢</button>
+</div>
+<script>
+const ADJ = {"children":{"n_start":["n_Takip_32_m_252__351_terisi_32_mi_63_"],"n_Oran_32_Vade_32_Kontrol":["n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay"],"n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_","n_Reddet"],"n__350_ube_32_Havuzu":["n_Oran_32_Vade_32_Kontrol","n_Reddet"],"n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_":["n_Finansal_32_Kurumlar_32_Onay_305_","n__214_zel_32_Maliyet_32_mi_63_"],"n_Finansal_32_Kurumlar_32_Onay_305_":["n_runActionServices","n_Reddet"],"n_Reddet":["n_end1"],"n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_":["n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge"],"n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_","n_Reddet"],"n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_Ticari__350_ube_Mi_63_"],"n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_":["n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_","n_Ticari_32__350_ube_32_Mi_63_"],"n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_":["n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_","n_Ticari_32__350_ube_32_Mi_63_"],"n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_":["n_M_252__351_teri_32_Segmenti2","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_Krediler_32_Y_246_netimi_32_Onay":["n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_","n_Reddet"],"n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_":["n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_","n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"],"n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama","n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"],"n_KTF_32__304_BPMUD_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n_KTF_32_TRMBPMUD_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n_KTF_32_KOB_304_PAZMUD_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n_KTF_32_T_304_BPMUD_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n_runActionServices":["n_end1"],"n_end1":[],"n__214_zel_32_Maliyet_32_mi_63_":["n_Fon_32_Y_246_netimi","n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_"],"n_Fon_32_Y_246_netimi":["n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_","n_Reddet"],"n_M_252__351_teri_32_Segmenti":["n_KTF_32_TRMBPMUD_32_Onay_305_","n_KTF_32__304_BPMUD_32_Onay_305_","n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_","n_KTF_32__304_BPMUD_32_Onay_305_","n_KTF_32_PBSMUD_32_Onay_305_"],"n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_":["n_KTF_32_KOB_304_PAZMUD_32_Onay_305_","n_KTF_32_T_304_BPMUD_32_Onay_305_"],"n_Ba_351_latan_32_Kontrol":["n_Oran_32_Vade_32_Kontrol","n_Reddet"],"n_Programatik_32_Reddet":[],"n_Manuel_32_Reddet":[],"n_Otomatik_32_Reddet":[],"n_Ba_351_latan_32_D_252_zeltme":["n__304_ptal_32_Et"],"n__304_ptal_32_Et":[],"n_Ticari_32__350_ube_32_Mi_63_":["n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi","n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"],"n_Ticari__350_ube_Mi_63_":["n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_","n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"],"n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"],"n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_":["n_PK_304__350_L_45_PKONAY_32_B_246_lge","n_TARYET_32_B_246_lge","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"],"n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_Reddet","n_Ba_351_latan_32_Kontrol"],"n_PK_304__350_L_45_PKONAY_32_B_246_lge":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_Reddet"],"n_TARYET_32_B_246_lge":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_Reddet"],"n_Ticari_350_ubeMi_63_":["n_KTF_32_KBPFYET_32_Onay_305_","n_M_252__351_teri_32_Segmenti"],"n_KTF_32_KBPFYET_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge":["n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_","n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_","n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_","n_Yap_305_land_305_rma_32_KTF_32_simi_63_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama":["n_Yap_305_land_305_rma_32_KTF_32_simi_63_","n_Yap_305_land_305_rma_32_KTF_32_simi_63_","n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_","n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri":["n_Oran_32_Vade_32_Kontrol","n_Oran_32_Vade_32_Kontrol","n_Oran_32_Vade_32_Kontrol","n_Oran_32_Vade_32_Kontrol"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu":["n__350_ube_32_Havuzu","n__350_ube_32_Havuzu","n__350_ube_32_Havuzu","n__350_ube_32_Havuzu"],"n_Otomatik_32_KTF_32_mi_63_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri","n_end2"],"n_end2":[],"n_Yap_305_land_305_rma_32_KTF_32_simi_63_":["n_Ticari_32__351_ube_32_mi_63__40_IZL_41_","n_runActionServices"],"n_Ticari_32__351_ube_32_mi_63__40_IZL_41_":["n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2","n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_"],"n_BOPAZ_40_IZL_41_":["n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2","n_Reddet"],"n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"],"n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_":["n_Ticari_32__351_ube_32_mi_63__40_IZL_41_","n_Ticari_350_ubeMi_63_"],"n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_":["n_BOPAZ_40_IZL_41_","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2"],"n_Takip_32_m_252__351_terisi_32_mi_63_":["n__350_ube_32_Onay_305_","n_Otomatik_32_KTF_32_mi_63_"],"n__350_ube_32_Onay_305_":["n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_","n_Reddet"],"n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_":["n_runActionServices","n_Reddet"],"n_M_252__351_teri_32_Segmenti2":["n_KRDY","n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY","n_TARYET","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_","n_PK_304__350_L_45_PKONAY"],"n_KRDY":["n_Reddet","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_PK_304__350_L_45_PKONAY":["n_Reddet","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY":["n_Reddet","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_TARYET":["n_Reddet","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_PBSMUD":["n_Reddet","n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_KTF_32_PBSMUD_32_Onay_305_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n_runActionServices","n_Reddet"]},"parents":{"n_start":[],"n_Oran_32_Vade_32_Kontrol":["n__350_ube_32_Havuzu","n_Ba_351_latan_32_Kontrol","n__220_r_252_n_45_Kampanya_32_Kontrolleri","n__220_r_252_n_45_Kampanya_32_Kontrolleri","n__220_r_252_n_45_Kampanya_32_Kontrolleri","n__220_r_252_n_45_Kampanya_32_Kontrolleri"],"n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay":["n_Oran_32_Vade_32_Kontrol"],"n__350_ube_32_Havuzu":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu"],"n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_":["n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay"],"n_Finansal_32_Kurumlar_32_Onay_305_":["n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_"],"n_Reddet":["n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay","n__350_ube_32_Havuzu","n_Finansal_32_Kurumlar_32_Onay_305_","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi","n_Krediler_32_Y_246_netimi_32_Onay","n_KTF_32__304_BPMUD_32_Onay_305_","n_KTF_32_TRMBPMUD_32_Onay_305_","n_KTF_32_KOB_304_PAZMUD_32_Onay_305_","n_KTF_32_T_304_BPMUD_32_Onay_305_","n_Fon_32_Y_246_netimi","n_Ba_351_latan_32_Kontrol","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi","n_PK_304__350_L_45_PKONAY_32_B_246_lge","n_TARYET_32_B_246_lge","n_KTF_32_KBPFYET_32_Onay_305_","n_BOPAZ_40_IZL_41_","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2","n__350_ube_32_Onay_305_","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_","n_KRDY","n_PK_304__350_L_45_PKONAY","n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY","n_TARYET","n_PBSMUD","n_KTF_32_PBSMUD_32_Onay_305_"],"n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_":["n__214_zel_32_Maliyet_32_mi_63_","n_Fon_32_Y_246_netimi"],"n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi":["n_Ticari_32__350_ube_32_Mi_63_"],"n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_":["n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge"],"n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_":["n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_","n_Ticari__350_ube_Mi_63_","n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi","n_PK_304__350_L_45_PKONAY_32_B_246_lge","n_TARYET_32_B_246_lge"],"n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_"],"n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_":["n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi","n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_","n_Ticari_32__350_ube_32_Mi_63_"],"n_Krediler_32_Y_246_netimi_32_Onay":[],"n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_":["n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_","n_Krediler_32_Y_246_netimi_32_Onay","n_M_252__351_teri_32_Segmenti2","n_KRDY","n_PK_304__350_L_45_PKONAY","n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY","n_TARYET","n_PBSMUD"],"n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_":["n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n_KTF_32__304_BPMUD_32_Onay_305_":["n_M_252__351_teri_32_Segmenti","n_M_252__351_teri_32_Segmenti"],"n_KTF_32_TRMBPMUD_32_Onay_305_":["n_M_252__351_teri_32_Segmenti"],"n_KTF_32_KOB_304_PAZMUD_32_Onay_305_":["n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_"],"n_KTF_32_T_304_BPMUD_32_Onay_305_":["n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_"],"n_runActionServices":["n_Finansal_32_Kurumlar_32_Onay_305_","n_KTF_32__304_BPMUD_32_Onay_305_","n_KTF_32_TRMBPMUD_32_Onay_305_","n_KTF_32_KOB_304_PAZMUD_32_Onay_305_","n_KTF_32_T_304_BPMUD_32_Onay_305_","n_KTF_32_KBPFYET_32_Onay_305_","n_Yap_305_land_305_rma_32_KTF_32_simi_63_","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_","n_KTF_32_PBSMUD_32_Onay_305_"],"n_end1":["n_Reddet","n_runActionServices"],"n__214_zel_32_Maliyet_32_mi_63_":["n_Kredi_32_kulland_305_r_305_lacak_32_firman_305_n_32_tahsisi_32_Finansal_32_Kurumlar_32_taraf_305_ndan_32_m_305__32_yap_305_lm_305__351__63_"],"n_Fon_32_Y_246_netimi":["n__214_zel_32_Maliyet_32_mi_63_"],"n_M_252__351_teri_32_Segmenti":["n_Ticari_350_ubeMi_63_"],"n_M_252__351_teri_32_Segmenti_32_Kobi_32_Mi_63_":["n_M_252__351_teri_32_Segmenti"],"n_Ba_351_latan_32_Kontrol":["n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi"],"n_Programatik_32_Reddet":[],"n_Manuel_32_Reddet":[],"n_Otomatik_32_Reddet":[],"n_Ba_351_latan_32_D_252_zeltme":[],"n__304_ptal_32_Et":["n_Ba_351_latan_32_D_252_zeltme"],"n_Ticari_32__350_ube_32_Mi_63_":["n_Fiyatlama_32__350_ube_32_Yetkisinde_32_mi_63_","n_Masraf_32__350_ube_32_Yetkisinde_32_mi_63_"],"n_Ticari__350_ube_Mi_63_":["n_Risk_32_Vadesi_32___32_Mektup_32_Metni_32___32_Muhattap_Amir_32_Risk_Dipnot_32__350_ube_32_Yetkisi_32__220_zerinde_32_mi_63_"],"n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_":["n_Ticari__350_ube_Mi_63_"],"n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_":["n_BOTAH_32_Onay_305__32_Gerekli_32_Mi_63_"],"n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Tahsis_32_Servisi":["n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_","n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_","n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_","n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"],"n_PK_304__350_L_45_PKONAY_32_B_246_lge":["n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"],"n_TARYET_32_B_246_lge":["n_BOTAH_32_Onay_305__32_Tar_305_m_45__304__351_letme_32_Kontrol_252_"],"n_Ticari_350_ubeMi_63_":["n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"],"n_KTF_32_KBPFYET_32_Onay_305_":["n_Ticari_350_ubeMi_63_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge":["n_Fiyatlama_32___32_Risk_32_Vadesi_32___32_Mektup__32_Metni_32___32_Muhattap_Amir_32_Risk_32__350_ube_32_Yetkisinde_32_mi_63_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama":["n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri":["n_Otomatik_32_KTF_32_mi_63_"],"n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32__350_ube_32_Havuzu":["n_PY_32_veya_32_YPY_32_veya_32_SBM_32_Onay","n_B_246_lge_32_M_252_d_252_rl_252__287__252__32_Pazarlama_32_Servisi","n_KTF_32__304_BPMUD_32_Onay_305_","n_KTF_32_TRMBPMUD_32_Onay_305_","n_KTF_32_KOB_304_PAZMUD_32_Onay_305_","n_KTF_32_T_304_BPMUD_32_Onay_305_","n_KTF_32_KBPFYET_32_Onay_305_","n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2","n_KTF_32_PBSMUD_32_Onay_305_"],"n_Otomatik_32_KTF_32_mi_63_":["n_Takip_32_m_252__351_terisi_32_mi_63_"],"n_end2":["n_Otomatik_32_KTF_32_mi_63_"],"n_Yap_305_land_305_rma_32_KTF_32_simi_63_":["n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_B_246_lge","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama"],"n_Ticari_32__351_ube_32_mi_63__40_IZL_41_":["n_Yap_305_land_305_rma_32_KTF_32_simi_63_","n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_"],"n_BOPAZ_40_IZL_41_":["n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_"],"n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_2":["n_Ticari_32__351_ube_32_mi_63__40_IZL_41_","n_BOPAZ_40_IZL_41_","n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_"],"n_Yap_305_land_305_rma_32_KTF_32_simi_63__40_GMY_32_kontrol_41_":["n_Fiyatlama_32_ve_32_Risk_32_Vadesi_32_B_246_lge_32_Yetkisinde_32_mi_63_","n_Masraf_32_B_246_lge_32_Yetkisinde_32_mi_63_","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama","n__220_r_252_n_45_Kampanya_32_Kontrolleri_32__45__32_Pazarlama"],"n_Daha_32__246_nce_32_BOPAZ_32_onaylad_305__32_m_305__63_":["n_Ticari_32__351_ube_32_mi_63__40_IZL_41_"],"n_Takip_32_m_252__351_terisi_32_mi_63_":["n_start"],"n__350_ube_32_Onay_305_":["n_Takip_32_m_252__351_terisi_32_mi_63_"],"n_YTYET_32_veya_32_YTMUD_32_veya_32_K_304_B_350_K_32_onay_305_":["n__350_ube_32_Onay_305_"],"n_M_252__351_teri_32_Segmenti2":["n_Amir_32_Risk_32_ve_32_Kulland_305_r_305_m_44__32_Amir_32_Risk_32_B_246_lge_32__304__351_lem_32_Limiti_32__252_zerinde_32_mi_63_"],"n_KRDY":["n_M_252__351_teri_32_Segmenti2"],"n_PK_304__350_L_45_PKONAY":["n_M_252__351_teri_32_Segmenti2"],"n_PK_304__350_L_45_KRD_304__350_L_45_PKONAY":["n_M_252__351_teri_32_Segmenti2"],"n_TARYET":["n_M_252__351_teri_32_Segmenti2"],"n_PBSMUD":[],"n_KTF_32_PBSMUD_32_Onay_305_":["n_M_252__351_teri_32_Segmenti"]}};
+const viewport = document.getElementById('viewport');
+const stage = document.getElementById('stage');
+let scale = 0.42, tx = 20, ty = 20, dragging = false, lastX = 0, lastY = 0;
+function apply(){ stage.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; }
+function fit(){
+  const vw = viewport.clientWidth, vh = viewport.clientHeight;
+  const svg = document.getElementById('svg');
+  const sw = +svg.getAttribute('width'), sh = +svg.getAttribute('height');
+  scale = Math.min(vw/sw, vh/sh) * 0.94;
+  tx = (vw - sw*scale)/2; ty = (vh - sh*scale)/2;
+  apply();
+}
+viewport.addEventListener('pointerdown', e=>{ dragging=true; lastX=e.clientX; lastY=e.clientY; viewport.classList.add('dragging'); });
+window.addEventListener('pointerup', ()=>{ dragging=false; viewport.classList.remove('dragging'); });
+window.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  tx += e.clientX-lastX; ty += e.clientY-lastY; lastX=e.clientX; lastY=e.clientY; apply();
+});
+viewport.addEventListener('wheel', e=>{
+  e.preventDefault();
+  const rect = viewport.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  const prev = scale;
+  scale = Math.min(2.4, Math.max(0.08, scale * (e.deltaY>0 ? 0.9 : 1.1)));
+  tx = mx - (mx-tx) * (scale/prev);
+  ty = my - (my-ty) * (scale/prev);
+  apply();
+}, {passive:false});
+document.getElementById('zin').onclick = ()=>{ scale=Math.min(2.4,scale*1.2); apply(); };
+document.getElementById('zout').onclick = ()=>{ scale=Math.max(0.08,scale*0.8); apply(); };
+document.getElementById('zfit').onclick = fit;
+
+// Full transitive ancestor/descendant set — used only when the user PINS a
+// node (click), since on a hub node (e.g. a shared "Reddet") this can touch
+// most of the graph and is only useful as a deliberate, stable view.
+function fullPath(id){
+  const anc = new Set(), desc = new Set();
+  let stack=[id];
+  while(stack.length){ const cur=stack.pop(); for(const p of (ADJ.parents[cur]||[])) if(p!==id && !anc.has(p)){anc.add(p); stack.push(p);} }
+  stack=[id];
+  while(stack.length){ const cur=stack.pop(); for(const c of (ADJ.children[cur]||[])) if(c!==id && !desc.has(c)){desc.add(c); stack.push(c);} }
+  return new Set([id, ...anc, ...desc]);
+}
+// Immediate neighbours only (1-hop) — this is the default hover behaviour so
+// hovering a busy hub node doesn't light up dozens of far-away rail edges at
+// once; it only shows what feeds directly in/out of THAT node.
+function neighbourPath(id){
+  const parents = ADJ.parents[id] || [], children = ADJ.children[id] || [];
+  return new Set([id, ...parents, ...children]);
+}
+const nodeEls = [...document.querySelectorAll('.pnode')];
+const edgeEls = [...document.querySelectorAll('.edge')];
+let pinnedId = null;
+function clearClasses(){
+  nodeEls.forEach(n=>n.classList.remove('dim','onpath'));
+  edgeEls.forEach(e=>e.classList.remove('dim','onpath'));
+}
+function applyActive(active){
+  nodeEls.forEach(n=> n.classList.toggle('dim', !active.has(n.dataset.id)));
+  nodeEls.forEach(n=> n.classList.toggle('onpath', active.has(n.dataset.id)));
+  edgeEls.forEach(e=>{
+    const on = active.has(e.dataset.from) && active.has(e.dataset.to);
+    e.classList.toggle('onpath', on);
+    e.classList.toggle('dim', !on);
+  });
+}
+function refresh(hoverId){
+  if(pinnedId){ applyActive(fullPath(pinnedId)); return; }
+  if(hoverId){ applyActive(neighbourPath(hoverId)); return; }
+  clearClasses();
+}
+nodeEls.forEach(n=>{
+  n.addEventListener('pointerenter', ()=> refresh(n.dataset.id));
+  n.addEventListener('pointerleave', ()=> refresh(null));
+  n.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    pinnedId = (pinnedId === n.dataset.id) ? null : n.dataset.id;
+    document.getElementById('pinhint').style.display = pinnedId ? 'inline-flex' : 'none';
+    refresh(null);
+  });
+});
+viewport.addEventListener('click', ()=>{ if(pinnedId){ pinnedId=null; document.getElementById('pinhint').style.display='none'; refresh(null);} });
+window.addEventListener('resize', fit);
+
+function parseXY(el){
+  const m=/translate\(([-.\d]+),\s*([-.\d]+)\)/.exec(el.getAttribute('transform')||'');
+  return m ? {x:+m[1], y:+m[2]} : {x:0,y:0};
+}
+function nodeBox(el){
+  const {x,y}=parseXY(el);
+  if(el.classList.contains('kind-start')||el.classList.contains('kind-end'))
+    return {l:x+62,r:x+106,t:y+6,b:y+50,cx:x+84,cy:y+28};
+  if(el.classList.contains('kind-decision'))
+    return {l:x+58,r:x+110,t:y+2,b:y+54,cx:x+84,cy:y+28};
+  return {l:x,r:x+168,t:y,b:y+56,cx:x+84,cy:y+28};
+}
+function pts(d){ return [...d.matchAll(/([-.\d]+)\s*,\s*([-.\d]+)/g)].map(m=>({x:+m[1],y:+m[2]})); }
+function leavePort(box, from, to){
+  const dx=to.x-from.x, dy=to.y-from.y;
+  if(Math.abs(dx)>=Math.abs(dy)) return dx>=0 ? {x:box.r,y:box.cy} : {x:box.l,y:box.cy};
+  return dy>=0 ? {x:box.cx,y:box.b} : {x:box.cx,y:box.t};
+}
+function enterPort(box, from, to){
+  const dx=to.x-from.x, dy=to.y-from.y;
+  if(Math.abs(dx)>=Math.abs(dy)) return dx>=0 ? {x:box.l,y:box.cy} : {x:box.r,y:box.cy};
+  return dy>=0 ? {x:box.cx,y:box.t} : {x:box.cx,y:box.b};
+}
+function setFirst(d,x,y){ return d.replace(/M\s*[-.\d]+\s*,\s*[-.\d]+/, `M${x.toFixed(1)},${y.toFixed(1)}`); }
+function setLast(d,x,y){ return d.replace(/([-.\d]+)\s*,\s*([-.\d]+)\s*$/, `${x.toFixed(1)},${y.toFixed(1)}`); }
+
+function snapEdges(){
+  const byId={};
+  document.querySelectorAll('.pnode').forEach(n=> byId[n.id]=nodeBox(n));
+  document.querySelectorAll('.edge path').forEach(path=>{
+    const g=path.parentNode;
+    const fb=byId[g.dataset.from], tb=byId[g.dataset.to];
+    if(!fb||!tb) return;
+    const orig=path.getAttribute('d');
+    const p=pts(orig);
+    if(p.length<2) return;
+    const s=leavePort(fb, p[0], p[1]);
+    const t=enterPort(tb, p[p.length-2], p[p.length-1]);
+    let d=setFirst(orig,s.x,s.y);
+    d=setLast(d,t.x,t.y);
+    if(Math.abs(p[1].x-p[0].x)<1.5){
+      d=d.replace(/^(M[-.\d.]+,)([-.\d.]+)(\s+L\s*)([-.\d.]+)/, (_,m,y,L)=> m+y+L+s.x.toFixed(1));
+    }
+    path.setAttribute('d', d);
+  });
+}
+
+function wrapTaskTitles(){
+  const ns='http://www.w3.org/2000/svg';
+  const xhtml='http://www.w3.org/1999/xhtml';
+  document.querySelectorAll('.pnode.kind-task, .pnode.kind-service, .pnode.kind-other').forEach(n=>{
+    const titleEl=n.querySelector('.node-title');
+    const svcEl=n.querySelector('.node-svc');
+    const full=(n.querySelector('title')?.textContent||'').split('\n')[0].trim() || titleEl?.textContent || '';
+    if(titleEl){
+      titleEl.remove();
+      const fo=document.createElementNS(ns,'foreignObject');
+      fo.setAttribute('x','8'); fo.setAttribute('y','17');
+      fo.setAttribute('width','152'); fo.setAttribute('height', svcEl ? '22' : '34');
+      const div=document.createElement('div');
+      div.setAttribute('xmlns', xhtml);
+      div.className='node-label-box';
+      div.textContent=full;
+      fo.appendChild(div);
+      n.appendChild(fo);
+    }
+    if(svcEl){
+      const t=svcEl.textContent||'';
+      svcEl.remove();
+      const fo=document.createElementNS(ns,'foreignObject');
+      fo.setAttribute('x','8'); fo.setAttribute('y','40');
+      fo.setAttribute('width','152'); fo.setAttribute('height','12');
+      const div=document.createElement('div');
+      div.setAttribute('xmlns', xhtml);
+      div.className='node-svc-box';
+      div.setAttribute('title', t);
+      div.textContent=t;
+      fo.appendChild(div);
+      n.appendChild(fo);
+    }
+  });
+}
+
+const marker=document.querySelector('#arrow');
+if(marker){ marker.setAttribute('refX','10'); marker.setAttribute('markerWidth','6'); marker.setAttribute('markerHeight','6'); }
+
+wrapTaskTitles();
+snapEdges();
+
+fit();
+</script>
+</body></html>

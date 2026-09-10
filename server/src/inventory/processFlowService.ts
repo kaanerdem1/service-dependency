@@ -5,8 +5,8 @@ import {
   type ProcessFlowGraph,
 } from './parProcessParser.js'
 
-/** İlk turda drawer’da yalnızca bu iki süreç — basit + dallı. */
-export const POC_PROCESS_NOS = ['105199', '105251'] as const
+/** Drawer’daki deneme süreçleri: basit, dallı, büyük (KTF). */
+export const POC_PROCESS_NOS = ['105199', '105251', '105116'] as const
 
 export type ProcessListItem = {
   oid: string
@@ -27,7 +27,7 @@ export async function listPocProcesses(): Promise<ProcessListItem[]> {
      WHERE status = 1
        AND process_definition IS NOT NULL
        AND no = ANY($1::varchar[])
-     ORDER BY CASE no WHEN '105199' THEN 1 WHEN '105251' THEN 2 ELSE 9 END`,
+     ORDER BY CASE no WHEN '105199' THEN 1 WHEN '105251' THEN 2 WHEN '105116' THEN 3 ELSE 9 END`,
     [POC_PROCESS_NOS],
   )
   return rows.map((r) => ({

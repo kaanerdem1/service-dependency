@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getProcessFlow } from '../api/client'
-import { ProcessFlowCanvas } from './ProcessFlowCanvas'
+import { ProcessFlowMap } from './ProcessFlowMap'
 import type { ProcessFlowGraph } from '../types'
 
 type Props = {
@@ -29,28 +29,13 @@ export function ProcessFlowPage({ processNo, onDismiss }: Props) {
   }, [processNo])
 
   return (
-    <article className="pf-page">
-      <header className="wf-info-hero">
-        <div className="wf-info-hero-main">
-          <p className="wf-info-kicker">Süreç</p>
-          <div className="wf-info-title-row">
-            <h1 className="wf-info-title">{graph?.label || processNo}</h1>
-          </div>
-          <p className="wf-info-lede">
-            {graph
-              ? `${graph.no} · ${graph.nodes.length} adım · ${graph.edges.length} geçiş`
-              : `No ${processNo}`}
-          </p>
-        </div>
-        <div className="wf-info-hero-side">
-          <button type="button" className="ce-dismiss" onClick={onDismiss}>
-            Kapat
-          </button>
-        </div>
-      </header>
-      {error ? <p className="wf-info-lede">{error}</p> : null}
-      {!error && !graph ? <p className="wf-info-lede">Yükleniyor…</p> : null}
-      {graph ? <ProcessFlowCanvas graph={graph} /> : null}
+    <article className="pf-map-page">
+      <button type="button" className="pf-map-close" onClick={onDismiss}>
+        Kapat
+      </button>
+      {error ? <p className="pf-map-status">{error}</p> : null}
+      {!error && !graph ? <p className="pf-map-status">Yükleniyor…</p> : null}
+      {graph ? <ProcessFlowMap key={graph.no} graph={graph} /> : null}
     </article>
   )
 }

@@ -1,3 +1,5 @@
+import { ELEMENT_SIZES, layoutProcess, type BpmnElementType, type BpmnFlowElement, type BpmnProcess } from '@bpmnkit/core'
+
 export type ProcessFlowNodeKind =
   | 'start'
   | 'end'
@@ -5,6 +7,7 @@ export type ProcessFlowNodeKind =
   | 'decision'
   | 'service'
   | 'other'
+  | 'dummy'
 
 /** Bir karar (decision) düğümünün handler'ı, hangi kriter (organizasyon,
  * profil, kanal...) hangi geçişe (transition) eşleniyor bilgisini taşır —
@@ -31,6 +34,8 @@ export type ProcessFlowNode = {
   services: string[]
   /** Sadece kind === 'decision' için: XML handler'ından çıkarılan kural seti. */
   decisionInfo?: ProcessDecisionInfo
+  /** XML’deki tek düğüm; canvas’ta kararın yanında gösterilen kopya. */
+  copyOf?: string
 }
 
 export type ProcessFlowEdge = {
@@ -38,6 +43,8 @@ export type ProcessFlowEdge = {
   from: string
   to: string
   label?: string
+  /** Alt otobüs: 2 ara nokta (katman katman yılan değil). */
+  via?: string[]
 }
 
 export type ProcessFlowGraph = {
@@ -83,23 +90,18 @@ function decode(value: string): string {
 }
 
 function findTagClose(xml: string, start: number, tag: string): number {
-  const openRe = new RegExp(`<${tag}\\b`, 'gi')
-  const closeRe = new RegExp(`</${tag}\\s*>`, 'gi')
+  const re = new RegExp(`<${tag}\\b([^>]*?)(/)?\\s*>|</${tag}\\s*>`, 'gi')
+  re.lastIndex = start
   let depth = 1
-  let i = start
-  while (i < xml.length && depth > 0) {
-    openRe.lastIndex = i
-    closeRe.lastIndex = i
-    const nextOpen = openRe.exec(xml)
-    const nextClose = closeRe.exec(xml)
-    if (!nextClose) return -1
-    if (nextOpen && nextOpen.index < nextClose.index) {
-      depth += 1
-      i = nextOpen.index + 1
-    } else {
+  let m: RegExpExecArray | null
+  while ((m = re.exec(xml))) {
+    const isClose = m[0].startsWith('</')
+    const selfClose = Boolean(m[2])
+    if (isClose) {
       depth -= 1
-      if (depth === 0) return nextClose.index + nextClose[0].length
-      i = nextClose.index + 1
+      if (depth === 0) return m.index + m[0].length
+    } else if (!selfClose) {
+      depth += 1
     }
   }
   return -1
@@ -124,10 +126,7 @@ function extractRootChildren(xml: string): { tag: string; open: string; inner: s
     }
     const innerStart = m.index + m[0].length
     const closeAt = findTagClose(body, innerStart, tag)
-    if (closeAt < 0) {
-      out.push({ tag, open, inner: body.slice(innerStart) })
-      break
-    }
+    if (closeAt < 0) continue
     out.push({ tag, open, inner: body.slice(innerStart, closeAt) })
     re.lastIndex = closeAt
   }
@@ -211,11 +210,12 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
     if (seen.has(id)) continue
     seen.add(id)
     const kind = kindFromTag(child.tag, child.inner)
+    const services = extractServices(child.inner)
     nodes.push({
       id,
       name: id,
       kind,
-      services: extractServices(child.inner),
+      services,
       decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
@@ -243,117 +243,95 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
   }
 }
 
+function bpmnTypeFor(kind: ProcessFlowNodeKind): BpmnElementType {
+  if (kind === 'start') return 'startEvent'
+  if (kind === 'end') return 'endEvent'
+  if (kind === 'decision') return 'exclusiveGateway'
+  if (kind === 'service') return 'serviceTask'
+  if (kind === 'task') return 'userTask'
+  return 'task'
+}
+
+function toBpmnElement(node: ProcessFlowNode): BpmnFlowElement {
+  const type = bpmnTypeFor(node.kind)
+  const base = {
+    id: node.id,
+    name: node.name,
+    incoming: [] as string[],
+    outgoing: [] as string[],
+    extensionElements: [],
+    unknownAttributes: {},
+  }
+  if (type === 'startEvent' || type === 'endEvent') {
+    return { ...base, type, eventDefinitions: [] }
+  }
+  return { ...base, type } as BpmnFlowElement
+}
+
+function toBpmnProcess(graph: ProcessFlowGraph): BpmnProcess {
+  const reals = graph.nodes.filter((n) => n.kind !== 'dummy')
+  return {
+    id: `p_${graph.no}`,
+    name: graph.label ?? graph.no,
+    extensionElements: [],
+    flowElements: reals.map(toBpmnElement),
+    sequenceFlows: graph.edges.map((e) => ({
+      id: e.id,
+      name: e.label,
+      sourceRef: e.from,
+      targetRef: e.to,
+      extensionElements: [],
+      unknownAttributes: {},
+    })),
+    textAnnotations: [],
+    associations: [],
+    groups: [],
+    unknownAttributes: {},
+  }
+}
+
 /**
- * Katmanlı (Sugiyama tarzı) yerleşim: her düğüm başlangıçtan en UZUN yol
- * mesafesine (longest-path) göre bir sütuna (depth) yerleşir — böylece bir
- * yakınsama düğümü (örn. "Sil"), onu besleyen tüm dalların ötesinde durur ve
- * ok geriye/üste doğru kesişmez. Her sütun içinde satır sırası, önceki
- * sütundaki ebeveynlerinin ortalama satırına göre (barycenter) belirlenir ve
- * o sütun ebeveynlerin ortalamasına ortalanır — bu, tek bir karardan çıkan
- * çoklu dalların simetrik şekilde açılıp aynı hedefte simetrik toplanmasını
- * sağlar (kullanıcının elle dizdiği örnekteki görünüm).
+ * BPMN Kit semantic auto-layout (https://bpmnkit.com/auto-layout):
+ * rank + branch bands + orthogonal routes that go around shapes.
  */
+ELEMENT_SIZES.userTask = { width: 200, height: 96 }
+ELEMENT_SIZES.serviceTask = { width: 200, height: 96 }
+ELEMENT_SIZES.task = { width: 200, height: 96 }
+ELEMENT_SIZES.exclusiveGateway = { width: 80, height: 92 }
+ELEMENT_SIZES.startEvent = { width: 48, height: 80 }
+ELEMENT_SIZES.endEvent = { width: 48, height: 80 }
+
 export function layoutProcessFlow(graph: ProcessFlowGraph): ProcessFlowGraph & {
   positions: Record<string, { x: number; y: number }>
 } {
-  const outgoing = new Map<string, string[]>()
-  const incoming = new Map<string, string[]>()
-  for (const e of graph.edges) {
-    const outList = outgoing.get(e.from) ?? []
-    outList.push(e.to)
-    outgoing.set(e.from, outList)
-    const inList = incoming.get(e.to) ?? []
-    inList.push(e.from)
-    incoming.set(e.to, inList)
+  const reals = graph.nodes.filter((n) => n.kind !== 'dummy')
+  const result = layoutProcess(toBpmnProcess({ ...graph, nodes: reals }), 'semantic')
+  const positions: Record<string, { x: number; y: number }> = {}
+  for (const n of result.nodes) {
+    positions[n.id] = { x: n.bounds.x, y: n.bounds.y }
+  }
+  let orphanY = Math.max(48, ...Object.values(positions).map((p) => p.y + 80))
+  for (const n of reals) {
+    if (positions[n.id]) continue
+    positions[n.id] = { x: 48, y: orphanY }
+    orphanY += 112
   }
 
-  // 1) En-uzun-yol katmanlama (topological relaxation, döngülere karşı korumalı).
-  const depth = new Map<string, number>()
-  const seedIds = graph.nodes.filter((n) => n.kind === 'start').map((n) => n.id)
-  const indegree = new Map<string, number>()
-  for (const n of graph.nodes) indegree.set(n.id, 0)
-  for (const e of graph.edges) {
-    if (indegree.has(e.to)) indegree.set(e.to, (indegree.get(e.to) ?? 0) + 1)
-  }
-  const queue: string[] = []
-  for (const id of seedIds) {
-    depth.set(id, 0)
-    queue.push(id)
-  }
-  for (const n of graph.nodes) {
-    if (!depth.has(n.id) && (indegree.get(n.id) ?? 0) === 0) {
-      depth.set(n.id, 0)
-      queue.push(n.id)
-    }
-  }
-  if (queue.length === 0 && graph.nodes[0]) {
-    depth.set(graph.nodes[0].id, 0)
-    queue.push(graph.nodes[0].id)
-  }
-  const guardLimit = graph.nodes.length * 4 + 64
-  let guard = 0
-  while (queue.length && guard < guardLimit) {
-    guard += 1
-    const id = queue.shift()!
-    const d = depth.get(id) ?? 0
-    for (const to of outgoing.get(id) ?? []) {
-      const next = d + 1
-      const prev = depth.get(to)
-      if (prev == null || next > prev) {
-        depth.set(to, next)
-        queue.push(to)
-      }
-    }
-  }
-  const maxDepth = Math.max(0, ...[...depth.values()])
-  let extra = 0
-  for (const n of graph.nodes) {
-    if (!depth.has(n.id)) {
-      depth.set(n.id, maxDepth + 1 + extra)
-      extra += 1
-    }
-  }
-
-  const layers = new Map<number, string[]>()
-  for (const n of graph.nodes) {
-    const d = depth.get(n.id) ?? 0
-    const list = layers.get(d) ?? []
-    list.push(n.id)
-    layers.set(d, list)
-  }
-  const orderedLayers = [...layers.entries()].sort((a, b) => a[0] - b[0])
-
-  // 2) Barycenter satır sırası + ebeveyn ortalamasına ortalama.
-  const rowOf = new Map<string, number>()
-  orderedLayers.forEach(([, ids], layerIdx) => {
-    if (layerIdx === 0) {
-      ids.forEach((id, i) => rowOf.set(id, i))
-      return
-    }
-    const scored = ids.map((id) => {
-      const preds = incoming.get(id) ?? []
-      const rows = preds.map((p) => rowOf.get(p)).filter((r): r is number => r != null)
-      const bary = rows.length ? rows.reduce((a, b) => a + b, 0) / rows.length : 0
-      return { id, bary }
+  const laidById = new Map(result.edges.map((e) => [e.id, e]))
+  const dummyNodes: ProcessFlowNode[] = []
+  const edges = graph.edges.map((e) => {
+    const laid = laidById.get(e.id)
+    const mids = (laid?.waypoints ?? []).slice(1, -1)
+    if (mids.length === 0) return e
+    const via = mids.map((wp, i) => {
+      const id = `d:b:${e.id}:${i}`
+      dummyNodes.push({ id, name: '', kind: 'dummy', services: [] })
+      positions[id] = { x: wp.x - 4, y: wp.y - 4 }
+      return id
     })
-    scored.sort((a, b) => a.bary - b.bary)
-    scored.forEach((s, i) => rowOf.set(s.id, i))
-    const layerAvgRow = scored.reduce((a, s) => a + (rowOf.get(s.id) ?? 0), 0) / scored.length
-    const targetAvg = scored.reduce((a, s) => a + s.bary, 0) / scored.length
-    const shift = targetAvg - layerAvgRow
-    scored.forEach((s) => rowOf.set(s.id, (rowOf.get(s.id) ?? 0) + shift))
+    return { ...e, via }
   })
 
-  const allRows = [...rowOf.values()]
-  const minRow = allRows.length ? Math.min(...allRows) : 0
-  const colW = 260
-  const rowH = 100
-  const positions: Record<string, { x: number; y: number }> = {}
-  for (const [d, ids] of orderedLayers) {
-    for (const id of ids) {
-      const r = (rowOf.get(id) ?? 0) - minRow
-      positions[id] = { x: 48 + d * colW, y: 48 + r * rowH }
-    }
-  }
-  return { ...graph, positions }
+  return { ...graph, nodes: [...reals, ...dummyNodes], edges, positions }
 }
+

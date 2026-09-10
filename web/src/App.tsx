@@ -1292,13 +1292,13 @@ export default function App() {
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
           <main
-          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId || processFlowNo ? ' main-catalog-entity main-overview' : ''}${!hasSelection ? ' is-empty' : ''}`}
+          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId && !processFlowNo ? ' main-catalog-entity main-overview' : ''}${processFlowNo ? ' main-process-flow' : ''}${!hasSelection ? ' is-empty' : ''}`}
           ref={mainRef}
         >
           {!hasSelection && <WelcomeScreen />}
 
           {processFlowNo ? (
-            <div className="stage-body wf-info-stage">
+            <div className="stage-body pf-map-stage">
               <ProcessFlowPage
                 processNo={processFlowNo}
                 onDismiss={() => setProcessFlowNo(undefined)}
