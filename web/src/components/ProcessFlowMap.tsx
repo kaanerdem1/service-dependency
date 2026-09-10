@@ -20,7 +20,13 @@ import ReactFlow, {
   type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import type { ProcessDecisionInfo, ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
+import type {
+  ProcessDecisionInfo,
+  ProcessFlowGraph,
+  ProcessFlowNodeKind,
+  ProcessNodeDetails,
+} from '../types'
+import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 import { summarizeProcessFlow } from './processFlowSummary'
 
@@ -41,6 +47,7 @@ type ProcessNodeData = {
   kind: ProcessFlowNodeKind
   services: string[]
   decisionInfo?: ProcessDecisionInfo
+  details?: ProcessNodeDetails
 }
 
 type RouteKind = 'direct' | 'jump' | 'back'
@@ -62,21 +69,6 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   service: 'Servis',
   dummy: 'Adım',
   other: 'Adım',
-}
-
-const CRITERIA_LABEL: Record<string, string> = {
-  organization: 'Organizasyon',
-  organizationType: 'Org. tipi',
-  organizationGroup: 'Org. grubu',
-  profile: 'Profil',
-  channelCode: 'Kanal',
-  unit: 'Birim',
-}
-
-function formatDecisionCriteria(criteria: Record<string, string>): string {
-  const entries = Object.entries(criteria)
-  if (!entries.length) return 'kriter yok (diğer / varsayılan)'
-  return entries.map(([k, v]) => `${CRITERIA_LABEL[k] ?? k}: ${v}`).join(' · ')
 }
 
 function Ports() {
@@ -105,7 +97,6 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
   }
 
   if (data.kind === 'decision') {
-    const rules = data.decisionInfo?.rules ?? []
     return (
       <div className={`pf-node pf-node-gateway is-decision${selected ? ' is-selected' : ''}`}>
         <Ports />
@@ -114,22 +105,6 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
           <span className="pf-gateway-mark">✕</span>
         </div>
         <strong className="pf-gateway-label">{data.label}</strong>
-        {rules.length > 0 ? (
-          <div className="pf-decision-info" title="Karar kriterleri">
-            <span className="pf-decision-badge">i</span>
-            <div className="pf-decision-tooltip">
-              <div className="pf-decision-tooltip-title">
-                Hangi ok neden seçilir? (istek sahibinin bilgilerine göre)
-              </div>
-              {rules.map((r) => (
-                <div className="pf-decision-rule" key={r.transition}>
-                  <span className="pf-decision-rule-key">{r.transition}</span>
-                  <span className="pf-decision-rule-val">{formatDecisionCriteria(r.criteria)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
     )
   }
@@ -140,11 +115,6 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
-      {data.services[0] ? (
-        <span className="pf-node-svc" title={data.services.join(', ')}>
-          {data.services[0]}
-        </span>
-      ) : null}
     </div>
   )
 }
@@ -243,7 +213,7 @@ function ProcessEdge({
         <EdgeLabelRenderer>
           <div
             className={`pf-edge-label${stateClass}`}
-            title={data?.labels?.length ? data.labels.join(' · ') : undefined}
+            title={data?.labels?.length ? mergeTransitionLabels(data.labels) : undefined}
             style={{
               position: 'absolute',
               pointerEvents: 'auto',
@@ -265,38 +235,41 @@ function isDummyId(id: string) {
   return id.startsWith('d:')
 }
 
+function mergeTransitionLabels(labels: string[]): string | undefined {
+  const parts = labels.map((l) => l.trim()).filter(Boolean)
+  if (parts.length === 0) return undefined
+  return parts.join(' / ')
+}
+
+/** Aynı from→to XML geçişlerini tek ok + birleşik etiket (2 / 3 / BOTAH). */
 function visualEdges(graph: ProcessFlowGraph) {
-  const totals = new Map<string, number>()
-  const seen = new Map<string, number>()
+  const groups = new Map<
+    string,
+    { from: string; to: string; labels: string[]; originalId: string }
+  >()
   for (const e of graph.edges) {
     if (isDummyId(e.from) || isDummyId(e.to)) continue
     const key = `${e.from}\0${e.to}`
-    totals.set(key, (totals.get(key) ?? 0) + 1)
-  }
-  const out: {
-    from: string
-    to: string
-    label?: string
-    originalId: string
-    labels: string[]
-    lane: number
-  }[] = []
-  for (const e of graph.edges) {
-    if (isDummyId(e.from) || isDummyId(e.to)) continue
-    const key = `${e.from}\0${e.to}`
-    const n = totals.get(key) ?? 1
-    const i = seen.get(key) ?? 0
-    seen.set(key, i + 1)
-    out.push({
+    const hit = groups.get(key)
+    if (hit) {
+      if (e.label?.trim()) hit.labels.push(e.label.trim())
+      continue
+    }
+    groups.set(key, {
       from: e.from,
       to: e.to,
-      label: e.label,
+      labels: e.label?.trim() ? [e.label.trim()] : [],
       originalId: e.id,
-      labels: e.label ? [e.label] : [],
-      lane: n <= 1 ? 0 : i - (n - 1) / 2,
     })
   }
-  return out
+  return [...groups.values()].map((g) => ({
+    from: g.from,
+    to: g.to,
+    label: mergeTransitionLabels(g.labels),
+    originalId: g.originalId,
+    labels: g.labels,
+    lane: 0,
+  }))
 }
 
 function layeredLayout(graph: ProcessFlowGraph) {
@@ -438,6 +411,7 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
         kind: n.kind,
         services: n.services,
         decisionInfo: n.decisionInfo,
+        details: n.details,
       } satisfies ProcessNodeData,
       draggable: true,
     }))
@@ -445,7 +419,7 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
   const edges: Edge[] = visualEdges(graph).map((e) => {
     const route = routeFor(graph, e.from, e.to, posOf(e.from).x, posOf(e.to).x)
     return {
-      id: `b:${e.originalId}`,
+      id: `b:${e.from}\0${e.to}`,
       source: e.from,
       target: e.to,
       label: e.label,
@@ -545,10 +519,16 @@ function ProcessFlowMapInner({
   const [edges] = useEdgesState(seed.edges)
   const [hoverId, setHoverId] = useState<string>()
   const [dragId, setDragId] = useState<string>()
+  const [selectedNodeId, setSelectedNodeId] = useState<string>()
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string>()
+  const dragMovedRef = useRef(false)
   const { setViewport } = useReactFlow()
-  const focusId = dragId ?? hoverId
+  const focusId = selectedNodeId ?? dragId ?? hoverId
+  const selectedNode = useMemo(
+    () => graph.nodes.find((n) => n.id === selectedNodeId),
+    [graph.nodes, selectedNodeId],
+  )
   const wide = seed.nodes.length > 18 || graphSpanX(seed.nodes) > WIDE_SPAN
   const summary = useMemo(() => summarizeProcessFlow(graph), [graph])
 
@@ -558,13 +538,22 @@ function ProcessFlowMapInner({
   }, [graph.no, seed.nodes, setViewport, wide])
 
   useEffect(() => {
-    if (!expanded) return
+    setSelectedNodeId(undefined)
+  }, [graph.no])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setExpanded(false)
+      if (e.key !== 'Escape') return
+      if (selectedNodeId) {
+        e.preventDefault()
+        setSelectedNodeId(undefined)
+        return
+      }
+      if (expanded) setExpanded(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expanded])
+  }, [expanded, selectedNodeId])
 
   const neighborhood = useMemo(() => {
     if (!focusId) return null
@@ -580,12 +569,24 @@ function ProcessFlowMapInner({
   }, [edges, focusId])
 
   const shownNodes = useMemo(() => {
-    if (!neighborhood) return nodes
-    const decorated = nodes.map((n) => {
+    const base = nodes.map((n) => ({
+      ...n,
+      className: [
+        n.className,
+        selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+      selected: selectedNodeId === n.id,
+    }))
+    if (!neighborhood) return base
+    const decorated = base.map((n) => {
       const active = neighborhood.nodeIds.has(n.id)
       return {
         ...n,
-        className: active ? 'pf-node-onpath' : 'pf-node-offpath',
+        className: [active ? 'pf-node-onpath' : 'pf-node-offpath', n.className]
+          .filter(Boolean)
+          .join(' '),
         zIndex: active ? 4 : 0,
       }
     })
@@ -593,7 +594,7 @@ function ProcessFlowMapInner({
       ...decorated.filter((n) => n.className !== 'pf-node-onpath'),
       ...decorated.filter((n) => n.className === 'pf-node-onpath'),
     ]
-  }, [neighborhood, nodes])
+  }, [neighborhood, nodes, selectedNodeId])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -620,32 +621,53 @@ function ProcessFlowMapInner({
     if (!dragRef.current) setHoverId(undefined)
   }, [])
   const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    dragMovedRef.current = false
     dragRef.current = node.id
     setDragId(node.id)
     setHoverId(node.id)
   }, [])
   const onNodeDrag = useCallback((_: unknown, node: Node) => {
+    dragMovedRef.current = true
     dragRef.current = node.id
     setDragId(node.id)
   }, [])
   const onNodeDragStop = useCallback(() => {
     dragRef.current = undefined
     setDragId(undefined)
+    window.setTimeout(() => {
+      dragMovedRef.current = false
+    }, 0)
   }, [])
+  const onNodeClick = useCallback((_: unknown, node: Node) => {
+    if (dragMovedRef.current) return
+    setSelectedNodeId(node.id)
+  }, [])
+  const onPaneClick = useCallback(() => {
+    setSelectedNodeId(undefined)
+  }, [])
+  const closeDetail = useCallback(() => setSelectedNodeId(undefined), [])
 
   return (
     <div className={`pf-map-wrap${expanded ? ' is-expanded' : ''}`}>
       <header className="pf-map-head">
         <h1 className="pf-map-title">{summary.title}</h1>
         <p className="pf-map-subtitle">{summary.subtitle}</p>
-        <p className="pf-map-summary">{summary.statsLine}</p>
+        {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
       </header>
       {onDismiss ? (
         <button type="button" className="pf-map-close" onClick={onDismiss}>
           Kapat
         </button>
       ) : null}
-      <div className="pf-map-canvas">
+      <div className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}`}>
+        {selectedNodeId ? (
+          <button
+            type="button"
+            className="pf-detail-scrim"
+            aria-label="Detayı kapat"
+            onClick={closeDetail}
+          />
+        ) : null}
         <div className="pf-map-tools">
           <button
             type="button"
@@ -667,6 +689,8 @@ function ProcessFlowMapInner({
         onNodeDragStart={onNodeDragStart}
         onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         nodesConnectable={false}
@@ -685,6 +709,18 @@ function ProcessFlowMapInner({
         <Background id="pf-dots" variant={BackgroundVariant.Dots} gap={18} size={1.1} color="#c5ccd4" />
         <Controls showInteractive={false} />
         </ReactFlow>
+        {selectedNode ? (
+          <ProcessFlowDetailDrawer
+            open
+            nodeId={selectedNode.id}
+            nodeName={selectedNode.name}
+            kind={selectedNode.kind}
+            details={selectedNode.details}
+            decisionInfo={selectedNode.decisionInfo}
+            services={selectedNode.services}
+            onClose={closeDetail}
+          />
+        ) : null}
       </div>
     </div>
   )

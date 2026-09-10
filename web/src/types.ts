@@ -384,6 +384,12 @@ export type ProcessDecisionInfo = {
   rules: ProcessDecisionRule[]
 }
 
+export type ProcessDetailRow = { label: string; value: string }
+
+export type ProcessDetailGroup = { title: string; rows: ProcessDetailRow[] }
+
+export type ProcessNodeDetails = { groups: ProcessDetailGroup[] }
+
 export type ProcessFlowGraph = {
   no: string
   oid: string
@@ -400,6 +406,7 @@ export type ProcessFlowGraph = {
     kind: ProcessFlowNodeKind
     services: string[]
     decisionInfo?: ProcessDecisionInfo
+    details?: ProcessNodeDetails
     copyOf?: string
   }[]
   edges: { id: string; from: string; to: string; label?: string; via?: string[] }[]

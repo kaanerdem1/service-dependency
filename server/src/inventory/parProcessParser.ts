@@ -27,6 +27,13 @@ export type ProcessDecisionInfo = {
   rules: ProcessDecisionRule[]
 }
 
+export type ProcessDetailRow = { label: string; value: string }
+
+export type ProcessDetailGroup = { title: string; rows: ProcessDetailRow[] }
+
+/** Task/node XML’inden çıkarılan dolu alanlar — drawer’da gösterilir. */
+export type ProcessNodeDetails = { groups: ProcessDetailGroup[] }
+
 export type ProcessFlowNode = {
   id: string
   name: string
@@ -34,6 +41,8 @@ export type ProcessFlowNode = {
   services: string[]
   /** Sadece kind === 'decision' için: XML handler'ından çıkarılan kural seti. */
   decisionInfo?: ProcessDecisionInfo
+  /** Task/node event ve assignment alanları (yalnızca dolu olanlar). */
+  details?: ProcessNodeDetails
   /** XML’deki tek düğüm; canvas’ta kararın yanında gösterilen kopya. */
   copyOf?: string
 }
@@ -194,6 +203,120 @@ function extractServices(inner: string): string[] {
   return names
 }
 
+const DETAIL_FIELD_LABELS: Record<string, string> = {
+  organization: 'Organizasyon',
+  organizationType: 'Org. tipi',
+  organizationGroup: 'Org. grubu',
+  profile: 'Profil',
+  channelCode: 'Kanal',
+  unit: 'Birim',
+  actorCount: 'Onaycı sayısı',
+  rule: 'Kural',
+}
+
+function pushDetailRow(rows: ProcessDetailRow[], label: string, value: string | undefined) {
+  const v = value?.trim()
+  if (!v) return
+  rows.push({ label, value: decode(v) })
+}
+
+function extractServiceDetailRows(inner: string): ProcessDetailRow[] {
+  const rows: ProcessDetailRow[] = []
+  const re = /<service\b([^>]*)\/?>/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(inner))) {
+    const name = attr(m[1], 'service-name')
+    if (!name) continue
+    const callType = attr(m[1], 'call-type')
+    const writeToInput = attr(m[1], 'write-to-input')
+    const bits = [decode(name)]
+    if (callType) bits.push(`call-type: ${callType}`)
+    if (writeToInput === 'true') bits.push('write-to-input')
+    rows.push({ label: 'Servis', value: bits.join(' · ') })
+  }
+  return rows
+}
+
+function extractEventBlock(inner: string, eventType: string): string | undefined {
+  const re = new RegExp(`<event\\s+type="${eventType}"\\b[^>]*>([\\s\\S]*?)<\\/event>`, 'i')
+  return re.exec(inner)?.[1]
+}
+
+/** Task/node içindeki dolu XML alanlarını gruplar halinde çıkarır. */
+function extractNodeDetails(inner: string): ProcessNodeDetails | undefined {
+  const groups: ProcessDetailGroup[] = []
+
+  const enter = extractEventBlock(inner, 'node-enter')
+  if (enter) {
+    const rows: ProcessDetailRow[] = []
+    const status = enter.match(/<set-status\b[^>]*\bprocess\s*=\s*"([^"]+)"/i)
+    if (status?.[1]) rows.push({ label: 'Durum kodu', value: decode(status[1]) })
+    rows.push(...extractServiceDetailRows(enter))
+    if (rows.length) groups.push({ title: 'Giriş', rows })
+  }
+
+  const leave = extractEventBlock(inner, 'node-leave')
+  if (leave) {
+    const rows = extractServiceDetailRows(leave)
+    if (rows.length) groups.push({ title: 'Çıkış', rows })
+  }
+
+  const assignmentMatch = inner.match(/<assignment\b([^>]*)>([\s\S]*?)<\/assignment>/i)
+  if (assignmentMatch) {
+    const cls = attr(assignmentMatch[1], 'class')
+    if (cls?.trim()) {
+      groups.push({
+        title: 'Atama',
+        rows: [{ label: 'Handler', value: decode(cls) }],
+      })
+    }
+    const actorRe = /<actor>([\s\S]*?)<\/actor>/gi
+    let actorIdx = 0
+    let am: RegExpExecArray | null
+    while ((am = actorRe.exec(assignmentMatch[2]))) {
+      actorIdx++
+      const rows: ProcessDetailRow[] = []
+      const body = am[1]
+      const leafRe = /<(organization|profile|unit|actorCount|rule)>([^<]*)<\/\1>/gi
+      let lm: RegExpExecArray | null
+      while ((lm = leafRe.exec(body))) {
+        pushDetailRow(rows, DETAIL_FIELD_LABELS[lm[1]] ?? lm[1], lm[2])
+      }
+      const screen = body.match(/<screen\s+name\s*=\s*"([^"]+)"/i)
+      if (screen?.[1]) pushDetailRow(rows, 'Ekran', screen[1])
+      if (rows.length) {
+        groups.push({ title: actorIdx > 1 ? `Onaycı ${actorIdx}` : 'Onaycı', rows })
+      }
+    }
+  }
+
+  const timer = inner.match(/<timer\b([^>]*)\/?>/i)
+  if (timer) {
+    const due = attr(timer[1], 'duedate') ?? attr(timer[1], 'due-date')
+    if (due?.trim()) groups.push({ title: 'Zamanlayıcı', rows: [{ label: 'Vade', value: decode(due) }] })
+  }
+
+  const desc = inner.match(/<description>([^<]*)<\/description>/i)
+  if (desc?.[1]?.trim()) {
+    groups.push({ title: 'Açıklama', rows: [{ label: 'Metin', value: decode(desc[1]) }] })
+  }
+
+  const transitionRe = /<transition\b([^>]*)>([\s\S]*?)<\/transition>/gi
+  let tm: RegExpExecArray | null
+  while ((tm = transitionRe.exec(inner))) {
+    const trName = attr(tm[1], 'name')
+    const rows = extractServiceDetailRows(tm[2])
+    if (!rows.length) continue
+    groups.push({
+      title: trName?.trim() ? `Geçiş: ${decode(trName.trim())}` : 'Geçiş servisleri',
+      rows,
+    })
+  }
+
+  if (groups.length === 0) return undefined
+  return { groups }
+}
+
 export function parseProcessDefinitionXml(xml: string, fallbackNo: string): ProcessFlowGraph {
   const defOpen = xml.match(/<process-definition\b[^>]*>/i)?.[0] ?? ''
   const no = attr(defOpen, 'name') || fallbackNo
@@ -217,6 +340,7 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
       kind,
       services,
       decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
+      details: kind !== 'decision' ? extractNodeDetails(child.inner) : undefined,
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
       edges.push({
