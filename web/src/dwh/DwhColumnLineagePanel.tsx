@@ -321,8 +321,9 @@ function buildAncestryGraph(
   targetTableName?: string | null,
 ): ColumnLineageGraph {
   if (!target) return { nodes: [], edges: [] }
+  if (!ancestry) return buildDirectGraph(target, targetTableName)
 
-  const steps = ancestry?.steps ?? []
+  const steps = ancestry.steps
   if (!target.targetColumnId || !steps.length) return buildDirectGraph(target, ancestry?.tableName ?? targetTableName)
 
   const levels = Array.from(new Set(steps.map((step) => step.level))).sort((a, b) => a - b)

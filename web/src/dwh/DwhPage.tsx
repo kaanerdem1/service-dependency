@@ -900,7 +900,7 @@ function ImpactPanel({
       <StatementDetailModal
         statement={activeImpactStatement}
         focusTable={activeTableName}
-        sourceTable={activeImpactStatement?.relatedTable}
+        sourceTable={activeImpactStatement?.relatedTable ?? undefined}
         onClose={() => setActiveImpactStatement(undefined)}
       />
     </div>

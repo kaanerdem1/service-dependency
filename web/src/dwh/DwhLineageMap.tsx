@@ -1623,12 +1623,14 @@ function DwhLineageMapInner({
     let frame: number | null = null
     const timeout = window.setTimeout(() => {
       frame = window.requestAnimationFrame(() => {
-        const node = rfInstance.current?.getNode(activeSearchId)
+        const instance = rfInstance.current
+        if (!instance) return
+        const node = instance.getNode(activeSearchId)
         if (!node) return
         const width = node.width ?? (typeof node.style?.width === 'number' ? node.style.width : 220)
         const height = node.height ?? (typeof node.style?.height === 'number' ? node.style.height : 72)
-        const zoom = rfInstance.current.getViewport().zoom
-        void rfInstance.current?.setCenter(
+        const zoom = instance.getViewport().zoom
+        void instance.setCenter(
           node.position.x + width / 2,
           node.position.y + height / 2,
           { duration: 900, zoom },
