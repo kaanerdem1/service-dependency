@@ -32,6 +32,7 @@ import {
 import { DwhColumnLineagePanel } from './DwhColumnLineagePanel'
 import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
+import { DwhSqlCode } from './DwhSqlCode'
 import { type AppSurface } from '../components/SurfaceSwitch'
 import type {
   DwhColumn,
@@ -183,55 +184,17 @@ function procedureLabel(statement: DwhSqlStatement) {
   return proc || pkg || 'Prosedür bilgisi yok'
 }
 
+function relationCellLabel(value: string) {
+  const trimmed = value.trim()
+  const separator = trimmed.lastIndexOf('.')
+  return separator >= 0 ? trimmed.slice(separator + 1) : trimmed
+}
+
 function impactProcedureLabel(statement: DwhTableImpact['affectedTables'][number]['statements'][number]) {
   const pkg = statement.packageName?.trim()
   const proc = statement.procedureName?.trim()
   if (pkg && proc) return `${pkg}.${proc}`
   return proc || pkg || 'Prosedür bilgisi yok'
-}
-
-function ImpactSqlBlock({
-  sqlText,
-  simplifiedSql,
-}: {
-  sqlText?: string | null
-  simplifiedSql?: string | null
-}) {
-  const [view, setView] = useState<'summary' | 'full'>('full')
-  const hasSummary = Boolean(simplifiedSql)
-  const shownSql = hasSummary && view === 'summary' ? simplifiedSql : sqlText
-
-  useEffect(() => {
-    setView(hasSummary ? 'summary' : 'full')
-  }, [hasSummary, sqlText, simplifiedSql])
-
-  if (!sqlText) return <p className="dwh-empty-line">SQL metni yok.</p>
-  return (
-    <div className="dwh-impact-sql">
-      <div className="dwh-sql-view-head">
-        <h4>SQL</h4>
-        {hasSummary ? (
-          <div className="dwh-sql-view-toggle" role="group" aria-label="SQL görünümü">
-            <button
-              type="button"
-              className={view === 'summary' ? 'on' : undefined}
-              onClick={() => setView('summary')}
-            >
-              Sade
-            </button>
-            <button
-              type="button"
-              className={view === 'full' ? 'on' : undefined}
-              onClick={() => setView('full')}
-            >
-              Tam SQL
-            </button>
-          </div>
-        ) : null}
-      </div>
-      <pre>{shownSql || compactSql(shownSql)}</pre>
-    </div>
-  )
 }
 
 function dmlClass(dmlType: string | null | undefined) {
@@ -257,15 +220,6 @@ function TransformationBadge({ type }: { type?: string | null }) {
   if (!type) return null
   const derived = type === 'TURETILMIS'
   return <span className={`dwh-transform-badge ${derived ? 'is-derived' : 'is-direct'}`}>{derived ? 'Türetilmiş' : type}</span>
-}
-
-function Metric({ label, value }: { label: string; value: number | string }) {
-  return (
-    <span className="dwh-metric">
-      <strong>{value}</strong>
-      <span>{label}</span>
-    </span>
-  )
 }
 
 function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
@@ -357,7 +311,7 @@ function StatementTable({
                     <td>
                       <span className="dwh-query-procedure-link">{procedureLabel(statement)}</span>
                     </td>
-                    <td title={relation}>{relation}</td>
+                    <td title={relation}>{relationCellLabel(relation)}</td>
                     <td><DmlBadge dmlType={statement.dmlType} /></td>
                   </tr>
                 )
@@ -375,9 +329,11 @@ function StatementTable({
 function SqlDetailPanel({
   statement,
   focusTable,
+  sourceTable,
 }: {
   statement?: DwhSqlStatement
   focusTable?: string
+  sourceTable?: string
 }) {
   const [view, setView] = useState<'summary' | 'full'>('full')
 
@@ -417,7 +373,7 @@ function SqlDetailPanel({
         </span>
         <span>
           <strong>Kaynak</strong>
-          {focusTable ?? '-'}
+          {sourceTable ?? focusTable ?? '-'}
         </span>
       </div>
 
@@ -455,7 +411,7 @@ function SqlDetailPanel({
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || compactSql(sqlText)}</pre>
+      <DwhSqlCode sql={sqlText || compactSql(sqlText)} highlightTable={focusTable ?? statement.targetTable} />
     </article>
   )
 }
@@ -499,10 +455,12 @@ function DwhSqlModalBackdrop({
 function StatementDetailModal({
   statement,
   focusTable,
+  sourceTable,
   onClose,
 }: {
   statement?: DwhSqlStatement
   focusTable?: string
+  sourceTable?: string
   onClose: () => void
 }) {
   return (
@@ -520,7 +478,7 @@ function StatementDetailModal({
                 Kapat
               </button>
             </header>
-            <SqlDetailPanel statement={statement} focusTable={focusTable} />
+            <SqlDetailPanel statement={statement} focusTable={focusTable} sourceTable={sourceTable} />
           </MotionModalPanel>
         </DwhSqlModalBackdrop>
       ) : null}
@@ -584,7 +542,7 @@ function ReportSqlDetailPanel({ report }: { report: DwhReportDetail }) {
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || 'SQL metni yok'}</pre>
+      <DwhSqlCode sql={sqlText || 'SQL metni yok'} />
     </article>
   )
 }
@@ -648,14 +606,14 @@ function TableQueryPanel({
     <>
       <div className="dwh-tab-content dwh-query-layout">
         <StatementTable
-          title="Çağıranlar"
+          title={`${tableName} tablosunu kaynak olarak kullanan sorgular`}
           empty={`${tableName} tablosunu kaynak olarak kullanan sorgu yok.`}
           statements={readers}
           relationLabel={(statement) => statement.relatedTable ?? statement.targetTable ?? 'Hedef tablo yok'}
           onOpen={setActiveStatement}
         />
         <StatementTable
-          title="Çağrılanlar"
+          title={`${tableName} tablosunu dolduran sorgular`}
           empty={`${tableName} tablosunu dolduran sorgu yok.`}
           statements={writers}
           relationLabel={(statement) => statement.targetTable ?? tableName}
@@ -802,9 +760,11 @@ function ImpactPanel({
   loading: boolean
 }) {
   const [activeImpactTable, setActiveImpactTable] = useState<DwhImpactTable>()
+  const [activeImpactStatement, setActiveImpactStatement] = useState<DwhSqlStatement>()
 
   useEffect(() => {
     setActiveImpactTable(undefined)
+    setActiveImpactStatement(undefined)
   }, [detailKind, table?.tableId, impact])
 
   useEffect(() => {
@@ -854,6 +814,24 @@ function ImpactPanel({
 
   const activeTableName = activeImpactTable ? fullTableName(activeImpactTable) : ''
 
+  const openImpactStatement = (statement: DwhImpactTable['statements'][number]) => {
+    if (!activeImpactTable) return
+    setActiveImpactStatement({
+      id: statement.id,
+      statementId: statement.statementId,
+      packageName: statement.packageName,
+      procedureName: statement.procedureName,
+      dmlType: statement.dmlType ?? 'SQL',
+      lineNo: statement.lineNo,
+      sqlText: statement.sqlText,
+      simplifiedSql: statement.simplifiedSql,
+      targetTable: activeTableName,
+      role: 'writer',
+      relatedTable: statement.sourceTableName,
+      sources: statement.sourceTableName ? [statement.sourceTableName] : [],
+    })
+  }
+
   return (
     <div className="dwh-tab-content dwh-impact-content">
       <div className={`dwh-impact-workspace${activeImpactTable ? ' has-detail' : ''}`}>
@@ -879,7 +857,10 @@ function ImpactPanel({
                             key={`${affected.id}-${affected.level}`}
                             type="button"
                             className={`dwh-impact-table-row${selected ? ' is-selected' : ''}`}
-                            onClick={() => setActiveImpactTable(selected ? undefined : affected)}
+                            onClick={() => {
+                              setActiveImpactStatement(undefined)
+                              setActiveImpactTable(selected ? undefined : affected)
+                            }}
                             title={fullTableName(affected)}
                           >
                             <span className="dwh-kind-badge is-dwh-table" aria-hidden>T</span>
@@ -936,7 +917,10 @@ function ImpactPanel({
               <button
                 type="button"
                 className="dwh-impact-detail-close"
-                onClick={() => setActiveImpactTable(undefined)}
+                onClick={() => {
+                  setActiveImpactStatement(undefined)
+                  setActiveImpactTable(undefined)
+                }}
               >
                 Kapat
               </button>
@@ -944,21 +928,32 @@ function ImpactPanel({
 
             <div className="dwh-impact-statement-accordion">
               {activeImpactTable.statements.map((statement) => (
-                <details key={`${activeImpactTable.id}-${statement.id}`} className="dwh-impact-statement-detail">
-                  <summary>
+                <button
+                  key={`${activeImpactTable.id}-${statement.id}`}
+                  type="button"
+                  className="dwh-impact-statement-detail"
+                  onClick={() => openImpactStatement(statement)}
+                >
+                  <span className="dwh-impact-statement-summary">
                     <span>
                       <strong>{impactProcedureLabel(statement)}</strong>
                       <small>{statement.lineNo != null ? `Satır ${statement.lineNo}` : 'Satır bilgisi yok'}</small>
                     </span>
                     <DmlBadge dmlType={statement.dmlType} />
-                  </summary>
-                  <ImpactSqlBlock sqlText={statement.sqlText} simplifiedSql={statement.simplifiedSql} />
-                </details>
+                  </span>
+                  <span className="dwh-impact-statement-open">SQL göster</span>
+                </button>
               ))}
             </div>
           </article>
         ) : null}
       </div>
+      <StatementDetailModal
+        statement={activeImpactStatement}
+        focusTable={activeTableName}
+        sourceTable={activeImpactStatement?.relatedTable}
+        onClose={() => setActiveImpactStatement(undefined)}
+      />
     </div>
   )
 }
@@ -1374,26 +1369,6 @@ export function DwhPage({
             <h1 className="main-heading" title={stageHeading}>
               {stageHeading}
             </h1>
-          </div>
-          <div className="dwh-header-metrics">
-            {stageTab === 'impact' && detailKind === 'table' && selectedTable ? (
-              <>
-                <Metric label="Etkilenen tablo" value={loadingImpact ? '...' : (impact?.affectedTables.length ?? 0)} />
-                <Metric label="Etkilenen rapor" value={loadingImpact ? '...' : (impact?.affectedReports.length ?? 0)} />
-              </>
-            ) : detailKind === 'table' && selectedTable ? (
-              <>
-                <Metric label="Kolon" value={selectedTable.columnCount} />
-                <Metric label="Kaynak" value={selectedTable.sourceCount} />
-                <Metric label="Hedef" value={selectedTable.targetCount} />
-              </>
-            ) : null}
-            {stageTab !== 'impact' && detailKind === 'report' && selectedReport ? (
-              <>
-                <Metric label="Kaynak" value={selectedReport.sourceCount} />
-                <Metric label="Kolon" value={selectedReport.columnCount} />
-              </>
-            ) : null}
           </div>
         </div>
         <StageTabs<DwhStageTab>

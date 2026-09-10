@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { TreeAccordion } from '../motion/TreeAccordion'
 import {
   getDwhReportTreeChildren,
@@ -143,7 +143,10 @@ function TreeItem({
   }, [selected])
 
   return (
-    <div className="dwh-tree-item">
+    <div
+      className="dwh-tree-item"
+      style={{ '--dwh-tree-depth': depth } as CSSProperties}
+    >
       <div
         ref={rowRef}
         className={`dwh-tree-row dwh-kind-${kind}${selected ? ' selected' : ''}${node.cycle ? ' is-cycle' : ''}`}

@@ -5,7 +5,6 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Handle,
-  MarkerType,
   Position,
   type Edge,
   type EdgeProps,
@@ -16,6 +15,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { getDwhColumnAncestry, getDwhStatement } from './api'
+import { DwhSqlCode } from './DwhSqlCode'
 import type {
   DwhColumnAncestryResponse,
   DwhColumnAncestryStep,
@@ -101,6 +101,16 @@ function qualifiedColumnName(tableName: string | null | undefined, columnName: s
   return table ? `${table}.${column}` : column
 }
 
+function splitQualifiedColumnName(value: string) {
+  if (value.includes(' · ')) return { tableName: undefined, columnName: value }
+  const separator = value.lastIndexOf('.')
+  if (separator < 0) return { tableName: undefined, columnName: value }
+  return {
+    tableName: value.slice(0, separator),
+    columnName: value.slice(separator + 1),
+  }
+}
+
 function dmlClass(dmlType: string | null | undefined) {
   const normalized = dmlType?.toLowerCase() ?? ''
   if (normalized.includes('insert')) return 'is-insert'
@@ -117,25 +127,31 @@ function refsFromSources(
   direction: ColumnNodeStatementRef['direction'],
   relatedColumnName: string,
   relatedTableName?: string | null,
+  relatedColumnNameForSource?: (source: DwhColumnLineageSource) => string,
 ): ColumnNodeStatementRef[] {
-  const seen = new Set<number>()
-  return sources
-    .filter((source): source is DwhColumnLineageSource & { statementId: number } => typeof source.statementId === 'number')
-    .filter((source) => {
-      if (seen.has(source.statementId)) return false
-      seen.add(source.statementId)
-      return true
-    })
-    .map((source) => ({
+  const refsByKey = new Map<string, ColumnNodeStatementRef>()
+  for (const source of sources) {
+    if (typeof source.statementId !== 'number') continue
+    const columnName = relatedColumnNameForSource
+      ? relatedColumnNameForSource(source)
+      : qualifiedColumnName(relatedTableName, relatedColumnName)
+    const key = `${source.statementId}:${columnName}`
+    const existing = refsByKey.get(key)
+    if (existing) {
+      continue
+    }
+    refsByKey.set(key, {
       statementId: source.statementId,
       relation,
       direction,
-      relatedColumnName: qualifiedColumnName(relatedTableName, relatedColumnName),
+      relatedColumnName: columnName,
       transformationType: source.transformationType,
       confidence: source.confidence,
       packageName: source.packageName,
       procedureName: source.procedureName,
-    }))
+    })
+  }
+  return Array.from(refsByKey.values())
 }
 
 function addStatementRef(
@@ -144,7 +160,11 @@ function addStatementRef(
   ref: ColumnNodeStatementRef,
 ) {
   const refs = refsByColumnId.get(columnId) ?? []
-  if (!refs.some((item) => item.statementId === ref.statementId && item.relation === ref.relation)) {
+  if (!refs.some((item) =>
+    item.statementId === ref.statementId &&
+    item.relation === ref.relation &&
+    item.relatedColumnName === ref.relatedColumnName
+  )) {
     refs.push(ref)
   }
   refsByColumnId.set(columnId, refs)
@@ -170,11 +190,11 @@ function ColumnLineageNode({ data }: NodeProps<ColumnNodeData>) {
       className={`dwh-col-flow-node is-${data.kind}${data.confidence === 'TAHMIN' ? ' is-estimated' : ''}${data.statementRefs?.length ? ' has-sql' : ''}`}
       title={data.statementRefs?.length ? 'SQL detayını aç' : undefined}
     >
-      <Handle type="target" position={Position.Left} className="dwh-col-flow-handle" />
+      <Handle type="target" position={Position.Right} className="dwh-col-flow-handle" />
       <span className="dwh-col-flow-kicker">{label}</span>
       <strong title={data.label}>{data.label}</strong>
       <small title={data.sub}>{data.sub}</small>
-      <Handle type="source" position={Position.Right} className="dwh-col-flow-handle" />
+      <Handle type="source" position={Position.Left} className="dwh-col-flow-handle" />
     </div>
   )
 }
@@ -189,7 +209,6 @@ function ColumnLineageFanEdge({
   targetX,
   targetY,
   style,
-  markerEnd,
   data,
 }: EdgeProps<ColumnEdgeData>) {
   const fanIndex = data?.fanIndex ?? 0
@@ -197,16 +216,30 @@ function ColumnLineageFanEdge({
   const mid = (fanCount - 1) / 2
   const spread = Math.max(-76, Math.min(76, (fanIndex - mid) * 14))
   const dx = Math.max(120, Math.abs(targetX - sourceX) * 0.42)
-  const path = `M ${sourceX},${sourceY} C ${sourceX + dx},${sourceY + spread} ${targetX - dx},${targetY + spread} ${targetX},${targetY}`
+  const direction = targetX >= sourceX ? 1 : -1
+  const path = `M ${sourceX},${sourceY} C ${sourceX + direction * dx},${sourceY + spread} ${targetX - direction * dx},${targetY + spread} ${targetX},${targetY}`
+  const tangentX = direction * dx
+  const tangentY = -spread
+  const tangentLength = Math.max(1, Math.hypot(tangentX, tangentY))
+  const ux = tangentX / tangentLength
+  const uy = tangentY / tangentLength
+  const arrowLength = 11
+  const arrowWidth = 5
+  const baseX = targetX - ux * arrowLength
+  const baseY = targetY - uy * arrowLength
+  const arrowPath = `M ${targetX},${targetY} L ${baseX - uy * arrowWidth},${baseY + ux * arrowWidth} L ${baseX + uy * arrowWidth},${baseY - ux * arrowWidth} Z`
 
   return (
-    <BaseEdge
-      id={id}
-      path={path}
-      style={style}
-      markerEnd={markerEnd}
-      interactionWidth={24}
-    />
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        style={style}
+        markerEnd={undefined}
+        interactionWidth={24}
+      />
+      <path className="dwh-column-edge-arrow" d={arrowPath} pointerEvents="none" />
+    </>
   )
 }
 
@@ -303,6 +336,7 @@ function buildAncestryGraph(
     'fills',
     target.targetColumnName,
     ancestry.tableName,
+    (source) => qualifiedColumnName(source.sourceTableName, source.sourceColumnName ?? 'Kaynak kolon yok'),
   )
   const statementRefsByColumnId = new Map<number, ColumnNodeStatementRef[]>()
   for (const source of target.sources) {
@@ -338,18 +372,18 @@ function buildAncestryGraph(
       ...refBase,
       relation: 'Kolonu dolduruyor',
       direction: 'fills',
-      relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
+      relatedColumnName: qualifiedColumnName(step.sourceTableName, step.sourceColumnName),
     })
   }
   const metaByColumnId = new Map<number, ColumnNodeData>()
-  const visualColumnById = new Map<string, number>([[targetId, maxLevel]])
+  const visualColumnById = new Map<string, number>([[targetId, 0]])
   const idsByVisualColumn = new Map<number, string[]>()
   const downstreamBySourceId = new Map<string, string[]>()
 
   for (const step of steps) {
     const sourceId = nodeIdForColumn(step.sourceColumnId)
     const currentColumn = visualColumnById.get(sourceId)
-    const visualColumn = maxLevel - step.level
+    const visualColumn = step.level
     visualColumnById.set(
       sourceId,
       currentColumn === undefined ? visualColumn : Math.min(currentColumn, visualColumn),
@@ -383,23 +417,23 @@ function buildAncestryGraph(
     {
       id: targetId,
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X + maxLevel * COLUMN_FLOW_COL_PITCH, y: targetY },
+      position: { x: COLUMN_FLOW_LEFT_X, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: ancestry.tableName,
         kind: 'target',
         columnId: target.targetColumnId,
         tableName: ancestry.tableName,
-        statementRefs: statementRefsByColumnId.get(target.targetColumnId) ?? targetStatementRefs,
+        statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     },
   ]
 
-  for (let visualColumn = maxLevel - 1; visualColumn >= 0; visualColumn -= 1) {
+  for (let visualColumn = 1; visualColumn <= maxLevel; visualColumn += 1) {
     const ids = idsByVisualColumn.get(visualColumn) ?? []
     const score = (id: string) => {
       const yValues = (downstreamBySourceId.get(id) ?? [])
@@ -438,8 +472,8 @@ function buildAncestryGraph(
         },
         data: meta,
         style: { width: COLUMN_FLOW_NODE_W },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+        sourcePosition: Position.Left,
+        targetPosition: Position.Right,
         draggable: false,
       })
     })
@@ -472,12 +506,6 @@ function buildAncestryGraph(
       source: edge.source,
       target: edge.target,
       type: 'columnFan',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 18,
-        height: 18,
-        color: style.color,
-      },
       className: edgeClassName(edge.step),
       style: {
         stroke: style.color,
@@ -499,13 +527,14 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
     'fills',
     target.targetColumnName,
     targetTableName,
+    (source) => qualifiedColumnName(source.sourceTableName, source.sourceColumnName ?? 'Kaynak kolon yok'),
   )
   const targetY = COLUMN_FLOW_TOP_Y + ((Math.max(1, shownSources.length) - 1) * COLUMN_FLOW_ROW_GAP) / 2
   const nodes: Node<ColumnNodeData>[] = [
     {
       id: 'target',
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X + COLUMN_FLOW_COL_PITCH, y: targetY },
+      position: { x: COLUMN_FLOW_LEFT_X, y: targetY },
       data: {
         label: target.targetColumnName,
         sub: `${target.sources.length} kaynak kolon`,
@@ -514,8 +543,8 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
         statementRefs: targetStatementRefs,
       },
       style: { width: COLUMN_FLOW_NODE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     },
   ]
@@ -524,7 +553,7 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
     nodes.push({
       id: `source:${index}`,
       type: 'columnLineageNode',
-      position: { x: COLUMN_FLOW_LEFT_X, y: COLUMN_FLOW_TOP_Y + index * COLUMN_FLOW_ROW_GAP },
+      position: { x: COLUMN_FLOW_LEFT_X + COLUMN_FLOW_COL_PITCH, y: COLUMN_FLOW_TOP_Y + index * COLUMN_FLOW_ROW_GAP },
       data: {
         label: source.sourceColumnName ?? 'Kolon yok',
         sub: source.sourceTableName ?? 'Kaynak tablo yok',
@@ -541,8 +570,8 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
         ),
       },
       style: { width: COLUMN_FLOW_SOURCE_W },
-      sourcePosition: Position.Right,
-      targetPosition: Position.Left,
+      sourcePosition: Position.Left,
+      targetPosition: Position.Right,
       draggable: false,
     })
   })
@@ -554,12 +583,6 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
       source: `source:${index}`,
       target: 'target',
       type: 'columnFan',
-      markerEnd: {
-        type: MarkerType.ArrowClosed,
-        width: 18,
-        height: 18,
-        color: style.color,
-      },
       className: edgeClassName(source),
       style: {
         stroke: style.color,
@@ -571,6 +594,189 @@ function buildDirectGraph(target: DwhColumnLineageTarget, targetTableName?: stri
   })
 
   return { nodes, edges }
+}
+
+type AncestryMatrixCell = {
+  label: string
+  step: DwhColumnAncestryStep
+  columnId: number
+  tableName: string
+}
+
+type AncestryMatrixRow = {
+  key: string
+  cells: Array<AncestryMatrixCell | undefined>
+}
+
+function ancestryPrefixKey(
+  cells: Array<AncestryMatrixCell | undefined>,
+  maxLevel: number,
+  depth: number,
+) {
+  return cells
+    .slice(maxLevel - depth, maxLevel + 1)
+    .map((cell) => cell?.label ?? '')
+    .join('¦')
+}
+
+function buildAncestryMatrixRows(
+  target: DwhColumnLineageTarget,
+  ancestry: DwhColumnAncestryResponse,
+) {
+  const maxLevel = Math.max(1, ...ancestry.steps.map((step) => step.level))
+  const byDownstream = new Map<number, DwhColumnAncestryStep[]>()
+  for (const step of ancestry.steps) {
+    const steps = byDownstream.get(step.downstreamColumnId) ?? []
+    steps.push(step)
+    byDownstream.set(step.downstreamColumnId, steps)
+  }
+
+  const paths: DwhColumnAncestryStep[][] = []
+  const walk = (
+    columnId: number,
+    path: DwhColumnAncestryStep[],
+    visited: Set<number>,
+  ) => {
+    const parents = byDownstream.get(columnId) ?? []
+    if (!parents.length) {
+      paths.push(path)
+      return
+    }
+    for (const step of parents) {
+      if (visited.has(step.sourceColumnId)) continue
+      walk(
+        step.sourceColumnId,
+        [...path, step],
+        new Set(visited).add(step.sourceColumnId),
+      )
+    }
+  }
+  walk(target.targetColumnId!, [], new Set([target.targetColumnId!]))
+
+  const targetLabel = qualifiedColumnName(ancestry.tableName, target.targetColumnName)
+  const rows = paths.map((path) => {
+    const cells: Array<AncestryMatrixCell | undefined> = Array(maxLevel + 1).fill(undefined)
+    cells[maxLevel] = {
+      label: targetLabel,
+      step: path[0] ?? ancestry.steps[0]!,
+      columnId: target.targetColumnId!,
+      tableName: ancestry.tableName,
+    }
+    for (const step of path) {
+      const sourceColumn = qualifiedColumnName(step.sourceTableName, step.sourceColumnName)
+      const downstreamColumn = qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName)
+      cells[maxLevel - step.level] = {
+        label: sourceColumn,
+        step,
+        columnId: step.sourceColumnId,
+        tableName: step.sourceTableName,
+      }
+      cells[maxLevel - step.level + 1] = {
+        label: downstreamColumn,
+        step,
+        columnId: step.downstreamColumnId,
+        tableName: step.downstreamTableName,
+      }
+    }
+    return {
+      key: cells.map((cell) => cell?.label ?? '').join('|'),
+      cells,
+    }
+  })
+
+  const seen = new Set<string>()
+  return {
+    maxLevel,
+    rows: rows.filter((row) => {
+      if (seen.has(row.key)) return false
+      seen.add(row.key)
+      return true
+    }),
+  }
+}
+
+function buildAncestryColumnNode(
+  target: DwhColumnLineageTarget,
+  ancestry: DwhColumnAncestryResponse,
+  column: Pick<AncestryMatrixCell, 'columnId' | 'label' | 'tableName'>,
+): ColumnNodeData {
+  const refs: ColumnNodeStatementRef[] = []
+  const add = (ref: ColumnNodeStatementRef) => {
+    if (!refs.some((item) =>
+      item.statementId === ref.statementId &&
+      item.direction === ref.direction &&
+      item.relatedColumnName === ref.relatedColumnName
+    )) {
+      refs.push(ref)
+    }
+  }
+
+  for (const source of target.sources) {
+    if (typeof source.statementId !== 'number') continue
+    if (column.columnId === target.targetColumnId) {
+      add({
+        statementId: source.statementId,
+        relation: 'Kolonu dolduruyor',
+        direction: 'fills',
+        relatedColumnName: qualifiedColumnName(source.sourceTableName, source.sourceColumnName ?? 'Kaynak kolon yok'),
+        transformationType: source.transformationType,
+        confidence: source.confidence,
+        packageName: source.packageName,
+        procedureName: source.procedureName,
+      })
+    } else if (source.sourceColumnId === column.columnId) {
+      add({
+        statementId: source.statementId,
+        relation: `${target.targetColumnName} kolonuna kaynak oluyor`,
+        direction: 'source',
+        relatedColumnName: qualifiedColumnName(ancestry.tableName, target.targetColumnName),
+        transformationType: source.transformationType,
+        confidence: source.confidence,
+        packageName: source.packageName,
+        procedureName: source.procedureName,
+      })
+    }
+  }
+
+  for (const step of ancestry.steps) {
+    if (typeof step.statementId !== 'number') continue
+    const base = {
+      statementId: step.statementId,
+      transformationType: step.transformationType,
+      confidence: step.confidence,
+      packageName: step.packageName,
+      procedureName: step.procedureName,
+    }
+    if (step.downstreamColumnId === column.columnId) {
+      add({
+        ...base,
+        relation: 'Kolonu dolduruyor',
+        direction: 'fills',
+        relatedColumnName: qualifiedColumnName(step.sourceTableName, step.sourceColumnName),
+      })
+    }
+    if (step.sourceColumnId === column.columnId) {
+      add({
+        ...base,
+        relation: `${step.downstreamColumnName} kolonuna kaynak oluyor`,
+        direction: 'source',
+        relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
+      })
+    }
+  }
+
+  return {
+    label: column.label.includes('.') ? column.label.slice(column.label.lastIndexOf('.') + 1) : column.label,
+    sub: column.tableName,
+    kind: column.columnId === target.targetColumnId
+      ? 'target'
+      : ancestry.steps.some((step) => step.sourceColumnId === column.columnId && step.original)
+        ? 'original'
+        : 'source',
+    columnId: column.columnId,
+    tableName: column.tableName,
+    statementRefs: refs,
+  }
 }
 
 function ColumnLineageLegend() {
@@ -664,7 +870,11 @@ function ColumnSqlBlock({
           </div>
         ) : null}
       </div>
-      <pre className="dwh-sql-block">{sqlText || compactSql(sqlText)}</pre>
+      <DwhSqlCode
+        sql={sqlText || compactSql(sqlText)}
+        highlightTable={columnTableName}
+        highlightColumn={columnName}
+      />
     </div>
   )
 }
@@ -686,6 +896,8 @@ function ColumnSqlModal({
   onSelectStatement: (statementId: number) => void
   onClose: () => void
 }) {
+  const [selectedRefKey, setSelectedRefKey] = useState<string>()
+
   useEffect(() => {
     if (!node) return undefined
     const onKey = (event: KeyboardEvent) => {
@@ -697,22 +909,38 @@ function ColumnSqlModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [node, onClose])
 
+  useEffect(() => {
+    setSelectedRefKey(undefined)
+  }, [node])
+
   if (!node) return null
 
+  const refs = node.statementRefs ?? []
+  const refKey = (ref: ColumnNodeStatementRef) =>
+    `${ref.statementId}:${ref.direction}:${ref.relatedColumnName}`
   const selectedStatement =
     statements.find((statement) => statement.statementId === selectedStatementId) ?? statements[0]
-  const refs = node.statementRefs ?? []
   const fillingRefs = refs.filter((ref) => ref.direction === 'fills')
   const downstreamRefs = refs.filter((ref) => ref.direction === 'source')
+  const selectedRef = refs.find((ref) => refKey(ref) === selectedRefKey)
+    ?? refs.find((ref) => ref.statementId === selectedStatementId)
+    ?? refs[0]
+  const selectedColumn = selectedRef
+    ? splitQualifiedColumnName(selectedRef.relatedColumnName)
+    : { tableName: node.tableName, columnName: node.label }
   const renderStatementRefs = (items: ColumnNodeStatementRef[]) =>
-    items.map((ref, index) => {
+    items.map((ref) => {
       const statement = statements.find((item) => item.statementId === ref.statementId)
+      const key = refKey(ref)
       return (
         <button
-          key={`${ref.statementId}:${index}`}
+          key={key}
           type="button"
-          className={selectedStatement?.statementId === ref.statementId ? 'is-selected' : undefined}
-          onClick={() => onSelectStatement(ref.statementId)}
+          className={selectedRef === ref ? 'is-selected' : undefined}
+          onClick={() => {
+            setSelectedRefKey(key)
+            onSelectStatement(ref.statementId)
+          }}
         >
           <strong>{ref.relatedColumnName}</strong>
           <small>{statement ? statementProcedureLabel(statement) : statementProcedureLabel(ref)}</small>
@@ -762,8 +990,8 @@ function ColumnSqlModal({
               {selectedStatement ? (
                 <ColumnSqlBlock
                   statement={selectedStatement}
-                  columnName={node.label}
-                  columnTableName={node.tableName}
+                  columnName={selectedColumn.columnName}
+                  columnTableName={selectedColumn.tableName}
                 />
               ) : (
                 <div className="dwh-col-sql-state">Seçili sorgu bulunamadı.</div>
@@ -788,14 +1016,20 @@ function AncestryTable({
   ancestry,
   loading,
   error,
-  onSelectStep,
+  onSelectColumn,
 }: {
   target?: DwhColumnLineageTarget
   ancestry?: DwhColumnAncestryResponse
   loading: boolean
   error?: string
-  onSelectStep: (step: DwhColumnAncestryStep) => void
+  onSelectColumn: (column: AncestryMatrixCell) => void
 }) {
+  const [expandedPrefixes, setExpandedPrefixes] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    setExpandedPrefixes(new Set())
+  }, [target?.targetColumnId, ancestry?.steps.length])
+
   if (!target) return <div className="dwh-detail-empty">Detay için bir kolon seçin.</div>
 
   return (
@@ -810,48 +1044,137 @@ function AncestryTable({
         {!loading && !error && target.targetColumnId && ancestry?.steps.length === 0 ? (
           <p className="dwh-empty-line">Bu kolon için kayıtlı bir üst kaynak bulunamadı.</p>
         ) : null}
-        {ancestry?.steps.length ? (
-          <div className="dwh-col-ancestry-table-wrap">
-            <table className="dwh-col-ancestry-table">
-              <thead>
-                <tr>
-                  <th>Seviye</th>
-                  <th>Kaynak kolon</th>
-                  <th>Bağlandığı kolon</th>
-                  <th>Tip</th>
-                  <th>Güven</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ancestry.steps.map((step) => (
-                  <tr
-                    key={step.id}
-                    className={step.original ? 'is-original' : undefined}
-                    onClick={() => onSelectStep(step)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault()
-                        onSelectStep(step)
-                      }
-                    }}
-                    tabIndex={0}
-                    title="SQL detayını aç"
-                  >
-                    <td>{step.level}</td>
-                    <td title={`${step.sourceTableName}.${step.sourceColumnName}`}>
-                      {step.sourceTableName}.{step.sourceColumnName}
-                    </td>
-                    <td title={`${step.downstreamTableName}.${step.downstreamColumnName}`}>
-                      {step.downstreamTableName}.{step.downstreamColumnName}
-                    </td>
-                    <td>{transformLabel(step.transformationType)}</td>
-                    <td>{step.original ? 'Orijinal kaynak' : step.confidence ?? '-'}</td>
+        {ancestry?.steps.length ? (() => {
+          const matrix = buildAncestryMatrixRows(target, ancestry)
+          const defaultDepth = Math.min(1, matrix.maxLevel)
+          const displayRows: Array<{ row: AncestryMatrixRow; depth: number }> = []
+          const seenDisplayRows = new Set<string>()
+          for (const row of matrix.rows) {
+            let depth = defaultDepth
+            for (let nextDepth = 1; nextDepth < matrix.maxLevel; nextDepth += 1) {
+              const nextCell = row.cells[matrix.maxLevel - nextDepth - 1]
+              if (!nextCell) break
+              const prefix = ancestryPrefixKey(row.cells, matrix.maxLevel, nextDepth)
+              if (!expandedPrefixes.has(prefix)) break
+              depth = nextDepth + 1
+            }
+            const displayKey = ancestryPrefixKey(row.cells, matrix.maxLevel, depth)
+            if (seenDisplayRows.has(displayKey)) continue
+            seenDisplayRows.add(displayKey)
+            displayRows.push({ row, depth })
+          }
+          const visibleDepth = Math.min(
+            matrix.maxLevel,
+            Math.max(3, ...displayRows.map((item) => item.depth)),
+          )
+          const visibleColumns = Array.from(
+            { length: visibleDepth + 1 },
+            (_, index) => matrix.maxLevel - index,
+          )
+          const previousLabels: Array<string | undefined> = []
+          return (
+            <div className="dwh-col-ancestry-table-wrap">
+              <table className="dwh-col-ancestry-table dwh-col-ancestry-matrix">
+                <thead>
+                  <tr>
+                    {visibleColumns.map((index) => (
+                      <th key={index}>
+                        {index === matrix.maxLevel ? 'Hedef' : `${matrix.maxLevel - index}. Katman`}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : null}
+                </thead>
+                <tbody>
+                  {displayRows.map(({ row, depth: rowDepth }) => (
+                    <tr key={`path-${row.key}`}>
+                      {visibleColumns.map((cellIndex) => {
+                        const cells = row.cells
+                        const cell = cells[cellIndex]
+                        const sourceDepth = matrix.maxLevel - cellIndex
+                        const isBeyondOpenDepth = sourceDepth > 0 && sourceDepth > rowDepth
+                        const isRepeated = Boolean(
+                          cell && !isBeyondOpenDepth && previousLabels[cellIndex] === cell.label,
+                        )
+                        previousLabels[cellIndex] = cell && !isBeyondOpenDepth ? cell.label : undefined
+                        const nextSourceIndex = cellIndex - 1
+                        const hasNextLayer =
+                          sourceDepth > 0 &&
+                          nextSourceIndex >= 0 &&
+                          cells[nextSourceIndex] != null
+                        const prefix =
+                          sourceDepth > 0
+                            ? ancestryPrefixKey(cells, matrix.maxLevel, sourceDepth)
+                            : ''
+                        const isExpanded = prefix ? expandedPrefixes.has(prefix) : false
+                        return (
+                          <td key={`${row.key}-${cellIndex}`}>
+                            {cell && !isBeyondOpenDepth && !isRepeated ? (
+                              <div className="dwh-col-ancestry-cell-wrap">
+                                {hasNextLayer ? (
+                                  <button
+                                    type="button"
+                                    className="dwh-col-ancestry-cell-toggle"
+                                    aria-expanded={isExpanded}
+                                    aria-label={isExpanded ? 'Sonraki katmanı kapat' : 'Sonraki katmanı aç'}
+                                    title={isExpanded ? 'Sonraki katmanı kapat' : 'Sonraki katmanı aç'}
+                                    onClick={() => {
+                                      setExpandedPrefixes((previous) => {
+                                        const next = new Set(previous)
+                                        if (next.has(prefix)) {
+                                          for (const item of next) {
+                                            if (item === prefix || item.startsWith(`${prefix}¦`)) {
+                                              next.delete(item)
+                                            }
+                                          }
+                                        } else {
+                                          next.add(prefix)
+                                        }
+                                        return next
+                                      })
+                                    }}
+                                  >
+                                    <span
+                                      className={`dwh-col-ancestry-chevron${isExpanded ? ' is-open' : ''}`}
+                                      aria-hidden
+                                    >
+                                      ›
+                                    </span>
+                                  </button>
+                                ) : (
+                                  <span className="dwh-col-ancestry-toggle-spacer" aria-hidden />
+                                )}
+                                <button
+                                  type="button"
+                                  className="dwh-col-ancestry-cell"
+                                  title="SQL detayını aç"
+                                onClick={() => onSelectColumn(cell)}
+                                >
+                                  {(() => {
+                                    const parts = splitQualifiedColumnName(cell.label)
+                                    return (
+                                      <>
+                                        <strong>{parts.columnName}</strong>
+                                        <small>{parts.tableName ?? 'Tablo bilgisi yok'}</small>
+                                      </>
+                                    )
+                                  })()}
+                                </button>
+                              </div>
+                            ) : cell ? (
+                              <span className="dwh-col-ancestry-empty-cell is-continuation" aria-hidden />
+                            ) : (
+                              <span className="dwh-col-ancestry-empty-cell is-missing">—</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })() : null}
       </section>
     </div>
   )
@@ -1008,32 +1331,46 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
   }, [sqlNode])
 
   const focusSet = useMemo(() => {
-    if (!focusNodeId) return { nodeIds: new Set<string>(), edgeIds: new Set<string>() }
+    if (!focusNodeId) {
+      return {
+        nodeIds: new Set<string>(),
+        edgeIds: new Set<string>(),
+        sourceNodeIds: new Set<string>(),
+        targetNodeIds: new Set<string>(),
+      }
+    }
 
     const nodeIds = new Set<string>([focusNodeId])
     const edgeIds = new Set<string>()
-    const queue = [focusNodeId]
+    const sourceNodeIds = new Set<string>()
+    const targetNodeIds = new Set<string>()
+    // Kaynak tarafında yalnızca seçili kolona doğrudan gelenler gösterilir.
+    for (const edge of graph.edges) {
+      if (edge.target !== focusNodeId) continue
+      edgeIds.add(edge.id)
+      sourceNodeIds.add(edge.source)
+      nodeIds.add(edge.source)
+    }
 
+    // Hedef tarafında seçili kolondan aşağı doğru tüm zincir gösterilir.
+    const queue = [focusNodeId]
+    const visited = new Set<string>([focusNodeId])
     while (queue.length) {
       const currentId = queue.shift()
       if (!currentId) continue
       for (const edge of graph.edges) {
-        if (edge.target !== currentId || edgeIds.has(edge.id)) continue
+        if (edge.source !== currentId) continue
         edgeIds.add(edge.id)
-        if (!nodeIds.has(edge.source)) {
-          nodeIds.add(edge.source)
-          queue.push(edge.source)
+        targetNodeIds.add(edge.target)
+        nodeIds.add(edge.target)
+        if (!visited.has(edge.target)) {
+          visited.add(edge.target)
+          queue.push(edge.target)
         }
       }
     }
 
-    for (const edge of graph.edges) {
-      if (edge.source !== focusNodeId) continue
-      edgeIds.add(edge.id)
-      nodeIds.add(edge.target)
-    }
-
-    return { nodeIds, edgeIds }
+    return { nodeIds, edgeIds, sourceNodeIds, targetNodeIds }
   }, [focusNodeId, graph.edges])
 
   const flowNodes = useMemo(() => {
@@ -1043,12 +1380,14 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
       className: [
         node.className,
         focusSet.nodeIds.has(node.id) ? 'rf-path-on' : 'rf-path-off',
+        focusSet.sourceNodeIds.has(node.id) ? 'rf-path-source' : undefined,
+        focusSet.targetNodeIds.has(node.id) ? 'rf-path-target' : undefined,
         node.id === focusNodeId ? 'rf-path-focus' : undefined,
       ]
         .filter(Boolean)
         .join(' '),
     }))
-  }, [focusNodeId, focusSet.nodeIds, graph.nodes])
+  }, [focusNodeId, focusSet.nodeIds, focusSet.sourceNodeIds, focusSet.targetNodeIds, graph.nodes])
 
   const flowEdges = useMemo(() => {
     if (!focusNodeId) return graph.edges
@@ -1057,6 +1396,8 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
       className: [
         edge.className,
         focusSet.edgeIds.has(edge.id) ? 'dd-edge-on' : 'dd-edge-off',
+        edge.source === focusNodeId ? 'dd-edge-target' : undefined,
+        edge.target === focusNodeId ? 'dd-edge-source' : undefined,
       ]
         .filter(Boolean)
         .join(' '),
@@ -1246,30 +1587,9 @@ export function DwhColumnLineagePanel({ lineage, loading }: Props) {
             ancestry={ancestry}
             loading={ancestryLoading}
             error={ancestryError}
-            onSelectStep={(step) => {
-              setSqlNode({
-                label: step.sourceColumnName,
-                sub: step.sourceTableName,
-                kind: step.original ? 'original' : 'source',
-                confidence: step.confidence,
-                columnId: step.sourceColumnId,
-                tableName: step.sourceTableName,
-                statementRefs:
-                  typeof step.statementId === 'number'
-                    ? [
-                        {
-                          statementId: step.statementId,
-                          relation: `${step.downstreamTableName}.${step.downstreamColumnName} kolonuna kaynak oluyor`,
-                          direction: 'source',
-                          relatedColumnName: qualifiedColumnName(step.downstreamTableName, step.downstreamColumnName),
-                          transformationType: step.transformationType,
-                          confidence: step.confidence,
-                          packageName: step.packageName,
-                          procedureName: step.procedureName,
-                        },
-                      ]
-                    : [],
-              })
+            onSelectColumn={(column) => {
+              if (!ancestry || !selectedTarget) return
+              setSqlNode(buildAncestryColumnNode(selectedTarget, ancestry, column))
             }}
           />
         )}

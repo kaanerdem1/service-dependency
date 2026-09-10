@@ -755,6 +755,22 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   min-width: 0;
 }
 
+/* Açık DWH dallarında parent okunun hizasını gösteren indent kılavuzu. */
+.dwh-tree-item > .tree-accordion-body {
+  position: relative;
+}
+
+.dwh-tree-item > .tree-accordion-body::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(8px + (var(--dwh-tree-depth, 0) * 12px) + 10px);
+  border-left: 1px dashed color-mix(in srgb, var(--shell-tree-chev, #9aa3a0) 58%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
 .dwh-tree-row {
   position: relative;
   display: grid;
@@ -2112,6 +2128,11 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-query-row:hover {
   background: #f8fbf9;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.dwh-query-row:hover td {
+  color: #184f3a;
 }
 
 .dwh-query-row:focus-visible {
@@ -2133,14 +2154,14 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font-weight: 800;
   text-align: left;
   text-overflow: ellipsis;
+  text-decoration: none;
   white-space: nowrap;
 }
 
 .dwh-query-row:hover .dwh-query-procedure-link,
 .dwh-query-procedure-link:hover {
   color: #184f3a;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 
 .dwh-query-table-empty {
@@ -2993,6 +3014,14 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   stroke-linejoin: round;
 }
 
+.dwh-col-flow-edge .dwh-column-edge-arrow {
+  fill: #2f6f55;
+}
+
+.dwh-col-flow-edge.is-derived .dwh-column-edge-arrow {
+  fill: #9a6a16;
+}
+
 .dwh-col-flow-canvas.is-focusing .react-flow__node,
 .dwh-col-flow-canvas.is-focusing .react-flow__edge {
   transition:
@@ -3001,8 +3030,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-off {
-  opacity: 0.2;
-  filter: saturate(0.65);
+  opacity: 0.16;
+  filter: saturate(0.55);
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-on {
@@ -3015,14 +3044,35 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-focus .dwh-col-flow-node {
-  border-color: #27986c;
+  border-color: #1e3a2f;
   box-shadow:
-    0 0 0 3px rgba(47, 111, 85, 0.16),
-    0 10px 24px rgba(40, 35, 28, 0.14);
+    0 0 0 4px rgba(45, 90, 69, 0.28),
+    0 10px 22px rgba(30, 58, 47, 0.18);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-on:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #3d7a60;
+  box-shadow:
+    0 0 0 3px rgba(61, 122, 96, 0.2),
+    0 8px 18px rgba(30, 58, 47, 0.12);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-source:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #d97706;
+  box-shadow:
+    0 0 0 3px rgba(217, 119, 6, 0.24),
+    0 8px 18px rgba(154, 91, 10, 0.16);
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__node.rf-path-target:not(.rf-path-focus) .dwh-col-flow-node {
+  border-color: #3d7a60;
+  box-shadow:
+    0 0 0 3px rgba(61, 122, 96, 0.2),
+    0 8px 18px rgba(30, 58, 47, 0.12);
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-off {
-  opacity: 0.11;
+  opacity: 0.16;
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-on {
@@ -3030,8 +3080,76 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-on .react-flow__edge-path {
-  stroke-width: 3px;
+  stroke: #2f8e62 !important;
+  stroke-width: 3px !important;
+  stroke-dasharray: 8 6 !important;
+  animation: dwh-edge-flow 0.95s linear infinite;
   filter: drop-shadow(0 2px 4px rgba(47, 111, 85, 0.18));
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source .react-flow__edge-path {
+  stroke: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target .react-flow__edge-path {
+  stroke: #2f8e62 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source marker path {
+  fill: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target marker path {
+  fill: #2f8e62 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-source .dwh-column-edge-arrow {
+  fill: #d97706 !important;
+}
+
+.dwh-col-flow-canvas.is-focusing .react-flow__edge.dd-edge-target .dwh-column-edge-arrow {
+  fill: #2f8e62 !important;
+}
+
+.map-legend-pop .dwh-map-edge-default {
+  background: #8a9691;
+}
+
+.map-legend-pop .dwh-map-edge-incoming,
+.map-legend-pop .dwh-map-edge-outgoing {
+  height: 3px;
+  animation: dwh-legend-flow 0.95s linear infinite;
+}
+
+.map-legend-pop .dwh-map-edge-incoming {
+  background: repeating-linear-gradient(90deg, #d97706 0 6px, transparent 6px 10px);
+}
+
+.map-legend-pop .dwh-map-edge-outgoing {
+  background: repeating-linear-gradient(90deg, #2f8e62 0 6px, transparent 6px 10px);
+}
+
+.map-legend-pop .dwh-map-edge-muted {
+  background: #c4cbc8;
+  opacity: 0.55;
+}
+
+@keyframes dwh-legend-flow {
+  to { background-position: 20px 0; }
+}
+
+.dwh-lineage-map .map-legend-pop {
+  width: min(430px, calc(100vw - 32px));
+}
+
+.dwh-lineage-map .map-legend-pop .path-legend-item {
+  align-items: flex-start;
+  line-height: 1.35;
+}
+
+.dwh-lineage-map .map-legend-pop .path-legend-item > span:last-child {
+  min-width: 0;
+  white-space: normal;
 }
 
 .dwh-col-flow-edge.is-derived .react-flow__edge-path {
@@ -3283,6 +3401,158 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font-size: 12px;
 }
 
+.dwh-col-ancestry-matrix {
+  min-width: max-content;
+}
+
+.dwh-col-ancestry-matrix th,
+.dwh-col-ancestry-matrix td {
+  min-width: 240px;
+}
+
+.dwh-col-ancestry-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.dwh-col-ancestry-cell strong {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.dwh-col-ancestry-cell small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dwh-col-ancestry-cell-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dwh-col-ancestry-cell-wrap .dwh-col-ancestry-cell {
+  min-width: 0;
+}
+
+.dwh-col-ancestry-cell-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dwh-col-ancestry-toggle-spacer {
+  display: block;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+}
+
+.dwh-col-ancestry-chevron {
+  display: block;
+  font-size: 18px;
+  line-height: 20px;
+  transition: transform 140ms ease;
+}
+
+.dwh-col-ancestry-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.dwh-col-ancestry-cell-toggle:hover,
+.dwh-col-ancestry-cell-toggle:focus-visible {
+  border: 0;
+  background: #f1f7f4;
+  color: var(--ink);
+  outline: 0;
+}
+
+.dwh-col-ancestry-cell:hover,
+.dwh-col-ancestry-cell:focus-visible {
+  color: var(--ink);
+  outline: 0;
+}
+
+.dwh-col-ancestry-cell:hover strong,
+.dwh-col-ancestry-cell:focus-visible strong {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Keep the matrix dense like the service relationship table. */
+.dwh-col-ancestry-cell-toggle + .dwh-col-ancestry-cell {
+  width: calc(100% - 26px);
+}
+
+/* The target has no branch control, but its text keeps the same rhythm. */
+.dwh-col-ancestry-cell-wrap > .dwh-col-ancestry-toggle-spacer + .dwh-col-ancestry-cell {
+  width: calc(100% - 26px);
+}
+
+.dwh-col-ancestry-cell-toggle:disabled {
+  cursor: default;
+}
+
+.dwh-col-ancestry-cell-toggle[aria-expanded='true'] {
+  color: var(--ink);
+}
+
+.dwh-col-ancestry-cell-toggle[aria-expanded='false'] {
+  color: var(--muted);
+}
+
+.dwh-col-ancestry-cell-toggle::after {
+  content: none;
+}
+
+.dwh-col-ancestry-empty-cell {
+  display: block;
+  padding: 8px 10px;
+  color: #a1a9ad;
+  text-align: center;
+}
+
+.dwh-col-ancestry-empty-cell.is-continuation {
+  color: transparent;
+}
+
+.dwh-col-ancestry-empty-cell.is-missing {
+  color: var(--muted);
+}
+
 .dwh-col-ancestry-table th,
 .dwh-col-ancestry-table td {
   padding: 8px 10px;
@@ -3304,6 +3574,10 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-col-ancestry-table tr:last-child td {
   border-bottom: 0;
+}
+
+.dwh-col-ancestry-table tbody tr:hover td {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
 }
 
 .dwh-col-ancestry-table tr.is-original td {
@@ -3386,7 +3660,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-impact-workspace.has-detail {
-  grid-template-columns: minmax(300px, 380px) minmax(520px, 1fr);
+  grid-template-columns: minmax(300px, 420px) minmax(480px, 1fr);
 }
 
 .dwh-impact-list-panel {
@@ -3600,82 +3874,6 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   gap: 8px;
 }
 
-.dwh-impact-statement-detail {
-  overflow: visible;
-  border: 1px solid #e2e5e8;
-  border-radius: 8px;
-  background: #fff;
-}
-
-.dwh-impact-statement-detail summary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 48px;
-  padding: 9px 10px;
-  background: #fbfcfd;
-  cursor: pointer;
-  list-style: none;
-}
-
-.dwh-impact-statement-detail summary::-webkit-details-marker {
-  display: none;
-}
-
-.dwh-impact-statement-detail summary > span {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.dwh-impact-statement-detail summary strong,
-.dwh-impact-statement-detail summary small {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dwh-impact-statement-detail summary strong {
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 850;
-}
-
-.dwh-impact-statement-detail summary small {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.dwh-impact-statement-detail[open] summary {
-  border-bottom: 1px solid #edf0f2;
-}
-
-.dwh-impact-sql {
-  margin: 0;
-  background: #fff;
-}
-
-.dwh-impact-sql .dwh-sql-view-head {
-  padding: 9px 10px 8px;
-}
-
-.dwh-impact-sql pre {
-  margin: 0;
-  overflow: visible;
-  padding: 10px;
-  border-top: 1px solid #edf0f2;
-  background: #f7f8f9;
-  color: #26312d;
-  font-size: 11.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 .dwh-impact-report-main {
   display: flex;
   min-width: 0;
@@ -3754,6 +3952,88 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.dwh-impact-statement-detail {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 1px solid #e1e5e8;
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dwh-impact-statement-detail:hover {
+  border-color: #a9c9ba;
+  box-shadow: 0 3px 10px rgba(37, 73, 57, 0.08);
+}
+
+.dwh-impact-statement-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px 6px;
+}
+
+.dwh-impact-statement-summary > span:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dwh-impact-statement-summary strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.dwh-impact-statement-summary small {
+  color: var(--muted);
+}
+
+.dwh-impact-statement-open {
+  display: block;
+  padding: 0 11px 8px;
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 750;
+}
+
+.dwh-sql-code {
+  tab-size: 2;
+  font-family: 'Cascadia Code', 'Consolas', 'SFMono-Regular', monospace;
+  font-variant-ligatures: none;
+}
+
+.dwh-sql-token-keyword {
+  color: #276c58;
+  font-weight: 800;
+}
+
+.dwh-sql-token-string {
+  color: #a14f2f;
+}
+
+.dwh-sql-token-number {
+  color: #996b18;
+}
+
+.dwh-sql-token-comment {
+  color: #7d8783;
+  font-style: italic;
+}
+
+.dwh-sql-token-highlight {
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #f3d56b;
+  color: #2d2a1c;
+  font-weight: 800;
 }
 
 .dwh-statement-foot {
