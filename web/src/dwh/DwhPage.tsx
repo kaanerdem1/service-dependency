@@ -1383,10 +1383,6 @@ export function DwhPage({
               </button>
             </div>
 
-            <div className="dwh-sidebar-subhead">
-              <span>{loadingList ? 'Yükleniyor' : `${visibleCount} kayıt`}</span>
-            </div>
-
             <div className="dwh-catalog-switch" role="tablist" aria-label="DWH katalog görünümü">
               <button
                 type="button"
@@ -1410,6 +1406,10 @@ export function DwhPage({
               >
                 Raporlar
               </button>
+            </div>
+
+            <div className="dwh-sidebar-subhead">
+              <span>{loadingList ? 'Yükleniyor' : `${visibleCount} kayıt`}</span>
             </div>
 
             <label className="search dwh-search dwh-catalog-search" ref={searchRef}>
@@ -1506,14 +1506,16 @@ export function DwhPage({
 
             <div className="dwh-sidebar-body">
               <div className="dwh-tree-head">
-                <span>Lineage</span>
                 <label className="dwh-simple-toggle">
                   <input
                     type="checkbox"
                     checked={simpleTree}
                     onChange={(e) => setSimpleTree(e.target.checked)}
                   />
-                  Alt sorgusuz
+                  <span className="dwh-simple-toggle-track" aria-hidden>
+                    <span className="dwh-simple-toggle-thumb" />
+                  </span>
+                  <span>Alt sorgusuz</span>
                 </label>
               </div>
               <DwhLineageTree

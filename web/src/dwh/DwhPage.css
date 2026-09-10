@@ -273,8 +273,9 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin: 0 0 2px;
-  padding: 0 4px 4px 2px;
+  margin: 8px 0 0;
+  padding: 0 4px 2px 2px;
+  min-height: 28px;
   flex-shrink: 0;
 }
 
@@ -360,7 +361,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   display: flex;
   justify-content: flex-end;
   min-height: 16px;
-  margin: -2px 3px 7px;
+  margin: -2px 3px 5px;
 }
 
 .dwh-sidebar-subhead span {
@@ -376,6 +377,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.08em;
+  line-height: 28px;
   text-transform: uppercase;
 }
 
@@ -385,7 +387,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   align-self: flex-start;
   gap: 3px;
   max-width: 100%;
-  margin: 0 2px 12px;
+  margin: 0 2px 9px;
   padding: 3px;
   border: 1px solid var(--shell-sidebar-input-border);
   border-radius: 12px;
@@ -620,7 +622,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-tree-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 8px;
   min-height: 26px;
   margin: 0 2px 4px;
@@ -689,15 +691,57 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-simple-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   cursor: pointer;
 }
 
 .dwh-simple-toggle input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
-  accent-color: var(--accent);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dwh-simple-toggle-track {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  flex: 0 0 auto;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--shell-sidebar-input-border);
+  border-radius: 999px;
+  background: var(--shell-sidebar-input-bg);
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.dwh-simple-toggle-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--shell-sidebar-muted, var(--muted));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.dwh-simple-toggle input:checked + .dwh-simple-toggle-track {
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  background: color-mix(in srgb, var(--accent) 28%, var(--shell-sidebar-input-bg));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.dwh-simple-toggle input:checked + .dwh-simple-toggle-track .dwh-simple-toggle-thumb {
+  transform: translateX(12px);
+  background: var(--accent);
+}
+
+.dwh-simple-toggle:focus-within .dwh-simple-toggle-track {
+  outline: 2px solid var(--shell-sidebar-input-focus-ring);
+  outline-offset: 2px;
 }
 
 .dwh-root-list {
