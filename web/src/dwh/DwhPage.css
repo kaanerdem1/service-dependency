@@ -488,7 +488,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-search-hits-portal {
-  overflow: hidden;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   color: var(--shell-search-dropdown-fg, var(--shell-sidebar-fg));
 }
 
@@ -498,9 +499,19 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   overflow-x: hidden;
 }
 
+.dwh-search-hits-portal .search-hits-auto {
+  flex: 0 0 auto;
+  max-height: none;
+  overflow: visible !important;
+}
+
+.dwh-search-hits-portal .search-hits-auto > div {
+  min-height: 0;
+  overflow: visible;
+}
+
 .dwh-search-hits-portal .search-hits {
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: visible !important;
 }
 
 .dwh-search-hits-portal .search-hits button {
@@ -1167,6 +1178,20 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   border-color: color-mix(in srgb, var(--accent) 68%, transparent);
   background: color-mix(in srgb, var(--accent) 28%, var(--shell-sidebar-input-bg));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.dwh-tree-head .dwh-simple-toggle input:checked + .dwh-simple-toggle-track {
+  border-color: #54b98a;
+  background: #a9e6c7;
+  box-shadow: 0 0 0 2px rgba(84, 185, 138, 0.16);
+}
+
+.dwh-tree-head .dwh-simple-toggle input:checked + .dwh-simple-toggle-track .dwh-simple-toggle-thumb {
+  background: #2f9b6b;
+}
+
+.dwh-tree-head .dwh-simple-toggle input:checked ~ span:last-child {
+  color: #55b889;
 }
 
 .dwh-simple-toggle input:checked + .dwh-simple-toggle-track .dwh-simple-toggle-thumb {
