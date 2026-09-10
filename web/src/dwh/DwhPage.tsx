@@ -32,7 +32,11 @@ import {
 import { DwhColumnLineagePanel } from './DwhColumnLineagePanel'
 import { DwhLineageMap } from './DwhLineageMap'
 import { DwhLineageTree } from './DwhLineageTree'
+import { DwhFavoritesPanel } from './DwhFavoritesPanel'
+import { useDwhFavorites } from './useDwhFavorites'
 import { DwhSqlCode } from './DwhSqlCode'
+import { StarIcon } from '../components/FavoriteStarButton'
+import { DwhKindIconBadge } from './DwhKindIconBadge'
 import { type AppSurface } from '../components/SurfaceSwitch'
 import type {
   DwhColumn,
@@ -112,12 +116,6 @@ const DWH_STAGE_TABS: StageTabDef<DwhStageTab>[] = [
     ),
   },
 ]
-
-const DWH_KIND_ICONS = {
-  table: new URL('../assets/table.png', import.meta.url).href,
-  report: new URL('../assets/file.png', import.meta.url).href,
-  subquery: new URL('../assets/sql-server.png', import.meta.url).href,
-}
 
 function DwhStageVisitPath({
   steps,
@@ -223,14 +221,6 @@ function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
         strokeLinecap="round"
       />
     </svg>
-  )
-}
-
-function DwhKindIconBadge({ kind }: { kind: 'table' | 'report' | 'subquery' }) {
-  return (
-    <span className={`dwh-kind-badge is-dwh-${kind}`} aria-hidden>
-      <img src={DWH_KIND_ICONS[kind]} alt="" aria-hidden />
-    </span>
   )
 }
 
@@ -942,6 +932,7 @@ export function DwhPage({
   const [impact, setImpact] = useState<DwhTableImpact>()
   const [detailKind, setDetailKind] = useState<DetailKind>('table')
   const [simpleTree, setSimpleTree] = useState(false)
+  const [favoritesOpen, setFavoritesOpen] = useState(false)
   const [lineageGraph, setLineageGraph] = useState<DwhLineageGraph>()
   const [columnLineage, setColumnLineage] = useState<DwhColumnLineageResponse>()
   const [mapExpanded, setMapExpanded] = useState(false)
@@ -959,6 +950,7 @@ export function DwhPage({
   const pageStyle = {
     '--dwh-sidebar-panel-width': `${sidebarWidth}px`,
   } as CSSProperties
+  const { store: dwhFavorites, setStore: setDwhFavorites } = useDwhFavorites()
 
   const entityNameByVisitKey = useMemo(() => {
     const names = new Map<string, string>()
@@ -1011,6 +1003,7 @@ export function DwhPage({
       }
       if (!options?.preserveStageTab) setStageTab('map')
       setQuery('')
+      setFavoritesOpen(false)
     }, [])
 
   const selectDwhVisit = useCallback(
@@ -1367,27 +1360,41 @@ export function DwhPage({
             </div>
             <span className="dwh-sidebar-rail-hint">Paneli Aç</span>
           </div>
-          <div className="dwh-sidebar-inner">
-            <div className="dwh-sidebar-head">
-              <h3>DWH Ağacı</h3>
-              <button
-                type="button"
-                className={`dwh-sidebar-pin-btn${sidebarPinned ? ' is-pinned' : ''}`}
-                title={sidebarPinned ? 'Sabitlemeyi bırak' : 'Paneli sabitle'}
-                aria-label={sidebarPinned ? 'DWH paneli sabitli, sabitlemeyi bırak' : 'DWH panelini sabitle'}
-                aria-expanded={sidebarExpanded}
-                aria-pressed={sidebarPinned}
-                onClick={toggleSidebarPinned}
-              >
-                <DwhSidebarPinIcon pinned={sidebarPinned} />
-              </button>
-            </div>
+          <div className={`dwh-sidebar-inner${favoritesOpen ? ' is-favorites' : ''}`}>
+            <div className="dwh-sidebar-view dwh-sidebar-transition-view dwh-tree-view">
+              <div className="dwh-sidebar-head">
+                <h3>DWH Ağacı</h3>
+                <div className="dwh-sidebar-head-actions">
+                <button
+                  type="button"
+                  className={`dwh-sidebar-pin-btn${sidebarPinned ? ' is-pinned' : ''}`}
+                  title={sidebarPinned ? 'Sabitlemeyi bırak' : 'Paneli sabitle'}
+                  aria-label={sidebarPinned ? 'DWH paneli sabitli, sabitlemeyi bırak' : 'DWH panelini sabitle'}
+                  aria-expanded={sidebarExpanded}
+                  aria-pressed={sidebarPinned}
+                  onClick={toggleSidebarPinned}
+                >
+                  <DwhSidebarPinIcon pinned={sidebarPinned} />
+                </button>
+                <button
+                  type="button"
+                  className="sidebar-star-btn dwh-favorites-toggle"
+                  title="Favorileri aç"
+                  aria-label="Favorileri aç"
+                  aria-expanded={favoritesOpen}
+                  onClick={() => setFavoritesOpen((open) => !open)}
+                >
+                  <StarIcon filled={false} size={15} />
+                </button>
+                </div>
+              </div>
 
             <div className="dwh-catalog-switch" role="tablist" aria-label="DWH katalog görünümü">
               <button
                 type="button"
                 className={catalogTab === 'tables' ? 'on' : undefined}
                 onClick={() => {
+                  setFavoritesOpen(false)
                   setCatalogTab('tables')
                   setDetailKind('table')
                   setQuery('')
@@ -1399,6 +1406,7 @@ export function DwhPage({
                 type="button"
                 className={catalogTab === 'reports' ? 'on' : undefined}
                 onClick={() => {
+                  setFavoritesOpen(false)
                   setCatalogTab('reports')
                   setDetailKind('report')
                   setQuery('')
@@ -1538,6 +1546,41 @@ export function DwhPage({
                   })
                 }}
               />
+            </div>
+            </div>
+            <div className={`dwh-favorites-overlay${favoritesOpen ? ' is-open' : ''}`} aria-hidden={!favoritesOpen}>
+              <div className="dwh-sidebar-head is-favorites-head">
+                <h3><StarIcon filled size={14} /> <span>Favorilerim</span></h3>
+                <div className="dwh-sidebar-head-actions">
+                  <button
+                    type="button"
+                    className={`dwh-sidebar-pin-btn${sidebarPinned ? ' is-pinned' : ''}`}
+                    title={sidebarPinned ? 'Sabitlemeyi bırak' : 'Paneli sabitle'}
+                    aria-label={sidebarPinned ? 'DWH paneli sabitli, sabitlemeyi bırak' : 'DWH panelini sabitle'}
+                    aria-pressed={sidebarPinned}
+                    onClick={toggleSidebarPinned}
+                  >
+                    <DwhSidebarPinIcon pinned={sidebarPinned} />
+                  </button>
+                  <button
+                    type="button"
+                    className="sidebar-star-btn dwh-favorites-toggle is-close"
+                    title="Favorileri kapat"
+                    aria-label="Favorileri kapat"
+                    aria-expanded={favoritesOpen}
+                    onClick={() => setFavoritesOpen(false)}
+                  >
+                    <span className="dwh-favorites-close-icon" aria-hidden>×</span>
+                  </button>
+                </div>
+              </div>
+              <div className="dwh-sidebar-body">
+                <DwhFavoritesPanel
+                  store={dwhFavorites}
+                  onStoreChange={setDwhFavorites}
+                  onSelectTable={(tableId) => selectDwhVisit({ kind: 'table', id: tableId, name: dwhVisitName('table', tableId) })}
+                />
+              </div>
             </div>
             <button
               type="button"
