@@ -662,11 +662,13 @@ export default function App() {
     setWorkflowInfoId(id)
   }, [])
 
-  const openProcessFlow = useCallback((no: string) => {
+  const openProcessFlow = useCallback((no: string, opts?: { keepService?: boolean }) => {
     setWorkflowInfoId(undefined)
     setWorkflowResumeId(undefined)
-    setPivotId(undefined)
-    setCatalogNode(null)
+    if (!opts?.keepService) {
+      setPivotId(undefined)
+      setCatalogNode(null)
+    }
     setProcessFlowNo(no)
   }, [])
 
@@ -1655,7 +1657,11 @@ export default function App() {
                     aria-hidden={tab !== 'processes'}
                     aria-label="Process"
                   >
-                    <ServiceProcessesStage processes={processes} loading={catalogLinksLoading} />
+                    <ServiceProcessesStage
+                      processes={processes}
+                      loading={catalogLinksLoading}
+                      onOpenProcess={(no) => openProcessFlow(no, { keepService: true })}
+                    />
                   </section>
                 </StageTabPanels>
               </div>

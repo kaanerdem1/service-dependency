@@ -10,6 +10,7 @@ export type ServiceScreenLink = {
 
 export type ServiceProcessLink = {
   oid: string
+  no: string
   name: string
   descriptionTr: string | null
 }
@@ -61,22 +62,25 @@ export async function listServiceProcesses(
 
   const { rows } = await query<{
     oid: string
+    no: string
     name: string
     description_tr: string | null
   }>(
     `SELECT p.oid::text AS oid,
+            p.no,
             p.name,
             p.description_tr
      FROM ${tableName('process_service')} ps
      JOIN ${tableName('process')} p ON p.oid = ps.process_oid
      WHERE ps.service_oid = $1
        AND p.status = 1
-     ORDER BY p.name`,
+     ORDER BY p.description_tr NULLS LAST, p.name`,
     [dbId],
   )
 
   return rows.map((row) => ({
     oid: row.oid,
+    no: row.no,
     name: row.name,
     descriptionTr: row.description_tr,
   }))

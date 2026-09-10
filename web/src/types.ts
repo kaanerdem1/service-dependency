@@ -351,6 +351,7 @@ export type ServiceScreenLink = {
 
 export type ServiceProcessLink = {
   oid: string
+  no: string
   name: string
   descriptionTr: string | null
 }
@@ -386,6 +387,12 @@ export type ProcessDecisionInfo = {
 export type ProcessFlowGraph = {
   no: string
   oid: string
+  /** DB süreç numarası (105801). */
+  catalogNo?: string
+  /** .par dosya adı. */
+  parName?: string | null
+  descriptionTr?: string | null
+  processType?: string | null
   label: string | null
   nodes: {
     id: string

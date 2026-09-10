@@ -91,9 +91,12 @@ export async function getProcessFlow(no: string): Promise<
   const { rows } = await query<{
     oid: string
     no: string
+    name: string | null
+    description_tr: string | null
+    process_type: string | null
     process_definition: string
   }>(
-    `SELECT oid::text AS oid, no, process_definition
+    `SELECT oid::text AS oid, no, name, description_tr, process_type, process_definition
      FROM ${tableName('process')}
      WHERE status = 1 AND no = $1 AND process_definition IS NOT NULL
      LIMIT 1`,
@@ -103,5 +106,12 @@ export async function getProcessFlow(no: string): Promise<
   if (!row) return undefined
   const graph = parseProcessDefinitionXml(row.process_definition, row.no)
   const laid = layoutProcessFlow(graph)
-  return { ...laid, oid: row.oid }
+  return {
+    ...laid,
+    oid: row.oid,
+    catalogNo: row.no,
+    parName: row.name,
+    descriptionTr: row.description_tr ?? laid.label,
+    processType: row.process_type ?? 'BPM',
+  }
 }

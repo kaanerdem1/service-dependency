@@ -3923,6 +3923,35 @@
   min-height: 0;
 }
 
+.pf-map-head {
+  flex: 0 0 auto;
+  padding: 14px 120px 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  background: color-mix(in srgb, #fff 94%, transparent);
+}
+
+.pf-map-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+}
+
+.pf-map-subtitle {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+.pf-map-summary {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
 .pf-map-close {
   position: absolute;
   top: 12px;
@@ -3939,11 +3968,18 @@
   cursor: pointer;
 }
 
+.pf-map-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
 .pf-map-tools {
   position: absolute;
   z-index: 20;
-  top: 12px;
-  left: 12px;
+  top: 10px;
+  left: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3973,6 +4009,8 @@
 
 .pf-map-wrap {
   position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-width: 0;
   min-height: 0;
@@ -3980,8 +4018,10 @@
   background: #f7f8fa;
 }
 
-.pf-map-wrap .react-flow {
+.pf-map-canvas .react-flow {
   width: 100%;
+  height: 100%;
+  min-height: 0;
   height: 100%;
 }
 
@@ -7670,6 +7710,36 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .service-link-oid {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--muted) 92%, var(--ink));
+  letter-spacing: 0.01em;
+}
+
+.service-link-open {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.service-link-open:hover,
+.service-link-open:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--shell-sidebar-fg, var(--ink)) 6%, transparent);
+}
+
+.service-link-meta {
   display: block;
   margin-top: 4px;
   font-family: var(--font-mono, ui-monospace, monospace);

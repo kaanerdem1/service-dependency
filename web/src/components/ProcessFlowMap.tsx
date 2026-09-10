@@ -22,6 +22,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css'
 import type { ProcessDecisionInfo, ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
+import { summarizeProcessFlow } from './processFlowSummary'
 
 const RANK_SEP = 250
 const NODE_SEP = 108
@@ -549,6 +550,7 @@ function ProcessFlowMapInner({
   const { setViewport } = useReactFlow()
   const focusId = dragId ?? hoverId
   const wide = seed.nodes.length > 18 || graphSpanX(seed.nodes) > WIDE_SPAN
+  const summary = useMemo(() => summarizeProcessFlow(graph), [graph])
 
   useEffect(() => {
     if (!wide) return
@@ -633,24 +635,30 @@ function ProcessFlowMapInner({
 
   return (
     <div className={`pf-map-wrap${expanded ? ' is-expanded' : ''}`}>
-      <div className="pf-map-tools">
-        <button
-          type="button"
-          className="tl-zoom"
-          title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
-          aria-label={expanded ? 'Küçült' : 'Tam ekran'}
-          onClick={() => setExpanded((v) => !v)}
-        >
-          <FullscreenGlyph expanded={expanded} />
-        </button>
-      </div>
+      <header className="pf-map-head">
+        <h1 className="pf-map-title">{summary.title}</h1>
+        <p className="pf-map-subtitle">{summary.subtitle}</p>
+        <p className="pf-map-summary">{summary.statsLine}</p>
+      </header>
       {onDismiss ? (
         <button type="button" className="pf-map-close" onClick={onDismiss}>
           Kapat
         </button>
       ) : null}
-      <EdgeMarkers />
-      <ReactFlow
+      <div className="pf-map-canvas">
+        <div className="pf-map-tools">
+          <button
+            type="button"
+            className="tl-zoom"
+            title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
+            aria-label={expanded ? 'Küçült' : 'Tam ekran'}
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <FullscreenGlyph expanded={expanded} />
+          </button>
+        </div>
+        <EdgeMarkers />
+        <ReactFlow
         nodes={shownNodes}
         edges={shownEdges}
         onNodesChange={onNodesChange}
@@ -676,7 +684,8 @@ function ProcessFlowMapInner({
       >
         <Background id="pf-dots" variant={BackgroundVariant.Dots} gap={18} size={1.1} color="#c5ccd4" />
         <Controls showInteractive={false} />
-      </ReactFlow>
+        </ReactFlow>
+      </div>
     </div>
   )
 }

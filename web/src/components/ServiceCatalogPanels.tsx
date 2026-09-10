@@ -148,9 +148,11 @@ function ScreenListPanel({
 function ProcessListPanel({
   processes,
   loading,
+  onOpenProcess,
 }: {
   processes: ServiceProcessLink[]
   loading: boolean
+  onOpenProcess?: (processNo: string) => void
 }) {
   if (loading) {
     return (
@@ -174,20 +176,42 @@ function ProcessListPanel({
 
   return (
     <ul className="service-link-list">
-      {processes.map((row) => (
-        <li key={row.oid} className="service-link-row">
-          <div className="service-link-row-head">
-            <span className="service-link-type is-process">Process</span>
-            <span className="service-link-name">{row.name}</span>
-          </div>
-          <span className="service-link-oid" title="Process OID">
-            {row.oid}
-          </span>
-          {row.descriptionTr ? (
-            <p className="service-link-desc">{row.descriptionTr}</p>
-          ) : null}
-        </li>
-      ))}
+      {processes.map((row) => {
+        const title = row.descriptionTr || row.name
+        const canOpen = Boolean(onOpenProcess && row.no)
+        return (
+          <li key={row.oid} className="service-link-row">
+            {canOpen ? (
+              <button
+                type="button"
+                className="service-link-open"
+                title={`${title} — akış diyagramını aç`}
+                onClick={() => onOpenProcess?.(row.no)}
+              >
+                <div className="service-link-row-head">
+                  <span className="service-link-type is-process">Process</span>
+                  <span className="service-link-name">{title}</span>
+                </div>
+                <span className="service-link-meta">
+                  {row.no}
+                  {row.name && row.name !== title ? ` · ${row.name}` : ''}
+                </span>
+              </button>
+            ) : (
+              <>
+                <div className="service-link-row-head">
+                  <span className="service-link-type is-process">Process</span>
+                  <span className="service-link-name">{title}</span>
+                </div>
+                <span className="service-link-meta">
+                  {row.no}
+                  {row.name && row.name !== title ? ` · ${row.name}` : ''}
+                </span>
+              </>
+            )}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -222,19 +246,21 @@ export function ServiceScreensStage({
 export function ServiceProcessesStage({
   processes,
   loading,
+  onOpenProcess,
 }: {
   processes: ServiceProcessLink[]
   loading: boolean
+  onOpenProcess?: (processNo: string) => void
 }) {
   return (
     <div className="stage-catalog-panel">
       <header className="stage-catalog-head">
         <h2 className="stage-catalog-title">Process</h2>
         <p className="stage-catalog-lead">
-          Bu servise bağlı iş süreci kayıtları.
+          Bu servisi adımında çağıran BPM süreçleri. Satıra tıklayarak akış diyagramını açın.
         </p>
       </header>
-      <ProcessListPanel processes={processes} loading={loading} />
+      <ProcessListPanel processes={processes} loading={loading} onOpenProcess={onOpenProcess} />
     </div>
   )
 }
