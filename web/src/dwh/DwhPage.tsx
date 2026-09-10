@@ -211,17 +211,6 @@ function DmlBadge({ dmlType }: { dmlType?: string | null }) {
   return <span className={`dwh-dml-badge ${dmlClass(dmlType)}`}>{dmlType || 'SQL'}</span>
 }
 
-function ConfidenceBadge({ confidence }: { confidence?: string | null }) {
-  if (!confidence) return null
-  return <span className={`dwh-confidence-badge ${confidence === 'TAHMIN' ? 'is-estimated' : 'is-exact'}`}>{confidence}</span>
-}
-
-function TransformationBadge({ type }: { type?: string | null }) {
-  if (!type) return null
-  const derived = type === 'TURETILMIS'
-  return <span className={`dwh-transform-badge ${derived ? 'is-derived' : 'is-direct'}`}>{derived ? 'Türetilmiş' : type}</span>
-}
-
 function DwhSidebarPinIcon({ pinned }: { pinned: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-pin-icon">
@@ -646,12 +635,6 @@ function ReportQueryPanel({ report, loading }: { report?: DwhReportDetail; loadi
             <h4>Rapor kaynakları</h4>
             <span>{report.sourceTables.length} tablo</span>
           </div>
-          <div className="dwh-query-report-actions">
-            <span title={report.fileName ?? report.reportName}>{report.fileName ?? report.reportName}</span>
-            <button type="button" className="btn ghost" onClick={() => setSqlOpen(true)}>
-              SQL göster
-            </button>
-          </div>
           {report.sourceTables.length ? (
             <div className="dwh-query-table-wrap">
               <table className="dwh-query-table">
@@ -687,16 +670,9 @@ function ReportQueryPanel({ report, loading }: { report?: DwhReportDetail; loadi
               <strong>Rapor</strong>
               {report.reportName}
             </span>
-            <span>
-              <strong>Dosya</strong>
-              {report.fileName ?? '-'}
-            </span>
-            <span>
-              <strong>SQL</strong>
-              <button type="button" className="dwh-query-procedure-link" onClick={() => setSqlOpen(true)}>
-                Rapor sorgusunu aç
-              </button>
-            </span>
+            <button type="button" className="dwh-report-sql-open-btn" onClick={() => setSqlOpen(true)}>
+              Rapor sorgusunu aç
+            </button>
           </div>
         </section>
       </div>
@@ -714,34 +690,17 @@ function ReportColumnsTable({ report, loading }: { report?: DwhReportDetail; loa
   if (!report) return <div className="dwh-detail-empty">Bir rapor seçin.</div>
   if (!report.columns.length) return <p className="dwh-empty-line">Rapor kolon lineage kaydı yok.</p>
   return (
-    <div className="dwh-column-list dwh-report-column-list">
-      <div className="dwh-column-row dwh-column-header dwh-report-column-row">
-        <span className="dwh-column-ordinal">#</span>
-        <span className="dwh-column-name">Rapor kolonu</span>
-        <span className="dwh-report-column-source-inline">
-          <span className="dwh-report-source-name">Kaynak</span>
-        </span>
-      </div>
+    <div className="dwh-column-list">
       {report.columns.map((column, index) => (
         <div
           key={`${column.columnName}-${column.sourceTable ?? 'src'}-${column.sourceColumn ?? index}-${index}`}
-          className="dwh-column-row dwh-report-column-row"
+          className="dwh-column-row"
         >
           <span className="dwh-column-ordinal">{index + 1}</span>
           <span className="dwh-column-name" title={column.columnName}>
             {column.columnName}
           </span>
-          <span className="dwh-report-column-source-inline">
-            <span
-              className="dwh-report-source-name"
-              title={`${column.sourceTable ?? '-'}${column.sourceColumn ? `.${column.sourceColumn}` : ''}`}
-            >
-              {column.sourceTable ?? '-'}
-              {column.sourceColumn ? `.${column.sourceColumn}` : ''}
-            </span>
-            <TransformationBadge type={column.transformationType} />
-            <ConfidenceBadge confidence={column.confidence} />
-          </span>
+          <span className="dwh-report-column-placeholder" aria-hidden />
         </div>
       ))}
     </div>
