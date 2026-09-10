@@ -374,7 +374,7 @@ function FlowScene() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.12, ...springSoft }}
         >
-          <span className="wp-fav-section">Kök</span>
+          <span className="wp-fav-section">Akış Takibi</span>
           {['PROPOSAL_MAIN_GET'].map((name, i) => (
             <motion.div
               key={name}

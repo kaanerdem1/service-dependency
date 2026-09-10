@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { ModuleNode } from '../types'
 
-type Kind = ModuleNode['kind'] | 'group' | 'package' | 'service' | 'method'
+type Kind = ModuleNode['kind'] | 'group' | 'package' | 'service' | 'method' | 'process'
 
 type Props = {
   kind: Kind
@@ -57,6 +57,16 @@ export function TreeKindIcon({ kind, size = 14, className, title }: Props) {
         </>
       )
       break
+    case 'process':
+      // Lucide workflow — BPM süreç
+      paths = (
+        <>
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </>
+      )
+      break
     case 'method':
     default:
       // braces — kod metodu
@@ -81,4 +91,5 @@ export const TREE_KIND_ICON_SET = [
   { kind: 'package' as const, label: 'Jar', source: 'Lucide package' },
   { kind: 'service' as const, label: 'Servis', source: 'Lucide layers' },
   { kind: 'method' as const, label: 'Metod', source: 'Lucide braces' },
+  { kind: 'process' as const, label: 'Süreç', source: 'Lucide workflow' },
 ]

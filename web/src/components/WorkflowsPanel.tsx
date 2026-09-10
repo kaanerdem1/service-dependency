@@ -7,7 +7,7 @@ import {
   type DragEvent as ReactDragEvent,
   type ReactNode,
 } from 'react'
-import { searchServices, listPocProcesses } from '../api/client'
+import { searchServices, listPocProcesses, searchProcesses } from '../api/client'
 import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
 import { TreeKindIcon } from './TreeKindIcon'
 import { GitBranchIcon, WorkflowFolderGlyph } from './WorkflowIcons'
@@ -477,6 +477,7 @@ export function WorkflowsPanel({
   const [editingFolderId, setEditingFolderId] = useState<string>()
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Service[]>([])
+  const [processHits, setProcessHits] = useState<ProcessCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
   const [pocProcesses, setPocProcesses] = useState<ProcessCatalogItem[]>([])
   const searchRef = useRef<HTMLInputElement>(null)
@@ -486,6 +487,7 @@ export function WorkflowsPanel({
     if (!open) {
       setQuery('')
       setHits([])
+      setProcessHits([])
       setExpandedFolders(new Set())
       return
     }
@@ -493,21 +495,6 @@ export function WorkflowsPanel({
     setStore(data)
     const t = window.setTimeout(() => searchRef.current?.focus(), 180)
     return () => window.clearTimeout(t)
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    let cancelled = false
-    listPocProcesses()
-      .then((rows) => {
-        if (!cancelled) setPocProcesses(rows)
-      })
-      .catch(() => {
-        if (!cancelled) setPocProcesses([])
-      })
-    return () => {
-      cancelled = true
-    }
   }, [open])
 
   useEffect(() => {
@@ -535,18 +522,23 @@ export function WorkflowsPanel({
     const q = query.trim()
     if (!open || q.length < 2) {
       setHits([])
+      setProcessHits([])
       setSearching(false)
       return
     }
     let cancelled = false
     setSearching(true)
     const timer = window.setTimeout(() => {
-      void searchServices(q)
-        .then((rows) => {
-          if (!cancelled) setHits(rankServiceHits(rows, q).slice(0, 12))
-        })
-        .catch(() => {
-          if (!cancelled) setHits([])
+      void Promise.all([
+        searchServices(q)
+          .then((rows) => rankServiceHits(rows, q).slice(0, 12))
+          .catch(() => [] as Service[]),
+        searchProcesses(q).catch(() => [] as ProcessCatalogItem[]),
+      ])
+        .then(([services, processes]) => {
+          if (cancelled) return
+          setHits(services)
+          setProcessHits(processes)
         })
         .finally(() => {
           if (!cancelled) setSearching(false)
@@ -663,8 +655,8 @@ export function WorkflowsPanel({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Servis ara…"
-            aria-label="Akışa servis ara"
+            placeholder="Servis veya süreç ara…"
+            aria-label="Servis veya süreç ara"
             autoComplete="off"
           />
           {query ? (
@@ -688,33 +680,62 @@ export function WorkflowsPanel({
             </p>
             {searching ? (
               <p className="sc-search-status">Aranıyor…</p>
-            ) : hits.length === 0 ? (
+            ) : hits.length === 0 && processHits.length === 0 ? (
               <p className="sc-search-status">Sonuç yok</p>
             ) : (
-              hits.map((s) => (
-                <div key={s.id} className="sc-hit-row">
-                  <button
-                    type="button"
-                    className="sc-hit-main"
-                    title={s.name}
-                    onClick={() => openService(s.id)}
-                  >
-                    <TreeKindIcon kind="service" size={13} />
-                    <SearchHitLabel name={s.name} query={query} id={s.id} />
-                  </button>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="sc-fav-btn"
-                      title="Köke ekle"
-                      aria-label="Köke ekle"
-                      onClick={() => addToRoot(s.id, s.name)}
-                    >
-                      +
-                    </button>
-                  ) : null}
-                </div>
-              ))
+              <>
+                {processHits.length > 0 ? (
+                  <>
+                    <p className="sc-search-status">Süreçler</p>
+                    {processHits.map((p) => (
+                      <div key={p.no} className="sc-hit-row">
+                        <button
+                          type="button"
+                          className="sc-hit-main"
+                          title={p.descriptionTr || p.name || p.no}
+                          onClick={() => onOpenProcess(p.no)}
+                        >
+                          <TreeKindIcon kind="process" size={13} />
+                          <SearchHitLabel
+                            name={p.descriptionTr || p.name || p.no}
+                            query={query}
+                            id={p.no}
+                          />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+                {hits.length > 0 ? (
+                  <>
+                    {processHits.length > 0 ? <p className="sc-search-status">Servisler</p> : null}
+                    {hits.map((s) => (
+                      <div key={s.id} className="sc-hit-row">
+                        <button
+                          type="button"
+                          className="sc-hit-main"
+                          title={s.name}
+                          onClick={() => openService(s.id)}
+                        >
+                          <TreeKindIcon kind="service" size={13} />
+                          <SearchHitLabel name={s.name} query={query} id={s.id} />
+                        </button>
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            className="sc-fav-btn"
+                            title="Köke ekle"
+                            aria-label="Köke ekle"
+                            onClick={() => addToRoot(s.id, s.name)}
+                          >
+                            +
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                  </>
+                ) : null}
+              </>
             )}
           </div>
         ) : null}
@@ -766,9 +787,12 @@ export function WorkflowsPanel({
                       className={`sc-process-item${processFlowNo === p.no ? ' is-active' : ''}`}
                       onClick={() => onOpenProcess(p.no)}
                     >
-                      <span className="sc-process-item-no">{p.no}</span>
-                      <span className="sc-process-item-name">
-                        {p.descriptionTr || p.name || p.no}
+                      <TreeKindIcon kind="process" size={14} title="Süreç" />
+                      <span className="sc-process-item-copy">
+                        <span className="sc-process-item-name">
+                          {p.descriptionTr || p.name || p.no}
+                        </span>
+                        <span className="sc-process-item-no">{p.no}</span>
                       </span>
                     </button>
                   </li>
@@ -790,7 +814,7 @@ export function WorkflowsPanel({
             onDropStep={(id) => setStore(moveWorkflowStep(id, undefined))}
             onDropFolder={(id) => setStore(moveWorkflowFolder(id, undefined))}
           >
-            <div className="sc-section-label">Kök</div>
+            <div className="sc-section-label">Akış Takibi</div>
           </DropZone>
           {rootSequence.length > 0 ? (
             <WorkflowStepReorder

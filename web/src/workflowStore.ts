@@ -721,7 +721,7 @@ export function workflowsForService(
     if (seen.has(key)) continue
     seen.add(key)
     if (!step.folderId) {
-      hits.push({ name: 'Kök', path: 'Kök' })
+      hits.push({ name: 'Akış Takibi', path: 'Akış Takibi' })
       continue
     }
     const folder = store.folders.find((f) => f.id === step.folderId)

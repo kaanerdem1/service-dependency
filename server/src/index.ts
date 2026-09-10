@@ -81,7 +81,7 @@ import {
   listServiceProcesses,
   listServiceScreens,
 } from './inventory/contextService.js'
-import { getProcessFlow, listPocProcesses } from './inventory/processFlowService.js'
+import { getProcessFlow, listProcesses } from './inventory/processFlowService.js'
 import { getServiceTreePath } from './inventory/location.js'
 import { getArtifactDetail, getGroupDetail } from './inventory/catalogEntityService.js'
 import { listModuleChildren, listModuleRoots, listNonServiceMethodsForArtifact, parseNodeId } from './inventory/treeService.js'
@@ -330,13 +330,14 @@ app.get('/api/services/:id/screens', async (req, res) => {
   }
 })
 
-app.get('/api/processes', async (_req, res) => {
+app.get('/api/processes', async (req, res) => {
   if (!isInventoryCatalog()) {
     res.status(404).json({ error: 'not_available' })
     return
   }
   try {
-    res.json(await listPocProcesses())
+    const q = typeof req.query.q === 'string' ? req.query.q : undefined
+    res.json(await listProcesses(q))
   } catch (e) {
     console.error('[inventory] /api/processes', e)
     res.status(500).json({ error: 'inventory_error' })

@@ -5,8 +5,9 @@ import {
   type ProcessFlowGraph,
 } from './parProcessParser.js'
 
-/** Drawer’daki deneme süreçleri: basit, dallı, büyük (KTF). */
-export const POC_PROCESS_NOS = ['105199', '105251', '105116'] as const
+/** Drawer’da varsayılan üç süreç; kalanı aramadan. */
+export const FEATURED_PROCESS_NOS = ['105801', '105251', '105116'] as const
+export const POC_PROCESS_NOS = FEATURED_PROCESS_NOS
 
 export type ProcessListItem = {
   oid: string
@@ -15,7 +16,54 @@ export type ProcessListItem = {
   descriptionTr: string | null
 }
 
-export async function listPocProcesses(): Promise<ProcessListItem[]> {
+function mapProcessRow(r: {
+  oid: string
+  no: string
+  name: string | null
+  description_tr: string | null
+}): ProcessListItem {
+  return {
+    oid: r.oid,
+    no: r.no,
+    name: r.name,
+    descriptionTr: r.description_tr,
+  }
+}
+
+export async function listProcesses(q?: string): Promise<ProcessListItem[]> {
+  const needle = q?.trim() ?? ''
+  if (needle.length >= 2) {
+    const like = `%${needle}%`
+    const prefix = `${needle}%`
+    const { rows } = await query<{
+      oid: string
+      no: string
+      name: string | null
+      description_tr: string | null
+    }>(
+      `SELECT oid::text AS oid, no, name, description_tr
+       FROM ${tableName('process')}
+       WHERE status = 1
+         AND process_definition IS NOT NULL
+         AND (
+           no ILIKE $1
+           OR name ILIKE $1
+           OR COALESCE(description_tr, '') ILIKE $1
+           OR COALESCE(description_en, '') ILIKE $1
+         )
+       ORDER BY
+         CASE
+           WHEN no ILIKE $2 THEN 0
+           WHEN no ILIKE $1 THEN 1
+           WHEN name ILIKE $2 THEN 2
+           ELSE 3
+         END,
+         no
+       LIMIT 80`,
+      [like, prefix],
+    )
+    return rows.map(mapProcessRow)
+  }
   const { rows } = await query<{
     oid: string
     no: string
@@ -27,15 +75,14 @@ export async function listPocProcesses(): Promise<ProcessListItem[]> {
      WHERE status = 1
        AND process_definition IS NOT NULL
        AND no = ANY($1::varchar[])
-     ORDER BY CASE no WHEN '105199' THEN 1 WHEN '105251' THEN 2 WHEN '105116' THEN 3 ELSE 9 END`,
-    [POC_PROCESS_NOS],
+     ORDER BY CASE no WHEN '105801' THEN 1 WHEN '105251' THEN 2 WHEN '105116' THEN 3 ELSE 9 END`,
+    [FEATURED_PROCESS_NOS],
   )
-  return rows.map((r) => ({
-    oid: r.oid,
-    no: r.no,
-    name: r.name,
-    descriptionTr: r.description_tr,
-  }))
+  return rows.map(mapProcessRow)
+}
+
+export async function listPocProcesses(): Promise<ProcessListItem[]> {
+  return listProcesses()
 }
 
 export async function getProcessFlow(no: string): Promise<

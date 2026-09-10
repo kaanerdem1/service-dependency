@@ -115,6 +115,10 @@ export function listPocProcesses() {
   return request<ProcessCatalogItem[]>('/processes')
 }
 
+export function searchProcesses(q: string) {
+  return request<ProcessCatalogItem[]>(`/processes?q=${encodeURIComponent(q)}`)
+}
+
 export function getProcessFlow(no: string) {
   return request<ProcessFlowGraph>(`/processes/${encodeURIComponent(no)}/flow`)
 }
