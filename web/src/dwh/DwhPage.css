@@ -2324,6 +2324,17 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   background: #1f7a54;
 }
 
+/* Radial hitbox ve görünen daire aynı merkezden ölçülmeli. */
+.dwh-lineage-map.is-radial .dwh-map-node.radial-dot {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.dwh-lineage-map.is-radial .dwh-map-node.radial-dot.center {
+  width: 48px !important;
+  height: 48px !important;
+}
+
 .dwh-lineage-map.is-radial .dwh-map-node.layer-tr .dd-radial-core {
   background: #286da2;
 }

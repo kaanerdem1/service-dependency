@@ -21,6 +21,7 @@ import { getDwhReportMapSummary, getDwhTableMapSummary } from './api'
 import {
   applyRadialLayout,
   compactMapLabel,
+  dwhRadialEdgeGeometry,
   mapLabelNeedsTip,
   mapLayoutForDepth,
   mapLayoutForRadial,
@@ -29,19 +30,19 @@ import {
   RADIAL_CENTER_HIT,
   RADIAL_CENTER_DOT_R,
   RADIAL_DOT_R,
-  RADIAL_EDGE_END_GAP,
   RADIAL_HIT,
   radialAnchorOffset,
-  radialEdgeGeometry,
   radialHandlePair,
   radialLabelDomStyle,
   radialLabelSide,
+  radialMaxZoom,
   radialNodeHitStyle,
   wrapRadialName,
   type MapLayout,
   type MapLayoutMode,
   type RadialLabelSide,
-} from '../impact/mapLayout'
+  type RadialViewportHint,
+} from './dwhMapLayout'
 import { MapCanvasBar, MapViewportSync, RadialLabelZoomSync } from './DwhMapChrome'
 import {
   buildDwhSwimlaneProjection,
@@ -253,15 +254,20 @@ function DwhRadialEdge({
   style,
   data,
 }: EdgeProps<DwhEdgeData>) {
+  const sourceCenterX = data?.sx ?? sourceX
+  const sourceCenterY = data?.sy ?? sourceY
+  const targetCenterX = data?.tx ?? targetX
+  const targetCenterY = data?.ty ?? targetY
+  const sr = data?.sr ?? RADIAL_DOT_R
   const tr = data?.tr ?? RADIAL_DOT_R
-  const dx = targetX - sourceX
-  const dy = targetY - sourceY
-  const dist = Math.hypot(dx, dy) || 1
-  const ux = dx / dist
-  const uy = dy / dist
-  const tx = targetX - ux * (tr + RADIAL_EDGE_END_GAP)
-  const ty = targetY - uy * (tr + RADIAL_EDGE_END_GAP)
-  const geom = radialEdgeGeometry(sourceX, sourceY, tx, ty, 0, 0)
+  const geom = dwhRadialEdgeGeometry(
+    sourceCenterX,
+    sourceCenterY,
+    targetCenterX,
+    targetCenterY,
+    sr,
+    tr,
+  )
   const fill = (style?.stroke as string) || '#6a645a'
   return (
     <>
@@ -356,6 +362,9 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
       style={radial ? { width: 'auto', height: 'auto', overflow: 'visible' } : undefined}
     >
       <Handle type="target" position={verticalFlow ? Position.Top : Position.Left} id="in" className="dd-handle" />
+      <Handle type="target" position={Position.Top} id="in-top" className="dd-handle dir" />
+      <Handle type="target" position={Position.Right} id="in-right" className="dd-handle dir" />
+      <Handle type="target" position={Position.Bottom} id="in-bottom" className="dd-handle dir" />
       <span className="dd-node-ring" aria-hidden />
       <div className="dd-node-body">
         {!radial && (
@@ -404,6 +413,9 @@ function DwhFlowNode({ data, xPos, yPos }: NodeProps<DwhNodeData>) {
         </span>
       ) : null}
       <Handle type="source" position={verticalFlow ? Position.Bottom : Position.Right} id="out" className="dd-handle" />
+      <Handle type="source" position={Position.Top} id="out-top" className="dd-handle dir" />
+      <Handle type="source" position={Position.Left} id="out-left" className="dd-handle dir" />
+      <Handle type="source" position={Position.Bottom} id="out-bottom" className="dd-handle dir" />
     </div>
   )
 }
@@ -1029,6 +1041,7 @@ function buildDwhMap(
   visibleSwimlaneKeys: DwhSwimlaneKey[],
   layout: MapLayout,
   layoutMode: DwhLayoutMode,
+  radialViewport?: RadialViewportHint,
 ): DwhBuiltMap {
   const { nodeW, colGap, rowGap, tipChars } = layout
   const colPitch = nodeW + colGap
@@ -1247,6 +1260,7 @@ function buildDwhMap(
           centerId: root.id,
           centerWidth: rootW,
           treeParent,
+          viewport: radialViewport,
         }).nodes
       : nodes
 
@@ -1260,8 +1274,6 @@ function buildDwhMap(
       if (!source || !target) return edge
       const sourceCenter = (source.data as DwhNodeData).kind === 'center'
       const targetCenter = (target.data as DwhNodeData).kind === 'center'
-      const sourceMid = radialAnchorOffset(sourceCenter)
-      const targetMid = radialAnchorOffset(targetCenter)
       const handles = radialHandlePair(
         {
           x: source.position.x,
@@ -1284,10 +1296,10 @@ function buildDwhMap(
           ...(edge.data as DwhEdgeData),
           cx: (source.data as DwhNodeData).radialCx ?? (target.data as DwhNodeData).radialCx,
           cy: (source.data as DwhNodeData).radialCy ?? (target.data as DwhNodeData).radialCy,
-          sx: source.position.x + sourceMid.x,
-          sy: source.position.y + sourceMid.y,
-          tx: target.position.x + targetMid.x,
-          ty: target.position.y + targetMid.y,
+          sx: source.position.x + radialAnchorOffset(sourceCenter).x,
+          sy: source.position.y + radialAnchorOffset(sourceCenter).y,
+          tx: target.position.x + radialAnchorOffset(targetCenter).x,
+          ty: target.position.y + radialAnchorOffset(targetCenter).y,
           sr: sourceCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R,
           tr: targetCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R,
         },
@@ -1534,7 +1546,6 @@ function DwhLineageMapInner({
   const lastTidyRef = useRef(0)
   const layoutEpochRef = useRef('')
   const prevRootRef = useRef(graph?.rootId ?? '')
-  const skipNextViewportSyncRef = useRef(false)
   const rfInstance = useRef<ReactFlowInstance | null>(null)
   const mapReady = active && mapSize.width > 0 && mapSize.height > 0
 
@@ -1716,29 +1727,57 @@ function DwhLineageMapInner({
     setVisibleMaxHop((hop) => Math.min(Math.max(1, hop), graphMaxHop))
   }, [graphMaxHop])
 
+  const radialViewport = useMemo((): RadialViewportHint | undefined => {
+    if (layoutMode !== 'radial') return undefined
+    const width = mapSize.width > 80 ? mapSize.width : 720
+    const height = mapSize.height > 80 ? mapSize.height : 480
+    return {
+      width,
+      height,
+      fullscreen: mapExpanded,
+      spokeScale: 2.15,
+    }
+  }, [layoutMode, mapExpanded, mapSize.height, mapSize.width])
+
   const layout = useMemo(
     () => {
       const baseLayout = layoutMode === 'radial' ? mapLayoutForRadial() : mapLayoutForDepth(visibleControlLayer)
+      const minZoom = Math.min(baseLayout.minZoom, DWH_MIN_ZOOM)
+      if (layoutMode === 'radial') {
+        if (!mapExpanded || mapSize.width <= 0) {
+          return { ...baseLayout, minZoom }
+        }
+        const aspect = mapSize.width / Math.max(mapSize.height, 1)
+        return { ...baseLayout, minZoom, maxZoom: radialMaxZoom(baseLayout, true, aspect) }
+      }
       if (layoutMode !== 'ltr') {
-        return { ...baseLayout, minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM) }
+        return { ...baseLayout, minZoom }
       }
       return {
         ...baseLayout,
         nodeW: mapNodeWidth('lg'),
         colGap: 220,
         rowGap: visibleControlLayer >= 3 ? 88 : 104,
-        minZoom: Math.min(baseLayout.minZoom, DWH_MIN_ZOOM),
+        minZoom,
       }
     },
-    [layoutMode, visibleControlLayer],
+    [layoutMode, mapExpanded, mapSize.height, mapSize.width, visibleControlLayer],
   )
 
   const built = useMemo<DwhBuiltMap>(
     () =>
       visualGraph
-        ? buildDwhMap(visualGraph, expandedLayers, visibleMaxHop, visibleSwimlaneKeys, layout, layoutMode)
+        ? buildDwhMap(
+            visualGraph,
+            expandedLayers,
+            visibleMaxHop,
+            visibleSwimlaneKeys,
+            layout,
+            layoutMode,
+            radialViewport,
+          )
         : { nodes: [] as Node<DwhNodeData>[], edges: [] as Edge[], hops: [] as number[] },
-    [expandedLayers, layout, layoutMode, visibleMaxHop, visibleSwimlaneKeys, visualGraph],
+    [expandedLayers, layout, layoutMode, radialViewport, visibleMaxHop, visibleSwimlaneKeys, visualGraph],
   )
 
   const builtNodeSig = useMemo(
@@ -1821,10 +1860,6 @@ function DwhLineageMapInner({
 
   useLayoutEffect(() => {
     if (!active) return
-    if (skipNextViewportSyncRef.current) {
-      skipNextViewportSyncRef.current = false
-      return
-    }
     let raf1 = 0
     let raf2 = 0
     raf1 = requestAnimationFrame(() => {
@@ -1934,10 +1969,54 @@ function DwhLineageMapInner({
   const [nodes, setNodes, onNodesChange] = useNodesState(built.nodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(built.edges)
 
+  // React Flow'un handle koordinatları radialde kenar yönüne göre değişir.
+  // Custom edge ise daima aynı node merkezlerini kullanmalıdır; sürükleme
+  // sonrasında bu merkez datasını güncel tutuyoruz.
+  useEffect(() => {
+    if (layoutMode !== 'radial') return
+    const nodeById = new Map(nodes.map((node) => [node.id, node]))
+    let changed = false
+    const nextEdges = edges.map((edge) => {
+      const source = nodeById.get(edge.source)
+      const target = nodeById.get(edge.target)
+      if (!source || !target || !source.data.radialDot || !target.data.radialDot) return edge
+      const sourceCenter = source.data.kind === 'center'
+      const targetCenter = target.data.kind === 'center'
+      const sourceMid = radialAnchorOffset(sourceCenter)
+      const targetMid = radialAnchorOffset(targetCenter)
+      const data = (edge.data ?? {}) as DwhEdgeData
+      const sr = sourceCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R
+      const tr = targetCenter ? RADIAL_CENTER_DOT_R : RADIAL_DOT_R
+      const sx = source.position.x + sourceMid.x
+      const sy = source.position.y + sourceMid.y
+      const tx = target.position.x + targetMid.x
+      const ty = target.position.y + targetMid.y
+      if (
+        data.sx === sx &&
+        data.sy === sy &&
+        data.tx === tx &&
+        data.ty === ty &&
+        data.sr === sr &&
+        data.tr === tr
+      ) {
+        return edge
+      }
+      changed = true
+      return {
+        ...edge,
+        data: { ...data, sx, sy, tx, ty, sr, tr },
+      }
+    })
+    if (changed) setEdges(nextEdges)
+  }, [edges, layoutMode, nodes, setEdges])
+
   useEffect(() => {
     const rootChanged = prevRootRef.current !== (graph?.rootId ?? '')
     prevRootRef.current = graph?.rootId ?? ''
-    const layoutEpoch = `${layoutMode}:${visibleControlLayer}:${layout.size}:${mapExpanded}`
+    const radialSizeEpoch = layoutMode === 'radial'
+      ? `:${mapSize.width}:${mapSize.height}`
+      : ''
+    const layoutEpoch = `${layoutMode}:${visibleControlLayer}:${layout.size}:${mapExpanded}${radialSizeEpoch}`
     const epochChanged = layoutEpochRef.current !== layoutEpoch
     layoutEpochRef.current = layoutEpoch
     const resetLayout = tidyNonce !== lastTidyRef.current || rootChanged || epochChanged
@@ -1956,6 +2035,8 @@ function DwhLineageMapInner({
     layout.size,
     layoutMode,
     mapExpanded,
+    mapSize.height,
+    mapSize.width,
     setEdges,
     setNodes,
     tidyNonce,
@@ -2034,7 +2115,6 @@ function DwhLineageMapInner({
         return
       }
       if (node.data.kind === 'collapsed') {
-        skipNextViewportSyncRef.current = true
         setExpandedLayers((prev) => new Set(prev).add(node.data.hop))
         return
       }
@@ -2219,20 +2299,21 @@ function DwhLineageMapInner({
               proOptions={{ hideAttribution: true }}
             >
               <RadialLabelZoomSync
-                layoutTick={`${layoutMode}-${visibleControlLayer}-${tidyNonce}-${graph.rootId}-${mapExpanded}`}
+                layoutTick={`${layoutMode}-${visibleControlLayer}-${tidyNonce}-${graph.rootId}-${mapExpanded}-${mapSize.width}x${mapSize.height}`}
               />
               <MapViewportSync
                 centerId={graph.rootId}
                 visibleMaxHop={visibleControlLayer}
-                layoutKey={`${graph.rootId}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleControlLayer}-${mapExpanded}`}
+                layoutKey={`${graph.rootId}-${layout.size}-${layoutMode}-${tidyNonce}-${visibleControlLayer}-${mapExpanded}-${layoutMode === 'radial' ? [...expandedLayers].sort((a, b) => a - b).join(',') : ''}`}
                 layout={layout}
                 layoutMode={flowLayoutMode}
                 drawerOpen={infoPanelOpen}
                 mapExpanded={mapExpanded}
                 viewportSyncKey={viewportSyncKey}
                 topAligned={layoutMode !== 'radial'}
-                readableMinZoom={layoutMode === 'swimlane' ? 0.46 : 0.42}
+                readableMinZoom={layoutMode === 'swimlane' ? 0.46 : layoutMode === 'radial' ? 0.08 : 0.42}
                 rightAlignOnLayerChange
+                radialFocusToBounds
                 suppressAutoFit={Boolean(searchQuery.trim() && activeSearchId)}
               />
               <Background

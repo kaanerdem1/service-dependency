@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { motion } from 'motion/react'
 import { useReactFlow, useStore } from 'reactflow'
-import type { MapLayout, MapLayoutMode, RadialLabelSide } from '../impact/mapLayout'
+import type { MapLayout, MapLayoutMode, RadialLabelSide } from './dwhMapLayout'
 import {
   autoFitMinZoom,
   fitViewPaddingForChrome,
@@ -9,7 +9,7 @@ import {
   radialAnchorOffset,
   radialGraphBounds,
   radialViewportForCenter,
-} from '../impact/mapLayout'
+} from './dwhMapLayout'
 import {
   animateViewport,
   easeInOutCubic,
@@ -46,6 +46,7 @@ export function MapViewportSync({
   topAligned = false,
   readableMinZoom,
   rightAlignOnLayerChange = false,
+  radialFocusToBounds = false,
   suppressAutoFit = false,
 }: {
   centerId: string
@@ -62,10 +63,12 @@ export function MapViewportSync({
   topAligned?: boolean
   readableMinZoom?: number
   rightAlignOnLayerChange?: boolean
+  radialFocusToBounds?: boolean
   suppressAutoFit?: boolean
 }) {
   const rf = useReactFlow()
   const prevCenter = useRef<string | null>(null)
+  const prevLayoutKey = useRef(layoutKey)
   const prevHop = useRef(visibleMaxHop)
   const prevSyncKey = useRef(viewportSyncKey)
   const pendingHopFit = useRef(false)
@@ -210,6 +213,14 @@ export function MapViewportSync({
         const bounds = radialGraphBounds(items)
         const centerNode = rf.getNode(centerId)
         if (bounds && centerNode && paneW > 0 && paneH > 0) {
+          // Radial edge'ler eğri olduğu için node/etiket bounds'larının biraz
+          // dışına taşabilir. Fit hesabı bu alanı da kapsamalı.
+          const fitBounds = {
+            x: bounds.x - 48,
+            y: bounds.y - 48,
+            width: bounds.width + 96,
+            height: bounds.height + 96,
+          }
           const d = centerNode.data as { radialCx?: number; radialCy?: number }
           const cx =
             typeof d.radialCx === 'number'
@@ -219,9 +230,15 @@ export function MapViewportSync({
             typeof d.radialCy === 'number'
               ? d.radialCy
               : centerNode.position.y + radialAnchorOffset(true).y
+          const focusCenter = radialFocusToBounds
+            ? {
+                cx: fitBounds.x + fitBounds.width / 2,
+                cy: fitBounds.y + fitBounds.height / 2,
+              }
+            : { cx, cy }
           const vp = radialViewportForCenter(
-            bounds,
-            { cx, cy },
+            fitBounds,
+            focusCenter,
             paneW,
             paneH,
             {
@@ -258,7 +275,9 @@ export function MapViewportSync({
     const hopChanged = prevHop.current !== visibleMaxHop
     const modeChanged = prevLayoutMode.current !== layoutMode
     const syncKeyChanged = prevSyncKey.current !== viewportSyncKey
+    const layoutChanged = prevLayoutKey.current !== layoutKey
     prevCenter.current = centerId
+    prevLayoutKey.current = layoutKey
     prevLayoutMode.current = layoutMode
     prevSyncKey.current = viewportSyncKey
     if (hopChanged) {
@@ -266,6 +285,8 @@ export function MapViewportSync({
       pendingHopFit.current = true
       pendingLayerShift.current = rightAlignOnLayerChange && !centerChanged && !modeChanged
       if (!centerChanged) return
+    } else if (layoutChanged && layoutMode === 'radial' && radialFocusToBounds) {
+      pendingHopFit.current = true
     } else {
       prevHop.current = visibleMaxHop
     }
@@ -347,6 +368,7 @@ export function MapViewportSync({
     topAligned,
     readableMinZoom,
     rightAlignOnLayerChange,
+    radialFocusToBounds,
     suppressAutoFit,
     rf,
   ])
