@@ -55,7 +55,7 @@ const NODE_H = 76
 const GATEWAY_H = 108
 const RAIL_PAD = 36
 const RAIL_GAP = 16
-const CORNER = 14
+const CORNER = 26
 const WIDE_SPAN = 1600
 const START_ZOOM = 0.9
 
@@ -249,13 +249,26 @@ function kitEdgePath(
     }
   }
   const slot = railSlot(slotKey)
-  const r = CORNER
+  // Köşe yarıçapı, dikey/yatay mesafeye göre sınırlanır; böylece kısa
+  // saplarda bile eğri kendi üstüne binmez ama mümkün olduğunca geniş ve
+  // yuvarlak kalır — "çıkış -> ray -> giriş" sert dik açı gibi görünmesin.
+  const roundBack = (railY: number) => {
+    const rV = Math.min(CORNER, Math.abs(railY - sourceY) * 0.85, Math.abs(railY - targetY) * 0.85)
+    const rH = Math.min(CORNER, Math.abs(targetX - sourceX) * 0.35)
+    const r = Math.max(4, Math.min(rV, rH))
+    return r
+  }
   if (route === 'back') {
     const railY = (referenceRailY ?? bandMinY - RAIL_PAD - slot * RAIL_GAP) + lift
+    const r = roundBack(railY)
+    // Çıkış: kaynağın sağ kenarından dikey olarak rayına yükselir (yön:
+    // yukarı), rayda geniş bir yay ile sola döner, hedefin üstüne aynı
+    // şekilde geniş bir yayla iner — köşeler her zaman C1-sürekli (Q eğrisi).
     const path = `M ${sourceX},${sourceY} L ${sourceX},${railY + r} Q ${sourceX},${railY} ${sourceX - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
   const railY = (referenceRailY ?? bandMaxY + RAIL_PAD + slot * RAIL_GAP) + lift
+  const r = roundBack(railY)
   const path = `M ${sourceX},${sourceY} L ${sourceX},${railY - r} Q ${sourceX},${railY} ${sourceX + r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
   return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
 }
@@ -300,12 +313,24 @@ function ProcessEdge({
   const stateClass = active ? ' is-onpath' : dim ? ' is-dim' : ''
   // Akış yönünü belirtmek için label'ın hemen öncesine ve sonrasına küçük
   // ok işaretleri koyulur — "akan" animasyon yerine sabit, okunması kolay
-  // bir yön ipucu.
+  // bir yön ipucu. Ray tabanlı (jump/back) rotalarda etiketin durduğu segment
+  // her zaman yataydır; 'direct' rotada ise gerçek eğime göre döndürülür ki
+  // eğik bir çizgide yatay ok görünmesin.
   const dirSign = targetX >= sourceX ? 1 : -1
+  const angleDeg =
+    route === 'direct'
+      ? (Math.atan2(targetY - sourceY, targetX - sourceX) * 180) / Math.PI
+      : dirSign > 0
+        ? 0
+        : 180
+  const angleRad = (angleDeg * Math.PI) / 180
+  const ux = Math.cos(angleRad)
+  const uy = Math.sin(angleRad)
   const span = Math.abs(targetX - sourceX) + Math.abs(targetY - sourceY)
   const showChevrons = !!label && span > 70
-  const chevronGlyph = dirSign > 0 ? '›' : '‹'
   const chevronGap = 20
+  const preChevron = { x: labelX - ux * chevronGap, y: labelY - uy * chevronGap }
+  const postChevron = { x: labelX + ux * chevronGap, y: labelY + uy * chevronGap }
   return (
     <>
       <BaseEdge
@@ -324,11 +349,11 @@ function ProcessEdge({
                 position: 'absolute',
                 pointerEvents: 'none',
                 color: stroke,
-                transform: `translate(-50%, -50%) translate(${labelX - dirSign * chevronGap}px, ${labelY}px)`,
+                transform: `translate(-50%, -50%) translate(${preChevron.x}px, ${preChevron.y}px) rotate(${angleDeg}deg)`,
               }}
               aria-hidden
             >
-              {chevronGlyph}
+              ›
             </span>
           ) : null}
           <div
@@ -349,11 +374,11 @@ function ProcessEdge({
                 position: 'absolute',
                 pointerEvents: 'none',
                 color: stroke,
-                transform: `translate(-50%, -50%) translate(${labelX + dirSign * chevronGap}px, ${labelY}px)`,
+                transform: `translate(-50%, -50%) translate(${postChevron.x}px, ${postChevron.y}px) rotate(${angleDeg}deg)`,
               }}
               aria-hidden
             >
-              {chevronGlyph}
+              ›
             </span>
           ) : null}
         </EdgeLabelRenderer>
@@ -791,6 +816,85 @@ function incomingTransitionsFor(
   return rows
 }
 
+/** Bir hedefe (örn. "Reddet") birden fazla uzak karardan "back" oku
+ * geliyorsa, tek düğüm etrafında kalabalıklaşma ve uzun ray çakışması olur.
+ * Deneysel çözüm: ilk kaynak gerçek düğüme bağlı kalır, kalan her kaynağın
+ * yanına küçük, salt-görsel bir kopya konur ve o kaynağın oku artık kısa/
+ * doğrudan bu kopyaya bağlanır — grafın kendisi (node/edge sayısı, drawer
+ * içeriği) değişmez, sadece ekranda nereye çizildiği değişir. */
+const SINK_COPY_GAP_X = 40
+const SINK_COPY_OFFSET_Y = -52
+
+function sinkCopyRealId(id: string): string {
+  const at = id.indexOf('::near:')
+  return at < 0 ? id : id.slice(0, at)
+}
+
+function splitCrowdedBackSinks(
+  graph: ProcessFlowGraph,
+  nodes: Node[],
+  edges: Edge[],
+  positions: Record<string, { x: number; y: number }>,
+): { nodes: Node[]; edges: Edge[] } {
+  const outDegree = new Map<string, number>()
+  for (const e of graph.edges) {
+    if (isDummyId(e.from) || isDummyId(e.to)) continue
+    outDegree.set(e.from, (outDegree.get(e.from) ?? 0) + 1)
+  }
+  const backByTarget = new Map<string, Edge[]>()
+  for (const e of edges) {
+    if ((e.data as ProcessEdgeData | undefined)?.route !== 'back') continue
+    const list = backByTarget.get(e.target) ?? []
+    list.push(e)
+    backByTarget.set(e.target, list)
+  }
+
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  const extraNodes: Node[] = []
+  const nextEdges = [...edges]
+
+  for (const [targetId, list] of backByTarget) {
+    // Sadece gerçek "sink" (çıkışı olmayan, örn. Reddet/İptal bitiş) düğümleri
+    // için: normal ileri akışa müdahale etmeyelim.
+    if (list.length < 2 || (outDegree.get(targetId) ?? 0) > 0) continue
+    const targetNode = nodeById.get(targetId)
+    if (!targetNode) continue
+
+    list.slice(1).forEach((e) => {
+      const sourcePos = positions[e.source]
+      if (!sourcePos) return
+      const copyId = `${targetId}::near:${e.source}`
+      extraNodes.push({
+        ...targetNode,
+        id: copyId,
+        position: { x: sourcePos.x + NODE_W + SINK_COPY_GAP_X, y: sourcePos.y + SINK_COPY_OFFSET_Y },
+        selected: false,
+        className: ['pf-node-sink-copy', typeof targetNode.className === 'string' ? targetNode.className : '']
+          .filter(Boolean)
+          .join(' '),
+        zIndex: 6,
+      })
+      const idx = nextEdges.findIndex((edge) => edge.id === e.id)
+      if (idx < 0) return
+      nextEdges[idx] = {
+        ...nextEdges[idx],
+        target: copyId,
+        sourceHandle: 'r',
+        targetHandle: 'l',
+        data: {
+          ...(nextEdges[idx].data as ProcessEdgeData),
+          route: 'direct',
+          railY: undefined,
+          lane: 0,
+        } satisfies ProcessEdgeData,
+      }
+    })
+  }
+
+  if (extraNodes.length === 0) return { nodes, edges: nextEdges }
+  return { nodes: [...nodes, ...extraNodes], edges: nextEdges }
+}
+
 function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
   const positions = positionsFor(graph)
   const nodes: Node[] = graph.nodes
@@ -829,8 +933,9 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#a8b0bc' },
     }
   })
-  const edges = withEdgeRoutes(graph, baseEdges, posMap)
-  return { nodes, edges }
+  const routedEdges = withEdgeRoutes(graph, baseEdges, posMap)
+  const { nodes: finalNodes, edges } = splitCrowdedBackSinks(graph, nodes, routedEdges, posMap)
+  return { nodes: finalNodes, edges }
 }
 
 function EdgeMarkers() {
@@ -1045,16 +1150,12 @@ function ProcessFlowMapInner({
       if (n.type === 'processNote') {
         return { ...n, zIndex: 6, className: 'pf-note-node' }
       }
+      const isSelected = !!selectedNodeId && sinkCopyRealId(n.id) === selectedNodeId
       return {
         ...n,
-        className: [
-          n.className,
-          selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
-        ]
-          .filter(Boolean)
-          .join(' '),
-        selected: selectedNodeId === n.id,
-        zIndex: selectedNodeId === n.id ? 14 : 6,
+        className: [n.className, isSelected ? 'pf-node-detail-selected' : ''].filter(Boolean).join(' '),
+        selected: isSelected,
+        zIndex: isSelected ? 14 : 6,
       }
     })
     if (!neighborhood) return base
@@ -1066,7 +1167,7 @@ function ProcessFlowMapInner({
         className: [active ? 'pf-node-onpath' : 'pf-node-offpath', n.className]
           .filter(Boolean)
           .join(' '),
-        zIndex: n.id === selectedNodeId ? 14 : active ? 12 : 6,
+        zIndex: (!!selectedNodeId && sinkCopyRealId(n.id) === selectedNodeId) ? 14 : active ? 12 : 6,
       }
     })
     const processOnly = decorated.filter((n) => n.type !== 'processNote')
@@ -1130,7 +1231,7 @@ function ProcessFlowMapInner({
       if (data.collapsed) data.onToggleCollapse()
       return
     }
-    setSelectedNodeId(node.id)
+    setSelectedNodeId(sinkCopyRealId(node.id))
   }, [])
   const addNote = useCallback(() => {
     const id = `note-${Date.now()}`

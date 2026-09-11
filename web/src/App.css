@@ -4704,6 +4704,27 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
+/* "Reddet" gibi paylaşılan geri-dönüş hedeflerinin, kalabalık tek noktaya
+   toplanmak yerine her kararın yanında gösterilen küçük görsel kopyası
+   (izole deneme — copyOf mantığının Süreç Akışı haritasındaki karşılığı). */
+.react-flow__node.pf-node-sink-copy {
+  opacity: 0.92;
+}
+
+.pf-node-sink-copy .pf-event-circle {
+  border-style: dashed;
+  transform: scale(0.8);
+}
+
+.pf-node-sink-copy .pf-event-label {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.pf-node-sink-copy .pf-node:not(.pf-node-event) {
+  border-style: dashed;
+}
+
 .pf-event-label {
   font-size: 11px;
   font-weight: 650;
