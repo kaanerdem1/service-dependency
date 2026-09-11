@@ -604,75 +604,113 @@ function visualEdges(graph: ProcessFlowGraph) {
   }))
 }
 
-function layeredLayout(graph: ProcessFlowGraph) {
-  const children = new Map<string, string[]>()
-  for (const n of graph.nodes) {
-    if (n.kind !== 'dummy') children.set(n.id, [])
+/** Verilen düğüm alt kümesi için, DAG (döngüsüz) kenarları üzerinden
+ * topolojik sırayla "en uzun yol" (longest path) rank'ı hesaplar. Kısa yol
+ * (BFS) yerine en uzun yol kullanılır ki bir düğüme uzun bir zincirle de
+ * ulaşılıyorsa, o zincirin gerektirdiği kadar sağa itilsin — örn. bir bitiş
+ * düğümü kısa bir yolla erken erişilebiliyor olsa bile, asıl uzun ana akış
+ * zinciri bitmeden sola/erken sütunlara sıkışmasın. */
+function longestPathRanks(
+  nodeIds: string[],
+  dagChildren: Map<string, string[]>,
+  forcedRootHop0: string[],
+): Map<string, number> {
+  const idSet = new Set(nodeIds)
+  const indegree = new Map<string, number>(nodeIds.map((id) => [id, 0]))
+  for (const id of nodeIds) {
+    for (const to of dagChildren.get(id) ?? []) {
+      if (idSet.has(to)) indegree.set(to, (indegree.get(to) ?? 0) + 1)
+    }
   }
+  const rank = new Map<string, number>()
+  const queue = nodeIds
+    .filter((id) => (indegree.get(id) ?? 0) === 0)
+    .sort((a, b) => a.localeCompare(b, 'tr'))
+  for (const id of queue) rank.set(id, 0)
+  for (const id of forcedRootHop0) if (idSet.has(id)) rank.set(id, 0)
+  const remaining = new Map(indegree)
+  while (queue.length) {
+    const from = queue.shift()!
+    const h = rank.get(from) ?? 0
+    for (const to of dagChildren.get(from) ?? []) {
+      if (!idSet.has(to)) continue
+      rank.set(to, Math.max(rank.get(to) ?? 0, h + 1))
+      const left = (remaining.get(to) ?? 0) - 1
+      remaining.set(to, left)
+      if (left === 0) queue.push(to)
+    }
+  }
+  // Teorik olarak kalmaması gerekir (DAG döngüsüz) ama garanti için.
+  for (const id of nodeIds) if (!rank.has(id)) rank.set(id, 0)
+  return rank
+}
+
+function layeredLayout(graph: ProcessFlowGraph) {
+  const allIds = graph.nodes.filter((n) => n.kind !== 'dummy').map((n) => n.id)
+  const children = new Map<string, string[]>()
+  for (const id of allIds) children.set(id, [])
   for (const e of graph.edges) {
     if (isDummyId(e.from) || isDummyId(e.to)) continue
     const list = children.get(e.from)
     if (list && !list.includes(e.to)) list.push(e.to)
   }
-  const hop = new Map<string, number>()
-  const q: string[] = []
-  for (const n of graph.nodes) {
-    if (n.kind === 'start') {
-      hop.set(n.id, 0)
-      q.push(n.id)
+  // Komşu ziyaret sırası her zaman aynı olsun (isim sırası) — geri kenar
+  // tespiti çalıştırmadan çalıştırmaya farklı sonuç vermesin.
+  for (const list of children.values()) list.sort((a, b) => a.localeCompare(b, 'tr'))
+
+  // 1) DFS ile döngü oluşturan ("geri") kenarları bul. Bunlar sıralama
+  // hesabına dahil edilmez; sadece görsel rotalamada 'back' sınıfında
+  // kullanılır (bkz. routeFor/classifyRoute — X konumuna göre ayrıca karar
+  // verir, burada asıl amaç sıralamayı bir DAG üzerinden yapabilmek).
+  const backEdgeKeys = new Set<string>()
+  const state = new Map<string, 1 | 2>()
+  const starts = graph.nodes
+    .filter((n) => n.kind === 'start')
+    .map((n) => n.id)
+    .sort((a, b) => a.localeCompare(b, 'tr'))
+  const dfsOrder = [...starts, ...allIds.filter((id) => !starts.includes(id)).sort((a, b) => a.localeCompare(b, 'tr'))]
+  const dfs = (id: string) => {
+    state.set(id, 1)
+    for (const to of children.get(id) ?? []) {
+      const s = state.get(to)
+      if (s === undefined) dfs(to)
+      else if (s === 1) backEdgeKeys.add(`${id}\0${to}`)
     }
+    state.set(id, 2)
   }
-  while (q.length) {
-    const from = q.shift()!
-    const h = hop.get(from) ?? 0
-    for (const to of children.get(from) ?? []) {
-      const next = h + 1
-      if (!hop.has(to) || next < hop.get(to)!) {
-        hop.set(to, next)
-        q.push(to)
+  for (const id of dfsOrder) if (!state.has(id)) dfs(id)
+
+  const dagChildren = new Map<string, string[]>()
+  for (const [from, list] of children) {
+    dagChildren.set(from, list.filter((to) => !backEdgeKeys.has(`${from}\0${to}`)))
+  }
+
+  // 2) start'tan DAG (döngüsüz) kenarlarla erişilebilen düğümler "ana akış".
+  const reached = new Set<string>(starts)
+  const rq = [...starts]
+  while (rq.length) {
+    const from = rq.shift()!
+    for (const to of dagChildren.get(from) ?? []) {
+      if (!reached.has(to)) {
+        reached.add(to)
+        rq.push(to)
       }
     }
   }
-  // start'tan ileri okla erişilemeyen düğümler (örn. hiçbir geçiş
-  // göstermeyen kopuk bir dallanma) eskiden hop=0'a, yani start ile aynı en
-  // sol sütuna düşüyordu — akış "solda görev/karar/bitiş" gibi tuhaf
-  // görünüyordu. Bunun yerine: bu düğümler kendi aralarında (giren oku
-  // sadece kendi kopuk kümesinden olan "kök"lerden başlayarak) ileri doğru
-  // sıralanır ve ana akışın SAĞINA, yeni bir bölüm gibi eklenir.
+  const reachedIds = allIds.filter((id) => reached.has(id))
+  const islandIds = allIds.filter((id) => !reached.has(id))
+
+  // 3) Ana akış en-uzun-yol rank'ı; kopuk (start'tan hiç erişilemeyen)
+  // düğümler kendi aralarında sıralanıp ana akışın SAĞINA eklenir — sol
+  // sütuna (start ile aynı yere) asla düşmezler.
+  const hop = longestPathRanks(reachedIds, dagChildren, starts)
   let maxReachedHop = 0
   for (const h of hop.values()) maxReachedHop = Math.max(maxReachedHop, h)
-  const unreached = graph.nodes
-    .filter((n) => n.kind !== 'dummy' && !hop.has(n.id))
-    .map((n) => n.id)
-  if (unreached.length > 0) {
-    const unreachedSet = new Set(unreached)
-    const indegree = new Map<string, number>(unreached.map((id) => [id, 0]))
-    for (const id of unreached) {
-      for (const to of children.get(id) ?? []) {
-        if (unreachedSet.has(to)) indegree.set(to, (indegree.get(to) ?? 0) + 1)
-      }
-    }
-    const uq: string[] = unreached
-      .filter((id) => (indegree.get(id) ?? 0) === 0)
-      .sort((a, b) => a.localeCompare(b, 'tr'))
-    for (const id of uq) hop.set(id, maxReachedHop + 1)
-    while (uq.length) {
-      const from = uq.shift()!
-      const h = hop.get(from) ?? maxReachedHop + 1
-      for (const to of children.get(from) ?? []) {
-        if (!unreachedSet.has(to)) continue
-        const next = h + 1
-        if (!hop.has(to) || next < hop.get(to)!) {
-          hop.set(to, next)
-          uq.push(to)
-        }
-      }
-    }
-    // Kopuk bir döngü (hepsi indegree>0) ya da yine de atlanan olursa son çare.
-    for (const id of unreached) {
-      if (!hop.has(id)) hop.set(id, maxReachedHop + 1)
-    }
+  if (islandIds.length > 0) {
+    const islandHop = longestPathRanks(islandIds, dagChildren, [])
+    for (const [id, h] of islandHop) hop.set(id, maxReachedHop + 1 + h)
   }
+
   const byHop = new Map<number, string[]>()
   for (const [id, h] of hop) {
     const list = byHop.get(h) ?? []
