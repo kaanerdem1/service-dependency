@@ -154,7 +154,10 @@ const FALLBACK_NODE_H = 70
 /** Snapshot okları düğüm kutularından en az bu kadar uzak kalır. */
 const ROUTE_CLEARANCE = 14
 /** Aynı düğüm kenarındaki portlar arası minimum mesafe (px). */
-const PORT_SPREAD = 22
+const PORT_SPREAD = 24
+/** Paralel okların aynı yatay/dikey şeritte binmemesi için ray aralığı. */
+const RAIL_LANE_GAP = 18
+const PORT_STUB = 26
 
 type SnakeItem = { id: string; x: number; y: number; w: number; h: number; rowIdx: number; dir: 1 | -1 }
 type SnapRect = { l: number; r: number; t: number; b: number }
@@ -321,8 +324,9 @@ function pickSnakePorts(cur: SnakeItem, next: SnakeItem, pad: number): { from: S
     }
   }
 
-  // Satır geçişi / çapraz: göreli konuma göre en net port çifti
-  if (Math.abs(dx) > Math.abs(dy) * 0.55) {
+  // Satır farkı olsa bile esas yön yataysa soldan/sağdan bağlan — "aşağı
+  // iniyor gibi" yanlış okuma olmasın (örn. 3. satır sağ uç).
+  if (Math.abs(dx) > Math.abs(dy) * 0.55 || (Math.abs(dx) > 80 && Math.abs(dy) < 80)) {
     return dx > 0
       ? { from: snakePort(cur, 'right', pad), to: snakePort(next, 'left', pad) }
       : { from: snakePort(cur, 'left', pad), to: snakePort(next, 'right', pad) }
@@ -360,7 +364,133 @@ function nudgePort(
   baseSpread: number,
   attempt: number,
 ): SnakePort {
-  return snakePort(item, side, pad, baseSpread + attempt * 7)
+  return snakePort(item, side, pad, baseSpread + attempt * 8)
+}
+
+/** Giriş/çıkış aynı kenarda ise birbirinden uzaklaştır. */
+function biasedPortSpread(
+  side: SnakePort['side'],
+  role: 'from' | 'to',
+  idx: number,
+  n: number,
+): number {
+  const base = n <= 1 ? 0 : (idx - (n - 1) / 2) * PORT_SPREAD
+  const bias = PORT_SPREAD * 0.35
+  if (side === 'bottom') return role === 'to' ? base - bias : base + bias
+  if (side === 'top') return role === 'to' ? base + bias : base - bias
+  if (side === 'right') return role === 'from' ? base + bias : base - bias
+  return role === 'to' ? base + bias : base - bias
+}
+
+type EdgeRailLane = { railOffset: number; dropXOffset: number; arcOffset: number }
+
+function assignEdgeRailLanes(
+  pathEdges: PathEdgeDraw[],
+  laidById: Map<string, SnakeItem>,
+  ports: Map<string, { from: SnakePort; to: SnakePort }>,
+  pad: number,
+): Map<string, EdgeRailLane> {
+  type HSeg = { ek: string; y: number; x1: number; x2: number }
+  type VSeg = { ek: string; x: number; y1: number; y2: number }
+  const hSegs: HSeg[] = []
+  const vSegs: VSeg[] = []
+
+  for (const pe of pathEdges) {
+    const ek = `${pe.fromId}\0${pe.toId}`
+    const cur = laidById.get(pe.fromId)
+    const next = laidById.get(pe.toId)
+    const p = ports.get(ek)
+    if (!cur || !next || !p) continue
+
+    if (cur.rowIdx === next.rowIdx) {
+      const xLo = Math.min(p.from.x, p.to.x)
+      const xHi = Math.max(p.from.x, p.to.x)
+      const corridorY = (p.from.y + p.to.y) / 2
+      hSegs.push({ ek, y: corridorY - ROUTE_CLEARANCE, x1: xLo, x2: xHi })
+    } else {
+      const fromR = snakeNodeRect(cur, pad)
+      const railY = fromR.b + SNAKE_ROW_GAP / 2
+      hSegs.push({
+        ek,
+        y: railY,
+        x1: Math.min(p.from.x, p.to.x),
+        x2: Math.max(p.from.x, p.to.x),
+      })
+      vSegs.push({ ek, x: p.from.x, y1: Math.min(p.from.y, railY), y2: Math.max(p.from.y, railY) })
+      vSegs.push({ ek, x: p.to.x, y1: Math.min(p.to.y, railY), y2: Math.max(p.to.y, railY) })
+    }
+  }
+
+  const lanes = new Map<string, EdgeRailLane>()
+  const mergeLane = (ek: string, patch: Partial<EdgeRailLane>) => {
+    const prev = lanes.get(ek) ?? { railOffset: 0, dropXOffset: 0, arcOffset: 0 }
+    lanes.set(ek, {
+      railOffset: Math.max(prev.railOffset, patch.railOffset ?? 0),
+      dropXOffset: Math.max(prev.dropXOffset, patch.dropXOffset ?? 0),
+      arcOffset: Math.max(prev.arcOffset, patch.arcOffset ?? 0),
+    })
+  }
+
+  const assignHLanes = (segs: HSeg[]) => {
+    const sorted = [...segs].sort((a, b) => a.y - b.y || a.x1 - b.x1)
+    const placed: Array<{ y: number; x1: number; x2: number; lane: number }> = []
+    for (const seg of sorted) {
+      let lane = 0
+      for (;;) {
+        const y = seg.y + lane * RAIL_LANE_GAP
+        const clash = placed.some(
+          (p) =>
+            p.lane === lane &&
+            Math.abs(p.y - y) < 8 &&
+            p.x1 < seg.x2 + 12 &&
+            p.x2 + 12 > seg.x1,
+        )
+        if (!clash) {
+          placed.push({ y, x1: seg.x1, x2: seg.x2, lane })
+          mergeLane(seg.ek, {
+            railOffset: lane * RAIL_LANE_GAP,
+            dropXOffset: lane * 12,
+            arcOffset: lane * RAIL_LANE_GAP,
+          })
+          break
+        }
+        lane++
+      }
+    }
+  }
+
+  const assignVLanes = (segs: VSeg[]) => {
+    const sorted = [...segs].sort((a, b) => a.x - b.x || a.y1 - b.y1)
+    const placed: Array<{ x: number; y1: number; y2: number; lane: number }> = []
+    for (const seg of sorted) {
+      let lane = 0
+      for (;;) {
+        const x = seg.x + lane * 14
+        const clash = placed.some(
+          (p) =>
+            p.lane === lane &&
+            Math.abs(p.x - x) < 8 &&
+            p.y1 < seg.y2 + 10 &&
+            p.y2 + 10 > seg.y1,
+        )
+        if (!clash) {
+          placed.push({ x, y1: seg.y1, y2: seg.y2, lane })
+          mergeLane(seg.ek, { dropXOffset: lane * 14 })
+          break
+        }
+        lane++
+      }
+    }
+  }
+
+  assignHLanes(hSegs)
+  assignVLanes(vSegs)
+
+  for (const pe of pathEdges) {
+    const ek = `${pe.fromId}\0${pe.toId}`
+    if (!lanes.has(ek)) lanes.set(ek, { railOffset: 0, dropXOffset: 0, arcOffset: 0 })
+  }
+  return lanes
 }
 
 function assignSnapshotPorts(
@@ -406,7 +536,7 @@ function assignSnapshotPorts(
       })
       const n = list.length
       list.forEach((entry, idx) => {
-        const spread = n <= 1 ? 0 : (idx - (n - 1) / 2) * PORT_SPREAD
+        const spread = biasedPortSpread(entry.side, role, idx, n)
         let port = snakePort(entry.item, entry.side, pad, spread)
         let attempt = 0
         while (used.has(portKey(port)) && attempt < 12) {
@@ -524,6 +654,7 @@ function routeSnapshotEdge(
   toItem: SnakeItem,
   allItems: SnakeItem[],
   pad: number,
+  lane: EdgeRailLane,
 ): { d: string; poly: Pt[]; tipX: number; tipY: number; angle: number } {
   const blocks = allItems
     .filter((it) => it.id !== fromItem.id && it.id !== toItem.id)
@@ -540,12 +671,19 @@ function routeSnapshotEdge(
       (o) => o.r > xLo && o.l < xHi && o.b > corridorY - 18 && o.t < corridorY + 18,
     )
     if (blocking.length === 0 && Math.abs(from.y - to.y) < 6) {
-      pts = [from, to]
+      const stub = PORT_STUB + lane.dropXOffset * 0.2
+      const exit: Pt = { ...from }
+      if (from.side === 'right') exit.x = from.x + stub
+      else if (from.side === 'left') exit.x = from.x - stub
+      const entry: Pt = { ...to }
+      if (to.side === 'left') entry.x = to.x - stub
+      else if (to.side === 'right') entry.x = to.x + stub
+      pts = [from, exit, entry, to]
     } else {
       const arcY =
-        blocking.length > 0
+        (blocking.length > 0
           ? Math.min(...blocking.map((o) => o.t)) - ROUTE_CLEARANCE
-          : corridorY - ROUTE_CLEARANCE
+          : corridorY - ROUTE_CLEARANCE) - lane.arcOffset
       pts = [
         from,
         { x: from.x, y: arcY },
@@ -553,49 +691,69 @@ function routeSnapshotEdge(
         to,
       ]
     }
+  } else if (
+    (from.side === 'right' && to.side === 'left') ||
+    (from.side === 'left' && to.side === 'right')
+  ) {
+    // Yatay baskın bağlantı: önce yatay çık, gerekirse hafif kavis — dikey
+    // şeritte binme olmasın.
+    const stub = PORT_STUB
+    const exit: Pt = { ...from }
+    const entry: Pt = { ...to }
+    if (from.side === 'right') exit.x = from.x + stub + lane.dropXOffset
+    else exit.x = from.x - stub - lane.dropXOffset
+    if (to.side === 'left') entry.x = to.x - stub - lane.dropXOffset
+    else entry.x = to.x + stub + lane.dropXOffset
+    if (Math.abs(from.y - to.y) < 10) {
+      pts = [from, exit, entry, to]
+    } else {
+      const midY = (from.y + to.y) / 2 + lane.railOffset
+      pts = [from, exit, { x: exit.x, y: midY }, { x: entry.x, y: midY }, entry, to]
+    }
   } else {
     const fromR0 = snakeNodeRect(fromItem, pad)
-    const toR0 = snakeNodeRect(toItem, pad)
-    let railY =
-      toItem.rowIdx > fromItem.rowIdx
-        ? fromR0.b + SNAKE_ROW_GAP / 2
-        : toR0.b + SNAKE_ROW_GAP / 2
+    let railY = fromR0.b + SNAKE_ROW_GAP / 2 + lane.railOffset
     railY = clearHorizontalRail(railY, from.x, to.x, blocks)
 
-    const stub = 18
     const exit: Pt = { ...from }
     switch (from.side) {
       case 'right':
-        exit.x = from.x + stub
+        exit.x = from.x + PORT_STUB + lane.dropXOffset
         break
       case 'left':
-        exit.x = from.x - stub
+        exit.x = from.x - PORT_STUB - lane.dropXOffset
         break
       case 'bottom':
-        exit.y = from.y + stub
+        exit.x = from.x + lane.dropXOffset
+        exit.y = from.y + PORT_STUB
         break
       case 'top':
-        exit.y = from.y - stub
+        exit.x = from.x + lane.dropXOffset
+        exit.y = from.y - PORT_STUB
         break
     }
 
     const entry: Pt = { ...to }
     switch (to.side) {
       case 'left':
-        entry.x = to.x - stub
+        entry.x = to.x - PORT_STUB - lane.dropXOffset * 0.5
         break
       case 'right':
-        entry.x = to.x + stub
+        entry.x = to.x + PORT_STUB + lane.dropXOffset * 0.5
         break
       case 'top':
-        entry.y = to.y - stub
+        entry.x = to.x + lane.dropXOffset * 0.5
+        entry.y = to.y - PORT_STUB
         break
       case 'bottom':
-        entry.y = to.y + stub
+        entry.x = to.x + lane.dropXOffset * 0.5
+        entry.y = to.y + PORT_STUB
         break
     }
 
-    pts = [from, exit, { x: exit.x, y: railY }, { x: entry.x, y: railY }, entry, to]
+    const dropX = exit.x
+    const approachX = entry.x
+    pts = [from, exit, { x: dropX, y: railY }, { x: approachX, y: railY }, entry, to]
   }
 
   const d = smoothPathFromPoints(pts)
@@ -711,6 +869,7 @@ function buildSnapshotCaptureContainer(
   }
 
   const assignedPorts = assignSnapshotPorts(pathEdges, laidById, SNAKE_PADDING)
+  const edgeLanes = assignEdgeRailLanes(pathEdges, laidById, assignedPorts, SNAKE_PADDING)
   const pendingLabels: SnapshotLabel[] = []
 
   for (const pe of pathEdges) {
@@ -720,6 +879,7 @@ function buildSnapshotCaptureContainer(
     const ek = `${pe.fromId}\0${pe.toId}`
     const ports = assignedPorts.get(ek)
     if (!ports) continue
+    const lane = edgeLanes.get(ek) ?? { railOffset: 0, dropXOffset: 0, arcOffset: 0 }
 
     const { d, poly, tipX, tipY, angle } = routeSnapshotEdge(
       ports.from,
@@ -728,6 +888,7 @@ function buildSnapshotCaptureContainer(
       next,
       laid,
       SNAKE_PADDING,
+      lane,
     )
     const path = document.createElementNS(svgNs, 'path')
     path.setAttribute('fill', 'none')
