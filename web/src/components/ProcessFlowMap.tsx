@@ -54,8 +54,8 @@ const NODE_W = 168
 const NODE_H = 76
 const GATEWAY_H = 108
 const RAIL_PAD = 36
-const RAIL_GAP = 16
-const CORNER = 26
+const RAIL_GAP = 28
+const CORNER = 36
 const WIDE_SPAN = 1600
 const START_ZOOM = 0.9
 
@@ -165,10 +165,45 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
   )
 }
 
-function railSlot(key: string) {
-  let h = 0
-  for (let i = 0; i < key.length; i++) h = (h + key.charCodeAt(i) * (i + 1)) % 5
-  return h
+/** Aynı hedefe (back) veya aynı kaynaktan (jump) birden fazla ok
+ * yakınsıyorsa, hash tabanlı sözde-rastgele bir ofset yerine, diğer ucun Y
+ * konumuna göre sıralı ve çakışmasız bir "slot" (0,1,2,...) atar. Böylece
+ * örn. 3 ayrı görevden aynı karara dönen "Onay" okları üst üste binmez, her
+ * biri kendi rayında, kaynak sırasına göre ayrışmış şekilde görünür. */
+function assignRailSlots(
+  edges: Edge[],
+  positions: Record<string, { x: number; y: number }>,
+): Map<string, number> {
+  const backGroups = new Map<string, Edge[]>()
+  const jumpGroups = new Map<string, Edge[]>()
+  for (const e of edges) {
+    const route = (e.data as ProcessEdgeData | undefined)?.route
+    if (route === 'back') {
+      const list = backGroups.get(e.target) ?? []
+      list.push(e)
+      backGroups.set(e.target, list)
+    } else if (route === 'jump') {
+      const list = jumpGroups.get(e.source) ?? []
+      list.push(e)
+      jumpGroups.set(e.source, list)
+    }
+  }
+  const slotOf = new Map<string, number>()
+  for (const list of backGroups.values()) {
+    list.sort(
+      (a, b) =>
+        (positions[a.source]?.y ?? 0) - (positions[b.source]?.y ?? 0) || a.id.localeCompare(b.id),
+    )
+    list.forEach((e, i) => slotOf.set(e.id, i))
+  }
+  for (const list of jumpGroups.values()) {
+    list.sort(
+      (a, b) =>
+        (positions[a.target]?.y ?? 0) - (positions[b.target]?.y ?? 0) || a.id.localeCompare(b.id),
+    )
+    list.forEach((e, i) => slotOf.set(e.id, i))
+  }
+  return slotOf
 }
 
 function classifyRoute(sourceX: number, targetX: number): RouteKind {
@@ -248,18 +283,21 @@ function kitEdgePath(
       labelY: (sourceY + targetY) / 2 + lift,
     }
   }
-  const slot = railSlot(slotKey)
+  // referenceRailY normalde withEdgeRoutes tarafından her zaman doldurulur
+  // (bkz. assignRailSlots); burası sadece pozisyon bulunamayan istisnai bir
+  // durum için son çare (slot=0) olarak kalır.
+  void slotKey
   // Köşe yarıçapı, dikey/yatay mesafeye göre sınırlanır; böylece kısa
   // saplarda bile eğri kendi üstüne binmez ama mümkün olduğunca geniş ve
   // yuvarlak kalır — "çıkış -> ray -> giriş" sert dik açı gibi görünmesin.
   const roundBack = (railY: number) => {
-    const rV = Math.min(CORNER, Math.abs(railY - sourceY) * 0.85, Math.abs(railY - targetY) * 0.85)
-    const rH = Math.min(CORNER, Math.abs(targetX - sourceX) * 0.35)
+    const rV = Math.min(CORNER, Math.abs(railY - sourceY) * 0.9, Math.abs(railY - targetY) * 0.9)
+    const rH = Math.min(CORNER, Math.abs(targetX - sourceX) * 0.4)
     const r = Math.max(4, Math.min(rV, rH))
     return r
   }
   if (route === 'back') {
-    const railY = (referenceRailY ?? bandMinY - RAIL_PAD - slot * RAIL_GAP) + lift
+    const railY = (referenceRailY ?? bandMinY - RAIL_PAD) + lift
     const r = roundBack(railY)
     // Çıkış: kaynağın sağ kenarından dikey olarak rayına yükselir (yön:
     // yukarı), rayda geniş bir yay ile sola döner, hedefin üstüne aynı
@@ -267,7 +305,7 @@ function kitEdgePath(
     const path = `M ${sourceX},${sourceY} L ${sourceX},${railY + r} Q ${sourceX},${railY} ${sourceX - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
-  const railY = (referenceRailY ?? bandMaxY + RAIL_PAD + slot * RAIL_GAP) + lift
+  const railY = (referenceRailY ?? bandMaxY + RAIL_PAD) + lift
   const r = roundBack(railY)
   const path = `M ${sourceX},${sourceY} L ${sourceX},${railY - r} Q ${sourceX},${railY} ${sourceX + r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
   return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
@@ -827,16 +865,26 @@ function withEdgeRoutes(
 ): Edge[] {
   const kindById = new Map(graph.nodes.map((n) => [n.id, n.kind]))
   const band = flowBand(positions, kindById)
-  const routed = edges.map((e) => {
+  // Önce her okun rotası (direct/back/jump) belirlenir; slot ataması bu
+  // bilgiye (özellikle aynı hedefe/kaynaktan yakınsayan gruplara) ihtiyaç
+  // duyar, o yüzden iki geçişli çalışır.
+  const withRoute = edges.map((e) => {
     const from = positions[e.source]
     const to = positions[e.target]
-    if (!from || !to) return e
+    if (!from || !to) return { e, route: undefined as RouteKind | undefined }
     const route =
       (e.data as ProcessEdgeData | undefined)?.route ??
       routeFor(graph, e.source, e.target, from.x, to.x)
+    return { e: { ...e, data: { ...(e.data as ProcessEdgeData), route } } as Edge, route }
+  })
+  const slotOf = assignRailSlots(withRoute.map((w) => w.e), positions)
+  const routed = withRoute.map(({ e, route }) => {
+    const from = positions[e.source]
+    const to = positions[e.target]
+    if (!from || !to || !route) return e
     const xMin = Math.min(from.x, to.x) - 12
     const xMax = Math.max(from.x + NODE_W, to.x + NODE_W) + 12
-    const slot = railSlot((e.data as ProcessEdgeData | undefined)?.originalId ?? e.id)
+    const slot = slotOf.get(e.id) ?? 0
     const obstruct = corridorObstacles(
       positions,
       kindById,
