@@ -4242,7 +4242,8 @@
 
 .pf-map-wrap .react-flow__node,
 .pf-map-wrap .react-flow__node.selected,
-.pf-map-wrap .react-flow__node-processStep {
+.pf-map-wrap .react-flow__node-processStep,
+.pf-map-wrap .react-flow__node-processNote {
   outline: none;
   box-shadow: none;
   background: transparent;
@@ -4791,14 +4792,93 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  min-width: 140px;
-  min-height: 90px;
+  min-width: 64px;
+  min-height: 40px;
   box-sizing: border-box;
   padding: 8px 22px 8px 8px;
   border-radius: 8px;
   background: #fff6c8;
   border: 1px solid color-mix(in srgb, #e3b341 45%, #ccc);
   box-shadow: 1px 2px 0 color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
+.pf-note-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.pf-note-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fff6c8;
+  border: 1px solid color-mix(in srgb, #e3b341 50%, #ccc);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--ink) 72%, transparent);
+  user-select: none;
+}
+
+.pf-note-toolbar {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf-note-del,
+.pf-note-collapse {
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  color: var(--muted);
+}
+
+.pf-note-del:hover,
+.pf-note-collapse:hover {
+  color: var(--ink);
+}
+
+.pf-note-collapse {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pf-map-wrap .react-flow__node-processNote.selected .react-flow__resize-control.line {
+  border-color: #e3b341;
+}
+
+.pf-map-wrap .react-flow__node-processNote.selected .react-flow__resize-control.handle {
+  background: #e3b341;
+  border: 1px solid color-mix(in srgb, #e3b341 70%, #fff);
+}
+
+.pf-note:not(.pf-note-collapsed) {
+  padding-top: 22px;
 }
 
 .pf-note textarea {
@@ -4811,17 +4891,6 @@
   font: inherit;
   font-size: 12px;
   line-height: 1.35;
-}
-
-.pf-note-x {
-  position: absolute;
-  top: 2px;
-  right: 4px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font-size: 14px;
-  color: var(--muted);
 }
 
 .pf-detail {

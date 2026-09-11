@@ -7,6 +7,7 @@ import ReactFlow, {
   EdgeLabelRenderer,
   Handle,
   MarkerType,
+  NodeResizer,
   Position,
   ReactFlowProvider,
   useEdgesState,
@@ -28,6 +29,19 @@ import type {
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
+import {
+  NOTE_COLLAPSED_HEIGHT,
+  NOTE_COLLAPSED_WIDTH,
+  NOTE_DEFAULT_HEIGHT,
+  NOTE_DEFAULT_WIDTH,
+  NOTE_MAX_HEIGHT,
+  NOTE_MAX_WIDTH,
+  NOTE_MIN_HEIGHT,
+  NOTE_MIN_WIDTH,
+  readProcessFlowNotes,
+  writeProcessFlowNotes,
+  type ProcessFlowNote,
+} from './processFlowNotes'
 import { summarizeProcessFlow } from './processFlowSummary'
 
 const RANK_SEP = 250
@@ -228,8 +242,181 @@ function ProcessEdge({
   )
 }
 
-const nodeTypes: NodeTypes = { processStep: memo(ProcessStepNode) }
+type NoteNodeData = {
+  text: string
+  collapsed: boolean
+  expandedWidth?: number
+  expandedHeight?: number
+  onChange: (text: string) => void
+  onRemove: () => void
+  onResizeEnd: () => void
+  onToggleCollapse: () => void
+}
+
+function NoteNode({ data, selected }: NodeProps<NoteNodeData>) {
+  if (data.collapsed) {
+    const hint = data.text.trim() ? data.text : 'Açmak için tıkla'
+    return (
+      <div className="pf-note pf-note-collapsed" title={hint}>
+        <span className="pf-note-chip">Not</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`pf-note${selected ? ' is-selected' : ''}`}>
+      <NodeResizer
+        isVisible={selected}
+        minWidth={NOTE_MIN_WIDTH}
+        minHeight={NOTE_MIN_HEIGHT}
+        maxWidth={NOTE_MAX_WIDTH}
+        maxHeight={NOTE_MAX_HEIGHT}
+        color="#e3b341"
+        lineStyle={{ borderWidth: 2 }}
+        handleStyle={{ width: 10, height: 10, borderRadius: 2 }}
+        onResizeEnd={() => data.onResizeEnd()}
+      />
+      <div className="pf-note-toolbar">
+        <button
+          type="button"
+          className="pf-note-del"
+          onClick={(e) => {
+            e.stopPropagation()
+            data.onRemove()
+          }}
+        >
+          Sil
+        </button>
+        <button
+          type="button"
+          className="pf-note-collapse"
+          onClick={(e) => {
+            e.stopPropagation()
+            data.onToggleCollapse()
+          }}
+          aria-label="Notu kapat"
+          title="Kapat"
+        >
+          −
+        </button>
+      </div>
+      <textarea
+        value={data.text}
+        placeholder="Not…"
+        onChange={(e) => data.onChange(e.target.value)}
+        onPointerDown={(e) => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
+const nodeTypes: NodeTypes = {
+  processStep: memo(ProcessStepNode),
+  processNote: memo(NoteNode),
+}
 const edgeTypes: EdgeTypes = { processEdge: memo(ProcessEdge) }
+
+function notesFromNodes(list: Node[]): ProcessFlowNote[] {
+  return list
+    .filter((n) => n.type === 'processNote')
+    .map((n) => {
+      const data = n.data as NoteNodeData
+      return {
+        id: n.id,
+        text: data.text ?? '',
+        x: n.position.x,
+        y: n.position.y,
+        width: typeof n.width === 'number' ? n.width : undefined,
+        height: typeof n.height === 'number' ? n.height : undefined,
+        collapsed: data.collapsed ?? false,
+        expandedWidth: data.expandedWidth,
+        expandedHeight: data.expandedHeight,
+      }
+    })
+}
+
+function noteActions(
+  id: string,
+  processNo: string,
+  setNodes: ReturnType<typeof useNodesState>[1],
+  persistNotes: () => void,
+): Pick<NoteNodeData, 'onChange' | 'onRemove' | 'onResizeEnd' | 'onToggleCollapse'> {
+  const persist = (rows: Node[]) => writeProcessFlowNotes(processNo, notesFromNodes(rows))
+  return {
+    onChange: (text) => {
+      setNodes((rows) => {
+        const next = rows.map((row) =>
+          row.id === id ? { ...row, data: { ...(row.data as NoteNodeData), text } } : row,
+        )
+        persist(next)
+        return next
+      })
+    },
+    onRemove: () => {
+      setNodes((rows) => {
+        const next = rows.filter((row) => row.id !== id)
+        persist(next)
+        return next
+      })
+    },
+    onResizeEnd: persistNotes,
+    onToggleCollapse: () => {
+      setNodes((rows) => {
+        const next = rows.map((row) => {
+          if (row.id !== id) return row
+          const data = row.data as NoteNodeData
+          if (data.collapsed) {
+            return {
+              ...row,
+              width: data.expandedWidth ?? NOTE_DEFAULT_WIDTH,
+              height: data.expandedHeight ?? NOTE_DEFAULT_HEIGHT,
+              data: { ...data, collapsed: false },
+            }
+          }
+          return {
+            ...row,
+            width: NOTE_COLLAPSED_WIDTH,
+            height: NOTE_COLLAPSED_HEIGHT,
+            data: {
+              ...data,
+              collapsed: true,
+              expandedWidth: typeof row.width === 'number' ? row.width : NOTE_DEFAULT_WIDTH,
+              expandedHeight: typeof row.height === 'number' ? row.height : NOTE_DEFAULT_HEIGHT,
+            },
+          }
+        })
+        persist(next)
+        return next
+      })
+    },
+  }
+}
+
+function noteNodesFromStorage(processNo: string): Node[] {
+  return readProcessFlowNotes(processNo).map((note) => {
+    const collapsed = note.collapsed ?? false
+    return {
+      id: note.id,
+      type: 'processNote' as const,
+      position: { x: note.x, y: note.y },
+      width: collapsed ? NOTE_COLLAPSED_WIDTH : (note.width ?? NOTE_DEFAULT_WIDTH),
+      height: collapsed ? NOTE_COLLAPSED_HEIGHT : (note.height ?? NOTE_DEFAULT_HEIGHT),
+      data: {
+        text: note.text,
+        collapsed,
+        expandedWidth: note.expandedWidth,
+        expandedHeight: note.expandedHeight,
+        onChange: () => undefined,
+        onRemove: () => undefined,
+        onResizeEnd: () => undefined,
+        onToggleCollapse: () => undefined,
+      } satisfies NoteNodeData,
+      draggable: true,
+      selectable: true,
+      zIndex: 6,
+    }
+  })
+}
 
 function isDummyId(id: string) {
   return id.startsWith('d:')
@@ -514,14 +701,21 @@ function ProcessFlowMapInner({
   graph: ProcessFlowGraph
   onDismiss?: () => void
 }) {
-  const seed = useMemo(() => buildGraph(graph), [graph])
-  const [nodes, , onNodesChange] = useNodesState(seed.nodes)
-  const [edges] = useEdgesState(seed.edges)
+  const processNo = graph.catalogNo ?? graph.no
+  const seed = useMemo(() => {
+    const built = buildGraph(graph)
+    return {
+      nodes: [...built.nodes, ...noteNodesFromStorage(processNo)],
+      edges: built.edges,
+    }
+  }, [graph, processNo])
+  const [nodes, setNodes, onNodesChange] = useNodesState(seed.nodes)
+  const [edges, setEdges] = useEdgesState(seed.edges)
   const [hoverId, setHoverId] = useState<string>()
   const [dragId, setDragId] = useState<string>()
   const [selectedNodeId, setSelectedNodeId] = useState<string>()
   const [expanded, setExpanded] = useState(false)
-  const dragRef = useRef<string>()
+  const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
   const { setViewport } = useReactFlow()
   const focusId = selectedNodeId ?? dragId ?? hoverId
@@ -529,17 +723,51 @@ function ProcessFlowMapInner({
     () => graph.nodes.find((n) => n.id === selectedNodeId),
     [graph.nodes, selectedNodeId],
   )
-  const wide = seed.nodes.length > 18 || graphSpanX(seed.nodes) > WIDE_SPAN
+  const processNodes = useMemo(
+    () => seed.nodes.filter((n) => n.type !== 'processNote'),
+    [seed.nodes],
+  )
+  const wide = processNodes.length > 18 || graphSpanX(processNodes) > WIDE_SPAN
   const summary = useMemo(() => summarizeProcessFlow(graph), [graph])
+
+  const persistNotes = useCallback(() => {
+    setNodes((rows) => {
+      writeProcessFlowNotes(processNo, notesFromNodes(rows))
+      return rows
+    })
+  }, [processNo, setNodes])
+
+  useEffect(() => {
+    const built = buildGraph(graph)
+    setNodes((curr) => {
+      const keptNotes = curr.filter((n) => n.type === 'processNote')
+      const notes = keptNotes.length > 0 ? keptNotes : noteNodesFromStorage(processNo)
+      return [...built.nodes, ...notes]
+    })
+    setEdges(built.edges)
+    setSelectedNodeId(undefined)
+  }, [graph, processNo, setNodes, setEdges])
 
   useEffect(() => {
     if (!wide) return
-    setViewport(startCamera(seed.nodes), { duration: 0 })
-  }, [graph.no, seed.nodes, setViewport, wide])
+    setViewport(startCamera(processNodes), { duration: 0 })
+  }, [graph.no, processNodes, setViewport, wide])
 
   useEffect(() => {
-    setSelectedNodeId(undefined)
-  }, [graph.no])
+    setNodes((curr) =>
+      curr.map((n) => {
+        if (n.type !== 'processNote') return n
+        const data = n.data as NoteNodeData
+        return {
+          ...n,
+          data: {
+            ...data,
+            ...noteActions(n.id, processNo, setNodes, persistNotes),
+          },
+        }
+      }),
+    )
+  }, [processNo, persistNotes, setNodes])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -569,18 +797,24 @@ function ProcessFlowMapInner({
   }, [edges, focusId])
 
   const shownNodes = useMemo(() => {
-    const base = nodes.map((n) => ({
-      ...n,
-      className: [
-        n.className,
-        selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      selected: selectedNodeId === n.id,
-    }))
+    const base = nodes.map((n) => {
+      if (n.type === 'processNote') {
+        return { ...n, zIndex: 6, className: 'pf-note-node' }
+      }
+      return {
+        ...n,
+        className: [
+          n.className,
+          selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
+        selected: selectedNodeId === n.id,
+      }
+    })
     if (!neighborhood) return base
     const decorated = base.map((n) => {
+      if (n.type === 'processNote') return n
       const active = neighborhood.nodeIds.has(n.id)
       return {
         ...n,
@@ -590,9 +824,12 @@ function ProcessFlowMapInner({
         zIndex: active ? 4 : 0,
       }
     })
+    const processOnly = decorated.filter((n) => n.type !== 'processNote')
+    const notes = decorated.filter((n) => n.type === 'processNote')
     return [
-      ...decorated.filter((n) => n.className !== 'pf-node-onpath'),
-      ...decorated.filter((n) => n.className === 'pf-node-onpath'),
+      ...processOnly.filter((n) => n.className !== 'pf-node-onpath'),
+      ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
+      ...notes,
     ]
   }, [neighborhood, nodes, selectedNodeId])
 
@@ -615,6 +852,7 @@ function ProcessFlowMapInner({
   }, [edges, neighborhood])
 
   const onNodeMouseEnter = useCallback((_: unknown, node: Node) => {
+    if (node.type === 'processNote') return
     setHoverId(node.id)
   }, [])
   const onNodeMouseLeave = useCallback(() => {
@@ -634,14 +872,45 @@ function ProcessFlowMapInner({
   const onNodeDragStop = useCallback(() => {
     dragRef.current = undefined
     setDragId(undefined)
+    persistNotes()
     window.setTimeout(() => {
       dragMovedRef.current = false
     }, 0)
-  }, [])
+  }, [persistNotes])
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     if (dragMovedRef.current) return
+    if (node.type === 'processNote') {
+      const data = node.data as NoteNodeData
+      if (data.collapsed) data.onToggleCollapse()
+      return
+    }
     setSelectedNodeId(node.id)
   }, [])
+  const addNote = useCallback(() => {
+    const id = `note-${Date.now()}`
+    setNodes((curr) => {
+      const next: Node[] = [
+        ...curr,
+        {
+          id,
+          type: 'processNote',
+          position: { x: 48, y: 48 },
+          width: NOTE_DEFAULT_WIDTH,
+          height: NOTE_DEFAULT_HEIGHT,
+          data: {
+            text: '',
+            collapsed: false,
+            ...noteActions(id, processNo, setNodes, persistNotes),
+          } satisfies NoteNodeData,
+          draggable: true,
+          selectable: true,
+          zIndex: 6,
+        },
+      ]
+      writeProcessFlowNotes(processNo, notesFromNodes(next))
+      return next
+    })
+  }, [persistNotes, processNo, setNodes])
   const onPaneClick = useCallback(() => {
     setSelectedNodeId(undefined)
   }, [])
@@ -669,6 +938,9 @@ function ProcessFlowMapInner({
           />
         ) : null}
         <div className="pf-map-tools">
+          <button type="button" className="pf-add-note" onClick={addNote}>
+            Not ekle
+          </button>
           <button
             type="button"
             className="tl-zoom"
@@ -702,7 +974,7 @@ function ProcessFlowMapInner({
         maxZoom={1.8}
         fitView={!wide}
         fitViewOptions={{ padding: 0.16 }}
-        defaultViewport={wide ? startCamera(seed.nodes) : undefined}
+        defaultViewport={wide ? startCamera(processNodes) : undefined}
         proOptions={{ hideAttribution: true }}
         deleteKeyCode={null}
       >
