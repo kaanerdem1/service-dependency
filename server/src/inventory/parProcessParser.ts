@@ -6,6 +6,7 @@ export type ProcessFlowNodeKind =
   | 'task'
   | 'decision'
   | 'service'
+  | 'subprocess'
   | 'other'
   | 'dummy'
 
@@ -43,6 +44,8 @@ export type ProcessFlowNode = {
   decisionInfo?: ProcessDecisionInfo
   /** Task/node event ve assignment alanları (yalnızca dolu olanlar). */
   details?: ProcessNodeDetails
+  /** process-state → sub-process name (hedef süreç no). */
+  subProcessNo?: string
   /** XML’deki tek düğüm; canvas’ta kararın yanında gösterilen kopya. */
   copyOf?: string
 }
@@ -78,10 +81,17 @@ const NODE_TAGS = [
 function kindFromTag(tag: string, inner: string): ProcessFlowNodeKind {
   if (tag === 'start-state') return 'start'
   if (tag === 'end-state') return 'end'
+  if (tag === 'process-state') return 'subprocess'
   if (tag === 'decision' || tag === 'fork') return 'decision'
   if (tag === 'task-node') return 'task'
   if (/execute-services/i.test(inner) || /service-name=/i.test(inner)) return 'service'
   return 'other'
+}
+
+function extractSubProcessNo(inner: string): string | undefined {
+  const m = inner.match(/<sub-process\b[^>]*\bname\s*=\s*"([^"]+)"/i)
+  const raw = m?.[1]?.trim()
+  return raw ? decode(raw) : undefined
 }
 
 function attr(open: string, name: string): string | undefined {
@@ -334,13 +344,15 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
     seen.add(id)
     const kind = kindFromTag(child.tag, child.inner)
     const services = extractServices(child.inner)
+    const subProcessNo = child.tag === 'process-state' ? extractSubProcessNo(child.inner) : undefined
     nodes.push({
       id,
       name: id,
       kind,
       services,
+      subProcessNo,
       decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
-      details: kind !== 'decision' ? extractNodeDetails(child.inner) : undefined,
+      details: kind !== 'decision' && kind !== 'subprocess' ? extractNodeDetails(child.inner) : undefined,
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
       edges.push({
@@ -372,6 +384,7 @@ function bpmnTypeFor(kind: ProcessFlowNodeKind): BpmnElementType {
   if (kind === 'end') return 'endEvent'
   if (kind === 'decision') return 'exclusiveGateway'
   if (kind === 'service') return 'serviceTask'
+  if (kind === 'subprocess') return 'callActivity'
   if (kind === 'task') return 'userTask'
   return 'task'
 }

@@ -25,6 +25,7 @@ import type {
   ServiceCatalogContext,
   ServiceScreenLink,
   ServiceNameResolve,
+  ProcessRefResolve,
   ServiceProcessLink,
   ProcessCatalogItem,
   ProcessFlowGraph,
@@ -146,6 +147,14 @@ export function resolveServiceNames(names: string[]) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ names }),
+  })
+}
+
+export function resolveProcessRefs(nos: string[]) {
+  return request<ProcessRefResolve[]>('/processes/resolve-refs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nos }),
   })
 }
 

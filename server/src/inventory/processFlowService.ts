@@ -92,6 +92,39 @@ export type ProcessScreenLink = {
   descriptionTr: string | null
 }
 
+export type ProcessRefResolve = {
+  no: string
+  name: string | null
+  descriptionTr: string | null
+}
+
+export async function resolveProcessRefs(nos: string[]): Promise<ProcessRefResolve[]> {
+  const unique = [...new Set(nos.map((n) => n.trim()).filter(Boolean))]
+  if (!unique.length) return []
+
+  const { rows } = await query<{
+    no: string
+    name: string | null
+    description_tr: string | null
+  }>(
+    `SELECT no, name, description_tr
+     FROM ${tableName('process')}
+     WHERE status = 1
+       AND process_definition IS NOT NULL
+       AND no = ANY($1::varchar[])`,
+    [unique],
+  )
+  const byNo = new Map(rows.map((row) => [row.no, row]))
+  return unique.map((no) => {
+    const hit = byNo.get(no)
+    return {
+      no,
+      name: hit?.name ?? null,
+      descriptionTr: hit?.description_tr ?? null,
+    }
+  })
+}
+
 export async function listProcessScreens(processNo: string): Promise<ProcessScreenLink[]> {
   const { rows } = await query<{
     oid: string

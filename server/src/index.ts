@@ -90,6 +90,7 @@ import {
   getProcessFlow,
   listProcesses,
   listProcessScreens,
+  resolveProcessRefs,
 } from './inventory/processFlowService.js'
 import { getServiceTreePath } from './inventory/location.js'
 import { getArtifactDetail, getGroupDetail } from './inventory/catalogEntityService.js'
@@ -380,6 +381,22 @@ app.get('/api/processes/:no/flow', async (req, res) => {
     res.json(flow)
   } catch (e) {
     console.error('[inventory] /api/processes/:no/flow', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.post('/api/processes/resolve-refs', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    const nos = Array.isArray(req.body?.nos)
+      ? req.body.nos.filter((n: unknown) => typeof n === 'string')
+      : []
+    res.json(await resolveProcessRefs(nos))
+  } catch (e) {
+    console.error('[inventory] /api/processes/resolve-refs', e)
     res.status(500).json({ error: 'inventory_error' })
   }
 })

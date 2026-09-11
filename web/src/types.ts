@@ -362,6 +362,20 @@ export type ServiceNameResolve = {
   descriptionTr: string | null
 }
 
+export type ProcessRefResolve = {
+  no: string
+  name: string | null
+  descriptionTr: string | null
+}
+
+/** Seçili adıma hangi üst adım / geçiş etiketiyle gelindiği. */
+export type ProcessIncomingTransition = {
+  fromId: string
+  fromName: string
+  fromKind: ProcessFlowNodeKind
+  label?: string
+}
+
 export type ProcessCatalogItem = {
   oid: string
   no: string
@@ -375,6 +389,7 @@ export type ProcessFlowNodeKind =
   | 'task'
   | 'decision'
   | 'service'
+  | 'subprocess'
   | 'other'
   | 'dummy'
 
@@ -416,6 +431,7 @@ export type ProcessFlowGraph = {
     services: string[]
     decisionInfo?: ProcessDecisionInfo
     details?: ProcessNodeDetails
+    subProcessNo?: string
     copyOf?: string
   }[]
   edges: { id: string; from: string; to: string; label?: string; via?: string[] }[]

@@ -73,6 +73,7 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   task: 'Görev',
   decision: 'Karar',
   service: 'Servis',
+  subprocess: 'Alt süreç',
   dummy: 'Adım',
   other: 'Adım',
 }

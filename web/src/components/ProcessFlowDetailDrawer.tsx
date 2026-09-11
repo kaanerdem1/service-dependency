@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { resolveServiceNames } from '../api/client'
+import { resolveProcessRefs, resolveServiceNames } from '../api/client'
 import type {
   ProcessDecisionInfo,
   ProcessFlowNodeKind,
+  ProcessIncomingTransition,
   ProcessNodeDetails,
+  ProcessRefResolve,
   ServiceNameResolve,
 } from '../types'
 
@@ -13,6 +15,7 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   task: 'Görev',
   decision: 'Karar',
   service: 'Servis',
+  subprocess: 'Alt süreç',
   dummy: 'Adım',
   other: 'Adım',
 }
@@ -40,8 +43,11 @@ type Props = {
   details?: ProcessNodeDetails
   decisionInfo?: ProcessDecisionInfo
   services: string[]
+  subProcessNo?: string
+  incoming?: ProcessIncomingTransition[]
   onClose: () => void
   onOpenService?: (serviceName: string, serviceId?: string) => void
+  onOpenSubProcess?: (processNo: string) => void
 }
 
 export function ProcessFlowDetailDrawer({
@@ -52,14 +58,20 @@ export function ProcessFlowDetailDrawer({
   details,
   decisionInfo,
   services,
+  subProcessNo,
+  incoming = [],
   onClose,
   onOpenService,
+  onOpenSubProcess,
 }: Props) {
   const rules = decisionInfo?.rules ?? []
   const hasDetails = (details?.groups.length ?? 0) > 0
   const hasRules = rules.length > 0
   const hasServices = services.length > 0
+  const hasSubProcess = Boolean(subProcessNo?.trim())
+  const hasIncoming = incoming.length > 0
   const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
+  const [subProcessMeta, setSubProcessMeta] = useState<ProcessRefResolve | null>(null)
 
   const serviceKey = useMemo(() => services.join('\0'), [services])
 
@@ -88,6 +100,26 @@ export function ProcessFlowDetailDrawer({
     [resolved],
   )
 
+  useEffect(() => {
+    if (!open || !hasSubProcess || !subProcessNo) {
+      setSubProcessMeta(null)
+      return
+    }
+    let cancelled = false
+    void resolveProcessRefs([subProcessNo])
+      .then((rows) => {
+        if (!cancelled) setSubProcessMeta(rows[0] ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setSubProcessMeta(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hasSubProcess, open, subProcessNo])
+
+  const subProcessKnown = Boolean(subProcessMeta?.descriptionTr || subProcessMeta?.name)
+
   return (
     <aside
       className={`pf-detail-drawer${open ? ' is-open' : ''}`}
@@ -109,6 +141,34 @@ export function ProcessFlowDetailDrawer({
         </button>
       </header>
       <div className="pf-detail-drawer-body">
+        {hasIncoming ? (
+          <section className="pf-detail-section">
+            <h3 className="pf-detail-section-title">Bu adıma geliş</h3>
+            <p className="pf-detail-lead">
+              Hangi adımdan, hangi geçiş etiketiyle bu noktaya ulaşılıyor?
+            </p>
+            <ul className="pf-detail-incoming-list">
+              {incoming.map((row, i) => (
+                <li
+                  key={`${row.fromId}:${row.label ?? ''}:${i}`}
+                  className="pf-detail-incoming"
+                >
+                  <span className="pf-detail-incoming-from">
+                    <span className="pf-detail-incoming-kind">{KIND_LABEL[row.fromKind]}</span>
+                    {row.fromName}
+                  </span>
+                  <span className="pf-detail-incoming-arrow" aria-hidden>
+                    →
+                  </span>
+                  <span className="pf-detail-incoming-label">
+                    {row.label ?? 'etiket yok'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {hasRules ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Geçiş kuralları</h3>
@@ -149,6 +209,31 @@ export function ProcessFlowDetailDrawer({
             ))
           : null}
 
+        {hasSubProcess && subProcessNo ? (
+          <section className="pf-detail-section">
+            <h3 className="pf-detail-section-title">Alt süreç</h3>
+            <div className="pf-detail-service-card">
+              <p className="pf-detail-service-label">
+                {subProcessMeta?.descriptionTr?.trim() ||
+                  subProcessMeta?.name?.trim() ||
+                  'Süreç açıklaması yok'}
+              </p>
+              <p className="pf-detail-service-code">{subProcessNo}</p>
+              {onOpenSubProcess ? (
+                <button
+                  type="button"
+                  className="pf-detail-service-go"
+                  disabled={!subProcessKnown}
+                  title={subProcessKnown ? undefined : 'Katalogda eşleşen süreç bulunamadı'}
+                  onClick={() => onOpenSubProcess(subProcessNo)}
+                >
+                  Sürece git
+                </button>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         {hasServices ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Servisler</h3>
@@ -181,7 +266,7 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
-        {!hasRules && !hasDetails && !hasServices ? (
+        {!hasRules && !hasDetails && !hasServices && !hasSubProcess && !hasIncoming ? (
           <p className="pf-detail-empty">Bu adım için dolu XML alanı yok.</p>
         ) : null}
       </div>

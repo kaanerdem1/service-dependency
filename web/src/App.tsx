@@ -322,6 +322,10 @@ export default function App() {
   const [processFlowReturn, setProcessFlowReturn] = useState<
     { processNo: string; nodeId?: string } | undefined
   >()
+  /** Alt sürece gidildiğinde üst süreç + drawer adımı. */
+  const [processFlowStack, setProcessFlowStack] = useState<
+    { processNo: string; nodeId?: string }[]
+  >([])
   const [processFlowRestoreNodeId, setProcessFlowRestoreNodeId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
@@ -671,6 +675,7 @@ export default function App() {
     setWorkflowInfoId(undefined)
     setWorkflowResumeId(undefined)
     setProcessFlowReturn(undefined)
+    setProcessFlowStack([])
     setProcessFlowRestoreNodeId(undefined)
     if (!opts?.keepService) {
       setPivotId(undefined)
@@ -824,6 +829,26 @@ export default function App() {
     setMapExpanded(false)
     setTab('map')
   }, [processFlowReturn])
+
+  const openSubProcessFromFlow = useCallback(
+    (subNo: string, nodeId: string) => {
+      if (!processFlowNo) return
+      setProcessFlowStack((prev) => [...prev, { processNo: processFlowNo, nodeId }])
+      setProcessFlowRestoreNodeId(undefined)
+      setProcessFlowNo(subNo)
+    },
+    [processFlowNo],
+  )
+
+  const backToParentProcessFlow = useCallback(() => {
+    setProcessFlowStack((prev) => {
+      if (!prev.length) return prev
+      const parent = prev[prev.length - 1]
+      setProcessFlowRestoreNodeId(parent.nodeId)
+      setProcessFlowNo(parent.processNo)
+      return prev.slice(0, -1)
+    })
+  }, [])
 
   const selectMethod = useCallback(
     (serviceId: string, methodId: string) => {
@@ -1370,9 +1395,13 @@ export default function App() {
                 initialSelectedNodeId={processFlowRestoreNodeId}
                 onRestoreConsumed={() => setProcessFlowRestoreNodeId(undefined)}
                 onOpenService={openServiceFromProcessFlow}
+                onOpenSubProcess={openSubProcessFromFlow}
+                canGoBack={processFlowStack.length > 0}
+                onBackToParent={backToParentProcessFlow}
                 onDismiss={() => {
                   setProcessFlowNo(undefined)
                   setProcessFlowReturn(undefined)
+                  setProcessFlowStack([])
                   setProcessFlowRestoreNodeId(undefined)
                 }}
               />

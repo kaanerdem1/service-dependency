@@ -7,17 +7,23 @@ import type { ProcessFlowGraph, ServiceScreenLink } from '../types'
 type Props = {
   processNo: string
   onDismiss: () => void
+  canGoBack?: boolean
+  onBackToParent?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
+  onOpenSubProcess?: (processNo: string, nodeId: string) => void
 }
 
 export function ProcessFlowPage({
   processNo,
   onDismiss,
+  canGoBack,
+  onBackToParent,
   initialSelectedNodeId,
   onRestoreConsumed,
   onOpenService,
+  onOpenSubProcess,
 }: Props) {
   const [graph, setGraph] = useState<ProcessFlowGraph>()
   const [screens, setScreens] = useState<ServiceScreenLink[]>([])
@@ -62,9 +68,12 @@ export function ProcessFlowPage({
           graph={graph}
           screens={<ProcessFlowScreens screens={screens} />}
           onDismiss={onDismiss}
+          canGoBack={canGoBack}
+          onBackToParent={onBackToParent}
           initialSelectedNodeId={initialSelectedNodeId}
           onRestoreConsumed={onRestoreConsumed}
           onOpenService={onOpenService}
+          onOpenSubProcess={onOpenSubProcess}
         />
       ) : null}
     </article>

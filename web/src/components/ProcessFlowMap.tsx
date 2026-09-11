@@ -25,6 +25,7 @@ import type {
   ProcessDecisionInfo,
   ProcessFlowGraph,
   ProcessFlowNodeKind,
+  ProcessIncomingTransition,
   ProcessNodeDetails,
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
@@ -50,6 +51,8 @@ const FAN_GAP = 122
 const COL_GAP = 112
 const ORIGIN = { x: 60, y: 49.2 }
 const NODE_W = 168
+const NODE_H = 76
+const GATEWAY_H = 108
 const RAIL_PAD = 36
 const RAIL_GAP = 16
 const CORNER = 14
@@ -60,6 +63,7 @@ type ProcessNodeData = {
   label: string
   kind: ProcessFlowNodeKind
   services: string[]
+  subProcessNo?: string
   decisionInfo?: ProcessDecisionInfo
   details?: ProcessNodeDetails
 }
@@ -71,6 +75,9 @@ type ProcessEdgeData = {
   labels?: string[]
   route?: RouteKind
   lane?: number
+  railY?: number
+  bandMinY?: number
+  bandMaxY?: number
   active?: boolean
   dim?: boolean
 }
@@ -81,6 +88,7 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   task: 'Görev',
   decision: 'Karar',
   service: 'Servis',
+  subprocess: 'Alt süreç',
   dummy: 'Adım',
   other: 'Adım',
 }
@@ -106,6 +114,22 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
         <span className="pf-event-kicker">{KIND_LABEL[data.kind]}</span>
         <div className="pf-event-circle" />
         <strong className="pf-event-label">{data.label}</strong>
+      </div>
+    )
+  }
+
+  if (data.kind === 'subprocess') {
+    return (
+      <div className={`pf-node is-subprocess${selected ? ' is-selected' : ''}`}>
+        <Ports />
+        <span className="pf-node-icon">↳</span>
+        <span className="pf-node-kind">{KIND_LABEL.subprocess}</span>
+        <strong className="pf-node-title">{data.label}</strong>
+        {data.subProcessNo ? (
+          <span className="pf-node-subproc" title={`Alt süreç: ${data.subProcessNo}`}>
+            {data.subProcessNo}
+          </span>
+        ) : null}
       </div>
     )
   }
@@ -156,6 +180,48 @@ function handlesFor(route: RouteKind) {
   return { sourceHandle: 'r', targetHandle: 'l' }
 }
 
+function nodeBox(
+  pos: { x: number; y: number },
+  kind?: ProcessFlowNodeKind,
+): { left: number; top: number; right: number; bottom: number } {
+  const h = kind === 'decision' ? GATEWAY_H : kind === 'start' || kind === 'end' ? 64 : NODE_H
+  const w = kind === 'decision' ? 132 : NODE_W
+  return { left: pos.x, top: pos.y, right: pos.x + w, bottom: pos.y + h }
+}
+
+function flowBand(
+  positions: Record<string, { x: number; y: number }>,
+  kindById: Map<string, ProcessFlowNodeKind>,
+) {
+  let minY = ORIGIN.y
+  let maxY = ORIGIN.y + NODE_H
+  for (const [id, pos] of Object.entries(positions)) {
+    const box = nodeBox(pos, kindById.get(id))
+    minY = Math.min(minY, box.top)
+    maxY = Math.max(maxY, box.bottom)
+  }
+  return { minY, maxY }
+}
+
+function corridorObstacles(
+  positions: Record<string, { x: number; y: number }>,
+  kindById: Map<string, ProcessFlowNodeKind>,
+  xMin: number,
+  xMax: number,
+  exclude: Set<string>,
+) {
+  let minTop = Infinity
+  let maxBottom = -Infinity
+  for (const [id, pos] of Object.entries(positions)) {
+    if (exclude.has(id)) continue
+    const box = nodeBox(pos, kindById.get(id))
+    if (box.right < xMin || box.left > xMax) continue
+    minTop = Math.min(minTop, box.top)
+    maxBottom = Math.max(maxBottom, box.bottom)
+  }
+  return { minTop, maxBottom }
+}
+
 function kitEdgePath(
   sourceX: number,
   sourceY: number,
@@ -163,6 +229,9 @@ function kitEdgePath(
   targetY: number,
   route: RouteKind,
   slotKey: string,
+  referenceRailY: number | undefined,
+  bandMinY: number,
+  bandMaxY: number,
   lane = 0,
 ) {
   const lift = lane * 18
@@ -177,11 +246,11 @@ function kitEdgePath(
   const slot = railSlot(slotKey)
   const r = CORNER
   if (route === 'back') {
-    const railY = Math.min(sourceY, targetY) - RAIL_PAD - slot * RAIL_GAP + lift
+    const railY = (referenceRailY ?? bandMinY - RAIL_PAD - slot * RAIL_GAP) + lift
     const path = `M ${sourceX},${sourceY} L ${sourceX},${railY + r} Q ${sourceX},${railY} ${sourceX - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
-  const railY = Math.max(sourceY, targetY) + RAIL_PAD + slot * RAIL_GAP + lift
+  const railY = (referenceRailY ?? bandMaxY + RAIL_PAD + slot * RAIL_GAP) + lift
   const path = `M ${sourceX},${sourceY} L ${sourceX},${railY - r} Q ${sourceX},${railY} ${sourceX + r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
   return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
 }
@@ -197,6 +266,8 @@ function ProcessEdge({
   data,
 }: EdgeProps<ProcessEdgeData>) {
   const route = data?.route ?? classifyRoute(sourceX, targetX)
+  const bandMinY = data?.bandMinY ?? Math.min(sourceY, targetY)
+  const bandMaxY = data?.bandMaxY ?? Math.max(sourceY, targetY)
   const { path: edgePath, labelX, labelY } = kitEdgePath(
     sourceX,
     sourceY,
@@ -204,6 +275,9 @@ function ProcessEdge({
     targetY,
     route,
     data?.originalId ?? id,
+    data?.railY,
+    bandMinY,
+    bandMaxY,
     data?.lane ?? 0,
   )
   const active = !!data?.active
@@ -590,6 +664,92 @@ function routeFor(graph: ProcessFlowGraph, from: string, to: string, fromX: numb
   return classifyRoute(fromX + NODE_W, toX)
 }
 
+function assignEdgeLanes(edges: Edge[]): Edge[] {
+  const backCount = new Map<string, number>()
+  const jumpCount = new Map<string, number>()
+  return edges.map((e) => {
+    const data = e.data as ProcessEdgeData | undefined
+    const route = data?.route ?? 'direct'
+    if (route === 'direct') return e
+    const bucket = route === 'back' ? backCount : jumpCount
+    const key = `${Math.min(e.source, e.target)}\0${Math.max(e.source, e.target)}`
+    const lane = bucket.get(key) ?? 0
+    bucket.set(key, lane + 1)
+    return { ...e, data: { ...data, lane } }
+  })
+}
+
+function withEdgeRoutes(
+  graph: ProcessFlowGraph,
+  edges: Edge[],
+  positions: Record<string, { x: number; y: number }>,
+): Edge[] {
+  const kindById = new Map(graph.nodes.map((n) => [n.id, n.kind]))
+  const band = flowBand(positions, kindById)
+  const routed = edges.map((e) => {
+    const from = positions[e.source]
+    const to = positions[e.target]
+    if (!from || !to) return e
+    const route =
+      (e.data as ProcessEdgeData | undefined)?.route ??
+      routeFor(graph, e.source, e.target, from.x, to.x)
+    const xMin = Math.min(from.x, to.x) - 12
+    const xMax = Math.max(from.x + NODE_W, to.x + NODE_W) + 12
+    const slot = railSlot((e.data as ProcessEdgeData | undefined)?.originalId ?? e.id)
+    const obstruct = corridorObstacles(
+      positions,
+      kindById,
+      xMin,
+      xMax,
+      new Set([e.source, e.target]),
+    )
+    let railY: number | undefined
+    if (route === 'back') {
+      railY = band.minY - RAIL_PAD - slot * RAIL_GAP
+      if (obstruct.minTop !== Infinity) {
+        railY = Math.min(railY, obstruct.minTop - RAIL_PAD - slot * RAIL_GAP)
+      }
+    } else if (route === 'jump') {
+      railY = band.maxY + RAIL_PAD + slot * RAIL_GAP
+      if (obstruct.maxBottom !== -Infinity) {
+        railY = Math.max(railY, obstruct.maxBottom + RAIL_PAD + slot * RAIL_GAP)
+      }
+    }
+    return {
+      ...e,
+      ...handlesFor(route),
+      data: {
+        ...(e.data as ProcessEdgeData),
+        route,
+        bandMinY: band.minY,
+        bandMaxY: band.maxY,
+        railY,
+      } satisfies ProcessEdgeData,
+    }
+  })
+  return assignEdgeLanes(routed)
+}
+
+function incomingTransitionsFor(
+  graph: ProcessFlowGraph,
+  nodeId: string,
+): ProcessIncomingTransition[] {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+  const rows: ProcessIncomingTransition[] = []
+  for (const e of graph.edges) {
+    if (e.to !== nodeId || isDummyId(e.from)) continue
+    const from = byId.get(e.from)
+    if (!from) continue
+    rows.push({
+      fromId: e.from,
+      fromName: from.name,
+      fromKind: from.kind,
+      label: e.label?.trim() || undefined,
+    })
+  }
+  return rows
+}
+
 function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
   const positions = positionsFor(graph)
   const nodes: Node[] = graph.nodes
@@ -602,13 +762,15 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
         label: n.name,
         kind: n.kind,
         services: n.services,
+        subProcessNo: n.subProcessNo,
         decisionInfo: n.decisionInfo,
         details: n.details,
       } satisfies ProcessNodeData,
       draggable: true,
     }))
   const posOf = (id: string) => nodes.find((n) => n.id === id)?.position ?? ORIGIN
-  const edges: Edge[] = visualEdges(graph).map((e) => {
+  const posMap = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
+  const baseEdges: Edge[] = visualEdges(graph).map((e) => {
     const route = routeFor(graph, e.from, e.to, posOf(e.from).x, posOf(e.to).x)
     return {
       id: `b:${e.from}\0${e.to}`,
@@ -626,6 +788,7 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#a8b0bc' },
     }
   })
+  const edges = withEdgeRoutes(graph, baseEdges, posMap)
   return { nodes, edges }
 }
 
@@ -703,16 +866,22 @@ function ProcessFlowMapInner({
   graph,
   screens,
   onDismiss,
+  canGoBack,
+  onBackToParent,
   initialSelectedNodeId,
   onRestoreConsumed,
   onOpenService,
+  onOpenSubProcess,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
   onDismiss?: () => void
+  canGoBack?: boolean
+  onBackToParent?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
+  onOpenSubProcess?: (processNo: string, nodeId: string) => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const seed = useMemo(() => {
@@ -732,11 +901,15 @@ function ProcessFlowMapInner({
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
-  const { setViewport } = useReactFlow()
+  const { setViewport, getNodes } = useReactFlow()
   const focusId = selectedNodeId ?? dragId ?? hoverId
   const selectedNode = useMemo(
     () => graph.nodes.find((n) => n.id === selectedNodeId),
     [graph.nodes, selectedNodeId],
+  )
+  const selectedIncoming = useMemo(
+    () => (selectedNodeId ? incomingTransitionsFor(graph, selectedNodeId) : []),
+    [graph, selectedNodeId],
   )
   const processNodes = useMemo(
     () => seed.nodes.filter((n) => n.type !== 'processNote'),
@@ -751,6 +924,15 @@ function ProcessFlowMapInner({
       return rows
     })
   }, [processNo, setNodes])
+
+  const refreshEdgeRoutes = useCallback(() => {
+    const posMap = Object.fromEntries(
+      getNodes()
+        .filter((n) => n.type !== 'processNote')
+        .map((n) => [n.id, n.position]),
+    )
+    setEdges((curr) => withEdgeRoutes(graph, curr, posMap))
+  }, [getNodes, graph, setEdges])
 
   useEffect(() => {
     const built = buildGraph(graph)
@@ -831,6 +1013,7 @@ function ProcessFlowMapInner({
           .filter(Boolean)
           .join(' '),
         selected: selectedNodeId === n.id,
+        zIndex: selectedNodeId === n.id ? 14 : 6,
       }
     })
     if (!neighborhood) return base
@@ -842,7 +1025,7 @@ function ProcessFlowMapInner({
         className: [active ? 'pf-node-onpath' : 'pf-node-offpath', n.className]
           .filter(Boolean)
           .join(' '),
-        zIndex: active ? 4 : 0,
+        zIndex: n.id === selectedNodeId ? 14 : active ? 12 : 6,
       }
     })
     const processOnly = decorated.filter((n) => n.type !== 'processNote')
@@ -861,7 +1044,7 @@ function ProcessFlowMapInner({
       const data = e.data as ProcessEdgeData | undefined
       return {
         ...e,
-        zIndex: active ? 3 : 0,
+        zIndex: active ? 2 : 1,
         className: active ? 'pf-edge-onpath' : 'pf-edge-offpath',
         data: { ...data, active, dim: !active },
       }
@@ -894,10 +1077,11 @@ function ProcessFlowMapInner({
     dragRef.current = undefined
     setDragId(undefined)
     persistNotes()
+    refreshEdgeRoutes()
     window.setTimeout(() => {
       dragMovedRef.current = false
     }, 0)
-  }, [persistNotes])
+  }, [persistNotes, refreshEdgeRoutes])
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     if (dragMovedRef.current) return
     if (node.type === 'processNote') {
@@ -946,6 +1130,11 @@ function ProcessFlowMapInner({
         {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
         {screens}
       </header>
+      {canGoBack && onBackToParent ? (
+        <button type="button" className="pf-map-back" onClick={onBackToParent}>
+          ← Geri
+        </button>
+      ) : null}
       {onDismiss ? (
         <button type="button" className="pf-map-close" onClick={onDismiss}>
           Kapat
@@ -1013,11 +1202,18 @@ function ProcessFlowMapInner({
             details={selectedNode.details}
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
+            subProcessNo={selectedNode.subProcessNo}
+            incoming={selectedIncoming}
             onClose={closeDetail}
             onOpenService={
               onOpenService
                 ? (serviceName, serviceId) =>
                     onOpenService(serviceName, selectedNode.id, serviceId)
+                : undefined
+            }
+            onOpenSubProcess={
+              onOpenSubProcess
+                ? (processNo) => onOpenSubProcess(processNo, selectedNode.id)
                 : undefined
             }
           />
@@ -1031,16 +1227,22 @@ export function ProcessFlowMap({
   graph,
   screens,
   onDismiss,
+  canGoBack,
+  onBackToParent,
   initialSelectedNodeId,
   onRestoreConsumed,
   onOpenService,
+  onOpenSubProcess,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
   onDismiss?: () => void
+  canGoBack?: boolean
+  onBackToParent?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
+  onOpenSubProcess?: (processNo: string, nodeId: string) => void
 }) {
   return (
     <ReactFlowProvider>
@@ -1049,9 +1251,12 @@ export function ProcessFlowMap({
         graph={graph}
         screens={screens}
         onDismiss={onDismiss}
+        canGoBack={canGoBack}
+        onBackToParent={onBackToParent}
         initialSelectedNodeId={initialSelectedNodeId}
         onRestoreConsumed={onRestoreConsumed}
         onOpenService={onOpenService}
+        onOpenSubProcess={onOpenSubProcess}
       />
     </ReactFlowProvider>
   )

@@ -4014,10 +4014,10 @@
   line-height: 1.35;
 }
 
+.pf-map-back,
 .pf-map-close {
   position: absolute;
   top: 12px;
-  right: 12px;
   z-index: 20;
   margin: 0;
   padding: 6px 12px;
@@ -4028,6 +4028,14 @@
   font-size: 13px;
   font-weight: 650;
   cursor: pointer;
+}
+
+.pf-map-back {
+  right: 88px;
+}
+
+.pf-map-close {
+  right: 12px;
 }
 
 .pf-map-canvas {
@@ -4245,10 +4253,60 @@
 }
 
 .pf-detail-rule-list,
-.pf-detail-service-list {
+.pf-detail-service-list,
+.pf-detail-incoming-list {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.pf-detail-incoming {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.pf-detail-incoming:last-child {
+  border-bottom: 0;
+}
+
+.pf-detail-incoming-from {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.pf-detail-incoming-kind {
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-detail-incoming-arrow {
+  padding-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pf-detail-incoming-label {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--accent) 55%, var(--ink));
+  overflow-wrap: anywhere;
 }
 
 .pf-detail-rule {
@@ -4380,6 +4438,7 @@
 
 .pf-map-wrap .pf-node.is-task,
 .pf-map-wrap .pf-node.is-service,
+.pf-map-wrap .pf-node.is-subprocess,
 .pf-map-wrap .pf-node.is-other {
   width: 168px;
   min-width: 168px;
@@ -4402,8 +4461,12 @@
 }
 
 .pf-map-wrap .react-flow__edgelabel-renderer {
-  z-index: 6;
+  z-index: 3;
   pointer-events: none;
+}
+
+.pf-map-wrap .pf-edge-label {
+  z-index: 3;
 }
 
 .pf-map-wrap .pf-edge-label.is-dim {
@@ -4411,7 +4474,11 @@
 }
 
 .pf-map-wrap .pf-edge-label.is-onpath {
-  z-index: 10;
+  z-index: 4;
+}
+
+.pf-map-wrap .react-flow__node-processStep {
+  z-index: 6;
 }
 
 .pf-page {
@@ -4534,6 +4601,23 @@
 
 .pf-node.is-service {
   background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+
+.pf-node.is-subprocess {
+  border-width: 2px;
+  border-style: double;
+  background: color-mix(in srgb, #6b5b95 6%, #fff);
+}
+
+.pf-node-subproc {
+  display: block;
+  margin-top: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: color-mix(in srgb, #6b5b95 75%, var(--ink));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pf-dummy {
