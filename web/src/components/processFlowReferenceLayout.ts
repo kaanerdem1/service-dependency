@@ -52,9 +52,17 @@ export const KTF_REFERENCE_POSITIONS: Record<string, { x: number; y: number }> =
     "x": 5060,
     "y": 49.2
   },
+  // NOT: Bu iki düğüm ("Krediler Yönetimi Onay", "PBSMUD") sinyal ile
+  // başlayan, start'tan gerçek bir geçişle erişilemeyen düğümler — ama
+  // İKİSİ de "Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?" kararına
+  // "Onayla" ile bağlanıyor (bkz. KRDY / PKİŞL-PKONAY / PKİŞL-KRDİŞL-PKONAY
+  // / TARYET — aynı kararın öncülleri, hepsi x=5560 sütununda). Onaylanmış
+  // referansta yanlışlıkla start'ın hemen altına (x=60) konmuşlardı; bu,
+  // gerçek bağlantıları (ileride, x=5810) ile çelişip okun akışın tamamını
+  // yatay olarak kesmesine yol açıyordu. Aynı öncül sütununa taşındı.
   "Krediler Yönetimi Onay": {
-    "x": 60,
-    "y": 508.4
+    "x": 5560,
+    "y": 377.2
   },
   "Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?": {
     "x": 5810,
@@ -245,8 +253,8 @@ export const KTF_REFERENCE_POSITIONS: Record<string, { x: number; y: number }> =
     "y": 295.2
   },
   "PBSMUD": {
-    "x": 60,
-    "y": 918.4
+    "x": 5560,
+    "y": 459.2
   },
   "KTF PBSMUD Onayı": {
     "x": 7310,
@@ -336,7 +344,7 @@ export const KTF_REFERENCE_ROUTES: Record<string, ReferenceRoute> = {
     "route": "direct"
   },
   "Krediler Yönetimi Onay\u0000Reddet": {
-    "route": "direct"
+    "route": "jump"
   },
   "Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?\u0000Masraf Bölge Yetkisinde mi?": {
     "route": "direct"
@@ -612,7 +620,7 @@ export const KTF_REFERENCE_ROUTES: Record<string, ReferenceRoute> = {
     "route": "direct"
   },
   "PBSMUD\u0000Reddet": {
-    "route": "direct"
+    "route": "jump"
   },
   "PBSMUD\u0000Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?": {
     "route": "direct"

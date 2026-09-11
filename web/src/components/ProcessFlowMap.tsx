@@ -96,15 +96,22 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
 /** Üstten sadece giriş kabul edilir, hiçbir zaman çıkış olmaz — bir düğümün
  * üzerinden ok başlatmak, akışı okurken "bu adımdan mı çıkıyor, mu giriyor"
  * karışıklığına yol açıyordu. Çıkışlar sadece sağdan (ileri) veya alttan
- * (uzak sıçrama) olur. */
+ * (uzak sıçrama) olur.
+ *
+ * Alttaki iki handle ('b' çıkış, 'bi' giriş) kasıtlı olarak farklı X
+ * noktalarına oturtulur (%38 / %62) — ikisi de tam ortada (varsayılan %50)
+ * olsaydı, bir düğüme alttan gelen "jump" oku ile o düğümden alta çıkan
+ * başka bir "jump" oku BİREBİR aynı pikselden giriş/çıkış yapardı; bu da
+ * hangisinin giriş hangisinin çıkış olduğunu ayırt edilemez hale getiriyordu
+ * (bkz. 105116 "Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?" kararı). */
 function Ports() {
   return (
     <>
       <Handle id="l" type="target" position={Position.Left} className="pf-h" />
       <Handle id="r" type="source" position={Position.Right} className="pf-h" />
       <Handle id="ti" type="target" position={Position.Top} className="pf-h" />
-      <Handle id="b" type="source" position={Position.Bottom} className="pf-h" />
-      <Handle id="bi" type="target" position={Position.Bottom} className="pf-h" />
+      <Handle id="b" type="source" position={Position.Bottom} className="pf-h" style={{ left: '62%' }} />
+      <Handle id="bi" type="target" position={Position.Bottom} className="pf-h" style={{ left: '38%' }} />
     </>
   )
 }
