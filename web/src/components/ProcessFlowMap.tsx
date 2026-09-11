@@ -886,7 +886,7 @@ function pathToTarget(
 
 type PathHighlight = NonNullable<ReturnType<typeof pathToTarget>>
 
-/** Snapshot görseli: hedef adımın bir sonraki adım(lar)ını da dahil et. */
+/** Odak düğümün hemen sonraki adım(lar)ını da vurguya dahil et (chart + snapshot). */
 function extendPathOneStepForward(
   graph: ProcessFlowGraph,
   path: PathHighlight,
@@ -1483,7 +1483,7 @@ function ProcessFlowMapInner({
     const path = pathToTarget(graph, realFocus, edges)
     if (!path) return null
     path.nodeIds.add(focusId)
-    return path
+    return extendPathOneStepForward(graph, path, focusId, edges)
   }, [edges, focusId, graph])
 
   const neighborhood = useMemo(() => {
@@ -1516,30 +1516,6 @@ function ProcessFlowMapInner({
     })
   }, [selectedNodeId, pathToFocus, graph])
 
-  const snapshotExportPath = useMemo(() => {
-    if (!pathToFocus || !selectedNodeId) return null
-    return extendPathOneStepForward(graph, pathToFocus, selectedNodeId, edges)
-  }, [graph, pathToFocus, selectedNodeId, edges])
-
-  const snapshotExportSteps = useMemo(() => {
-    if (!selectedNodeId || !pathToFocus || !snapshotExportPath) return selectedPathSteps
-    const byId = new Map(graph.nodes.map((n) => [n.id, n]))
-    const seen = new Set(selectedPathSteps.map((s) => s.id))
-    const extra = snapshotExportPath.orderedIds
-      .filter((id) => !seen.has(id))
-      .map((id) => {
-        const n = byId.get(id)
-        const fromEdge = graph.edges.find((e) => e.from === selectedNodeId && e.to === id)
-        return {
-          id,
-          name: n?.name ?? id,
-          kind: (n?.kind ?? 'other') as ProcessFlowNodeKind,
-          label: fromEdge?.label?.trim() || undefined,
-        }
-      })
-    return extra.length > 0 ? [...selectedPathSteps, ...extra] : selectedPathSteps
-  }, [selectedNodeId, pathToFocus, snapshotExportPath, selectedPathSteps, graph])
-
   const shownNodes = useMemo(() => {
     const base = nodes.map((n) => {
       if (n.type === 'processNote') {
@@ -1567,11 +1543,11 @@ function ProcessFlowMapInner({
     })
     const processOnly = decorated.filter((n) => n.type !== 'processNote')
     const notes = decorated.filter((n) => n.type === 'processNote')
-    if (snapshotCapturing && snapshotExportPath) {
+    if (snapshotCapturing && pathToFocus) {
       return processOnly.filter(
         (n) =>
-          snapshotExportPath.nodeIds.has(n.id) ||
-          snapshotExportPath.nodeIds.has(sinkCopyRealId(n.id)),
+          pathToFocus.nodeIds.has(n.id) ||
+          pathToFocus.nodeIds.has(sinkCopyRealId(n.id)),
       )
     }
     return [
@@ -1579,7 +1555,7 @@ function ProcessFlowMapInner({
       ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
       ...notes,
     ]
-  }, [neighborhood, nodes, selectedNodeId, snapshotCapturing, snapshotExportPath])
+  }, [neighborhood, nodes, selectedNodeId, snapshotCapturing, pathToFocus])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -1593,14 +1569,14 @@ function ProcessFlowMapInner({
         data: { ...data, active, dim: !active },
       }
     })
-    if (snapshotCapturing && snapshotExportPath) {
-      return decorated.filter((e) => snapshotExportPath.edgeIds.has(e.id))
+    if (snapshotCapturing && pathToFocus) {
+      return decorated.filter((e) => pathToFocus.edgeIds.has(e.id))
     }
     return [
       ...decorated.filter((e) => !e.data.active),
       ...decorated.filter((e) => e.data.active),
     ]
-  }, [edges, neighborhood, snapshotCapturing, snapshotExportPath])
+  }, [edges, neighborhood, snapshotCapturing, pathToFocus])
 
   const onNodeMouseEnter = useCallback((_: unknown, node: Node) => {
     if (node.type === 'processNote') return
@@ -1669,7 +1645,7 @@ function ProcessFlowMapInner({
   const closeDetail = useCallback(() => setSelectedNodeId(undefined), [])
 
   const handleSnapshot = useCallback(async () => {
-    if (!selectedNode || !snapshotExportPath || snapshotBusy) return
+    if (!selectedNode || !pathToFocus || snapshotBusy) return
     setSnapshotBusy(true)
     try {
       setSnapshotCapturing(true)
@@ -1679,7 +1655,7 @@ function ProcessFlowMapInner({
       const el = mapCanvasRef.current
       if (!el) throw new Error('Harita elementi bulunamadı')
       const snapshotPathEdges = edges
-        .filter((e) => snapshotExportPath.edgeIds.has(e.id))
+        .filter((e) => pathToFocus.edgeIds.has(e.id))
         .map((e) => {
           const fromId = sinkCopyRealId(e.source)
           const toId = sinkCopyRealId(e.target)
@@ -1689,10 +1665,10 @@ function ProcessFlowMapInner({
         })
       await exportProcessPathSnapshotPdf({
         mapEl: el,
-        pathNodeIds: snapshotExportPath.nodeIds,
+        pathNodeIds: pathToFocus.nodeIds,
         pathEdges: snapshotPathEdges,
         getNodes,
-        steps: snapshotExportSteps,
+        steps: selectedPathSteps,
         processTitle: summary.title,
         processNo,
         targetName: selectedNode.name,
@@ -1708,10 +1684,10 @@ function ProcessFlowMapInner({
     }
   }, [
     selectedNode,
-    snapshotExportPath,
+    pathToFocus,
     snapshotBusy,
     getNodes,
-    snapshotExportSteps,
+    selectedPathSteps,
     summary.title,
     processNo,
     edges,
