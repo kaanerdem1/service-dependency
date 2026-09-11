@@ -633,8 +633,45 @@ function layeredLayout(graph: ProcessFlowGraph) {
       }
     }
   }
-  for (const n of graph.nodes) {
-    if (n.kind !== 'dummy' && !hop.has(n.id)) hop.set(n.id, 0)
+  // start'tan ileri okla erişilemeyen düğümler (örn. hiçbir geçiş
+  // göstermeyen kopuk bir dallanma) eskiden hop=0'a, yani start ile aynı en
+  // sol sütuna düşüyordu — akış "solda görev/karar/bitiş" gibi tuhaf
+  // görünüyordu. Bunun yerine: bu düğümler kendi aralarında (giren oku
+  // sadece kendi kopuk kümesinden olan "kök"lerden başlayarak) ileri doğru
+  // sıralanır ve ana akışın SAĞINA, yeni bir bölüm gibi eklenir.
+  let maxReachedHop = 0
+  for (const h of hop.values()) maxReachedHop = Math.max(maxReachedHop, h)
+  const unreached = graph.nodes
+    .filter((n) => n.kind !== 'dummy' && !hop.has(n.id))
+    .map((n) => n.id)
+  if (unreached.length > 0) {
+    const unreachedSet = new Set(unreached)
+    const indegree = new Map<string, number>(unreached.map((id) => [id, 0]))
+    for (const id of unreached) {
+      for (const to of children.get(id) ?? []) {
+        if (unreachedSet.has(to)) indegree.set(to, (indegree.get(to) ?? 0) + 1)
+      }
+    }
+    const uq: string[] = unreached
+      .filter((id) => (indegree.get(id) ?? 0) === 0)
+      .sort((a, b) => a.localeCompare(b, 'tr'))
+    for (const id of uq) hop.set(id, maxReachedHop + 1)
+    while (uq.length) {
+      const from = uq.shift()!
+      const h = hop.get(from) ?? maxReachedHop + 1
+      for (const to of children.get(from) ?? []) {
+        if (!unreachedSet.has(to)) continue
+        const next = h + 1
+        if (!hop.has(to) || next < hop.get(to)!) {
+          hop.set(to, next)
+          uq.push(to)
+        }
+      }
+    }
+    // Kopuk bir döngü (hepsi indegree>0) ya da yine de atlanan olursa son çare.
+    for (const id of unreached) {
+      if (!hop.has(id)) hop.set(id, maxReachedHop + 1)
+    }
   }
   const byHop = new Map<number, string[]>()
   for (const [id, h] of hop) {
