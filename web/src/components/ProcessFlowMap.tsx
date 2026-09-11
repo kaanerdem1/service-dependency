@@ -299,10 +299,13 @@ function kitEdgePath(
   if (route === 'back') {
     const railY = (referenceRailY ?? bandMinY - RAIL_PAD) + lift
     const r = roundBack(railY)
-    // Çıkış: kaynağın sağ kenarından dikey olarak rayına yükselir (yön:
-    // yukarı), rayda geniş bir yay ile sola döner, hedefin üstüne aynı
-    // şekilde geniş bir yayla iner — köşeler her zaman C1-sürekli (Q eğrisi).
-    const path = `M ${sourceX},${sourceY} L ${sourceX},${railY + r} Q ${sourceX},${railY} ${sourceX - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
+    // Çıkış: düğümün sağından hemen dikey fırlamak yerine önce biraz sağa
+    // (yataya) açılıp, sonra rayına yumuşakça kıvrılarak yükselir. Aynı
+    // sütundaki birden fazla görevin çıkışı böylece üst üste binen dümdüz
+    // dikey çizgiler gibi görünmez; her biri kendi düğümünden ayrışarak,
+    // eğri bir "kanca" ile çıkar — yön daha net okunur.
+    const kx = Math.max(16, Math.min(34, r + 8))
+    const path = `M ${sourceX},${sourceY} C ${sourceX + kx},${sourceY} ${sourceX + kx},${railY + r} ${sourceX + kx},${railY + r} Q ${sourceX + kx},${railY} ${sourceX + kx - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
   const railY = (referenceRailY ?? bandMaxY + RAIL_PAD) + lift
