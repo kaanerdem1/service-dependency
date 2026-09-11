@@ -131,49 +131,6 @@ function sanitizeAttributesForXml(root: HTMLElement): Array<() => void> {
   return restores
 }
 
-/**
- * html-to-image, SVG `marker-end` referanslarını (ok başları) genelde
- * PNG'ye aktaramaz — bu yüzden her kenarın ucuna gerçek bir <polygon> ok
- * başı ekleyip marker-end'i kaldırıyoruz. Ayrıca XML için geçersiz
- * karakterleri de temizliyoruz (yukarıya bkz). Bu, YAKALAMA hedefindeki
- * CANLI DOM'u geçici olarak değiştirir; bu yüzden çağıran taraf dönen
- * `restore()` fonksiyonunu yakalama bitince MUTLAKA çağırmalı (ekrandaki
- * oklar/id'ler kalıcı olarak bozulmasın).
- */
-function prepareForCapture(root: HTMLElement): () => void {
-  const restores: Array<() => void> = [...sanitizeAttributesForXml(root)]
-  root.querySelectorAll<SVGPathElement>('.react-flow__edge path').forEach((path) => {
-    if (path.classList.contains('react-flow__edge-interaction')) return
-    const len = path.getTotalLength()
-    if (len < 6) return
-    const prevMarker = path.getAttribute('marker-end')
-    const prevMarkerStyle = path.style.markerEnd
-    const color = path.getAttribute('stroke') || getComputedStyle(path).stroke || '#94a3b8'
-    const tip = path.getPointAtLength(len)
-    const base = path.getPointAtLength(Math.max(0, len - 12))
-    const angle = Math.atan2(tip.y - base.y, tip.x - base.x)
-    const size = 8
-    const wing = Math.PI / 6.5
-    const x1 = tip.x - size * Math.cos(angle - wing)
-    const y1 = tip.y - size * Math.sin(angle - wing)
-    const x2 = tip.x - size * Math.cos(angle + wing)
-    const y2 = tip.y - size * Math.sin(angle + wing)
-    const headEl = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
-    headEl.setAttribute('points', `${tip.x},${tip.y} ${x1},${y1} ${x2},${y2}`)
-    headEl.setAttribute('fill', color)
-    headEl.style.setProperty('fill', color, 'important')
-    path.parentElement?.appendChild(headEl)
-    path.removeAttribute('marker-end')
-    path.style.markerEnd = 'none'
-    restores.push(() => {
-      headEl.remove()
-      if (prevMarker) path.setAttribute('marker-end', prevMarker)
-      path.style.markerEnd = prevMarkerStyle
-    })
-  })
-  return () => restores.forEach((fn) => fn())
-}
-
 function waitPaint(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 }
@@ -194,8 +151,14 @@ const SNAKE_PADDING = 40
 const SNAKE_ARROW_COLOR = '#2563eb'
 const FALLBACK_NODE_W = 190
 const FALLBACK_NODE_H = 70
+/** Snapshot okları düğüm kutularından en az bu kadar uzak kalır. */
+const ROUTE_CLEARANCE = 14
+/** Aynı düğüm kenarındaki portlar arası minimum mesafe (px). */
+const PORT_SPREAD = 22
 
 type SnakeItem = { id: string; x: number; y: number; w: number; h: number; rowIdx: number; dir: 1 | -1 }
+type SnapRect = { l: number; r: number; t: number; b: number }
+type Pt = { x: number; y: number }
 
 /**
  * Yol çok genişse (tek sıraya sığmıyorsa), düğümleri "yılan" (boustrophedon)
@@ -251,6 +214,52 @@ function packSnakeRows(
   })
 
   return { laid, width: canvasWidth, height: Math.max(0, y - SNAKE_ROW_GAP) }
+}
+
+/** Kısa yollar: canlı grafik konumlarını koru, okları snapshot katmanında çiz. */
+function packNaturalLayout(
+  pathNodes: Node[],
+  steps: ProcessPathSnapshotStep[],
+  bounds: { x: number; y: number },
+): { laid: SnakeItem[]; width: number; height: number } {
+  const nodeById = new Map<string, Node>()
+  for (const n of pathNodes) {
+    nodeById.set(n.id, n)
+    const real = sinkCopyRealId(n.id)
+    if (real !== n.id) nodeById.set(real, n)
+  }
+
+  const raw: Array<{ id: string; x: number; y: number; w: number; h: number }> = []
+  for (const s of steps) {
+    const n = nodeById.get(s.id)
+    raw.push({
+      id: s.id,
+      x: (n?.position.x ?? 0) - bounds.x,
+      y: (n?.position.y ?? 0) - bounds.y,
+      w: n?.width ?? FALLBACK_NODE_W,
+      h: n?.height ?? FALLBACK_NODE_H,
+    })
+  }
+
+  raw.sort((a, b) => a.y - b.y || a.x - b.x)
+  const laid: SnakeItem[] = []
+  let rowIdx = 0
+  let anchorY = -Infinity
+  for (const item of raw) {
+    if (item.y - anchorY > 56) {
+      rowIdx++
+      anchorY = item.y
+    }
+    laid.push({
+      ...item,
+      rowIdx,
+      dir: rowIdx % 2 === 0 ? 1 : -1,
+    })
+  }
+
+  const width = Math.max(0, ...laid.map((l) => l.x + l.w))
+  const height = Math.max(0, ...laid.map((l) => l.y + l.h))
+  return { laid, width, height }
 }
 
 /**
@@ -332,102 +341,318 @@ function pickSnakePorts(cur: SnakeItem, next: SnakeItem, pad: number): { from: S
   return { from: snakePort(cur, 'top', pad), to: snakePort(next, 'bottom', pad) }
 }
 
-function cubicControl(from: SnakePort, to: SnakePort): { c1x: number; c1y: number; c2x: number; c2y: number } {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const k = Math.max(36, Math.min(Math.hypot(dx, dy) * 0.42, 140))
-  let c1x = from.x
-  let c1y = from.y
-  let c2x = to.x
-  let c2y = to.y
-  switch (from.side) {
-    case 'right':
-      c1x = from.x + k
-      c1y = from.y
-      break
-    case 'left':
-      c1x = from.x - k
-      c1y = from.y
-      break
-    case 'bottom':
-      c1x = from.x
-      c1y = from.y + k
-      break
-    case 'top':
-      c1x = from.x
-      c1y = from.y - k
-      break
-  }
-  switch (to.side) {
-    case 'left':
-      c2x = to.x - k
-      c2y = to.y
-      break
-    case 'right':
-      c2x = to.x + k
-      c2y = to.y
-      break
-    case 'top':
-      c2x = to.x
-      c2y = to.y - k
-      break
-    case 'bottom':
-      c2x = to.x
-      c2y = to.y + k
-      break
-  }
-  return { c1x, c1y, c2x, c2y }
+function inflateRect(r: SnapRect, m: number): SnapRect {
+  return { l: r.l - m, r: r.r + m, t: r.t - m, b: r.b + m }
 }
 
-function cubicPoint(
-  from: SnakePort,
-  c1x: number,
-  c1y: number,
-  c2x: number,
-  c2y: number,
-  to: SnakePort,
-  t: number,
-): { x: number; y: number } {
-  const u = 1 - t
+function rectsOverlap(a: SnapRect, b: SnapRect, gap = 0): boolean {
+  return a.l - gap < b.r && a.r + gap > b.l && a.t - gap < b.b && a.b + gap > b.t
+}
+
+function portKey(p: SnakePort): string {
+  return `${Math.round(p.x * 10)}:${Math.round(p.y * 10)}`
+}
+
+function nudgePort(
+  item: SnakeItem,
+  side: SnakePort['side'],
+  pad: number,
+  baseSpread: number,
+  attempt: number,
+): SnakePort {
+  return snakePort(item, side, pad, baseSpread + attempt * 7)
+}
+
+function assignSnapshotPorts(
+  pathEdges: PathEdgeDraw[],
+  laidById: Map<string, SnakeItem>,
+  pad: number,
+): Map<string, { from: SnakePort; to: SnakePort }> {
+  type SideGroup = { edge: PathEdgeDraw; item: SnakeItem; side: SnakePort['side']; role: 'from' | 'to' }[]
+  const srcGroups = new Map<string, SideGroup>()
+  const tgtGroups = new Map<string, SideGroup>()
+  const baseSide = new Map<string, { fromSide: SnakePort['side']; toSide: SnakePort['side'] }>()
+
+  for (const pe of pathEdges) {
+    const cur = laidById.get(pe.fromId)
+    const next = laidById.get(pe.toId)
+    if (!cur || !next) continue
+    const base = pickSnakePorts(cur, next, pad)
+    const ek = `${pe.fromId}\0${pe.toId}`
+    baseSide.set(ek, { fromSide: base.from.side, toSide: base.to.side })
+    const sk = `${pe.fromId}:${base.from.side}:out`
+    const tk = `${pe.toId}:${base.to.side}:in`
+    const sg = srcGroups.get(sk) ?? []
+    sg.push({ edge: pe, item: cur, side: base.from.side, role: 'from' })
+    srcGroups.set(sk, sg)
+    const tg = tgtGroups.get(tk) ?? []
+    tg.push({ edge: pe, item: next, side: base.to.side, role: 'to' })
+    tgtGroups.set(tk, tg)
+  }
+
+  const used = new Set<string>()
+  const ports = new Map<string, { from?: SnakePort; to?: SnakePort }>()
+
+  const placeGroup = (groups: Map<string, SideGroup>, role: 'from' | 'to') => {
+    for (const [, list] of groups) {
+      list.sort((a, b) => {
+        const otherA = role === 'from' ? a.edge.toId : a.edge.fromId
+        const otherB = role === 'from' ? b.edge.toId : b.edge.fromId
+        const pa = laidById.get(otherA)
+        const pb = laidById.get(otherB)
+        const ya = pa?.y ?? 0
+        const yb = pb?.y ?? 0
+        return ya - yb || a.edge.fromId.localeCompare(b.edge.fromId)
+      })
+      const n = list.length
+      list.forEach((entry, idx) => {
+        const spread = n <= 1 ? 0 : (idx - (n - 1) / 2) * PORT_SPREAD
+        let port = snakePort(entry.item, entry.side, pad, spread)
+        let attempt = 0
+        while (used.has(portKey(port)) && attempt < 12) {
+          port = nudgePort(entry.item, entry.side, pad, spread, attempt + 1)
+          attempt++
+        }
+        used.add(portKey(port))
+        const ek = `${entry.edge.fromId}\0${entry.edge.toId}`
+        const slot = ports.get(ek) ?? {}
+        if (role === 'from') slot.from = port
+        else slot.to = port
+        ports.set(ek, slot)
+      })
+    }
+  }
+
+  placeGroup(srcGroups, 'from')
+  placeGroup(tgtGroups, 'to')
+
+  const out = new Map<string, { from: SnakePort; to: SnakePort }>()
+  for (const pe of pathEdges) {
+    const ek = `${pe.fromId}\0${pe.toId}`
+    const p = ports.get(ek)
+    const cur = laidById.get(pe.fromId)
+    const next = laidById.get(pe.toId)
+    const sides = baseSide.get(ek)
+    if (!p?.from || !p?.to || !cur || !next || !sides) continue
+    out.set(ek, { from: p.from, to: p.to })
+  }
+  return out
+}
+
+function clearHorizontalRail(y: number, x1: number, x2: number, obstacles: SnapRect[]): number {
+  const lo = Math.min(x1, x2)
+  const hi = Math.max(x1, x2)
+  let rail = y
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const hit = obstacles.some((o) => o.l < hi && o.r > lo && o.t < rail + 4 && o.b > rail - 4)
+    if (!hit) return rail
+    rail += 16
+  }
+  return rail
+}
+
+function polylineLength(pts: Pt[]): number {
+  let len = 0
+  for (let i = 1; i < pts.length; i++) {
+    len += Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
+  }
+  return len
+}
+
+function pointAlongPolyline(pts: Pt[], dist: number): { p: Pt; angle: number } {
+  if (pts.length < 2) return { p: pts[0] ?? { x: 0, y: 0 }, angle: 0 }
+  let left = dist
+  for (let i = 1; i < pts.length; i++) {
+    const seg = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y)
+    if (left <= seg || i === pts.length - 1) {
+      const t = seg > 0 ? Math.min(1, left / seg) : 0
+      return {
+        p: {
+          x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t,
+          y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t,
+        },
+        angle: Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x),
+      }
+    }
+    left -= seg
+  }
+  const last = pts.length - 1
   return {
-    x: u ** 3 * from.x + 3 * u ** 2 * t * c1x + 3 * u * t ** 2 * c2x + t ** 3 * to.x,
-    y: u ** 3 * from.y + 3 * u ** 2 * t * c1y + 3 * u * t ** 2 * c2y + t ** 3 * to.y,
+    p: pts[last],
+    angle: Math.atan2(pts[last].y - pts[last - 1].y, pts[last].x - pts[last - 1].x),
   }
 }
 
-function buildSnakeBezierPath(
+function smoothPathFromPoints(pts: Pt[]): string {
+  if (pts.length < 2) return ''
+  if (pts.length === 2) {
+    const [a, b] = pts
+    const k = Math.min(36, Math.hypot(b.x - a.x, b.y - a.y) * 0.38)
+    const c1x = a.x + (b.x > a.x ? k : b.x < a.x ? -k : 0)
+    const c1y = a.y + (b.y > a.y ? k : b.y < a.y ? -k : 0)
+    const c2x = b.x + (b.x > a.x ? -k : b.x < a.x ? k : 0)
+    const c2y = b.y + (b.y > a.y ? -k : b.y < a.y ? k : 0)
+    return `M ${a.x},${a.y} C ${c1x},${c1y} ${c2x},${c2y} ${b.x},${b.y}`
+  }
+  let d = `M ${pts[0].x},${pts[0].y}`
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1]
+    const curr = pts[i]
+    const next = pts[i + 1]
+    if (!next) {
+      d += ` L ${curr.x},${curr.y}`
+      continue
+    }
+    const r = 10
+    const dx1 = curr.x - prev.x
+    const dy1 = curr.y - prev.y
+    const len1 = Math.hypot(dx1, dy1) || 1
+    const dx2 = next.x - curr.x
+    const dy2 = next.y - curr.y
+    const len2 = Math.hypot(dx2, dy2) || 1
+    const p1 = { x: curr.x - (dx1 / len1) * Math.min(r, len1 / 2), y: curr.y - (dy1 / len1) * Math.min(r, len1 / 2) }
+    const p2 = { x: curr.x + (dx2 / len2) * Math.min(r, len2 / 2), y: curr.y + (dy2 / len2) * Math.min(r, len2 / 2) }
+    d += ` L ${p1.x},${p1.y} Q ${curr.x},${curr.y} ${p2.x},${p2.y}`
+  }
+  return d
+}
+
+function routeSnapshotEdge(
   from: SnakePort,
   to: SnakePort,
-): { d: string; tipX: number; tipY: number; angle: number; labelX: number; labelY: number } {
-  const { c1x, c1y, c2x, c2y } = cubicControl(from, to)
-  const d = `M ${from.x},${from.y} C ${c1x},${c1y} ${c2x},${c2y} ${to.x},${to.y}`
+  fromItem: SnakeItem,
+  toItem: SnakeItem,
+  allItems: SnakeItem[],
+  pad: number,
+): { d: string; poly: Pt[]; tipX: number; tipY: number; angle: number } {
+  const blocks = allItems
+    .filter((it) => it.id !== fromItem.id && it.id !== toItem.id)
+    .map((it) => inflateRect(snakeNodeRect(it, pad), ROUTE_CLEARANCE))
 
-  const u = 0.001
-  const near = cubicPoint(from, c1x, c1y, c2x, c2y, to, 1 - u)
-  const angle = Math.atan2(to.y - near.y, to.x - near.x)
+  const sameRow = fromItem.rowIdx === toItem.rowIdx
+  let pts: Pt[]
 
-  const mid = cubicPoint(from, c1x, c1y, c2x, c2y, to, 0.5)
-  // Etiket eğriye dik hafif kaydır — hangi ok olduğu daha net
-  const nx = -(to.y - from.y)
-  const ny = to.x - from.x
-  const nlen = Math.hypot(nx, ny) || 1
-  const labelOff = 14
-  return {
-    d,
-    tipX: to.x,
-    tipY: to.y,
-    angle,
-    labelX: mid.x + (nx / nlen) * labelOff,
-    labelY: mid.y + (ny / nlen) * labelOff,
+  if (sameRow) {
+    const corridorY = (from.y + to.y) / 2
+    const xLo = Math.min(from.x, to.x)
+    const xHi = Math.max(from.x, to.x)
+    const blocking = blocks.filter(
+      (o) => o.r > xLo && o.l < xHi && o.b > corridorY - 18 && o.t < corridorY + 18,
+    )
+    if (blocking.length === 0 && Math.abs(from.y - to.y) < 6) {
+      pts = [from, to]
+    } else {
+      const arcY =
+        blocking.length > 0
+          ? Math.min(...blocking.map((o) => o.t)) - ROUTE_CLEARANCE
+          : corridorY - ROUTE_CLEARANCE
+      pts = [
+        from,
+        { x: from.x, y: arcY },
+        { x: to.x, y: arcY },
+        to,
+      ]
+    }
+  } else {
+    const fromR0 = snakeNodeRect(fromItem, pad)
+    const toR0 = snakeNodeRect(toItem, pad)
+    let railY =
+      toItem.rowIdx > fromItem.rowIdx
+        ? fromR0.b + SNAKE_ROW_GAP / 2
+        : toR0.b + SNAKE_ROW_GAP / 2
+    railY = clearHorizontalRail(railY, from.x, to.x, blocks)
+
+    const stub = 18
+    const exit: Pt = { ...from }
+    switch (from.side) {
+      case 'right':
+        exit.x = from.x + stub
+        break
+      case 'left':
+        exit.x = from.x - stub
+        break
+      case 'bottom':
+        exit.y = from.y + stub
+        break
+      case 'top':
+        exit.y = from.y - stub
+        break
+    }
+
+    const entry: Pt = { ...to }
+    switch (to.side) {
+      case 'left':
+        entry.x = to.x - stub
+        break
+      case 'right':
+        entry.x = to.x + stub
+        break
+      case 'top':
+        entry.y = to.y - stub
+        break
+      case 'bottom':
+        entry.y = to.y + stub
+        break
+    }
+
+    pts = [from, exit, { x: exit.x, y: railY }, { x: entry.x, y: railY }, entry, to]
   }
+
+  const d = smoothPathFromPoints(pts)
+  const total = polylineLength(pts)
+  const near = pointAlongPolyline(pts, Math.max(0, total - 8))
+  return { d, poly: pts, tipX: to.x, tipY: to.y, angle: near.angle }
 }
 
-function buildSnakeCaptureContainer(
+type SnapshotLabel = {
+  edgeKey: string
+  text: string
+  x: number
+  y: number
+  angle: number
+}
+
+function labelBox(l: SnapshotLabel): SnapRect {
+  const w = Math.max(34, l.text.length * 6.5 + 16)
+  const h = 18
+  return { l: l.x - w / 2, r: l.x + w / 2, t: l.y - h / 2, b: l.y + h / 2 }
+}
+
+function resolveSnapshotLabels(labels: SnapshotLabel[], nodeRects: SnapRect[]): SnapshotLabel[] {
+  const resolved = labels.map((l) => ({ ...l }))
+  const maxIter = 40
+  for (let iter = 0; iter < maxIter; iter++) {
+    let moved = false
+    for (let i = 0; i < resolved.length; i++) {
+      const lb = labelBox(resolved[i])
+      for (const nr of nodeRects) {
+        if (!rectsOverlap(lb, nr, 4)) continue
+        resolved[i].y -= 14
+        resolved[i].x += 8
+        moved = true
+      }
+      for (let j = i + 1; j < resolved.length; j++) {
+        const lb2 = labelBox(resolved[j])
+        if (!rectsOverlap(lb, lb2, 6)) continue
+        resolved[j].y += 16
+        resolved[j].x += 12
+        resolved[i].x -= 8
+        moved = true
+      }
+    }
+    if (!moved) break
+  }
+  return resolved
+}
+
+function buildSnapshotCaptureContainer(
   mountEl: HTMLElement,
   viewportEl: HTMLElement,
   pathNodes: Node[],
   steps: ProcessPathSnapshotStep[],
   pathEdges: PathEdgeDraw[],
+  layout: 'snake' | 'natural',
+  bounds?: { x: number; y: number },
 ): { container: HTMLElement; width: number; height: number; cleanup: () => void } {
   const nodeById = new Map(pathNodes.map((n) => [n.id, n]))
   const liveElById = new Map<string, HTMLElement>()
@@ -443,8 +668,12 @@ function buildSnakeCaptureContainer(
     const n = nodeById.get(s.id)
     return { id: s.id, w: n?.width ?? FALLBACK_NODE_W, h: n?.height ?? FALLBACK_NODE_H }
   })
-  const { laid, width, height } = packSnakeRows(items)
+  const { laid, width, height } =
+    layout === 'snake'
+      ? packSnakeRows(items)
+      : packNaturalLayout(pathNodes, steps, bounds ?? { x: 0, y: 0 })
   const laidById = new Map(laid.map((l) => [l.id, l]))
+  const nodeRects = laid.map((item) => snakeNodeRect(item, SNAKE_PADDING))
 
   const container = document.createElement('div')
   container.className = 'pf-snake-capture-root'
@@ -481,44 +710,25 @@ function buildSnakeCaptureContainer(
     svg.appendChild(poly)
   }
 
-  // Aynı düğüm+kenardan çıkan çoklu okları dikey kaydır (etiket çakışmasını azalt)
-  const portUseCount = new Map<string, number>()
-  const portUseIndex = new Map<string, number>()
-  for (const pe of pathEdges) {
-    const cur = laidById.get(pe.fromId)
-    const next = laidById.get(pe.toId)
-    if (!cur || !next) continue
-    const base = pickSnakePorts(cur, next, SNAKE_PADDING)
-    portUseCount.set(`${pe.fromId}:${base.from.side}`, (portUseCount.get(`${pe.fromId}:${base.from.side}`) ?? 0) + 1)
-    portUseCount.set(`${pe.toId}:${base.to.side}`, (portUseCount.get(`${pe.toId}:${base.to.side}`) ?? 0) + 1)
-  }
-
-  function takePort(item: SnakeItem, side: SnakePort['side'], nodeId: string, role: 'from' | 'to'): SnakePort {
-    const key = `${nodeId}:${side}:${role}`
-    const total = portUseCount.get(`${nodeId}:${side}`) ?? 1
-    const idx = portUseIndex.get(key) ?? 0
-    portUseIndex.set(key, idx + 1)
-    const spread = 16
-    const offset = total <= 1 ? 0 : (idx - (total - 1) / 2) * spread
-    return snakePort(item, side, SNAKE_PADDING, offset)
-  }
+  const assignedPorts = assignSnapshotPorts(pathEdges, laidById, SNAKE_PADDING)
+  const pendingLabels: SnapshotLabel[] = []
 
   for (const pe of pathEdges) {
     const cur = laidById.get(pe.fromId)
     const next = laidById.get(pe.toId)
     if (!cur || !next) continue
+    const ek = `${pe.fromId}\0${pe.toId}`
+    const ports = assignedPorts.get(ek)
+    if (!ports) continue
 
-    const base = pickSnakePorts(cur, next, SNAKE_PADDING)
-    const from =
-      (portUseCount.get(`${pe.fromId}:${base.from.side}`) ?? 0) > 1
-        ? takePort(cur, base.from.side, pe.fromId, 'from')
-        : base.from
-    const to =
-      (portUseCount.get(`${pe.toId}:${base.to.side}`) ?? 0) > 1
-        ? takePort(next, base.to.side, pe.toId, 'to')
-        : base.to
-
-    const { d, tipX, tipY, angle, labelX, labelY } = buildSnakeBezierPath(from, to)
+    const { d, poly, tipX, tipY, angle } = routeSnapshotEdge(
+      ports.from,
+      ports.to,
+      cur,
+      next,
+      laid,
+      SNAKE_PADDING,
+    )
     const path = document.createElementNS(svgNs, 'path')
     path.setAttribute('fill', 'none')
     path.setAttribute('stroke', SNAKE_ARROW_COLOR)
@@ -527,27 +737,43 @@ function buildSnakeCaptureContainer(
     svg.appendChild(path)
     addArrowHead(tipX, tipY, angle)
 
-    const label = pe.label
+    const label = pe.label?.trim()
     if (label) {
-      const labelEl = document.createElement('div')
-      labelEl.textContent = label
-      labelEl.style.position = 'absolute'
-      labelEl.style.left = `${labelX}px`
-      labelEl.style.top = `${labelY}px`
-      labelEl.style.transform = 'translate(-50%, -50%)'
-      labelEl.style.fontSize = '10px'
-      labelEl.style.fontWeight = '600'
-      labelEl.style.fontFamily = 'Inter, Arial, sans-serif'
-      labelEl.style.color = '#1e40af'
-      labelEl.style.background = '#ffffff'
-      labelEl.style.padding = '2px 6px'
-      labelEl.style.borderRadius = '6px'
-      labelEl.style.border = '1px solid #93c5fd'
-      labelEl.style.boxShadow = '0 1px 2px rgba(15,23,42,0.08)'
-      labelEl.style.whiteSpace = 'nowrap'
-      labelEl.style.zIndex = '40'
-      container.appendChild(labelEl)
+      const total = polylineLength(poly)
+      const at = pointAlongPolyline(poly, Math.min(total * 0.28, 72))
+      const nx = -Math.sin(at.angle)
+      const ny = Math.cos(at.angle)
+      pendingLabels.push({
+        edgeKey: ek,
+        text: label,
+        x: at.p.x + nx * 14,
+        y: at.p.y + ny * 14,
+        angle: at.angle,
+      })
     }
+  }
+
+  const resolvedLabels = resolveSnapshotLabels(pendingLabels, nodeRects)
+  for (const lbl of resolvedLabels) {
+    const labelEl = document.createElement('div')
+    labelEl.textContent = lbl.text
+    labelEl.style.position = 'absolute'
+    labelEl.style.left = `${lbl.x}px`
+    labelEl.style.top = `${lbl.y}px`
+    labelEl.style.transform = 'translate(-50%, -50%)'
+    labelEl.style.fontSize = '10px'
+    labelEl.style.fontWeight = '600'
+    labelEl.style.fontFamily = 'Inter, Arial, sans-serif'
+    labelEl.style.color = '#1e40af'
+    labelEl.style.background = '#ffffff'
+    labelEl.style.padding = '2px 6px'
+    labelEl.style.borderRadius = '6px'
+    labelEl.style.border = '1px solid #93c5fd'
+    labelEl.style.boxShadow = '0 1px 2px rgba(15,23,42,0.08)'
+    labelEl.style.whiteSpace = 'nowrap'
+    labelEl.style.zIndex = '40'
+    labelEl.style.pointerEvents = 'none'
+    container.appendChild(labelEl)
   }
 
   let cloneCount = 0
@@ -615,77 +841,38 @@ export async function exportProcessPathSnapshotPdf(opts: {
   if (!viewportEl) throw new Error('React Flow viewport elementi bulunamadı')
 
   const bounds = getNodesBounds(pathNodes)
-  const PADDING = 48
-  const ZOOM = 1
 
-  // Yol tek satıra (SNAKE_MAX_ROW_WIDTH) sığıyorsa, canlı diyagramı olduğu
-  // gibi (mevcut, test edilmiş yöntemle) yakalıyoruz — bu durum zaten iyi
-  // çalışıyor, davranışı değiştirmiyoruz. Sığmıyorsa, düğümleri "yılan"
-  // (sağa-aşağı-sola-aşağı-sağa…) düzeninde yeniden dizip o bağımsız
-  // yapıyı yakalıyoruz; düğüm/ok boyutları aynı kalır, sadece daha kompakt
-  // bir bloğa katlanır.
-  const useSnake = bounds.width > SNAKE_MAX_ROW_WIDTH
-
+  // Snapshot görseli HER ZAMAN bağımsız bir katmanda üretilir — canlı
+  // ProcessFlowMap okları/etiketleri PDF'e yansımaz, chart'a dokunulmaz.
+  const useSnakeLayout = bounds.width > SNAKE_MAX_ROW_WIDTH
+  const { container, width, height, cleanup } = buildSnapshotCaptureContainer(
+    mapEl,
+    viewportEl,
+    pathNodes,
+    steps,
+    pathEdges,
+    useSnakeLayout ? 'snake' : 'natural',
+    { x: bounds.x, y: bounds.y },
+  )
+  const restore = sanitizeAttributesForXml(container)
   let dataUrl: string
-  if (useSnake) {
-    const { container, width, height, cleanup } = buildSnakeCaptureContainer(
-      mapEl,
-      viewportEl,
-      pathNodes,
-      steps,
-      pathEdges,
-    )
-    const restore = sanitizeAttributesForXml(container)
-    try {
-      await waitPaint()
-      await waitPaint()
-      const pixelRatio = Math.max(1, Math.min(2.5, 8000 / Math.max(width, height)))
-      dataUrl = await toPng(container, {
-        pixelRatio,
-        cacheBust: true,
-        backgroundColor: '#ffffff',
-        skipFonts: false,
-        width,
-        height,
-      })
-    } finally {
-      restore.forEach((fn) => fn())
-      cleanup()
-    }
-  } else {
-    const imageWidthRaw = Math.ceil((bounds.width + PADDING * 2) * ZOOM)
-    const imageHeightRaw = Math.ceil((bounds.height + PADDING * 2) * ZOOM)
-    const transformX = -bounds.x * ZOOM + PADDING
-    const transformY = -bounds.y * ZOOM + PADDING
-
-    // Çok geniş yollarda toplam canvas piksel sayısı tarayıcı sınırlarını
-    // aşmasın diye pixelRatio kademeli düşürülür — ama ZOOM her zaman 1
-    // kalır, yani metin asla küçülmez; sadece ekstra keskinlik (DPI) azalır.
-    const MAX_CANVAS_DIM = 8000
-    const pixelRatio = Math.max(
-      1,
-      Math.min(2.5, MAX_CANVAS_DIM / Math.max(imageWidthRaw, imageHeightRaw)),
-    )
-
-    const restore = prepareForCapture(viewportEl)
-    try {
-      await waitPaint()
-      dataUrl = await toPng(viewportEl, {
-        pixelRatio,
-        cacheBust: true,
-        backgroundColor: '#ffffff',
-        skipFonts: true,
-        width: imageWidthRaw,
-        height: imageHeightRaw,
-        style: {
-          width: `${imageWidthRaw}px`,
-          height: `${imageHeightRaw}px`,
-          transform: `translate(${transformX}px, ${transformY}px) scale(${ZOOM})`,
-        },
-      })
-    } finally {
-      restore()
-    }
+  try {
+    await waitPaint()
+    await waitPaint()
+    const captureW = width + SNAKE_PADDING * 2
+    const captureH = height + SNAKE_PADDING * 2
+    const pixelRatio = Math.max(1, Math.min(2.5, 8000 / Math.max(captureW, captureH)))
+    dataUrl = await toPng(container, {
+      pixelRatio,
+      cacheBust: true,
+      backgroundColor: '#ffffff',
+      skipFonts: false,
+      width: captureW,
+      height: captureH,
+    })
+  } finally {
+    restore.forEach((fn) => fn())
+    cleanup()
   }
 
   const img = await loadImage(dataUrl)
