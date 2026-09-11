@@ -36,6 +36,14 @@ function formatCriteria(criteria: Record<string, string>): string {
     .join(' · ')
 }
 
+export type ProcessPathStep = {
+  id: string
+  name: string
+  kind: ProcessFlowNodeKind
+  /** Bu adımdan bir sonraki adıma geçiş etiketi (varsa). */
+  label?: string
+}
+
 type Props = {
   open: boolean
   nodeId: string
@@ -47,6 +55,10 @@ type Props = {
   subProcessNo?: string
   incoming?: ProcessIncomingTransition[]
   outgoing?: ProcessOutgoingTransition[]
+  /** start'tan bu düğüme kadar sıralı kanonik yol — Snapshot export'u için. */
+  path?: ProcessPathStep[]
+  onSnapshot?: () => void
+  snapshotBusy?: boolean
   onClose: () => void
   onOpenService?: (serviceName: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string) => void
@@ -63,10 +75,14 @@ export function ProcessFlowDetailDrawer({
   subProcessNo,
   incoming = [],
   outgoing = [],
+  path = [],
+  onSnapshot,
+  snapshotBusy = false,
   onClose,
   onOpenService,
   onOpenSubProcess,
 }: Props) {
+  const hasPath = path.length > 1
   const rules = decisionInfo?.rules ?? []
   const hasDetails = (details?.groups.length ?? 0) > 0
   const hasRules = rules.length > 0
@@ -163,9 +179,48 @@ export function ProcessFlowDetailDrawer({
           </h2>
           <p className="pf-detail-drawer-id">{nodeId}</p>
         </div>
-        <button type="button" className="pf-detail-drawer-close" onClick={onClose} aria-label="Kapat">
-          ×
-        </button>
+        <div className="pf-detail-drawer-head-actions">
+          {onSnapshot ? (
+            <button
+              type="button"
+              className="pf-detail-drawer-snapshot"
+              onClick={onSnapshot}
+              disabled={!hasPath || snapshotBusy}
+              title={
+                hasPath
+                  ? 'Buraya kadar gelen yolun PDF snapshot\u2019ını indir'
+                  : 'Yol bilgisi yok'
+              }
+              aria-label="Snapshot indir (PDF)"
+            >
+              {snapshotBusy ? (
+                '…'
+              ) : (
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden focusable="false">
+                  <path
+                    d="M8 1.5v8.4M8 9.9 5 6.9M8 9.9l3-3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M2.5 10.8v2c0 .66.54 1.2 1.2 1.2h8.6c.66 0 1.2-.54 1.2-1.2v-2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </button>
+          ) : null}
+          <button type="button" className="pf-detail-drawer-close" onClick={onClose} aria-label="Kapat">
+            ×
+          </button>
+        </div>
       </header>
       <div className="pf-detail-drawer-body">
         {hasIncoming ? (

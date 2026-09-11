@@ -4098,6 +4098,14 @@
   pointer-events: auto;
 }
 
+.pf-map-canvas.is-snapshot-capturing .react-flow {
+  visibility: hidden;
+}
+
+.pf-snake-capture-root {
+  pointer-events: none;
+}
+
 .pf-detail-scrim {
   position: absolute;
   inset: 0;
@@ -4168,10 +4176,21 @@
   color: var(--muted);
 }
 
-.pf-detail-drawer-close {
+.pf-detail-drawer-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pf-detail-drawer-close,
+.pf-detail-drawer-snapshot {
   flex-shrink: 0;
   width: 28px;
   height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-radius: 8px;
   background: color-mix(in srgb, var(--ink) 6%, transparent);
@@ -4181,9 +4200,15 @@
   cursor: pointer;
 }
 
-.pf-detail-drawer-close:hover {
+.pf-detail-drawer-close:hover,
+.pf-detail-drawer-snapshot:hover:not(:disabled) {
   background: color-mix(in srgb, var(--ink) 10%, transparent);
   color: var(--ink);
+}
+
+.pf-detail-drawer-snapshot:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .pf-detail-drawer-body {

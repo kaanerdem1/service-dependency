@@ -31,6 +31,7 @@ import type {
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
+import { exportProcessPathSnapshotPdf } from '../snapshot/processPathSnapshot'
 import {
   NOTE_COLLAPSED_HEIGHT,
   NOTE_COLLAPSED_WIDTH,
@@ -45,6 +46,13 @@ import {
   type ProcessFlowNote,
 } from './processFlowNotes'
 import { summarizeProcessFlow } from './processFlowSummary'
+
+/** Snapshot çekimi öncesi DOM/layout'un yeni (daraltılmış) düğüm kümesiyle
+ * gerçekten render/reflow olmasını beklemek için — bir animasyon
+ * frame'inin tamamlanmasını bekler. */
+function nextFrame(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+}
 
 const RANK_SEP = 250
 const NODE_SEP = 108
@@ -738,7 +746,7 @@ function longestPathRanks(
 /** Bir sürecin düğüm/kenar grafiğinden, döngüleri (DFS ile tespit edilen
  * "geri" kenarları) çıkarılmış bir DAG üretir. Hem sütun/rank hesabı
  * (layeredLayout) hem de "buraya nasıl gelinir" kanonik yol hesabı
- * (canonicalPredecessors) bu ortak DAG üzerinden çalışır — iki yerde ayrı
+ * (pathToTarget) bu ortak DAG üzerinden çalışır — iki yerde ayrı
  * ayrı DFS/geri-kenar mantığı tekrarlanmasın diye tek noktadan üretilir. */
 function buildDag(graph: ProcessFlowGraph): {
   allIds: string[]
@@ -802,45 +810,78 @@ function reachableFromStarts(starts: string[], dagChildren: Map<string, string[]
   return reached
 }
 
-/** Her düğüm için, start'tan ona giden EN UZUN yolda hemen önceki düğümü
- * ("kanonik" öncül) hesaplar. Bu, o düğüme "gerçekte" nasıl ulaşıldığını
- * gösteren tek, deterministik bir zincir üretir — hover/seçim anında
- * start'tan o düğüme kadar olan yolu vurgulamak için kullanılır. Kopuk
- * (start'tan erişilemeyen) düğümlerin öncülü yoktur. */
-function canonicalPredecessors(graph: ProcessFlowGraph): Map<string, string> {
+/** Start → hedef arasında HERHANGİ bir yolda kalan düğüm/kenar kümesi.
+ * Kanonik tek-zincir yerine paralel dalları da kapsar (ör. 3 görev → 1 karar). */
+function pathToTarget(
+  graph: ProcessFlowGraph,
+  targetId: string,
+  reactFlowEdges: Edge[],
+): { nodeIds: Set<string>; edgeIds: Set<string>; orderedIds: string[] } | null {
   const { starts, dagChildren } = buildDag(graph)
-  const reached = reachableFromStarts(starts, dagChildren)
-  const idSet = reached
-  const indegree = new Map<string, number>([...reached].map((id) => [id, 0]))
-  for (const id of reached) {
-    for (const to of dagChildren.get(id) ?? []) {
-      if (idSet.has(to)) indegree.set(to, (indegree.get(to) ?? 0) + 1)
+  const forward = reachableFromStarts(starts, dagChildren)
+  if (!forward.has(targetId)) return null
+
+  const reverseAdj = new Map<string, string[]>()
+  for (const id of forward) reverseAdj.set(id, [])
+  for (const [from, tos] of dagChildren) {
+    if (!forward.has(from)) continue
+    for (const to of tos) {
+      if (!forward.has(to)) continue
+      reverseAdj.get(to)!.push(from)
     }
   }
-  const rank = new Map<string, number>()
-  const pred = new Map<string, string>()
-  const queue = [...reached]
+  const backward = new Set<string>([targetId])
+  const bq = [targetId]
+  while (bq.length) {
+    const cur = bq.shift()!
+    for (const pred of reverseAdj.get(cur) ?? []) {
+      if (!backward.has(pred)) {
+        backward.add(pred)
+        bq.push(pred)
+      }
+    }
+  }
+
+  const onPath = new Set<string>([...forward].filter((id) => backward.has(id)))
+  const nodeIds = new Set<string>(onPath)
+  const edgeIds = new Set<string>()
+
+  for (const e of reactFlowEdges) {
+    const from = sinkCopyRealId(e.source)
+    const to = sinkCopyRealId(e.target)
+    if (!onPath.has(from) || !onPath.has(to)) continue
+    if (!(dagChildren.get(from) ?? []).includes(to)) continue
+    edgeIds.add(e.id)
+    nodeIds.add(e.source)
+    nodeIds.add(e.target)
+  }
+
+  const indegree = new Map<string, number>()
+  for (const id of onPath) indegree.set(id, 0)
+  for (const id of onPath) {
+    for (const to of dagChildren.get(id) ?? []) {
+      if (!onPath.has(to)) continue
+      indegree.set(to, (indegree.get(to) ?? 0) + 1)
+    }
+  }
+  const queue = [...onPath]
     .filter((id) => (indegree.get(id) ?? 0) === 0)
     .sort((a, b) => a.localeCompare(b, 'tr'))
-  for (const id of queue) rank.set(id, 0)
-  for (const id of starts) rank.set(id, 0)
+  const orderedIds: string[] = []
   const remaining = new Map(indegree)
   while (queue.length) {
-    const from = queue.shift()!
-    const h = rank.get(from) ?? 0
-    for (const to of dagChildren.get(from) ?? []) {
-      if (!idSet.has(to)) continue
-      const candidate = h + 1
-      if (candidate > (rank.get(to) ?? -1)) {
-        rank.set(to, candidate)
-        pred.set(to, from)
-      }
+    const id = queue.shift()!
+    orderedIds.push(id)
+    for (const to of dagChildren.get(id) ?? []) {
+      if (!onPath.has(to)) continue
       const left = (remaining.get(to) ?? 0) - 1
       remaining.set(to, left)
       if (left === 0) queue.push(to)
     }
+    queue.sort((a, b) => a.localeCompare(b, 'tr'))
   }
-  return pred
+
+  return { nodeIds, edgeIds, orderedIds }
 }
 
 function layeredLayout(graph: ProcessFlowGraph) {
@@ -1312,11 +1353,10 @@ function ProcessFlowMapInner({
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
   const { setViewport, getNodes } = useReactFlow()
+  const [snapshotCapturing, setSnapshotCapturing] = useState(false)
+  const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const mapCanvasRef = useRef<HTMLDivElement>(null)
   const focusId = selectedNodeId ?? dragId ?? hoverId
-  // "Buraya nasıl gelinir?" — hover/seçim anında start'tan bu düğüme kadar
-  // olan TEK, kanonik (en uzun yol) zinciri vurgulamak için önceden
-  // hesaplanır. Süreç değişmediği sürece yeniden hesaplanmaz.
-  const canonicalPred = useMemo(() => canonicalPredecessors(graph), [graph])
   const selectedNode = useMemo(
     () => graph.nodes.find((n) => n.id === selectedNodeId),
     [graph.nodes, selectedNodeId],
@@ -1404,45 +1444,44 @@ function ProcessFlowMapInner({
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded, selectedNodeId])
 
-  const neighborhood = useMemo(() => {
+  const pathToFocus = useMemo(() => {
     if (!focusId) return null
-    // Görsel kopyalar ("Reddet"in kaynağa yakın kopyası gibi) için gerçek
-    // düğüm kimliğine dön; kanonik zincir hep gerçek graf id'leriyle tutulur.
     const realFocus = sinkCopyRealId(focusId)
-    // start'tan realFocus'a kadar öncülleri geriye doğru izleyerek TEK yolu
-    // çıkar. Kopuk (start'tan erişilemeyen) düğümlerde öncül yoktur; o
-    // durumda sadece kendisini vurgula (eski "yakın komşu" davranışına düşer).
-    const pathNodeIds: string[] = []
-    let cur: string | undefined = realFocus
-    const guard = new Set<string>()
-    while (cur && !guard.has(cur)) {
-      pathNodeIds.push(cur)
-      guard.add(cur)
-      cur = canonicalPred.get(cur)
-    }
-    const nodeIds = new Set<string>([focusId, ...pathNodeIds])
-    const edgeIds = new Set<string>()
-    for (let i = 0; i < pathNodeIds.length - 1; i++) {
-      const target = pathNodeIds[i]
-      const source = pathNodeIds[i + 1]
-      for (const e of edges) {
-        if (sinkCopyRealId(e.source) === source && sinkCopyRealId(e.target) === target) {
-          edgeIds.add(e.id)
+    const path = pathToTarget(graph, realFocus, edges)
+    if (!path) return null
+    path.nodeIds.add(focusId)
+    return path
+  }, [edges, focusId, graph])
+
+  const neighborhood = useMemo(() => {
+    if (!pathToFocus) return null
+    return { nodeIds: pathToFocus.nodeIds, edgeIds: pathToFocus.edgeIds }
+  }, [pathToFocus])
+
+  const selectedPathSteps = useMemo(() => {
+    if (!selectedNodeId || !pathToFocus) return []
+    const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+    const onPath = new Set(pathToFocus.orderedIds)
+    return pathToFocus.orderedIds.map((id, idx) => {
+      const n = byId.get(id)
+      let label: string | undefined
+      for (let j = idx + 1; j < pathToFocus.orderedIds.length; j++) {
+        const cand = pathToFocus.orderedIds[j]
+        if (!onPath.has(cand)) continue
+        const e = graph.edges.find((edge) => edge.from === id && edge.to === cand)
+        if (e) {
+          label = e.label?.trim() || undefined
+          break
         }
       }
-    }
-    // Odaklanılan düğümün doğrudan komşuları da (yol dışında kalsa bile)
-    // hafifçe göz önünde tutulsun diye eklenir — sadece kendisine giren/çıkan
-    // okları da işaretle (fan-out'un tamamı değil, en azından hemen
-    // önceki/sonraki bağlamı kaybetmesin).
-    for (const e of edges) {
-      if (e.source !== focusId && e.target !== focusId) continue
-      edgeIds.add(e.id)
-      nodeIds.add(e.source)
-      nodeIds.add(e.target)
-    }
-    return { nodeIds, edgeIds }
-  }, [edges, focusId, canonicalPred])
+      return {
+        id,
+        name: n?.name ?? id,
+        kind: (n?.kind ?? 'other') as ProcessFlowNodeKind,
+        label,
+      }
+    })
+  }, [selectedNodeId, pathToFocus, graph])
 
   const shownNodes = useMemo(() => {
     const base = nodes.map((n) => {
@@ -1471,12 +1510,17 @@ function ProcessFlowMapInner({
     })
     const processOnly = decorated.filter((n) => n.type !== 'processNote')
     const notes = decorated.filter((n) => n.type === 'processNote')
+    if (snapshotCapturing && pathToFocus) {
+      return processOnly.filter(
+        (n) => pathToFocus.nodeIds.has(n.id) || pathToFocus.nodeIds.has(sinkCopyRealId(n.id)),
+      )
+    }
     return [
       ...processOnly.filter((n) => n.className !== 'pf-node-onpath'),
       ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
       ...notes,
     ]
-  }, [neighborhood, nodes, selectedNodeId])
+  }, [neighborhood, nodes, selectedNodeId, snapshotCapturing, pathToFocus])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -1490,11 +1534,14 @@ function ProcessFlowMapInner({
         data: { ...data, active, dim: !active },
       }
     })
+    if (snapshotCapturing && pathToFocus) {
+      return decorated.filter((e) => pathToFocus.edgeIds.has(e.id))
+    }
     return [
       ...decorated.filter((e) => !e.data.active),
       ...decorated.filter((e) => e.data.active),
     ]
-  }, [edges, neighborhood])
+  }, [edges, neighborhood, snapshotCapturing, pathToFocus])
 
   const onNodeMouseEnter = useCallback((_: unknown, node: Node) => {
     if (node.type === 'processNote') return
@@ -1562,6 +1609,56 @@ function ProcessFlowMapInner({
   }, [])
   const closeDetail = useCallback(() => setSelectedNodeId(undefined), [])
 
+  const handleSnapshot = useCallback(async () => {
+    if (!selectedNode || !pathToFocus || snapshotBusy) return
+    setSnapshotBusy(true)
+    try {
+      setSnapshotCapturing(true)
+      await nextFrame()
+      await nextFrame()
+      await nextFrame()
+      const el = mapCanvasRef.current
+      if (!el) throw new Error('Harita elementi bulunamadı')
+      const snapshotPathEdges = edges
+        .filter((e) => pathToFocus.edgeIds.has(e.id))
+        .map((e) => {
+          const fromId = sinkCopyRealId(e.source)
+          const toId = sinkCopyRealId(e.target)
+          const ge = graph.edges.find((edge) => edge.from === fromId && edge.to === toId)
+          const label = ge?.label?.trim()
+          return { fromId, toId, label: label || undefined }
+        })
+      await exportProcessPathSnapshotPdf({
+        mapEl: el,
+        pathNodeIds: pathToFocus.nodeIds,
+        pathEdges: snapshotPathEdges,
+        getNodes,
+        steps: selectedPathSteps,
+        processTitle: summary.title,
+        processNo,
+        targetName: selectedNode.name,
+      })
+    } catch (err) {
+      console.error('Snapshot export başarısız:', err)
+      window.alert(
+        `Snapshot oluşturulamadı: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setSnapshotCapturing(false)
+      setSnapshotBusy(false)
+    }
+  }, [
+    selectedNode,
+    pathToFocus,
+    snapshotBusy,
+    getNodes,
+    selectedPathSteps,
+    summary.title,
+    processNo,
+    edges,
+    graph.edges,
+  ])
+
   return (
     <div className={`pf-map-wrap${expanded ? ' is-expanded' : ''}`}>
       <header className="pf-map-head">
@@ -1581,7 +1678,10 @@ function ProcessFlowMapInner({
           Kapat
         </button>
       ) : null}
-      <div className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}`}>
+      <div
+        ref={mapCanvasRef}
+        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
+      >
         {selectedNodeId ? (
           <button
             type="button"
@@ -1646,6 +1746,9 @@ function ProcessFlowMapInner({
             subProcessNo={selectedNode.subProcessNo}
             incoming={selectedIncoming}
             outgoing={selectedOutgoing}
+            path={selectedPathSteps}
+            onSnapshot={handleSnapshot}
+            snapshotBusy={snapshotBusy}
             onClose={closeDetail}
             onOpenService={
               onOpenService
