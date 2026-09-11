@@ -9,7 +9,7 @@ type Props = {
   onDismiss: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
-  onOpenService?: (serviceName: string, nodeId: string) => void
+  onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
 }
 
 export function ProcessFlowPage({

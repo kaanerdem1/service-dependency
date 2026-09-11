@@ -62,9 +62,6 @@ type ProcessNodeData = {
   services: string[]
   decisionInfo?: ProcessDecisionInfo
   details?: ProcessNodeDetails
-  pendingServiceName?: string
-  onServiceNameClick?: (serviceName: string) => void
-  onServiceGo?: (serviceName: string) => void
 }
 
 type RouteKind = 'direct' | 'jump' | 'back'
@@ -133,33 +130,9 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
       {data.services[0] ? (
-        <div className="pf-node-svc-wrap">
-          <button
-            type="button"
-            className={`pf-node-svc${data.pendingServiceName === data.services[0] ? ' is-active' : ''}`}
-            title={data.services.join(', ')}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              data.onServiceNameClick?.(data.services[0])
-            }}
-          >
-            {data.services[0]}
-          </button>
-          {data.pendingServiceName === data.services[0] ? (
-            <button
-              type="button"
-              className="pf-node-svc-go"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                data.onServiceGo?.(data.services[0])
-              }}
-            >
-              Servise git
-            </button>
-          ) : null}
-        </div>
+        <span className="pf-node-svc" title={data.services.join(', ')}>
+          {data.services[0]}
+        </span>
       ) : null}
     </div>
   )
@@ -739,7 +712,7 @@ function ProcessFlowMapInner({
   onDismiss?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
-  onOpenService?: (serviceName: string, nodeId: string) => void
+  onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const seed = useMemo(() => {
@@ -756,9 +729,6 @@ function ProcessFlowMapInner({
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
     initialSelectedNodeId,
   )
-  const [pendingServiceNav, setPendingServiceNav] = useState<
-    { nodeId: string; serviceName: string } | undefined
-  >()
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
@@ -820,19 +790,6 @@ function ProcessFlowMapInner({
     )
   }, [processNo, persistNotes, setNodes])
 
-  const handleServiceNameClick = useCallback((nodeId: string, serviceName: string) => {
-    setPendingServiceNav({ nodeId, serviceName })
-    setSelectedNodeId(undefined)
-  }, [])
-
-  const handleServiceGo = useCallback(
-    (nodeId: string, serviceName: string) => {
-      onOpenService?.(serviceName, nodeId)
-      setPendingServiceNav(undefined)
-    },
-    [onOpenService],
-  )
-
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -841,16 +798,11 @@ function ProcessFlowMapInner({
         setSelectedNodeId(undefined)
         return
       }
-      if (pendingServiceNav) {
-        e.preventDefault()
-        setPendingServiceNav(undefined)
-        return
-      }
       if (expanded) setExpanded(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expanded, pendingServiceNav, selectedNodeId])
+  }, [expanded, selectedNodeId])
 
   const neighborhood = useMemo(() => {
     if (!focusId) return null
@@ -870,17 +822,8 @@ function ProcessFlowMapInner({
       if (n.type === 'processNote') {
         return { ...n, zIndex: 6, className: 'pf-note-node' }
       }
-      const data = n.data as ProcessNodeData
       return {
         ...n,
-        data: {
-          ...data,
-          pendingServiceName:
-            pendingServiceNav?.nodeId === n.id ? pendingServiceNav.serviceName : undefined,
-          onServiceNameClick: (serviceName: string) =>
-            handleServiceNameClick(n.id, serviceName),
-          onServiceGo: (serviceName: string) => handleServiceGo(n.id, serviceName),
-        },
         className: [
           n.className,
           selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
@@ -909,7 +852,7 @@ function ProcessFlowMapInner({
       ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
       ...notes,
     ]
-  }, [handleServiceGo, handleServiceNameClick, neighborhood, nodes, pendingServiceNav, selectedNodeId])
+  }, [neighborhood, nodes, selectedNodeId])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -962,7 +905,6 @@ function ProcessFlowMapInner({
       if (data.collapsed) data.onToggleCollapse()
       return
     }
-    setPendingServiceNav(undefined)
     setSelectedNodeId(node.id)
   }, [])
   const addNote = useCallback(() => {
@@ -991,7 +933,6 @@ function ProcessFlowMapInner({
     })
   }, [persistNotes, processNo, setNodes])
   const onPaneClick = useCallback(() => {
-    setPendingServiceNav(undefined)
     setSelectedNodeId(undefined)
   }, [])
   const closeDetail = useCallback(() => setSelectedNodeId(undefined), [])
@@ -1073,6 +1014,12 @@ function ProcessFlowMapInner({
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
             onClose={closeDetail}
+            onOpenService={
+              onOpenService
+                ? (serviceName, serviceId) =>
+                    onOpenService(serviceName, selectedNode.id, serviceId)
+                : undefined
+            }
           />
         ) : null}
       </div>
@@ -1093,7 +1040,7 @@ export function ProcessFlowMap({
   onDismiss?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
-  onOpenService?: (serviceName: string, nodeId: string) => void
+  onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
 }) {
   return (
     <ReactFlowProvider>

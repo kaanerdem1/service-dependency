@@ -126,4 +126,35 @@ export async function listServiceLocations(
   }))
 }
 
+export type ServiceNameResolve = {
+  serviceName: string
+  id: string | null
+  descriptionTr: string | null
+}
+
+export async function resolveServiceNames(names: string[]): Promise<ServiceNameResolve[]> {
+  const unique = [...new Set(names.map((n) => n.trim()).filter(Boolean))]
+  if (!unique.length) return []
+
+  const { rows } = await query<{
+    id: string
+    service_name: string
+    service_description: string | null
+  }>(
+    `SELECT id::text AS id, service_name, service_description
+     FROM ${tableName('service_definition')}
+     WHERE status = 1 AND service_name = ANY($1::varchar[])`,
+    [unique],
+  )
+  const byName = new Map(rows.map((row) => [row.service_name, row]))
+  return unique.map((serviceName) => {
+    const hit = byName.get(serviceName)
+    return {
+      serviceName,
+      id: hit ? serviceIdFromDb(hit.id) : null,
+      descriptionTr: hit?.service_description?.trim() || null,
+    }
+  })
+}
+
 export { parseServiceId, serviceIdFromDb }

@@ -356,6 +356,12 @@ export type ServiceProcessLink = {
   descriptionTr: string | null
 }
 
+export type ServiceNameResolve = {
+  serviceName: string
+  id: string | null
+  descriptionTr: string | null
+}
+
 export type ProcessCatalogItem = {
   oid: string
   no: string

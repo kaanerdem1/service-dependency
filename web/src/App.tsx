@@ -781,19 +781,22 @@ export default function App() {
   )
 
   const openServiceFromProcessFlow = useCallback(
-    async (serviceName: string, nodeId: string) => {
+    async (serviceName: string, nodeId: string, serviceId?: string) => {
       if (!processFlowNo) return
-      const hits = await searchServices(serviceName).catch(() => [] as Service[])
-      const exact =
-        hits.find((h) => h.name === serviceName) ??
-        hits.find((h) => h.name.toUpperCase() === serviceName.toUpperCase())
-      const match = exact ?? (hits.length === 1 ? hits[0] : undefined)
-      if (!match) return
+      let pivotServiceId = serviceId
+      if (!pivotServiceId) {
+        const hits = await searchServices(serviceName).catch(() => [] as Service[])
+        const exact =
+          hits.find((h) => h.name === serviceName) ??
+          hits.find((h) => h.name.toUpperCase() === serviceName.toUpperCase())
+        pivotServiceId = exact?.id ?? (hits.length === 1 ? hits[0]?.id : undefined)
+      }
+      if (!pivotServiceId) return
 
       const returnTo = { processNo: processFlowNo, nodeId }
       setProcessFlowRestoreNodeId(undefined)
       setProcessFlowNo(undefined)
-      selectPivot(match.id, {
+      selectPivot(pivotServiceId, {
         resetHistory: true,
         source: 'table',
         keepProcessFlowReturn: true,

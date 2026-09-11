@@ -75,7 +75,12 @@ import {
 } from './inventory/methodService.js'
 import { pingInventory } from './inventory/db.js'
 import { getCatalogSource, isInventoryCatalog } from './inventory/config.js'
-import { getServiceById, listServiceLocations, searchServices as searchInventoryServices } from './inventory/serviceService.js'
+import {
+  getServiceById,
+  listServiceLocations,
+  resolveServiceNames,
+  searchServices as searchInventoryServices,
+} from './inventory/serviceService.js'
 import {
   getServiceCatalogContext,
   listServiceProcesses,
@@ -251,6 +256,22 @@ app.get('/api/services', async (req, res) => {
     )
   }
   res.json(list)
+})
+
+app.post('/api/services/resolve-names', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    const names = Array.isArray(req.body?.names)
+      ? req.body.names.filter((n: unknown) => typeof n === 'string')
+      : []
+    res.json(await resolveServiceNames(names))
+  } catch (e) {
+    console.error('[inventory] /api/services/resolve-names', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
 })
 
 app.get('/api/services/:id', async (req, res) => {

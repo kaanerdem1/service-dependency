@@ -24,6 +24,7 @@ import type {
   ServiceNote,
   ServiceCatalogContext,
   ServiceScreenLink,
+  ServiceNameResolve,
   ServiceProcessLink,
   ProcessCatalogItem,
   ProcessFlowGraph,
@@ -138,6 +139,14 @@ export function getService(id: string) {
 export function searchServices(query: string) {
   const q = encodeURIComponent(query.trim())
   return request<Service[]>(`/services?q=${q}`)
+}
+
+export function resolveServiceNames(names: string[]) {
+  return request<ServiceNameResolve[]>('/services/resolve-names', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ names }),
+  })
 }
 
 export function getAffected(serviceId: string) {

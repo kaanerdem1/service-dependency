@@ -1,7 +1,10 @@
+import { useEffect, useMemo, useState } from 'react'
+import { resolveServiceNames } from '../api/client'
 import type {
   ProcessDecisionInfo,
   ProcessFlowNodeKind,
   ProcessNodeDetails,
+  ServiceNameResolve,
 } from '../types'
 
 const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
@@ -38,6 +41,7 @@ type Props = {
   decisionInfo?: ProcessDecisionInfo
   services: string[]
   onClose: () => void
+  onOpenService?: (serviceName: string, serviceId?: string) => void
 }
 
 export function ProcessFlowDetailDrawer({
@@ -49,11 +53,40 @@ export function ProcessFlowDetailDrawer({
   decisionInfo,
   services,
   onClose,
+  onOpenService,
 }: Props) {
   const rules = decisionInfo?.rules ?? []
   const hasDetails = (details?.groups.length ?? 0) > 0
   const hasRules = rules.length > 0
   const hasServices = services.length > 0
+  const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
+
+  const serviceKey = useMemo(() => services.join('\0'), [services])
+
+  useEffect(() => {
+    if (!open || !hasServices) {
+      setResolved([])
+      return
+    }
+    let cancelled = false
+    void resolveServiceNames(services)
+      .then((rows) => {
+        if (!cancelled) setResolved(rows)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolved(services.map((serviceName) => ({ serviceName, id: null, descriptionTr: null })))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [hasServices, open, serviceKey, services])
+
+  const resolvedByName = useMemo(
+    () => new Map(resolved.map((row) => [row.serviceName, row])),
+    [resolved],
+  )
 
   return (
     <aside
@@ -119,11 +152,31 @@ export function ProcessFlowDetailDrawer({
         {hasServices ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Servisler</h3>
-            <p className="pf-detail-lead">Servise gitmek için haritadaki servis adına tıklayın.</p>
-            <ul className="pf-detail-service-list">
-              {services.map((s) => (
-                <li key={s}>{s}</li>
-              ))}
+            <ul className="pf-detail-service-cards">
+              {services.map((serviceName) => {
+                const meta = resolvedByName.get(serviceName)
+                const labelTr = meta?.descriptionTr?.trim()
+                const canGo = Boolean(onOpenService && meta?.id)
+                return (
+                  <li key={serviceName} className="pf-detail-service-card">
+                    <p className="pf-detail-service-label">
+                      {labelTr || 'Türkçe açıklama yok'}
+                    </p>
+                    <p className="pf-detail-service-code">{serviceName}</p>
+                    {onOpenService ? (
+                      <button
+                        type="button"
+                        className="pf-detail-service-go"
+                        disabled={!canGo}
+                        title={canGo ? undefined : 'Katalogda eşleşen servis bulunamadı'}
+                        onClick={() => onOpenService(serviceName, meta?.id ?? undefined)}
+                      >
+                        Servise git
+                      </button>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           </section>
         ) : null}
