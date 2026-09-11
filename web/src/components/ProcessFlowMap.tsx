@@ -93,12 +93,15 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   other: 'Adım',
 }
 
+/** Üstten sadece giriş kabul edilir, hiçbir zaman çıkış olmaz — bir düğümün
+ * üzerinden ok başlatmak, akışı okurken "bu adımdan mı çıkıyor, mu giriyor"
+ * karışıklığına yol açıyordu. Çıkışlar sadece sağdan (ileri) veya alttan
+ * (uzak sıçrama) olur. */
 function Ports() {
   return (
     <>
       <Handle id="l" type="target" position={Position.Left} className="pf-h" />
       <Handle id="r" type="source" position={Position.Right} className="pf-h" />
-      <Handle id="t" type="source" position={Position.Top} className="pf-h" />
       <Handle id="ti" type="target" position={Position.Top} className="pf-h" />
       <Handle id="b" type="source" position={Position.Bottom} className="pf-h" />
       <Handle id="bi" type="target" position={Position.Bottom} className="pf-h" />
@@ -176,7 +179,9 @@ function classifyRoute(sourceX: number, targetX: number): RouteKind {
 
 function handlesFor(route: RouteKind) {
   if (route === 'jump') return { sourceHandle: 'b', targetHandle: 'bi' }
-  if (route === 'back') return { sourceHandle: 't', targetHandle: 'ti' }
+  // "Geri" oku üst rayı kullanır ama üstten çıkış yasak: sağdan çıkıp
+  // hedefin üstüne (sadece giriş) bağlanır.
+  if (route === 'back') return { sourceHandle: 'r', targetHandle: 'ti' }
   return { sourceHandle: 'r', targetHandle: 'l' }
 }
 
@@ -293,6 +298,14 @@ function ProcessEdge({
   const width = active ? 2.5 : route === 'direct' ? 1.5 : 1.3
   const opacity = active ? 1 : dim ? 0.16 : route === 'direct' ? 1 : 0.55
   const stateClass = active ? ' is-onpath' : dim ? ' is-dim' : ''
+  // Akış yönünü belirtmek için label'ın hemen öncesine ve sonrasına küçük
+  // ok işaretleri koyulur — "akan" animasyon yerine sabit, okunması kolay
+  // bir yön ipucu.
+  const dirSign = targetX >= sourceX ? 1 : -1
+  const span = Math.abs(targetX - sourceX) + Math.abs(targetY - sourceY)
+  const showChevrons = !!label && span > 70
+  const chevronGlyph = dirSign > 0 ? '›' : '‹'
+  const chevronGap = 20
   return (
     <>
       <BaseEdge
@@ -304,6 +317,20 @@ function ProcessEdge({
       />
       {label ? (
         <EdgeLabelRenderer>
+          {showChevrons ? (
+            <span
+              className={`pf-edge-chevron${stateClass}`}
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                color: stroke,
+                transform: `translate(-50%, -50%) translate(${labelX - dirSign * chevronGap}px, ${labelY}px)`,
+              }}
+              aria-hidden
+            >
+              {chevronGlyph}
+            </span>
+          ) : null}
           <div
             className={`pf-edge-label${stateClass}`}
             title={data?.labels?.length ? mergeTransitionLabels(data.labels) : undefined}
@@ -315,6 +342,20 @@ function ProcessEdge({
           >
             {label}
           </div>
+          {showChevrons ? (
+            <span
+              className={`pf-edge-chevron${stateClass}`}
+              style={{
+                position: 'absolute',
+                pointerEvents: 'none',
+                color: stroke,
+                transform: `translate(-50%, -50%) translate(${labelX + dirSign * chevronGap}px, ${labelY}px)`,
+              }}
+              aria-hidden
+            >
+              {chevronGlyph}
+            </span>
+          ) : null}
         </EdgeLabelRenderer>
       ) : null}
     </>
@@ -672,7 +713,7 @@ function assignEdgeLanes(edges: Edge[]): Edge[] {
     const route = data?.route ?? 'direct'
     if (route === 'direct') return e
     const bucket = route === 'back' ? backCount : jumpCount
-    const key = `${Math.min(e.source, e.target)}\0${Math.max(e.source, e.target)}`
+    const key = [e.source, e.target].sort().join('\0')
     const lane = bucket.get(key) ?? 0
     bucket.set(key, lane + 1)
     return { ...e, data: { ...data, lane } }

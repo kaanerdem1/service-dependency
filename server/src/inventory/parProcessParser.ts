@@ -108,18 +108,21 @@ function decode(value: string): string {
     .replace(/&#39;/g, "'")
 }
 
+function isSelfClosingTag(open: string): boolean {
+  return /\/\s*>$/.test(open)
+}
+
 function findTagClose(xml: string, start: number, tag: string): number {
-  const re = new RegExp(`<${tag}\\b([^>]*?)(/)?\\s*>|</${tag}\\s*>`, 'gi')
+  const re = new RegExp(`<${tag}\\b[^>]*>|</${tag}\\s*>`, 'gi')
   re.lastIndex = start
   let depth = 1
   let m: RegExpExecArray | null
   while ((m = re.exec(xml))) {
     const isClose = m[0].startsWith('</')
-    const selfClose = Boolean(m[2])
     if (isClose) {
       depth -= 1
       if (depth === 0) return m.index + m[0].length
-    } else if (!selfClose) {
+    } else if (!isSelfClosingTag(m[0])) {
       depth += 1
     }
   }
@@ -134,18 +137,24 @@ function extractRootChildren(xml: string): { tag: string; open: string; inner: s
   const body = bodyEnd > bodyStart ? xml.slice(bodyStart, bodyEnd) : xml.slice(bodyStart)
   const out: { tag: string; open: string; inner: string }[] = []
   const tagAlt = NODE_TAGS.join('|')
-  const re = new RegExp(`<(${tagAlt})\\b([^>]*)(/?)>`, 'gi')
+  const re = new RegExp(`<(${tagAlt})\\b[^>]*>`, 'gi')
   let m: RegExpExecArray | null
   while ((m = re.exec(body))) {
     const tag = m[1].toLowerCase()
     const open = m[0]
-    if (m[3] === '/') {
+    if (isSelfClosingTag(open)) {
       out.push({ tag, open, inner: '' })
       continue
     }
     const innerStart = m.index + m[0].length
     const closeAt = findTagClose(body, innerStart, tag)
-    if (closeAt < 0) continue
+    if (closeAt < 0) {
+      const nodeName = attr(open, 'name') ?? '(isimsiz)'
+      console.warn(
+        `[process-parser] ${tag} "${nodeName}" için kapanış etiketi bulunamadı; yalnız bu düğüm atlandı.`,
+      )
+      continue
+    }
     out.push({ tag, open, inner: body.slice(innerStart, closeAt) })
     re.lastIndex = closeAt
   }
