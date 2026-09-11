@@ -686,7 +686,16 @@ function longestPathRanks(
   return rank
 }
 
-function layeredLayout(graph: ProcessFlowGraph) {
+/** Bir sürecin düğüm/kenar grafiğinden, döngüleri (DFS ile tespit edilen
+ * "geri" kenarları) çıkarılmış bir DAG üretir. Hem sütun/rank hesabı
+ * (layeredLayout) hem de "buraya nasıl gelinir" kanonik yol hesabı
+ * (canonicalPredecessors) bu ortak DAG üzerinden çalışır — iki yerde ayrı
+ * ayrı DFS/geri-kenar mantığı tekrarlanmasın diye tek noktadan üretilir. */
+function buildDag(graph: ProcessFlowGraph): {
+  allIds: string[]
+  starts: string[]
+  dagChildren: Map<string, string[]>
+} {
   const allIds = graph.nodes.filter((n) => n.kind !== 'dummy').map((n) => n.id)
   const children = new Map<string, string[]>()
   for (const id of allIds) children.set(id, [])
@@ -699,7 +708,7 @@ function layeredLayout(graph: ProcessFlowGraph) {
   // tespiti çalıştırmadan çalıştırmaya farklı sonuç vermesin.
   for (const list of children.values()) list.sort((a, b) => a.localeCompare(b, 'tr'))
 
-  // 1) DFS ile döngü oluşturan ("geri") kenarları bul. Bunlar sıralama
+  // DFS ile döngü oluşturan ("geri") kenarları bul. Bunlar sıralama
   // hesabına dahil edilmez; sadece görsel rotalamada 'back' sınıfında
   // kullanılır (bkz. routeFor/classifyRoute — X konumuna göre ayrıca karar
   // verir, burada asıl amaç sıralamayı bir DAG üzerinden yapabilmek).
@@ -725,8 +734,11 @@ function layeredLayout(graph: ProcessFlowGraph) {
   for (const [from, list] of children) {
     dagChildren.set(from, list.filter((to) => !backEdgeKeys.has(`${from}\0${to}`)))
   }
+  return { allIds, starts, dagChildren }
+}
 
-  // 2) start'tan DAG (döngüsüz) kenarlarla erişilebilen düğümler "ana akış".
+/** start'tan DAG (döngüsüz) kenarlarla erişilebilen düğüm kümesi. */
+function reachableFromStarts(starts: string[], dagChildren: Map<string, string[]>): Set<string> {
   const reached = new Set<string>(starts)
   const rq = [...starts]
   while (rq.length) {
@@ -738,10 +750,57 @@ function layeredLayout(graph: ProcessFlowGraph) {
       }
     }
   }
+  return reached
+}
+
+/** Her düğüm için, start'tan ona giden EN UZUN yolda hemen önceki düğümü
+ * ("kanonik" öncül) hesaplar. Bu, o düğüme "gerçekte" nasıl ulaşıldığını
+ * gösteren tek, deterministik bir zincir üretir — hover/seçim anında
+ * start'tan o düğüme kadar olan yolu vurgulamak için kullanılır. Kopuk
+ * (start'tan erişilemeyen) düğümlerin öncülü yoktur. */
+function canonicalPredecessors(graph: ProcessFlowGraph): Map<string, string> {
+  const { starts, dagChildren } = buildDag(graph)
+  const reached = reachableFromStarts(starts, dagChildren)
+  const idSet = reached
+  const indegree = new Map<string, number>([...reached].map((id) => [id, 0]))
+  for (const id of reached) {
+    for (const to of dagChildren.get(id) ?? []) {
+      if (idSet.has(to)) indegree.set(to, (indegree.get(to) ?? 0) + 1)
+    }
+  }
+  const rank = new Map<string, number>()
+  const pred = new Map<string, string>()
+  const queue = [...reached]
+    .filter((id) => (indegree.get(id) ?? 0) === 0)
+    .sort((a, b) => a.localeCompare(b, 'tr'))
+  for (const id of queue) rank.set(id, 0)
+  for (const id of starts) rank.set(id, 0)
+  const remaining = new Map(indegree)
+  while (queue.length) {
+    const from = queue.shift()!
+    const h = rank.get(from) ?? 0
+    for (const to of dagChildren.get(from) ?? []) {
+      if (!idSet.has(to)) continue
+      const candidate = h + 1
+      if (candidate > (rank.get(to) ?? -1)) {
+        rank.set(to, candidate)
+        pred.set(to, from)
+      }
+      const left = (remaining.get(to) ?? 0) - 1
+      remaining.set(to, left)
+      if (left === 0) queue.push(to)
+    }
+  }
+  return pred
+}
+
+function layeredLayout(graph: ProcessFlowGraph) {
+  const { allIds, starts, dagChildren } = buildDag(graph)
+  const reached = reachableFromStarts(starts, dagChildren)
   const reachedIds = allIds.filter((id) => reached.has(id))
   const islandIds = allIds.filter((id) => !reached.has(id))
 
-  // 3) Ana akış en-uzun-yol rank'ı; kopuk (start'tan hiç erişilemeyen)
+  // Ana akış en-uzun-yol rank'ı; kopuk (start'tan hiç erişilemeyen)
   // düğümler kendi aralarında sıralanıp ana akışın SAĞINA eklenir — sol
   // sütuna (start ile aynı yere) asla düşmezler.
   const hop = longestPathRanks(reachedIds, dagChildren, starts)
@@ -1180,6 +1239,10 @@ function ProcessFlowMapInner({
   const dragMovedRef = useRef(false)
   const { setViewport, getNodes } = useReactFlow()
   const focusId = selectedNodeId ?? dragId ?? hoverId
+  // "Buraya nasıl gelinir?" — hover/seçim anında start'tan bu düğüme kadar
+  // olan TEK, kanonik (en uzun yol) zinciri vurgulamak için önceden
+  // hesaplanır. Süreç değişmediği sürece yeniden hesaplanmaz.
+  const canonicalPred = useMemo(() => canonicalPredecessors(graph), [graph])
   const selectedNode = useMemo(
     () => graph.nodes.find((n) => n.id === selectedNodeId),
     [graph.nodes, selectedNodeId],
@@ -1265,8 +1328,35 @@ function ProcessFlowMapInner({
 
   const neighborhood = useMemo(() => {
     if (!focusId) return null
-    const nodeIds = new Set<string>([focusId])
+    // Görsel kopyalar ("Reddet"in kaynağa yakın kopyası gibi) için gerçek
+    // düğüm kimliğine dön; kanonik zincir hep gerçek graf id'leriyle tutulur.
+    const realFocus = sinkCopyRealId(focusId)
+    // start'tan realFocus'a kadar öncülleri geriye doğru izleyerek TEK yolu
+    // çıkar. Kopuk (start'tan erişilemeyen) düğümlerde öncül yoktur; o
+    // durumda sadece kendisini vurgula (eski "yakın komşu" davranışına düşer).
+    const pathNodeIds: string[] = []
+    let cur: string | undefined = realFocus
+    const guard = new Set<string>()
+    while (cur && !guard.has(cur)) {
+      pathNodeIds.push(cur)
+      guard.add(cur)
+      cur = canonicalPred.get(cur)
+    }
+    const nodeIds = new Set<string>([focusId, ...pathNodeIds])
     const edgeIds = new Set<string>()
+    for (let i = 0; i < pathNodeIds.length - 1; i++) {
+      const target = pathNodeIds[i]
+      const source = pathNodeIds[i + 1]
+      for (const e of edges) {
+        if (sinkCopyRealId(e.source) === source && sinkCopyRealId(e.target) === target) {
+          edgeIds.add(e.id)
+        }
+      }
+    }
+    // Odaklanılan düğümün doğrudan komşuları da (yol dışında kalsa bile)
+    // hafifçe göz önünde tutulsun diye eklenir — sadece kendisine giren/çıkan
+    // okları da işaretle (fan-out'un tamamı değil, en azından hemen
+    // önceki/sonraki bağlamı kaybetmesin).
     for (const e of edges) {
       if (e.source !== focusId && e.target !== focusId) continue
       edgeIds.add(e.id)
@@ -1274,7 +1364,7 @@ function ProcessFlowMapInner({
       nodeIds.add(e.target)
     }
     return { nodeIds, edgeIds }
-  }, [edges, focusId])
+  }, [edges, focusId, canonicalPred])
 
   const shownNodes = useMemo(() => {
     const base = nodes.map((n) => {
