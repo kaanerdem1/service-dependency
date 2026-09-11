@@ -844,17 +844,22 @@ function withEdgeRoutes(
       xMax,
       new Set([e.source, e.target]),
     )
+    // Ray Y konumu, tüm diyagramın en üst/en alt düğümüne göre değil, BU
+    // okun kendi kaynağı/hedefi ve aradaki (varsa) gerçek engele göre
+    // belirlenir. Eskiden global banda (flowBand) sabitlendiği için her
+    // back/jump oku, aralarında hiçbir şey olmasa bile diyagramın en
+    // tepesine/en dibine kadar gidip geliyordu — "dümdüz aşağı inip dik
+    // açıyla dönen" görüntünün asıl sebebi buydu.
     let railY: number | undefined
     if (route === 'back') {
-      railY = band.minY - RAIL_PAD - slot * RAIL_GAP
-      if (obstruct.minTop !== Infinity) {
-        railY = Math.min(railY, obstruct.minTop - RAIL_PAD - slot * RAIL_GAP)
-      }
+      const localTop = Math.min(nodeBox(from, kindById.get(e.source)).top, nodeBox(to, kindById.get(e.target)).top)
+      railY = (obstruct.minTop !== Infinity ? Math.min(localTop, obstruct.minTop) : localTop) - RAIL_PAD - slot * RAIL_GAP
     } else if (route === 'jump') {
-      railY = band.maxY + RAIL_PAD + slot * RAIL_GAP
-      if (obstruct.maxBottom !== -Infinity) {
-        railY = Math.max(railY, obstruct.maxBottom + RAIL_PAD + slot * RAIL_GAP)
-      }
+      const localBottom = Math.max(
+        nodeBox(from, kindById.get(e.source)).bottom,
+        nodeBox(to, kindById.get(e.target)).bottom,
+      )
+      railY = (obstruct.maxBottom !== -Infinity ? Math.max(localBottom, obstruct.maxBottom) : localBottom) + RAIL_PAD + slot * RAIL_GAP
     }
     return {
       ...e,
