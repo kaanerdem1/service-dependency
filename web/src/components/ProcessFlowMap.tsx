@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -62,6 +62,9 @@ type ProcessNodeData = {
   services: string[]
   decisionInfo?: ProcessDecisionInfo
   details?: ProcessNodeDetails
+  pendingServiceName?: string
+  onServiceNameClick?: (serviceName: string) => void
+  onServiceGo?: (serviceName: string) => void
 }
 
 type RouteKind = 'direct' | 'jump' | 'back'
@@ -130,9 +133,33 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
       {data.services[0] ? (
-        <span className="pf-node-svc" title={data.services.join(', ')}>
-          {data.services[0]}
-        </span>
+        <div className="pf-node-svc-wrap">
+          <button
+            type="button"
+            className={`pf-node-svc${data.pendingServiceName === data.services[0] ? ' is-active' : ''}`}
+            title={data.services.join(', ')}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              data.onServiceNameClick?.(data.services[0])
+            }}
+          >
+            {data.services[0]}
+          </button>
+          {data.pendingServiceName === data.services[0] ? (
+            <button
+              type="button"
+              className="pf-node-svc-go"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                data.onServiceGo?.(data.services[0])
+              }}
+            >
+              Servise git
+            </button>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
@@ -701,12 +728,14 @@ function FullscreenGlyph({ expanded }: { expanded: boolean }) {
 
 function ProcessFlowMapInner({
   graph,
+  screens,
   onDismiss,
   initialSelectedNodeId,
   onRestoreConsumed,
   onOpenService,
 }: {
   graph: ProcessFlowGraph
+  screens?: ReactNode
   onDismiss?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
@@ -727,6 +756,9 @@ function ProcessFlowMapInner({
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
     initialSelectedNodeId,
   )
+  const [pendingServiceNav, setPendingServiceNav] = useState<
+    { nodeId: string; serviceName: string } | undefined
+  >()
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
@@ -788,6 +820,19 @@ function ProcessFlowMapInner({
     )
   }, [processNo, persistNotes, setNodes])
 
+  const handleServiceNameClick = useCallback((nodeId: string, serviceName: string) => {
+    setPendingServiceNav({ nodeId, serviceName })
+    setSelectedNodeId(undefined)
+  }, [])
+
+  const handleServiceGo = useCallback(
+    (nodeId: string, serviceName: string) => {
+      onOpenService?.(serviceName, nodeId)
+      setPendingServiceNav(undefined)
+    },
+    [onOpenService],
+  )
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
@@ -796,11 +841,16 @@ function ProcessFlowMapInner({
         setSelectedNodeId(undefined)
         return
       }
+      if (pendingServiceNav) {
+        e.preventDefault()
+        setPendingServiceNav(undefined)
+        return
+      }
       if (expanded) setExpanded(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [expanded, selectedNodeId])
+  }, [expanded, pendingServiceNav, selectedNodeId])
 
   const neighborhood = useMemo(() => {
     if (!focusId) return null
@@ -820,8 +870,17 @@ function ProcessFlowMapInner({
       if (n.type === 'processNote') {
         return { ...n, zIndex: 6, className: 'pf-note-node' }
       }
+      const data = n.data as ProcessNodeData
       return {
         ...n,
+        data: {
+          ...data,
+          pendingServiceName:
+            pendingServiceNav?.nodeId === n.id ? pendingServiceNav.serviceName : undefined,
+          onServiceNameClick: (serviceName: string) =>
+            handleServiceNameClick(n.id, serviceName),
+          onServiceGo: (serviceName: string) => handleServiceGo(n.id, serviceName),
+        },
         className: [
           n.className,
           selectedNodeId === n.id ? 'pf-node-detail-selected' : '',
@@ -850,7 +909,7 @@ function ProcessFlowMapInner({
       ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
       ...notes,
     ]
-  }, [neighborhood, nodes, selectedNodeId])
+  }, [handleServiceGo, handleServiceNameClick, neighborhood, nodes, pendingServiceNav, selectedNodeId])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -903,6 +962,7 @@ function ProcessFlowMapInner({
       if (data.collapsed) data.onToggleCollapse()
       return
     }
+    setPendingServiceNav(undefined)
     setSelectedNodeId(node.id)
   }, [])
   const addNote = useCallback(() => {
@@ -931,6 +991,7 @@ function ProcessFlowMapInner({
     })
   }, [persistNotes, processNo, setNodes])
   const onPaneClick = useCallback(() => {
+    setPendingServiceNav(undefined)
     setSelectedNodeId(undefined)
   }, [])
   const closeDetail = useCallback(() => setSelectedNodeId(undefined), [])
@@ -942,6 +1003,7 @@ function ProcessFlowMapInner({
         <p className="pf-map-subtitle">{summary.subtitle}</p>
         {summary.metaLine ? <p className="pf-map-meta">{summary.metaLine}</p> : null}
         {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
+        {screens}
       </header>
       {onDismiss ? (
         <button type="button" className="pf-map-close" onClick={onDismiss}>
@@ -1011,11 +1073,6 @@ function ProcessFlowMapInner({
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
             onClose={closeDetail}
-            onOpenService={
-              onOpenService
-                ? (serviceName) => onOpenService(serviceName, selectedNode.id)
-                : undefined
-            }
           />
         ) : null}
       </div>
@@ -1025,12 +1082,14 @@ function ProcessFlowMapInner({
 
 export function ProcessFlowMap({
   graph,
+  screens,
   onDismiss,
   initialSelectedNodeId,
   onRestoreConsumed,
   onOpenService,
 }: {
   graph: ProcessFlowGraph
+  screens?: ReactNode
   onDismiss?: () => void
   initialSelectedNodeId?: string
   onRestoreConsumed?: () => void
@@ -1041,6 +1100,7 @@ export function ProcessFlowMap({
       <ProcessFlowMapInner
         key={graph.no}
         graph={graph}
+        screens={screens}
         onDismiss={onDismiss}
         initialSelectedNodeId={initialSelectedNodeId}
         onRestoreConsumed={onRestoreConsumed}

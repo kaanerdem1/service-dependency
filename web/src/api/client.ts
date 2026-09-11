@@ -123,6 +123,10 @@ export function getProcessFlow(no: string) {
   return request<ProcessFlowGraph>(`/processes/${encodeURIComponent(no)}/flow`)
 }
 
+export function getProcessScreens(no: string) {
+  return request<ServiceScreenLink[]>(`/processes/${encodeURIComponent(no)}/screens`)
+}
+
 export function getServiceTreePath(serviceId: string) {
   return request<{ path: ModuleNode[] }>(`/services/${encodeURIComponent(serviceId)}/tree-path`)
 }

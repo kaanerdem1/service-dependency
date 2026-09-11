@@ -81,7 +81,11 @@ import {
   listServiceProcesses,
   listServiceScreens,
 } from './inventory/contextService.js'
-import { getProcessFlow, listProcesses } from './inventory/processFlowService.js'
+import {
+  getProcessFlow,
+  listProcesses,
+  listProcessScreens,
+} from './inventory/processFlowService.js'
 import { getServiceTreePath } from './inventory/location.js'
 import { getArtifactDetail, getGroupDetail } from './inventory/catalogEntityService.js'
 import { listModuleChildren, listModuleRoots, listNonServiceMethodsForArtifact, parseNodeId } from './inventory/treeService.js'
@@ -355,6 +359,19 @@ app.get('/api/processes/:no/flow', async (req, res) => {
     res.json(flow)
   } catch (e) {
     console.error('[inventory] /api/processes/:no/flow', e)
+    res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.get('/api/processes/:no/screens', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    res.json(await listProcessScreens(req.params.no))
+  } catch (e) {
+    console.error('[inventory] /api/processes/:no/screens', e)
     res.status(500).json({ error: 'inventory_error' })
   }
 })

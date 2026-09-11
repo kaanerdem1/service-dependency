@@ -3959,6 +3959,61 @@
   color: color-mix(in srgb, var(--ink) 82%, var(--muted));
 }
 
+.pf-map-screens {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+
+.pf-map-screens-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-map-screens-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pf-map-screens-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 4%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: 11.5px;
+}
+
+.pf-map-screens-name {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.pf-map-screens-type {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.pf-map-screens-desc {
+  flex: 1 1 100%;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
 .pf-map-close {
   position: absolute;
   top: 12px;
@@ -4305,8 +4360,55 @@
   overflow-wrap: anywhere;
 }
 
+.pf-map-wrap .pf-node-svc-wrap {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  max-width: 100%;
+}
+
 .pf-map-wrap .pf-node-svc {
   max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  text-underline-offset: 2px;
+}
+
+.pf-map-wrap .pf-node-svc.is-active {
+  color: var(--ink);
+  font-weight: 650;
+}
+
+.pf-map-wrap .pf-node-svc-go {
+  margin: 0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 80%, var(--ink));
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pf-map-wrap .pf-node-svc-go:hover {
+  background: color-mix(in srgb, var(--accent) 20%, #fff);
 }
 
 .pf-map-wrap .react-flow__edgelabel-renderer {

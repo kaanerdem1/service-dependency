@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { getProcessFlow } from '../api/client'
+import { getProcessFlow, getProcessScreens } from '../api/client'
 import { ProcessFlowMap } from './ProcessFlowMap'
-import type { ProcessFlowGraph } from '../types'
+import { ProcessFlowScreens } from './ProcessFlowScreens'
+import type { ProcessFlowGraph, ServiceScreenLink } from '../types'
 
 type Props = {
   processNo: string
@@ -19,11 +20,13 @@ export function ProcessFlowPage({
   onOpenService,
 }: Props) {
   const [graph, setGraph] = useState<ProcessFlowGraph>()
+  const [screens, setScreens] = useState<ServiceScreenLink[]>([])
   const [error, setError] = useState<string>()
 
   useEffect(() => {
     let cancelled = false
     setGraph(undefined)
+    setScreens([])
     setError(undefined)
     void getProcessFlow(processNo)
       .then((row) => {
@@ -31,6 +34,13 @@ export function ProcessFlowPage({
       })
       .catch(() => {
         if (!cancelled) setError('Süreç akışı yüklenemedi.')
+      })
+    void getProcessScreens(processNo)
+      .then((rows) => {
+        if (!cancelled) setScreens(rows)
+      })
+      .catch(() => {
+        if (!cancelled) setScreens([])
       })
     return () => {
       cancelled = true
@@ -50,6 +60,7 @@ export function ProcessFlowPage({
         <ProcessFlowMap
           key={`${graph.no}:${initialSelectedNodeId ?? ''}`}
           graph={graph}
+          screens={<ProcessFlowScreens screens={screens} />}
           onDismiss={onDismiss}
           initialSelectedNodeId={initialSelectedNodeId}
           onRestoreConsumed={onRestoreConsumed}

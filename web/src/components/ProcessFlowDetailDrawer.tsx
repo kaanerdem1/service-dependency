@@ -29,31 +29,6 @@ function formatCriteria(criteria: Record<string, string>): string {
     .join(' · ')
 }
 
-function serviceNameFromDetailValue(value: string): string {
-  return value.split(' · ')[0]?.trim() ?? value.trim()
-}
-
-function isServiceDetailRow(label: string): boolean {
-  return label === 'Servis' || label.startsWith('Geçiş:')
-}
-
-function ServiceNameButton({
-  name,
-  onOpenService,
-}: {
-  name: string
-  onOpenService?: (serviceName: string) => void
-}) {
-  if (!onOpenService) {
-    return <span>{name}</span>
-  }
-  return (
-    <button type="button" className="pf-detail-service-link" onClick={() => onOpenService(name)}>
-      {name}
-    </button>
-  )
-}
-
 type Props = {
   open: boolean
   nodeId: string
@@ -63,7 +38,6 @@ type Props = {
   decisionInfo?: ProcessDecisionInfo
   services: string[]
   onClose: () => void
-  onOpenService?: (serviceName: string) => void
 }
 
 export function ProcessFlowDetailDrawer({
@@ -75,7 +49,6 @@ export function ProcessFlowDetailDrawer({
   decisionInfo,
   services,
   onClose,
-  onOpenService,
 }: Props) {
   const rules = decisionInfo?.rules ?? []
   const hasDetails = (details?.groups.length ?? 0) > 0
@@ -135,16 +108,7 @@ export function ProcessFlowDetailDrawer({
                   {group.rows.map((row) => (
                     <div key={`${group.title}-${row.label}-${row.value}`} className="pf-detail-dl-row">
                       <dt>{row.label}</dt>
-                      <dd>
-                        {onOpenService && isServiceDetailRow(row.label) ? (
-                          <ServiceNameButton
-                            name={serviceNameFromDetailValue(row.value)}
-                            onOpenService={onOpenService}
-                          />
-                        ) : (
-                          row.value
-                        )}
-                      </dd>
+                      <dd>{row.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -155,11 +119,10 @@ export function ProcessFlowDetailDrawer({
         {hasServices ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Servisler</h3>
+            <p className="pf-detail-lead">Servise gitmek için haritadaki servis adına tıklayın.</p>
             <ul className="pf-detail-service-list">
               {services.map((s) => (
-                <li key={s}>
-                  <ServiceNameButton name={s} onOpenService={onOpenService} />
-                </li>
+                <li key={s}>{s}</li>
               ))}
             </ul>
           </section>

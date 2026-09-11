@@ -85,6 +85,41 @@ export async function listPocProcesses(): Promise<ProcessListItem[]> {
   return listProcesses()
 }
 
+export type ProcessScreenLink = {
+  oid: string
+  name: string
+  pageType: string
+  descriptionTr: string | null
+}
+
+export async function listProcessScreens(processNo: string): Promise<ProcessScreenLink[]> {
+  const { rows } = await query<{
+    oid: string
+    name: string
+    page_type: string
+    description_tr: string | null
+  }>(
+    `SELECT s.oid::text AS oid,
+            s.name,
+            s.page_type,
+            s.description_tr
+     FROM ${tableName('screen_process')} sp
+     JOIN ${tableName('process')} p ON p.oid = sp.process_oid
+     JOIN ${tableName('screen')} s ON s.oid = sp.screen_oid
+     WHERE p.no = $1
+       AND p.status = 1
+       AND s.status = 1
+     ORDER BY s.page_type, s.name`,
+    [processNo],
+  )
+  return rows.map((row) => ({
+    oid: row.oid,
+    name: row.name,
+    pageType: row.page_type,
+    descriptionTr: row.description_tr,
+  }))
+}
+
 export async function getProcessFlow(no: string): Promise<
   (ProcessFlowGraph & { positions: Record<string, { x: number; y: number }>; oid: string }) | undefined
 > {
