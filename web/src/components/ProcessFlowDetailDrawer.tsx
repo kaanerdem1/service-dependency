@@ -5,6 +5,7 @@ import type {
   ProcessFlowNodeKind,
   ProcessIncomingTransition,
   ProcessNodeDetails,
+  ProcessOutgoingTransition,
   ProcessRefResolve,
   ServiceNameResolve,
 } from '../types'
@@ -45,6 +46,7 @@ type Props = {
   services: string[]
   subProcessNo?: string
   incoming?: ProcessIncomingTransition[]
+  outgoing?: ProcessOutgoingTransition[]
   onClose: () => void
   onOpenService?: (serviceName: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string) => void
@@ -60,6 +62,7 @@ export function ProcessFlowDetailDrawer({
   services,
   subProcessNo,
   incoming = [],
+  outgoing = [],
   onClose,
   onOpenService,
   onOpenSubProcess,
@@ -67,9 +70,33 @@ export function ProcessFlowDetailDrawer({
   const rules = decisionInfo?.rules ?? []
   const hasDetails = (details?.groups.length ?? 0) > 0
   const hasRules = rules.length > 0
-  const hasServices = services.length > 0
   const hasSubProcess = Boolean(subProcessNo?.trim())
   const hasIncoming = incoming.length > 0
+  const hasOutgoing = outgoing.length > 0
+  // "Geçiş: X" grupları (details.groups) zaten kendi servisini "Servis: Y"
+  // satırıyla gösteriyor. Aşağıdaki düz "Servisler" listesi TÜM node
+  // servislerini (hangi geçişe ait olduğu belirtilmeden) tekrar gösterirse,
+  // hem tekrar hem de "bu servisler hangi oka ait?" karışıklığı yaratıyordu
+  // — ekrandaki oklarla eşleşmeyen servisler varmış gibi görünüyordu. Bu
+  // yüzden burada sadece HİÇBİR "Geçiş:" grubunda geçmeyen (adım seviyesi,
+  // belirli bir çıkışa bağlı olmayan) servisler kalır.
+  const transitionServiceCodes = useMemo(() => {
+    const set = new Set<string>()
+    for (const group of details?.groups ?? []) {
+      if (!group.title.toLowerCase().startsWith('geçiş')) continue
+      for (const row of group.rows) {
+        if (row.label !== 'Servis') continue
+        const code = row.value.split('·')[0]?.trim()
+        if (code) set.add(code)
+      }
+    }
+    return set
+  }, [details])
+  const otherServices = useMemo(
+    () => services.filter((s) => !transitionServiceCodes.has(s)),
+    [services, transitionServiceCodes],
+  )
+  const hasServices = otherServices.length > 0
   const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
   const [subProcessMeta, setSubProcessMeta] = useState<ProcessRefResolve | null>(null)
 
@@ -169,6 +196,29 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
+        {hasOutgoing ? (
+          <section className="pf-detail-section">
+            <h3 className="pf-detail-section-title">Bu adımdan çıkış</h3>
+            <p className="pf-detail-lead">
+              Bu noktadan hangi geçiş etiketiyle nereye gidiliyor? (Servisi olmayan geçişler de dahil.)
+            </p>
+            <ul className="pf-detail-incoming-list">
+              {outgoing.map((row, i) => (
+                <li key={`${row.toId}:${row.label ?? ''}:${i}`} className="pf-detail-incoming">
+                  <span className="pf-detail-incoming-label">{row.label ?? 'etiket yok'}</span>
+                  <span className="pf-detail-incoming-arrow" aria-hidden>
+                    →
+                  </span>
+                  <span className="pf-detail-incoming-from">
+                    <span className="pf-detail-incoming-kind">{KIND_LABEL[row.toKind]}</span>
+                    {row.toName}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {hasRules ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Geçiş kuralları</h3>
@@ -236,9 +286,12 @@ export function ProcessFlowDetailDrawer({
 
         {hasServices ? (
           <section className="pf-detail-section">
-            <h3 className="pf-detail-section-title">Servisler</h3>
+            <h3 className="pf-detail-section-title">Diğer servisler</h3>
+            <p className="pf-detail-lead">
+              Belirli bir geçişe/oka bağlı değil — adımın kendisiyle ilgili (örn. atama, bildirim) servisler.
+            </p>
             <ul className="pf-detail-service-cards">
-              {services.map((serviceName) => {
+              {otherServices.map((serviceName) => {
                 const meta = resolvedByName.get(serviceName)
                 const labelTr = meta?.descriptionTr?.trim()
                 const canGo = Boolean(onOpenService && meta?.id)
@@ -266,7 +319,7 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
-        {!hasRules && !hasDetails && !hasServices && !hasSubProcess && !hasIncoming ? (
+        {!hasRules && !hasDetails && !hasServices && !hasSubProcess && !hasIncoming && !hasOutgoing ? (
           <p className="pf-detail-empty">Bu adım için dolu XML alanı yok.</p>
         ) : null}
       </div>

@@ -26,6 +26,7 @@ import type {
   ProcessFlowGraph,
   ProcessFlowNodeKind,
   ProcessIncomingTransition,
+  ProcessOutgoingTransition,
   ProcessNodeDetails,
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
@@ -76,6 +77,10 @@ type ProcessEdgeData = {
   route?: RouteKind
   lane?: number
   railY?: number
+  /** Aynı kaynaktan (jump) veya aynı hedefe (back) birden fazla ok varsa,
+   * her birinin ray içindeki sırası — çıkışta hemen ayrışsınlar diye
+   * kancanın yatay uzunluğu bu değere göre kademelenir (bkz. kitEdgePath). */
+  slot?: number
   bandMinY?: number
   bandMaxY?: number
   active?: boolean
@@ -172,43 +177,70 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
   )
 }
 
-/** Aynı hedefe (back) veya aynı kaynaktan (jump) birden fazla ok
- * yakınsıyorsa, hash tabanlı sözde-rastgele bir ofset yerine, diğer ucun Y
- * konumuna göre sıralı ve çakışmasız bir "slot" (0,1,2,...) atar. Böylece
- * örn. 3 ayrı görevden aynı karara dönen "Onay" okları üst üste binmez, her
- * biri kendi rayında, kaynak sırasına göre ayrışmış şekilde görünür. */
+/** Bir düğüme DOKUNAN (kaynak VEYA hedef olarak — ikisi de sayılır) aynı
+ * rota tipindeki (back/jump) tüm okları, hash tabanlı sözde-rastgele bir
+ * ofset yerine, diğer ucun Y konumuna göre sıralı ve çakışmasız bir "slot"
+ * (0,1,2,...) atar. Böylece örn. 3 ayrı görevden aynı karara dönen "Onay"
+ * okları üst üste binmez, her biri kendi rayında ayrışmış görünür.
+ *
+ * ÖNEMLİ: bir düğümün SADECE kaynak-grubu veya SADECE hedef-grubu ayrı ayrı
+ * gruplanırsa yetmez — örn. bir karara alttan "jump" ile giren BİR ok ile o
+ * karardan alta çıkan BAŞKA bir "jump" ok, iki farklı grupta (biri hedef
+ * grubu, biri kaynak grubu) ayrı ayrı slot=0 alıp aynı yatay rayda üst üste
+ * biner (105116'da "Fiyatlama ve Risk Vadesi Bölge Yetkisinde mi?" kararına
+ * giren/çıkan iki "false" oku gibi). Bu yüzden bir düğüme DOKUNAN tüm
+ * back/jump okları TEK bir gruba toplanır (yön farkı olmadan) ve bir okun
+ * nihai slotu, iki ucundaki (kaynak + hedef) grup slotlarının BÜYÜĞÜ olur —
+ * herhangi bir ucu paylaşan iki ok asla aynı slotta kalmaz. */
 function assignRailSlots(
   edges: Edge[],
   positions: Record<string, { x: number; y: number }>,
 ): Map<string, number> {
-  const backGroups = new Map<string, Edge[]>()
-  const jumpGroups = new Map<string, Edge[]>()
+  const backTouch = new Map<string, Edge[]>()
+  const jumpTouch = new Map<string, Edge[]>()
+  const pushInto = (m: Map<string, Edge[]>, key: string, e: Edge) => {
+    const list = m.get(key) ?? []
+    list.push(e)
+    m.set(key, list)
+  }
   for (const e of edges) {
     const route = (e.data as ProcessEdgeData | undefined)?.route
     if (route === 'back') {
-      const list = backGroups.get(e.target) ?? []
-      list.push(e)
-      backGroups.set(e.target, list)
+      pushInto(backTouch, e.source, e)
+      pushInto(backTouch, e.target, e)
     } else if (route === 'jump') {
-      const list = jumpGroups.get(e.source) ?? []
-      list.push(e)
-      jumpGroups.set(e.source, list)
+      pushInto(jumpTouch, e.source, e)
+      pushInto(jumpTouch, e.target, e)
     }
   }
-  const slotOf = new Map<string, number>()
-  for (const list of backGroups.values()) {
-    list.sort(
-      (a, b) =>
-        (positions[a.source]?.y ?? 0) - (positions[b.source]?.y ?? 0) || a.id.localeCompare(b.id),
-    )
-    list.forEach((e, i) => slotOf.set(e.id, i))
+  const yOf = (id: string) => positions[id]?.y ?? 0
+  const otherEndY = (e: Edge, touchedNode: string) =>
+    yOf(e.source === touchedNode ? e.target : e.source)
+  /** touchMap: nodeId -> o düğüme dokunan okların listesi. Her düğüm için
+   * kendi içinde sıralı slotlar üretir; sonucu nodeId -> (edgeId -> slot). */
+  const slotsPerNode = (touchMap: Map<string, Edge[]>): Map<string, Map<string, number>> => {
+    const out = new Map<string, Map<string, number>>()
+    for (const [node, list] of touchMap) {
+      const sorted = [...list].sort(
+        (a, b) => otherEndY(a, node) - otherEndY(b, node) || a.id.localeCompare(b.id),
+      )
+      const m = new Map<string, number>()
+      sorted.forEach((e, i) => m.set(e.id, i))
+      out.set(node, m)
+    }
+    return out
   }
-  for (const list of jumpGroups.values()) {
-    list.sort(
-      (a, b) =>
-        (positions[a.target]?.y ?? 0) - (positions[b.target]?.y ?? 0) || a.id.localeCompare(b.id),
-    )
-    list.forEach((e, i) => slotOf.set(e.id, i))
+  const backPerNode = slotsPerNode(backTouch)
+  const jumpPerNode = slotsPerNode(jumpTouch)
+
+  const slotOf = new Map<string, number>()
+  for (const e of edges) {
+    const route = (e.data as ProcessEdgeData | undefined)?.route
+    const perNode = route === 'back' ? backPerNode : route === 'jump' ? jumpPerNode : undefined
+    if (!perNode) continue
+    const s1 = perNode.get(e.source)?.get(e.id) ?? 0
+    const s2 = perNode.get(e.target)?.get(e.id) ?? 0
+    slotOf.set(e.id, Math.max(s1, s2))
   }
   return slotOf
 }
@@ -280,6 +312,7 @@ function kitEdgePath(
   bandMinY: number,
   bandMaxY: number,
   lane = 0,
+  slot = 0,
 ) {
   const lift = lane * 18
   if (route === 'direct') {
@@ -303,6 +336,13 @@ function kitEdgePath(
     const r = Math.max(4, Math.min(rV, rH))
     return r
   }
+  // Aynı düğümden (kaynak) birden fazla back/jump oku çıkıyorsa, hepsi aynı
+  // handle noktasından aynı yönde "kanca" ile çıkarsa, farklı raylara gitse
+  // bile ÇIKIŞTA hâlâ üst üste düz bir çizgi gibi görünür (bkz. "3 ok
+  // dümdüz aşağı inip sonra ayrılıyor" şikayeti). Bu yüzden kanca uzunluğu
+  // (kx), o okun slot sırasına göre kademelenir — her ok düğümden hemen
+  // farklı bir X'e doğru ayrılarak çıkar, aşağıda değil ÇIKIŞTA ayrışırlar.
+  const SLOT_STAGGER = 14
   if (route === 'back') {
     const railY = (referenceRailY ?? bandMinY - RAIL_PAD) + lift
     const r = roundBack(railY)
@@ -311,13 +351,14 @@ function kitEdgePath(
     // sütundaki birden fazla görevin çıkışı böylece üst üste binen dümdüz
     // dikey çizgiler gibi görünmez; her biri kendi düğümünden ayrışarak,
     // eğri bir "kanca" ile çıkar — yön daha net okunur.
-    const kx = Math.max(16, Math.min(34, r + 8))
+    const kx = Math.max(16, Math.min(34, r + 8)) + slot * SLOT_STAGGER
     const path = `M ${sourceX},${sourceY} C ${sourceX + kx},${sourceY} ${sourceX + kx},${railY + r} ${sourceX + kx},${railY + r} Q ${sourceX + kx},${railY} ${sourceX + kx - r},${railY} L ${targetX + r},${railY} Q ${targetX},${railY} ${targetX},${railY + r} L ${targetX},${targetY}`
     return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
   }
   const railY = (referenceRailY ?? bandMaxY + RAIL_PAD) + lift
   const r = roundBack(railY)
-  const path = `M ${sourceX},${sourceY} L ${sourceX},${railY - r} Q ${sourceX},${railY} ${sourceX + r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
+  const kx = Math.max(16, Math.min(34, r + 8)) + slot * SLOT_STAGGER
+  const path = `M ${sourceX},${sourceY} C ${sourceX + kx},${sourceY} ${sourceX + kx},${railY - r} ${sourceX + kx},${railY - r} Q ${sourceX + kx},${railY} ${sourceX + kx - r},${railY} L ${targetX - r},${railY} Q ${targetX},${railY} ${targetX},${railY - r} L ${targetX},${targetY}`
   return { path, labelX: (sourceX + targetX) / 2, labelY: railY }
 }
 
@@ -345,6 +386,7 @@ function ProcessEdge({
     bandMinY,
     bandMaxY,
     data?.lane ?? 0,
+    data?.slot ?? 0,
   )
   const active = !!data?.active
   const dim = !!data?.dim
@@ -987,6 +1029,7 @@ function withEdgeRoutes(
         bandMinY: band.minY,
         bandMaxY: band.maxY,
         railY,
+        slot,
       } satisfies ProcessEdgeData,
     }
   })
@@ -1007,6 +1050,30 @@ function incomingTransitionsFor(
       fromId: e.from,
       fromName: from.name,
       fromKind: from.kind,
+      label: e.label?.trim() || undefined,
+    })
+  }
+  return rows
+}
+
+/** Seçili adımdan çıkan TÜM geçişler (label + hedef) — servisi olmayan
+ * geçişler (örn. "Reddet") "details.groups" içinde hiç görünmüyordu, bu da
+ * ekranda 3 ok varken drawer'da 2 "Geçiş:" bölümü görünmesine yol açıyordu.
+ * Bu liste, görünen ok sayısıyla her zaman birebir eşleşir. */
+function outgoingTransitionsFor(
+  graph: ProcessFlowGraph,
+  nodeId: string,
+): ProcessOutgoingTransition[] {
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+  const rows: ProcessOutgoingTransition[] = []
+  for (const e of graph.edges) {
+    if (e.from !== nodeId || isDummyId(e.to)) continue
+    const to = byId.get(e.to)
+    if (!to) continue
+    rows.push({
+      toId: e.to,
+      toName: to.name,
+      toKind: to.kind,
       label: e.label?.trim() || undefined,
     })
   }
@@ -1256,6 +1323,10 @@ function ProcessFlowMapInner({
   )
   const selectedIncoming = useMemo(
     () => (selectedNodeId ? incomingTransitionsFor(graph, selectedNodeId) : []),
+    [graph, selectedNodeId],
+  )
+  const selectedOutgoing = useMemo(
+    () => (selectedNodeId ? outgoingTransitionsFor(graph, selectedNodeId) : []),
     [graph, selectedNodeId],
   )
   const processNodes = useMemo(
@@ -1574,6 +1645,7 @@ function ProcessFlowMapInner({
             services={selectedNode.services}
             subProcessNo={selectedNode.subProcessNo}
             incoming={selectedIncoming}
+            outgoing={selectedOutgoing}
             onClose={closeDetail}
             onOpenService={
               onOpenService

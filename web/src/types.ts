@@ -376,6 +376,16 @@ export type ProcessIncomingTransition = {
   label?: string
 }
 
+/** Seçili adımdan hangi geçiş etiketiyle nereye gidildiği — servisi olmayan
+ * geçişler de (örn. "Reddet") burada görünür; details.groups sadece
+ * servisi olan geçişleri kapsar. */
+export type ProcessOutgoingTransition = {
+  toId: string
+  toName: string
+  toKind: ProcessFlowNodeKind
+  label?: string
+}
+
 export type ProcessCatalogItem = {
   oid: string
   no: string
