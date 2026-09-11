@@ -95,10 +95,23 @@ export async function getProcessFlow(no: string): Promise<
     description_tr: string | null
     process_type: string | null
     process_definition: string
+    update_date: Date | string | null
+    it_owner_name: string | null
+    it_business_owner_name: string | null
   }>(
-    `SELECT oid::text AS oid, no, name, description_tr, process_type, process_definition
-     FROM ${tableName('process')}
-     WHERE status = 1 AND no = $1 AND process_definition IS NOT NULL
+    `SELECT p.oid::text AS oid,
+            p.no,
+            p.name,
+            p.description_tr,
+            p.process_type,
+            p.process_definition,
+            p.update_date,
+            po.it_owner_name,
+            po.it_business_owner_name
+     FROM ${tableName('process')} p
+     LEFT JOIN ${tableName('process_owner')} po
+       ON po.oid = p.process_owner_oid AND po.status = 1
+     WHERE p.status = 1 AND p.no = $1 AND p.process_definition IS NOT NULL
      LIMIT 1`,
     [no],
   )
@@ -113,5 +126,8 @@ export async function getProcessFlow(no: string): Promise<
     parName: row.name,
     descriptionTr: row.description_tr ?? laid.label,
     processType: row.process_type ?? 'BPM',
+    processOwnerIt: row.it_owner_name,
+    processOwnerBusiness: row.it_business_owner_name,
+    updatedAt: row.update_date ? String(row.update_date) : null,
   }
 }

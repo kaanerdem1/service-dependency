@@ -318,6 +318,11 @@ export default function App() {
   const [workflowInfoId, setWorkflowInfoId] = useState<string>()
   const [workflowResumeId, setWorkflowResumeId] = useState<string>()
   const [processFlowNo, setProcessFlowNo] = useState<string>()
+  /** Drawer’dan servise gidildiğinde sürece geri dönmek için. */
+  const [processFlowReturn, setProcessFlowReturn] = useState<
+    { processNo: string; nodeId?: string } | undefined
+  >()
+  const [processFlowRestoreNodeId, setProcessFlowRestoreNodeId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
@@ -665,6 +670,8 @@ export default function App() {
   const openProcessFlow = useCallback((no: string, opts?: { keepService?: boolean }) => {
     setWorkflowInfoId(undefined)
     setWorkflowResumeId(undefined)
+    setProcessFlowReturn(undefined)
+    setProcessFlowRestoreNodeId(undefined)
     if (!opts?.keepService) {
       setPivotId(undefined)
       setCatalogNode(null)
@@ -704,8 +711,15 @@ export default function App() {
   const selectPivot = useCallback(
     (
       id: string,
-      opts?: { resetHistory?: boolean; source?: 'tree' | 'map' | 'search' | 'table' | 'workflow' },
+      opts?: {
+        resetHistory?: boolean
+        source?: 'tree' | 'map' | 'search' | 'table' | 'workflow'
+        keepProcessFlowReturn?: boolean
+      },
     ) => {
+      if (!opts?.keepProcessFlowReturn) {
+        setProcessFlowReturn(undefined)
+      }
       setCatalogNode(null)
       setWorkflowInfoId(undefined)
       setProcessFlowNo(undefined)
@@ -766,6 +780,48 @@ export default function App() {
     [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
   )
 
+  const openServiceFromProcessFlow = useCallback(
+    async (serviceName: string, nodeId: string) => {
+      if (!processFlowNo) return
+      const hits = await searchServices(serviceName).catch(() => [] as Service[])
+      const exact =
+        hits.find((h) => h.name === serviceName) ??
+        hits.find((h) => h.name.toUpperCase() === serviceName.toUpperCase())
+      const match = exact ?? (hits.length === 1 ? hits[0] : undefined)
+      if (!match) return
+
+      const returnTo = { processNo: processFlowNo, nodeId }
+      setProcessFlowRestoreNodeId(undefined)
+      setProcessFlowNo(undefined)
+      selectPivot(match.id, {
+        resetHistory: true,
+        source: 'table',
+        keepProcessFlowReturn: true,
+      })
+      setProcessFlowReturn(returnTo)
+    },
+    [processFlowNo, selectPivot],
+  )
+
+  const restoreProcessFlowFromService = useCallback(() => {
+    if (!processFlowReturn) return
+    const ret = processFlowReturn
+    setProcessFlowReturn(undefined)
+    setProcessFlowRestoreNodeId(ret.nodeId)
+    setProcessFlowNo(ret.processNo)
+    setPivotId(undefined)
+    setSelectedMethodId(undefined)
+    setMethodImpact(undefined)
+    setHistory([])
+    setHistoryIndex(-1)
+    setService(undefined)
+    setAffected([])
+    setCallees([])
+    setImpact(undefined)
+    setMapExpanded(false)
+    setTab('map')
+  }, [processFlowReturn])
+
   const selectMethod = useCallback(
     (serviceId: string, methodId: string) => {
       setAllowNavCollapse(true)
@@ -817,6 +873,11 @@ export default function App() {
   const goBack = () => {
     if (selectedMethodId) {
       clearMethodKeepService()
+      return
+    }
+    if (processFlowReturn) {
+      trail.record('nav_back', undefined, 'Süreç akışına geri dönüldü')
+      restoreProcessFlowFromService()
       return
     }
     if (historyIndex <= 0) return
@@ -1303,7 +1364,14 @@ export default function App() {
             <div className="stage-body pf-map-stage">
               <ProcessFlowPage
                 processNo={processFlowNo}
-                onDismiss={() => setProcessFlowNo(undefined)}
+                initialSelectedNodeId={processFlowRestoreNodeId}
+                onRestoreConsumed={() => setProcessFlowRestoreNodeId(undefined)}
+                onOpenService={openServiceFromProcessFlow}
+                onDismiss={() => {
+                  setProcessFlowNo(undefined)
+                  setProcessFlowReturn(undefined)
+                  setProcessFlowRestoreNodeId(undefined)
+                }}
               />
             </div>
           ) : null}
@@ -1470,7 +1538,9 @@ export default function App() {
                           onPivotBack={goBack}
                           onPivotForward={goForward}
                           canPivotBack={
-                            historyIndex > 0 || Boolean(selectedMethodId)
+                            historyIndex > 0 ||
+                            Boolean(selectedMethodId) ||
+                            Boolean(processFlowReturn)
                           }
                           canPivotForward={
                             historyIndex >= 0 &&
@@ -1511,7 +1581,7 @@ export default function App() {
                           onClearCenter={leaveServiceSelection}
                           onPivotBack={goBack}
                           onPivotForward={goForward}
-                          canPivotBack={historyIndex > 0}
+                          canPivotBack={historyIndex > 0 || Boolean(processFlowReturn)}
                           canPivotForward={
                             historyIndex >= 0 &&
                             historyIndex < history.length - 1
@@ -1568,7 +1638,7 @@ export default function App() {
                           type="button"
                           className="map-nav-btn"
                           onClick={goBack}
-                          disabled={historyIndex <= 0}
+                          disabled={historyIndex <= 0 && !processFlowReturn}
                           title="Önceki servis (Harita ile aynı geçmiş)"
                         >
                           ← Geri

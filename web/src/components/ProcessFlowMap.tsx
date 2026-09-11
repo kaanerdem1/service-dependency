@@ -129,6 +129,11 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
+      {data.services[0] ? (
+        <span className="pf-node-svc" title={data.services.join(', ')}>
+          {data.services[0]}
+        </span>
+      ) : null}
     </div>
   )
 }
@@ -697,9 +702,15 @@ function FullscreenGlyph({ expanded }: { expanded: boolean }) {
 function ProcessFlowMapInner({
   graph,
   onDismiss,
+  initialSelectedNodeId,
+  onRestoreConsumed,
+  onOpenService,
 }: {
   graph: ProcessFlowGraph
   onDismiss?: () => void
+  initialSelectedNodeId?: string
+  onRestoreConsumed?: () => void
+  onOpenService?: (serviceName: string, nodeId: string) => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const seed = useMemo(() => {
@@ -713,7 +724,9 @@ function ProcessFlowMapInner({
   const [edges, setEdges] = useEdgesState(seed.edges)
   const [hoverId, setHoverId] = useState<string>()
   const [dragId, setDragId] = useState<string>()
-  const [selectedNodeId, setSelectedNodeId] = useState<string>()
+  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
+    initialSelectedNodeId,
+  )
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
@@ -745,8 +758,14 @@ function ProcessFlowMapInner({
       return [...built.nodes, ...notes]
     })
     setEdges(built.edges)
-    setSelectedNodeId(undefined)
-  }, [graph, processNo, setNodes, setEdges])
+    if (!initialSelectedNodeId) setSelectedNodeId(undefined)
+  }, [graph, initialSelectedNodeId, processNo, setNodes, setEdges])
+
+  useEffect(() => {
+    if (!initialSelectedNodeId) return
+    setSelectedNodeId(initialSelectedNodeId)
+    onRestoreConsumed?.()
+  }, [initialSelectedNodeId, onRestoreConsumed])
 
   useEffect(() => {
     if (!wide) return
@@ -921,6 +940,7 @@ function ProcessFlowMapInner({
       <header className="pf-map-head">
         <h1 className="pf-map-title">{summary.title}</h1>
         <p className="pf-map-subtitle">{summary.subtitle}</p>
+        {summary.metaLine ? <p className="pf-map-meta">{summary.metaLine}</p> : null}
         {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
       </header>
       {onDismiss ? (
@@ -991,6 +1011,11 @@ function ProcessFlowMapInner({
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
             onClose={closeDetail}
+            onOpenService={
+              onOpenService
+                ? (serviceName) => onOpenService(serviceName, selectedNode.id)
+                : undefined
+            }
           />
         ) : null}
       </div>
@@ -1001,13 +1026,26 @@ function ProcessFlowMapInner({
 export function ProcessFlowMap({
   graph,
   onDismiss,
+  initialSelectedNodeId,
+  onRestoreConsumed,
+  onOpenService,
 }: {
   graph: ProcessFlowGraph
   onDismiss?: () => void
+  initialSelectedNodeId?: string
+  onRestoreConsumed?: () => void
+  onOpenService?: (serviceName: string, nodeId: string) => void
 }) {
   return (
     <ReactFlowProvider>
-      <ProcessFlowMapInner key={graph.no} graph={graph} onDismiss={onDismiss} />
+      <ProcessFlowMapInner
+        key={graph.no}
+        graph={graph}
+        onDismiss={onDismiss}
+        initialSelectedNodeId={initialSelectedNodeId}
+        onRestoreConsumed={onRestoreConsumed}
+        onOpenService={onOpenService}
+      />
     </ReactFlowProvider>
   )
 }

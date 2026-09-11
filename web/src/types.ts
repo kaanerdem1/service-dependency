@@ -399,6 +399,9 @@ export type ProcessFlowGraph = {
   parName?: string | null
   descriptionTr?: string | null
   processType?: string | null
+  processOwnerIt?: string | null
+  processOwnerBusiness?: string | null
+  updatedAt?: string | null
   label: string | null
   nodes: {
     id: string
