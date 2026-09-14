@@ -103,7 +103,6 @@ function buildRouteNodes(
   byId: Map<string, FlowNode>,
   positions: Record<string, { x: number; y: number }>,
   selectedIndex: number | undefined,
-  readOnly: boolean,
 ): Node[] {
   const committed: Node<RouteNodeData>[] = visits.map((visit, index) => {
     const source = byId.get(visit.nodeId)
@@ -119,7 +118,7 @@ function buildRouteNodes(
       },
       className: 'pf-route-node-wrap',
       selected: selectedIndex === index,
-      draggable: !readOnly,
+      draggable: true,
       style: { width: 168 },
     }
   })
@@ -310,14 +309,14 @@ function ProcessFlowRouteBuilderInner({
   )
   const cameraKey = cameraFocusIds.join('|')
   const [nodes, setNodes, onNodesChange] = useNodesState(() =>
-    buildRouteNodes(visits, choices, byId, {}, selectedIndex, readOnly),
+    buildRouteNodes(visits, choices, byId, {}, selectedIndex),
   )
   const syncRouteNodes = useCallback(
     (current: Node[]) => {
       const positions = { ...positionsRef.current, ...collectNodePositions(current) }
-      return buildRouteNodes(visits, choices, byId, positions, selectedIndex, readOnly)
+      return buildRouteNodes(visits, choices, byId, positions, selectedIndex)
     },
-    [byId, choices, readOnly, selectedIndex, visits],
+    [byId, choices, selectedIndex, visits],
   )
 
   useEffect(() => {
@@ -340,13 +339,13 @@ function ProcessFlowRouteBuilderInner({
           return {
             ...node,
             selected: selectedIndex === index,
-            draggable: !readOnly,
+            draggable: true,
           }
         })
       }
       return syncRouteNodes(current)
     })
-  }, [choices, readOnly, selectedIndex, setNodes, syncRouteNodes, visits])
+  }, [choices, selectedIndex, setNodes, syncRouteNodes, visits])
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -474,24 +473,40 @@ function ProcessFlowRouteBuilderInner({
     [graph],
   )
 
-  const persistRoute = (asNew = false) => {
+  const routeDirty = activeRoute
+    ? savedRouteHasChanges(state, activeRoute.state, routeName, activeRoute.name)
+    : true
+
+  const persistRoute = useCallback(
+    (asNew = false) => {
+      const name = routeName.trim()
+      if (!name) return
+      const route = saveProcessRoute({
+        id: asNew ? undefined : activeRoute?.id,
+        processNo,
+        processTitle,
+        name,
+        state,
+        status: routeProgress(graph, state),
+        graphUpdatedAt: graph.updatedAt,
+      })
+      setActiveRoute(route)
+      setRouteName(route.name)
+      setSaveOpen(false)
+      setReadOnly(true)
+      onRouteSaved?.(route)
+    },
+    [activeRoute?.id, graph, onRouteSaved, processNo, processTitle, routeName, state],
+  )
+
+  const openSave = useCallback(() => {
     const name = routeName.trim()
-    if (!name) return
-    const route = saveProcessRoute({
-      id: asNew ? undefined : activeRoute?.id,
-      processNo,
-      processTitle,
-      name,
-      state,
-      status: routeProgress(graph, state),
-      graphUpdatedAt: graph.updatedAt,
-    })
-    setActiveRoute(route)
-    setRouteName(route.name)
-    setSaveOpen(false)
-    setReadOnly(true)
-    onRouteSaved?.(route)
-  }
+    if (activeRoute && name && !routeDirty) {
+      persistRoute(false)
+      return
+    }
+    setSaveOpen(true)
+  }, [activeRoute, persistRoute, routeDirty, routeName])
 
   const exportPdf = useCallback(
     async (endIndex: number) => {
@@ -538,9 +553,7 @@ function ProcessFlowRouteBuilderInner({
     return () => window.removeEventListener('keydown', onKey)
   }, [saveOpen, selectedIndex])
 
-  const canSaveAs =
-    Boolean(activeRoute) &&
-    savedRouteHasChanges(state, activeRoute!.state, routeName, activeRoute!.name)
+  const canSaveAs = Boolean(activeRoute) && routeDirty
 
   const stale =
     savedRoute?.graphUpdatedAt &&
@@ -618,7 +631,7 @@ function ProcessFlowRouteBuilderInner({
             <button
               type="button"
               className="pf-add-note"
-              onClick={() => setSaveOpen(true)}
+              onClick={openSave}
             >
               Kaydet
             </button>
@@ -638,7 +651,7 @@ function ProcessFlowRouteBuilderInner({
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          nodesDraggable={!readOnly}
+          nodesDraggable
           nodesConnectable={false}
           elementsSelectable
           selectNodesOnDrag={false}

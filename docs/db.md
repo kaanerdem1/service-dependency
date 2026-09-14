@@ -1,7 +1,7 @@
 # Inventory DB — katalog rehberi
 
 > Kaynak notlar: `/Users/kaanerdem/Desktop/db/db.txt`  
-> İlgili: [new.md §1.1](./new.md), [README](./README.md)
+> İlgili: [README](./README.md) · [process-flow.md](./process-flow.md)
 
 **inventory_db** (`env` şeması) statik servis / metod / call-graph kataloğu.
 
@@ -27,8 +27,6 @@
 ```text
 java_method.service_definition_id → java_class → artifact → project → project_group
 ```
-
-
 
 ### 2.2 Servis ↔ metod
 
@@ -63,8 +61,6 @@ Cross-service: caller ve callee metodlarının `service_definition_id` farklıys
 
 ---
 
-
-
 ## 3. API ↔ DB
 
 
@@ -83,8 +79,6 @@ Cross-service: caller ve callee metodlarının `service_definition_id` farklıys
 Id: `pg-{id}`, `art-{id}`, `sd-{service_definition.id}`, `jm-{java_method.id}`.
 
 ---
-
-
 
 ## 4. Sol ağaç (uygulama)
 
@@ -109,11 +103,90 @@ Lazy: 37k servis + 224k metod tek seferde açılmaz.
 
 ---
 
+## 13. Process XML — DB “eski hale döndü” / tabloya yazılmıyor
 
+### Belirtiler
+
+- Süreç listesinde isimler yine `.par` / ham `name`; **Türkçe label** (`description_tr`) yok.
+- Akış haritası açılmıyor veya çok az süreçte grafik var.
+- `env.process.process_definition` **NULL** veya çok kısa; ingest “updated=0”.
+- Dün düzgündü, bugün dump **restore** / yeni katalog import sonrası bozuldu.
+
+### Neden (veri kaybı değil, zenginleştirme silindi)
+
+
+| Olay                                                                                             | Sonuç                                                                    |
+| ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `inventory_db` **eski dump restore**                                                             | `description_tr` + `process_definition` üzerine yazılan PAR verisi gider |
+| Şema **RENAME** (`name`→`no`, eski `description_tr`→`name`) migration sonrası ingest **atlandı** | Kolonlar var ama XML/label boş                                           |
+| `process_definition` kolonu hiç yok                                                              | API yalnızca disk fallback (`PROCESS_PAR_ROOT`) veya akış yok            |
+| `PROCESS_PAR_ROOT` yanlış / ingest çalıştırılmadı                                                | Tablo dolmaz; sadece API env ile açık süreçler diskten okunabilir        |
+
+
+SQL migration dosyasını silmek veya repo’yu eski commit’e almak **Postgres’teki veriyi geri getirmez**.
+
+### Teşhis (1 dakika)
+
+API ayaktayken:
+
+```bash
+curl -s http://127.0.0.1:4000/api/meta/process-catalog-health | jq
+# veya
+cd server && npm run verify:process-catalog
+```
+
+Bakılacaklar: `ok`, `hasDefinitionColumn`, `withXml`, `withTurkishLabel`, `featured` (105801 / 105251 / 105116).
+
+SQL ile örnek:
+
+```sql
+SELECT no, LEFT(name, 40) AS name, LEFT(description_tr, 50) AS label,
+       LENGTH(process_definition) AS xml_len
+FROM env.process
+WHERE status = 1 AND no IN ('105801','105251','105116');
+```
+
+`xml_len` NULL veya 100’den küçükse tablo tarafı boş.
+
+### Onarım sırası (tekrar yaşanırsa aynı adımlar)
+
+1. **Doğru DB’ye bağlandığını doğrula** — `INVENTORY_PGDATABASE=inventory_db`, şema `env` (`server/.env`).
+2. **Kolonlar yoksa** (health: `hasDefinitionColumn: false`):
+
+```bash
+psql -h 127.0.0.1 -U postgres -d inventory_db -f server/sql/process_par_migration.sql
+```
+
+1. **PAR → tablo ingest** (asıl doldurma adımı):
+
+```bash
+cd server
+PROCESS_PAR_ROOT=/path/to/par npm run ingest:process-par
+```
+
+Script: `server/scripts/ingest-process-par.mjs` — klasör adındaki leading digits → `process.no`, `description_tr` ← XML label, `process_definition` ← tam XML.
+
+1. **API’yi yeniden başlat** — ingest sonrası; uzun işlerde `npm start` tercih et (`tsx watch` takılabilir).
+2. **Doğrula** — `npm run verify:process-catalog` veya health endpoint `ok: true`, `withXml` yüzlerce+.
+
+### Geçici fallback (tablo boşken tek süreç denemek)
+
+Sunucu env’inde `PROCESS_PAR_ROOT=/path/to/par` verilirse `getProcessFlow` diskten `processdefinition.xml` okuyabilir — **kalıcı çözüm değil**; tabloya ingest edin.
+
+### İlgili dosyalar
+
+
+| Dosya                                          | Rol                         |
+| ---------------------------------------------- | --------------------------- |
+| `server/sql/process_par_migration.sql`         | Kolon ekleme + şema notları |
+| `server/scripts/ingest-process-par.mjs`        | XML → `env.process`         |
+| `server/src/inventory/processCatalogHealth.ts` | Health + `repairCommand`    |
+| `server/.env.example`                          | Kısa hatırlatma yorumları   |
+
+
+---
 
 ## 5. Kenarlar
-
-
 
 ### 5.1 Metod
 
@@ -160,8 +233,6 @@ JOIN env.service_definition sd ON sd.id = ss.service_oid;
 
 ---
 
-
-
 ## 6. Ortam
 
 DWH ve inventory **ayrı** DB:
@@ -181,9 +252,9 @@ INVENTORY_PGPASSWORD=
 
 `tsx watch` uzun ingest/katalog yükünde kilitlenebilir; `npm start` (`server/`) daha stabil.
 
+**Süreç XML (PAR):** Kolonlar `env.process.description_tr` (Türkçe label) ve `env.process.process_definition` (tam XML). Bunlar **dump/restore ile gelmez** — ayrı migration + ingest gerekir (aşağı §13).
+
 ---
-
-
 
 ## 7. Fazlar
 
@@ -199,8 +270,6 @@ INVENTORY_PGPASSWORD=
 
 ---
 
-
-
 ## 8. Sık sorular
 
 **Yalnız** `public` **görünüyor.** Restore veya PG sürümü; şema `env`.
@@ -212,8 +281,6 @@ INVENTORY_PGPASSWORD=
 **Konumsuz.** `service_definition` var, hiçbir metod `service_definition_id` ile bakmıyor → jar join yok. Ağaçta ayrı kök; arama isimden bulur. Harita `sd-{id}` ile çalışır (kenar varsa).
 
 ---
-
-
 
 ## 9. Referans SQL
 
@@ -270,8 +337,6 @@ WHERE ss.service_oid = :service_definition_id;
 
 ---
 
-
-
 ## 10. Ölçümler (2026-09-01 dump)
 
 
@@ -296,15 +361,11 @@ Smoke: `PROPOSAL_MAIN_GET` (249), `ss.md` hop-1 seti (3/5/7/10/15/20), izole ser
 
 ---
 
-
-
 ## 11. Bilinçli dışarıda
 
 Screen/process UI, gerçek owner, otomatik ingest, Redis/graph DB, force-directed, edge bundling, Cmd+K.
 
 ---
-
-
 
 ## 12. Sıradaki işler
 
@@ -335,14 +396,12 @@ Onay birimi servis id kalır; F3 onay listesine girmez.
 
 ---
 
-
-
 ## Jar başına servis sayısı (DB)
 
 Şema: `env`. Servis ↔ jar: `java_method.service_definition_id` → `java_class.artifact_id`.
 
 ```sql
--- 1) Jar başına servis sayısı (azalan)
+-- 1) Jar başına servis sayısı
 SELECT a.id AS artifact_id,
        a.name AS jar_name,
        p.project_name,
@@ -357,18 +416,6 @@ JOIN env.service_definition sd ON sd.id = jm.service_definition_id AND sd.status
 GROUP BY a.id, a.name, p.project_name, pg.project_group_name
 ORDER BY service_count DESC
 LIMIT 50;
-```
-
-```sql
--- 2) 100+ servisli jar'lar
-SELECT a.id, a.name AS jar_name, COUNT(DISTINCT sd.id) AS n
-FROM env.artifact a
-JOIN env.java_class jc ON jc.artifact_id = a.id
-JOIN env.java_method jm ON jm.class_id = jc.id AND jm.service_definition_id IS NOT NULL
-JOIN env.service_definition sd ON sd.id = jm.service_definition_id AND sd.status = 1
-GROUP BY a.id, a.name
-HAVING COUNT(DISTINCT sd.id) > 100
-ORDER BY n DESC;
 ```
 
 ```sql

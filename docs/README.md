@@ -85,6 +85,7 @@ flowchart LR
 | UI kabuk | `web/src/App.tsx` |
 | Servis haritası | `web/src/components/ImpactMap.tsx` |
 | Method haritası | `web/src/components/MethodImpactMap.tsx` |
+| Process akış / rota | `ProcessFlowPage.tsx`, `ProcessFlowRouteBuilder.tsx` — [process-flow.md](./process-flow.md) |
 | Domain tipleri | `web/src/types.ts` |
 
 Mock’u yeniden üretmek: `python3 scripts/gen_mock_catalog.py`  
@@ -119,4 +120,4 @@ npm run dev
 
 UI: http://127.0.0.1:5173 · API: http://127.0.0.1:4000/api/health
 
-Dokümanlar: [PRODUCT.md](./PRODUCT.md) · [new.md](./new.md)
+Dokümanlar: [PRODUCT.md](./PRODUCT.md) · [process-flow.md](./process-flow.md) · [entegrasyon.md](./entegrasyon.md)

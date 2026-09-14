@@ -17588,46 +17588,123 @@ button.linkish {
 }
 
 .sc-process-route-row .sc-process-item {
-  padding-right: 55px;
+  padding-right: 62px;
 }
 
 .sc-process-route-glyph {
   display: inline-grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 18px;
-  color: var(--shell-sidebar-fg, var(--accent));
-  opacity: 1;
+  width: 20px;
+  color: color-mix(in srgb, var(--shell-sidebar-fg, #e8eaed) 72%, transparent);
 }
 
 .sc-process-route-glyph svg {
   display: block;
+  width: 15px;
+  height: 15px;
+}
+
+.sc-process-route-row .sc-process-item.is-active .sc-process-route-glyph {
+  color: color-mix(in srgb, var(--shell-sidebar-fg, #e8eaed) 88%, transparent);
 }
 
 .sc-process-route-actions {
   position: absolute;
   top: 50%;
-  right: 5px;
+  right: 3px;
   display: flex;
   gap: 2px;
   transform: translateY(-50%);
+  opacity: 0.94;
+  transition: opacity 0.14s ease;
 }
 
-.sc-process-route-actions button {
+.sc-process-route-row:hover .sc-process-route-actions,
+.sc-process-route-row:focus-within .sc-process-route-actions {
+  opacity: 1;
+}
+
+.sc-process-route-action {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
-  color: var(--muted);
+  color: color-mix(in srgb, var(--shell-sidebar-fg, #e8eaed) 68%, transparent);
   cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
 }
 
-.sc-process-route-actions button:hover {
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  color: var(--accent);
+.sc-process-route-action:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--shell-sidebar-fg, #fff) 10%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--shell-sidebar-fg, #fff) 16%, transparent);
+}
+
+.sc-process-route-action.is-rename:hover {
+  background: color-mix(in srgb, var(--shell-sidebar-fg, #fff) 12%, transparent);
+  color: color-mix(in srgb, var(--shell-sidebar-fg, #e8eaed) 94%, transparent);
+}
+
+.sc-process-route-action.is-delete:hover {
+  background: color-mix(in srgb, #fca5a5 18%, transparent);
+  color: color-mix(in srgb, #fecaca 96%, var(--shell-sidebar-fg, #fff));
+}
+
+.sc-route-rename-dialog {
+  width: min(400px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 18px 60px rgb(15 23 42 / 24%);
+}
+
+.sc-route-rename-dialog h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.sc-route-rename-meta {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.sc-route-rename-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sc-route-rename-field input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+}
+
+.sc-route-rename-field input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.sc-route-rename-dialog .sc-confirm-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .sc-confirm-backdrop {

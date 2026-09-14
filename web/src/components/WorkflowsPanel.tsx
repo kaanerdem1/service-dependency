@@ -123,6 +123,43 @@ function InlineRename({
   )
 }
 
+function RouteRenameIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden focusable="false">
+      <path
+        d="M4 20h4.2L18.2 9.8 14.2 5.8 4 16V20z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <path
+        d="M13 7.2l3.8 3.8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function RouteDeleteIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden focusable="false">
+      <path
+        d="M5.5 7.5h13M10 7.5V6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M9 7.5l.65 11h4.7L15 7.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.35"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 function PinIcon({ pinned }: { pinned: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden className="sidebar-pin-icon">
@@ -496,6 +533,8 @@ export function WorkflowsPanel({
     routesForPanel(processFlowNo),
   )
   const [pendingDelete, setPendingDelete] = useState<SavedProcessRoute>()
+  const [pendingRename, setPendingRename] = useState<SavedProcessRoute>()
+  const [renameDraft, setRenameDraft] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
 
@@ -838,7 +877,7 @@ export function WorkflowsPanel({
                       onClick={() => onOpenProcessRoute(route.id)}
                     >
                       <span className="sc-process-route-glyph" aria-hidden>
-                        <GitBranchIcon filled />
+                        <GitBranchIcon />
                       </span>
                       <span className="sc-process-item-copy">
                         <span className="sc-process-item-name">{route.name}</span>
@@ -850,22 +889,28 @@ export function WorkflowsPanel({
                     <span className="sc-process-route-actions">
                       <button
                         type="button"
-                        title="Yeniden adlandır"
-                        aria-label={`${route.name} rotasını yeniden adlandır`}
-                        onClick={() => {
-                          const name = window.prompt('Yeni rota adı', route.name)
-                          if (name?.trim()) setProcessRoutes(renameProcessRoute(route.id, name).routes)
+                        className="sc-process-route-action is-rename"
+                        title="Adı düzenle"
+                        aria-label={`${route.name} rotasının adını düzenle`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setPendingRename(route)
+                          setRenameDraft(route.name)
                         }}
                       >
-                        ✎
+                        <RouteRenameIcon />
                       </button>
                       <button
                         type="button"
-                        title="Sil"
+                        className="sc-process-route-action is-delete"
+                        title="Rotayı sil"
                         aria-label={`${route.name} rotasını sil`}
-                        onClick={() => setPendingDelete(route)}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          setPendingDelete(route)
+                        }}
                       >
-                        ×
+                        <RouteDeleteIcon />
                       </button>
                     </span>
                   </li>
@@ -962,6 +1007,75 @@ export function WorkflowsPanel({
           ))}
         </div>
       </aside>
+      {pendingRename
+        ? createPortal(
+            <div
+              className="sc-confirm-backdrop"
+              role="presentation"
+              onMouseDown={() => setPendingRename(undefined)}
+            >
+              <section
+                className="sc-confirm-dialog sc-route-rename-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="sc-route-rename-title"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <h2 id="sc-route-rename-title">Rota adını düzenle</h2>
+                <p className="sc-route-rename-meta">
+                  {pendingRename.processNo}
+                  {pendingRename.processTitle ? ` · ${pendingRename.processTitle}` : ''}
+                  {' · '}
+                  {pendingRename.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                </p>
+                <label className="sc-route-rename-field">
+                  <span>Rota adı</span>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={renameDraft}
+                    maxLength={140}
+                    placeholder="Örn. Bölge onay rotası"
+                    onChange={(event) => setRenameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      const trimmed = renameDraft.trim()
+                      if (event.key === 'Enter' && trimmed && trimmed !== pendingRename.name) {
+                        event.preventDefault()
+                        setProcessRoutes(renameProcessRoute(pendingRename.id, trimmed).routes)
+                        setPendingRename(undefined)
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault()
+                        setPendingRename(undefined)
+                      }
+                    }}
+                  />
+                </label>
+                <div className="sc-confirm-actions">
+                  <button type="button" onClick={() => setPendingRename(undefined)}>
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    className="is-primary"
+                    disabled={
+                      !renameDraft.trim() || renameDraft.trim() === pendingRename.name
+                    }
+                    onClick={() => {
+                      const trimmed = renameDraft.trim()
+                      if (!trimmed || trimmed === pendingRename.name) return
+                      setProcessRoutes(renameProcessRoute(pendingRename.id, trimmed).routes)
+                      setPendingRename(undefined)
+                    }}
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
       {pendingDelete
         ? createPortal(
             <div

@@ -34,13 +34,42 @@ export function WorkflowFolderGlyph({
 }
 
 export function GitBranchIcon({ filled }: { filled?: boolean }) {
+  const sw = filled ? 1.5 : 1.35
   return (
-    <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden>
-      <circle cx="6" cy="6" r="2.2" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="6" cy="18" r="2.2" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" />
-      <circle cx="18" cy="6" r="2.2" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.6" />
-      <path d="M6 8.2v7.6" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M8.2 6h5.2a4.6 4.6 0 0 1 4.6 4.6V18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden>
+      <circle
+        cx="6"
+        cy="6"
+        r="2.15"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={sw}
+      />
+      <circle
+        cx="6"
+        cy="18"
+        r="2.15"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={sw}
+      />
+      <circle
+        cx="18"
+        cy="6"
+        r="2.15"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth={sw}
+      />
+      <path d="M6 8.15v7.7" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" />
+      <path
+        d="M8.15 6h5.15a4.55 4.55 0 0 1 4.55 4.55V18"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={sw}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   )
 }

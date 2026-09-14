@@ -72,7 +72,9 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 | Tablo (etki zinciri) | ✅ | L1 satır → L2/L3/L4 kolonları |
 | Metod call-graph | ✅ | Servis altında drill-down |
 | Favoriler · iş akışları | ✅ | ⌃F / ⌃G — kişisel gezinme |
-| Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre |
+| Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre; **process akış haritası** ayrıntı: [process-flow.md](./process-flow.md) |
+| Process — tam akış haritası | ✅ | XML ingest, path focus, drawer, yol snapshot (PDF) |
+| Process — akış rotası oluştur | ✅ | Adım adım seçim, kayıt (Kaydet / Farklı kaydet), rotalar paneli |
 | DWH lineage sekmesi | ✅ | Ayrı `surface=dwh` |
 | Inventory DB entegrasyonu | ✅ | Postgres (`env.*`) |
 | Issue deep link / embed | ⏳ | F1: `?service=` — [entegrasyon.md](./entegrasyon.md) |
@@ -148,7 +150,8 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 | Issue link, embed, `CatalogWorkbench` | [entegrasyon.md](./entegrasyon.md) |
 | Etki BFS | `server/src/impactGraph.ts` |
 | Harita layout | `web/src/impact/mapLayout.ts`, `ImpactMap.tsx` |
+| Process tam akış + rota | [process-flow.md](./process-flow.md) · `ProcessFlowMap.tsx`, `ProcessFlowRouteBuilder.tsx` |
 
 ---
 
-*Son güncelleme: 2026-09-08 — Onay/rol/flag içeriği kaldırıldı; sınır issue management ile netleştirildi.*
+*Son güncelleme: 2026-09-14 — Process akış rotası ve snapshot dokümantasyonu eklendi.*
