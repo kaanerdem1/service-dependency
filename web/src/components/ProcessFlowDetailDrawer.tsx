@@ -22,6 +22,10 @@ const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   other: 'Adım',
 }
 
+function noteSectionTitle(kind: ProcessFlowNodeKind): string {
+  return `${KIND_LABEL[kind]} açıklaması`
+}
+
 const CRITERIA_LABEL: Record<string, string> = {
   organization: 'Organizasyon',
   organizationType: 'Org. tipi',
@@ -139,13 +143,28 @@ export function ProcessFlowDetailDrawer({
   const [draftText, setDraftText] = useState('')
   const [noteBusy, setNoteBusy] = useState(false)
   const [noteError, setNoteError] = useState<string>()
+  const [noteEditing, setNoteEditing] = useState(false)
 
   useEffect(() => {
     if (!open) return
+    setNoteEditing(false)
     setDraftTitle(savedNote?.title ?? '')
     setDraftText(savedNote?.text ?? '')
     setNoteError(undefined)
-  }, [open, nodeId, savedNote?.title, savedNote?.text])
+  }, [open, nodeId])
+
+  useEffect(() => {
+    if (!open || noteEditing) return
+    setDraftTitle(savedNote?.title ?? '')
+    setDraftText(savedNote?.text ?? '')
+  }, [open, noteEditing, savedNote?.title, savedNote?.text])
+
+  const closeNoteEditing = useCallback(() => {
+    setDraftTitle(savedNote?.title ?? '')
+    setDraftText(savedNote?.text ?? '')
+    setNoteError(undefined)
+    setNoteEditing(false)
+  }, [savedNote?.text, savedNote?.title])
 
   const persistNote = useCallback(
     async (patch: { title?: string | null; text?: string | null; delete?: boolean }) => {
@@ -160,6 +179,11 @@ export function ProcessFlowDetailDrawer({
       try {
         const res = await patchProcessNodeDescriptions(processNo, { nodeKey, ...patch })
         onNodeDescriptionsChange?.(res.nodeDescriptions)
+        const saved = res.nodeDescriptions.nodes?.[nodeKey]
+        setDraftTitle(saved?.title ?? '')
+        setDraftText(saved?.text ?? '')
+        setNoteError(undefined)
+        setNoteEditing(false)
       } catch (e) {
         setNoteError(e instanceof Error ? e.message : 'Kaydedilemedi')
       } finally {
@@ -223,6 +247,8 @@ export function ProcessFlowDetailDrawer({
       aria-modal="false"
       aria-labelledby="pf-detail-drawer-title"
       aria-hidden={!open}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
     >
       <header className="pf-detail-drawer-head">
         <div className="pf-detail-drawer-head-copy">
@@ -230,7 +256,11 @@ export function ProcessFlowDetailDrawer({
           <h2 id="pf-detail-drawer-title" className="pf-detail-drawer-title">
             {nodeName}
           </h2>
-          <p className="pf-detail-drawer-id">{nodeId}</p>
+          {nodeId.trim() !== nodeName.trim() ? (
+            <p className="pf-detail-drawer-id" title="XML düğüm adı">
+              {nodeId}
+            </p>
+          ) : null}
           {serviceSummary ? <p className="pf-detail-meta">{serviceSummary}</p> : null}
         </div>
         <div className="pf-detail-drawer-head-actions">
@@ -277,6 +307,101 @@ export function ProcessFlowDetailDrawer({
         </div>
       </header>
       <div className="pf-detail-drawer-body">
+        {showNoteSection ? (
+          <section className="pf-detail-section pf-detail-note-section">
+            <div className="pf-detail-note-head">
+              <h3 className="pf-detail-section-title">{noteSectionTitle(kind)}</h3>
+              {canEditCatalog && processNo ? (
+                <button
+                  type="button"
+                  className="pf-detail-note-edit-toggle"
+                  disabled={noteBusy}
+                  onClick={() => (noteEditing ? closeNoteEditing() : setNoteEditing(true))}
+                >
+                  {noteEditing ? 'Kapat' : 'Düzenle'}
+                </button>
+              ) : null}
+            </div>
+            {noteEditing && canEditCatalog && processNo ? (
+              <>
+                <p className="pf-detail-lead">
+                  XML dışı katalog notu — ekip geneli görür (sunucu veritabanı).
+                </p>
+                <label className="pf-detail-note-field">
+                  <span>Kısa başlık (isteğe bağlı)</span>
+                  <input
+                    type="text"
+                    value={draftTitle}
+                    maxLength={200}
+                    disabled={noteBusy}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                  />
+                </label>
+                <label className="pf-detail-note-field">
+                  <span>Açıklama</span>
+                  <textarea
+                    value={draftText}
+                    rows={5}
+                    maxLength={12000}
+                    disabled={noteBusy}
+                    placeholder="Bu adımda ne olur? Kim onaylar? Hangi dal ne anlama gelir?"
+                    onChange={(e) => setDraftText(e.target.value)}
+                  />
+                </label>
+                {noteError ? <p className="pf-detail-note-error">{noteError}</p> : null}
+                <div className="pf-detail-note-actions">
+                  <button
+                    type="button"
+                    className="pf-detail-note-save"
+                    disabled={noteBusy || !draftText.trim()}
+                    onClick={() =>
+                      void persistNote({
+                        title: draftTitle.trim() || null,
+                        text: draftText.trim() || null,
+                      })
+                    }
+                  >
+                    {noteBusy ? 'Kaydediliyor…' : 'Kaydet'}
+                  </button>
+                  {hasSavedNote ? (
+                    <button
+                      type="button"
+                      className="pf-detail-note-delete"
+                      disabled={noteBusy}
+                      onClick={() => {
+                        setDraftTitle('')
+                        setDraftText('')
+                        void persistNote({ delete: true })
+                      }}
+                    >
+                      Sil
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : hasSavedNote ? (
+              <dl className="pf-detail-dl pf-detail-note-read">
+                {savedNote?.title?.trim() ? (
+                  <div className="pf-detail-dl-row">
+                    <dt>Başlık</dt>
+                    <dd>{savedNote.title.trim()}</dd>
+                  </div>
+                ) : null}
+                {savedNote?.text?.trim() ? (
+                  <div className="pf-detail-dl-row">
+                    <dt>Açıklama</dt>
+                    <dd>{savedNote.text.trim()}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            ) : canEditCatalog ? (
+              <p className="pf-detail-lead pf-detail-note-empty">
+                Henüz {noteSectionTitle(kind)} yok.
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+
         {hasIncoming ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adıma geliş</h3>
@@ -337,79 +462,6 @@ export function ProcessFlowDetailDrawer({
                 </li>
               ))}
             </ul>
-          </section>
-        ) : null}
-
-        {showNoteSection ? (
-          <section className="pf-detail-section pf-detail-note-section">
-            <h3 className="pf-detail-section-title">Adım açıklaması</h3>
-            <p className="pf-detail-lead">
-              XML dışı katalog notu — ekip geneli görür (sunucu veritabanı).
-            </p>
-            {canEditCatalog && processNo ? (
-              <>
-                <label className="pf-detail-note-field">
-                  <span>Kısa başlık (isteğe bağlı)</span>
-                  <input
-                    type="text"
-                    value={draftTitle}
-                    maxLength={200}
-                    disabled={noteBusy}
-                    onChange={(e) => setDraftTitle(e.target.value)}
-                  />
-                </label>
-                <label className="pf-detail-note-field">
-                  <span>Açıklama</span>
-                  <textarea
-                    value={draftText}
-                    rows={5}
-                    maxLength={12000}
-                    disabled={noteBusy}
-                    placeholder="Bu adımda ne olur? Kim onaylar? Hangi dal ne anlama gelir?"
-                    onChange={(e) => setDraftText(e.target.value)}
-                  />
-                </label>
-                {noteError ? <p className="pf-detail-note-error">{noteError}</p> : null}
-                <div className="pf-detail-note-actions">
-                  <button
-                    type="button"
-                    className="pf-detail-note-save"
-                    disabled={noteBusy || !draftText.trim()}
-                    onClick={() =>
-                      void persistNote({
-                        title: draftTitle.trim() || null,
-                        text: draftText.trim() || null,
-                      })
-                    }
-                  >
-                    {noteBusy ? 'Kaydediliyor…' : 'Kaydet'}
-                  </button>
-                  {hasSavedNote ? (
-                    <button
-                      type="button"
-                      className="pf-detail-note-delete"
-                      disabled={noteBusy}
-                      onClick={() => {
-                        setDraftTitle('')
-                        setDraftText('')
-                        void persistNote({ delete: true })
-                      }}
-                    >
-                      Sil
-                    </button>
-                  ) : null}
-                </div>
-              </>
-            ) : (
-              <>
-                {savedNote?.title?.trim() ? (
-                  <p className="pf-detail-note-title">{savedNote.title.trim()}</p>
-                ) : null}
-                {savedNote?.text?.trim() ? (
-                  <p className="pf-detail-note-body">{savedNote.text.trim()}</p>
-                ) : null}
-              </>
-            )}
           </section>
         ) : null}
 

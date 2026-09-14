@@ -4246,6 +4246,44 @@
   font-size: 10.5px;
 }
 
+.pf-detail-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.pf-detail-note-head .pf-detail-section-title {
+  margin: 0;
+}
+
+.pf-detail-note-edit-toggle {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pf-detail-note-edit-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pf-detail-note-read .pf-detail-dl-row dd {
+  white-space: pre-wrap;
+}
+
+.pf-detail-note-empty {
+  margin: 0;
+  font-style: italic;
+}
+
 .pf-detail-note-field {
   display: block;
   margin-bottom: 10px;
@@ -4267,22 +4305,9 @@
   border-radius: 8px;
   border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   font: inherit;
-  font-size: 12.5px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.4;
   resize: vertical;
-}
-
-.pf-detail-note-title {
-  margin: 0 0 6px;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.pf-detail-note-body {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.5;
-  white-space: pre-wrap;
 }
 
 .pf-detail-note-error {

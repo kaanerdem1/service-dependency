@@ -1381,7 +1381,7 @@ function ProcessFlowMapInner({
       nodes: [...built.nodes, ...noteNodesFromStorage(processNo)],
       edges: built.edges,
     }
-  }, [graph, processNo])
+  }, [graph.edges, graph.nodes, processNo])
   const [nodes, setNodes, onNodesChange] = useNodesState(seed.nodes)
   const [edges, setEdges] = useEdgesState(seed.edges)
   const [hoverId, setHoverId] = useState<string>()
@@ -1440,8 +1440,14 @@ function ProcessFlowMapInner({
       return [...built.nodes, ...notes]
     })
     setEdges(built.edges)
-    if (!initialSelectedNodeId) setSelectedNodeId(undefined)
-  }, [graph, initialSelectedNodeId, processNo, setNodes, setEdges])
+  }, [graph.edges, graph.nodes, processNo, setNodes, setEdges])
+
+  useEffect(() => {
+    setSelectedNodeId((current) => {
+      if (!current) return current
+      return graph.nodes.some((n) => n.id === current) ? current : undefined
+    })
+  }, [graph.nodes])
 
   useEffect(() => {
     if (!initialSelectedNodeId) return
