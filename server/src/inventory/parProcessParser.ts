@@ -388,6 +388,112 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
   }
 }
 
+export type ProcessParseAudit = {
+  ok: boolean
+  processNo: string
+  issues: string[]
+  counts: {
+    xmlNamedRootNodes: number
+    xmlDuplicateRootNames: number
+    xmlUnnamedRootNodes: number
+    xmlTransitions: number
+    parsedNodes: number
+    parsedEdges: number
+  }
+}
+
+/** XML yapısı ile parser çıktısını karşılaştırır (regresyon / env.process audit). */
+export function auditProcessDefinitionXml(xml: string, fallbackNo: string): ProcessParseAudit {
+  const graph = parseProcessDefinitionXml(xml, fallbackNo)
+  const children = extractRootChildren(xml)
+  const issues: string[] = []
+
+  const seenRoot = new Set<string>()
+  let xmlNamedRootNodes = 0
+  let xmlDuplicateRootNames = 0
+  let xmlUnnamedRootNodes = 0
+  let xmlTransitions = 0
+  const expectedNodeIds = new Set<string>()
+  const expectedEdges: { from: string; to: string; label: string }[] = []
+
+  for (const child of children) {
+    const name = attr(child.open, 'name')
+    if (!name) {
+      xmlUnnamedRootNodes += 1
+      continue
+    }
+    xmlNamedRootNodes += 1
+    const id = decode(name)
+    if (seenRoot.has(id)) {
+      xmlDuplicateRootNames += 1
+      continue
+    }
+    seenRoot.add(id)
+    expectedNodeIds.add(id)
+    for (const tr of extractTransitions(child.inner, child.open)) {
+      xmlTransitions += 1
+      expectedEdges.push({
+        from: id,
+        to: tr.to,
+        label: tr.name?.trim() ?? '',
+      })
+    }
+  }
+  for (const e of expectedEdges) expectedNodeIds.add(e.to)
+
+  const parsedNodeIds = new Set(graph.nodes.map((n) => n.id))
+  const parsedEdgeKeys = new Set(
+    graph.edges.map((e) => `${e.from}\0${e.to}\0${e.label ?? ''}`),
+  )
+  const expectedEdgeKeys = new Set(
+    expectedEdges.map((e) => `${e.from}\0${e.to}\0${e.label}`),
+  )
+
+  if (graph.edges.length !== expectedEdges.length) {
+    issues.push(
+      `edge sayısı: parse=${graph.edges.length}, xml=${expectedEdges.length}`,
+    )
+  }
+  for (const key of expectedEdgeKeys) {
+    if (!parsedEdgeKeys.has(key)) {
+      issues.push(`eksik kenar: ${key.replace(/\0/g, ' → ')}`)
+    }
+  }
+  for (const key of parsedEdgeKeys) {
+    if (!expectedEdgeKeys.has(key)) {
+      issues.push(`fazla kenar: ${key.replace(/\0/g, ' → ')}`)
+    }
+  }
+  for (const id of expectedNodeIds) {
+    if (!parsedNodeIds.has(id)) issues.push(`eksik düğüm: ${id}`)
+  }
+  for (const id of parsedNodeIds) {
+    if (!expectedNodeIds.has(id)) issues.push(`fazla düğüm: ${id}`)
+  }
+  if (xmlDuplicateRootNames > 0) {
+    issues.push(
+      `${xmlDuplicateRootNames} kök düğüm aynı name ile tekrarlandı (parser yalnız ilkinde geçişleri alır)`,
+    )
+  }
+  if (xmlUnnamedRootNodes > 0) {
+    issues.push(`${xmlUnnamedRootNodes} kök düğümde name yok (atlandı)`)
+  }
+
+  return {
+    ok: issues.length === 0,
+    processNo: graph.no,
+    issues,
+    counts: {
+      xmlNamedRootNodes,
+      xmlDuplicateRootNames,
+      xmlUnnamedRootNodes,
+      xmlTransitions,
+      parsedNodes: graph.nodes.length,
+      parsedEdges: graph.edges.length,
+    },
+  }
+}
+
 function bpmnTypeFor(kind: ProcessFlowNodeKind): BpmnElementType {
   if (kind === 'start') return 'startEvent'
   if (kind === 'end') return 'endEvent'

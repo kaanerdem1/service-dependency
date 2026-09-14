@@ -31,6 +31,7 @@ import type {
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
+import { buildPathSnapshotSteps } from './processPathNarrative'
 import { exportProcessPathSnapshotPdf } from '../snapshot/processPathSnapshot'
 import {
   NOTE_COLLAPSED_HEIGHT,
@@ -1491,30 +1492,26 @@ function ProcessFlowMapInner({
     return { nodeIds: pathToFocus.nodeIds, edgeIds: pathToFocus.edgeIds }
   }, [pathToFocus])
 
+  const pathRanksOnFocus = useMemo(() => {
+    if (!pathToFocus) return null
+    const { starts, dagChildren } = buildDag(graph)
+    const onPathReal = new Set(pathToFocus.orderedIds)
+    for (const nid of pathToFocus.nodeIds) {
+      onPathReal.add(sinkCopyRealId(nid))
+    }
+    const ids = [...onPathReal].sort((a, b) => a.localeCompare(b, 'tr'))
+    return longestPathRanks(ids, dagChildren, starts)
+  }, [graph, pathToFocus])
+
   const selectedPathSteps = useMemo(() => {
-    if (!selectedNodeId || !pathToFocus) return []
-    const byId = new Map(graph.nodes.map((n) => [n.id, n]))
-    const onPath = new Set(pathToFocus.orderedIds)
-    return pathToFocus.orderedIds.map((id, idx) => {
-      const n = byId.get(id)
-      let label: string | undefined
-      for (let j = idx + 1; j < pathToFocus.orderedIds.length; j++) {
-        const cand = pathToFocus.orderedIds[j]
-        if (!onPath.has(cand)) continue
-        const e = graph.edges.find((edge) => edge.from === id && edge.to === cand)
-        if (e) {
-          label = e.label?.trim() || undefined
-          break
-        }
-      }
-      return {
-        id,
-        name: n?.name ?? id,
-        kind: (n?.kind ?? 'other') as ProcessFlowNodeKind,
-        label,
-      }
-    })
-  }, [selectedNodeId, pathToFocus, graph])
+    if (!selectedNodeId || !pathToFocus || !pathRanksOnFocus) return []
+    return buildPathSnapshotSteps(
+      graph,
+      pathToFocus.orderedIds,
+      pathToFocus.nodeIds,
+      (id) => pathRanksOnFocus.get(id) ?? 0,
+    )
+  }, [selectedNodeId, pathToFocus, pathRanksOnFocus, graph])
 
   const shownNodes = useMemo(() => {
     const base = nodes.map((n) => {

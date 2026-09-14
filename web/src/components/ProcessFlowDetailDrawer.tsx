@@ -36,13 +36,9 @@ function formatCriteria(criteria: Record<string, string>): string {
     .join(' · ')
 }
 
-export type ProcessPathStep = {
-  id: string
-  name: string
-  kind: ProcessFlowNodeKind
-  /** Bu adımdan bir sonraki adıma geçiş etiketi (varsa). */
-  label?: string
-}
+import type { ProcessPathSnapshotStep as ProcessPathStep } from '../snapshot/processPathSnapshot'
+
+export type { ProcessPathStep }
 
 type Props = {
   open: boolean

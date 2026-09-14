@@ -1,6 +1,18 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { parseProcessDefinitionXml } from './parProcessParser.js'
+import { auditProcessDefinitionXml, parseProcessDefinitionXml } from './parProcessParser.js'
+
+test('audit: örnek XML parser ile birebir uyumlu', () => {
+  const xml = `<process-definition name="P1">
+      <start-state name="Başlangıç">
+        <transition name="Devam" to="Ara"/>
+      </start-state>
+      <node name="Ara" />
+      <end-state name="Bitiş"/>
+    </process-definition>`
+  const audit = auditProcessDefinitionXml(xml, 'fallback')
+  assert.equal(audit.ok, true, audit.issues.join('; '))
+})
 
 test('root seviyesindeki self-closing düğümleri kaybetmez', () => {
   const graph = parseProcessDefinitionXml(

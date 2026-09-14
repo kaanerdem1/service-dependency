@@ -1,4 +1,6 @@
 import { query, tableName } from './db.js'
+import { sqlProcessDescriptionTr } from './processCatalogColumns.js'
+import { getProcessCatalogSchema } from './processCatalogSchema.js'
 import { parseServiceId } from './serviceService.js'
 
 export type ServiceScreenLink = {
@@ -60,15 +62,43 @@ export async function listServiceProcesses(
   const dbId = parseServiceId(serviceId)
   if (dbId === undefined) return []
 
+  const schema = await getProcessCatalogSchema()
+  if (schema === 'extended') {
+    const descTr = await sqlProcessDescriptionTr('p')
+    const { rows } = await query<{
+      oid: string
+      no: string
+      name: string
+      description_tr: string | null
+    }>(
+      `SELECT p.oid::text AS oid,
+              p.no,
+              p.name,
+              ${descTr} AS description_tr
+       FROM ${tableName('process_service')} ps
+       JOIN ${tableName('process')} p ON p.oid = ps.process_oid
+       WHERE ps.service_oid = $1
+         AND p.status = 1
+       ORDER BY p.name`,
+      [dbId],
+    )
+    return rows.map((row) => ({
+      oid: row.oid,
+      no: row.no,
+      name: row.name,
+      descriptionTr: row.description_tr,
+    }))
+  }
+
   const { rows } = await query<{
     oid: string
     no: string
-    name: string
+    name: string | null
     description_tr: string | null
   }>(
     `SELECT p.oid::text AS oid,
-            p.no,
-            p.name,
+            p.name AS no,
+            p.description_tr AS name,
             p.description_tr
      FROM ${tableName('process_service')} ps
      JOIN ${tableName('process')} p ON p.oid = ps.process_oid
@@ -81,7 +111,7 @@ export async function listServiceProcesses(
   return rows.map((row) => ({
     oid: row.oid,
     no: row.no,
-    name: row.name,
+    name: row.name ?? row.no,
     descriptionTr: row.description_tr,
   }))
 }

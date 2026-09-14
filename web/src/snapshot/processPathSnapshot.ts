@@ -5,11 +5,23 @@ import type { ProcessFlowNodeKind } from '../types'
 import turkishRegularUrl from '../assets/fonts/OpenSans-Regular.ttf?url'
 import turkishBoldUrl from '../assets/fonts/OpenSans-Bold.ttf?url'
 
+export type ProcessPathOutgoing = {
+  toId: string
+  toName: string
+  label?: string
+  /** Hedef düğümün anlatım adım numarası (aynı katmandaki paralel dallar aynı no). */
+  targetStep: number
+}
+
 export type ProcessPathSnapshotStep = {
   id: string
   name: string
   kind: ProcessFlowNodeKind
-  /** Bu adımdan bir sonraki adıma geçiş etiketi (varsa). */
+  /** DAG katmanı (1 = start); paralel düğümler aynı numarayı paylaşır. */
+  displayStep: number
+  /** Yol alt grafında bu adımdan çıkan tüm geçişler (paralel oklar dahil). */
+  outgoing: ProcessPathOutgoing[]
+  /** İlk geçiş etiketi — geriye uyumluluk. */
   label?: string
 }
 
@@ -1077,22 +1089,25 @@ export async function exportProcessPathSnapshotPdf(opts: {
   doc.setFont('PfSans', 'normal')
   doc.setFontSize(9.5)
 
-  steps.forEach((step, i) => {
+  steps.forEach((step) => {
     if (y > pageH - margin) {
       doc.addPage()
       y = margin
     }
     const kindLabel = KIND_LABEL_TR[step.kind] ?? step.kind
-    const line = `${i + 1}. [${kindLabel}] ${step.name}`
+    const stepNo = step.displayStep
+    const line = `${stepNo}. [${kindLabel}] ${step.name}`
     doc.text(line, margin, y)
     y += 14
-    if (step.label) {
+    for (const tr of step.outgoing) {
       if (y > pageH - margin) {
         doc.addPage()
         y = margin
       }
       doc.setTextColor(90, 90, 90)
-      doc.text(`     -> geçiş: ${step.label}`, margin, y)
+      const tag = tr.label ? `geçiş: ${tr.label}` : 'geçiş'
+      const dest = tr.toName ? ` → ${tr.toName}` : ''
+      doc.text(`     → ${tag}${dest} (adım ${tr.targetStep})`, margin, y)
       doc.setTextColor(0, 0, 0)
       y += 14
     }
