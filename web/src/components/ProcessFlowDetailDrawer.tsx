@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { resolveProcessRefs, resolveServiceNames } from '../api/client'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { patchProcessNodeDescriptions, resolveProcessRefs, resolveServiceNames } from '../api/client'
 import type {
   ProcessDecisionInfo,
   ProcessFlowNodeKind,
   ProcessIncomingTransition,
+  ProcessNodeDescriptionsDoc,
   ProcessNodeDetails,
   ProcessOutgoingTransition,
   ProcessRefResolve,
@@ -61,6 +62,10 @@ type Props = {
   onClose: () => void
   onOpenService?: (serviceName: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string) => void
+  processNo?: string
+  nodeDescriptions?: ProcessNodeDescriptionsDoc
+  canEditCatalog?: boolean
+  onNodeDescriptionsChange?: (doc: ProcessNodeDescriptionsDoc) => void
 }
 
 export function ProcessFlowDetailDrawer({
@@ -81,6 +86,10 @@ export function ProcessFlowDetailDrawer({
   onClose,
   onOpenService,
   onOpenSubProcess,
+  processNo,
+  nodeDescriptions,
+  canEditCatalog = false,
+  onNodeDescriptionsChange,
 }: Props) {
   const hasPath = path.length > 1
   const rules = decisionInfo?.rules ?? []
@@ -122,6 +131,43 @@ export function ProcessFlowDetailDrawer({
       : null
   const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
   const [subProcessMeta, setSubProcessMeta] = useState<ProcessRefResolve | null>(null)
+
+  const savedNote = nodeDescriptions?.nodes?.[nodeId]
+  const hasSavedNote = Boolean(savedNote?.title?.trim() || savedNote?.text?.trim())
+  const showNoteSection = canEditCatalog || hasSavedNote
+  const [draftTitle, setDraftTitle] = useState('')
+  const [draftText, setDraftText] = useState('')
+  const [noteBusy, setNoteBusy] = useState(false)
+  const [noteError, setNoteError] = useState<string>()
+
+  useEffect(() => {
+    if (!open) return
+    setDraftTitle(savedNote?.title ?? '')
+    setDraftText(savedNote?.text ?? '')
+    setNoteError(undefined)
+  }, [open, nodeId, savedNote?.title, savedNote?.text])
+
+  const persistNote = useCallback(
+    async (patch: { title?: string | null; text?: string | null; delete?: boolean }) => {
+      if (!processNo?.trim()) return
+      const nodeKey = nodeId.trim()
+      if (!nodeKey) {
+        setNoteError('Düğüm kimliği yok; kaydedilemedi.')
+        return
+      }
+      setNoteBusy(true)
+      setNoteError(undefined)
+      try {
+        const res = await patchProcessNodeDescriptions(processNo, { nodeKey, ...patch })
+        onNodeDescriptionsChange?.(res.nodeDescriptions)
+      } catch (e) {
+        setNoteError(e instanceof Error ? e.message : 'Kaydedilemedi')
+      } finally {
+        setNoteBusy(false)
+      }
+    },
+    [nodeId, onNodeDescriptionsChange, processNo],
+  )
 
   const serviceKey = useMemo(() => services.join('\0'), [services])
 
@@ -294,6 +340,79 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
+        {showNoteSection ? (
+          <section className="pf-detail-section pf-detail-note-section">
+            <h3 className="pf-detail-section-title">Adım açıklaması</h3>
+            <p className="pf-detail-lead">
+              XML dışı katalog notu — ekip geneli görür (sunucu veritabanı).
+            </p>
+            {canEditCatalog && processNo ? (
+              <>
+                <label className="pf-detail-note-field">
+                  <span>Kısa başlık (isteğe bağlı)</span>
+                  <input
+                    type="text"
+                    value={draftTitle}
+                    maxLength={200}
+                    disabled={noteBusy}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                  />
+                </label>
+                <label className="pf-detail-note-field">
+                  <span>Açıklama</span>
+                  <textarea
+                    value={draftText}
+                    rows={5}
+                    maxLength={12000}
+                    disabled={noteBusy}
+                    placeholder="Bu adımda ne olur? Kim onaylar? Hangi dal ne anlama gelir?"
+                    onChange={(e) => setDraftText(e.target.value)}
+                  />
+                </label>
+                {noteError ? <p className="pf-detail-note-error">{noteError}</p> : null}
+                <div className="pf-detail-note-actions">
+                  <button
+                    type="button"
+                    className="pf-detail-note-save"
+                    disabled={noteBusy || !draftText.trim()}
+                    onClick={() =>
+                      void persistNote({
+                        title: draftTitle.trim() || null,
+                        text: draftText.trim() || null,
+                      })
+                    }
+                  >
+                    {noteBusy ? 'Kaydediliyor…' : 'Kaydet'}
+                  </button>
+                  {hasSavedNote ? (
+                    <button
+                      type="button"
+                      className="pf-detail-note-delete"
+                      disabled={noteBusy}
+                      onClick={() => {
+                        setDraftTitle('')
+                        setDraftText('')
+                        void persistNote({ delete: true })
+                      }}
+                    >
+                      Sil
+                    </button>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <>
+                {savedNote?.title?.trim() ? (
+                  <p className="pf-detail-note-title">{savedNote.title.trim()}</p>
+                ) : null}
+                {savedNote?.text?.trim() ? (
+                  <p className="pf-detail-note-body">{savedNote.text.trim()}</p>
+                ) : null}
+              </>
+            )}
+          </section>
+        ) : null}
+
         {hasRules ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Geçiş kuralları</h3>
@@ -396,7 +515,13 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
-        {!hasRules && !hasDetails && !hasServices && !hasSubProcess && !hasIncoming && !hasOutgoing ? (
+        {!hasRules &&
+        !hasDetails &&
+        !hasServices &&
+        !hasSubProcess &&
+        !hasIncoming &&
+        !hasOutgoing &&
+        !showNoteSection ? (
           <p className="pf-detail-empty">Bu adım için dolu XML alanı yok.</p>
         ) : null}
       </div>

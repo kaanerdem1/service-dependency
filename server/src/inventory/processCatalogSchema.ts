@@ -4,6 +4,7 @@ export type ProcessCatalogSchema = 'legacy' | 'extended'
 
 let cached: ProcessCatalogSchema | null = null
 let cachedHasDefinition: boolean | null = null
+let cachedHasNodeDescriptions: boolean | null = null
 
 /** extended = `no` kolonu var (PAR import sonrası); legacy = süreç numarası `name` kolonunda. */
 export async function getProcessCatalogSchema(): Promise<ProcessCatalogSchema> {
@@ -30,4 +31,17 @@ export async function hasProcessDefinitionColumn(): Promise<boolean> {
   )
   cachedHasDefinition = rows[0]?.ok ?? false
   return cachedHasDefinition
+}
+
+export async function hasNodeDescriptionsColumn(): Promise<boolean> {
+  if (cachedHasNodeDescriptions != null) return cachedHasNodeDescriptions
+  const { rows } = await query<{ ok: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = 'process' AND column_name = 'node_descriptions'
+     ) AS ok`,
+    [INVENTORY_SCHEMA],
+  )
+  cachedHasNodeDescriptions = rows[0]?.ok ?? false
+  return cachedHasNodeDescriptions
 }

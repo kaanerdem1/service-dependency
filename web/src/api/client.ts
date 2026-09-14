@@ -29,16 +29,28 @@ import type {
   ServiceProcessLink,
   ProcessCatalogItem,
   ProcessFlowGraph,
+  ProcessNodeDescriptionsDoc,
   Snapshot,
   SnapshotClientPayload,
 } from '../types'
+import { resolveCatalogCanEdit } from '../auth/catalogAccess'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') ?? ''
 
+function catalogWriteHeaders(): Record<string, string> {
+  return { 'X-SD-Catalog-Edit': resolveCatalogCanEdit() ? '1' : '0' }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const { headers: extraHeaders, ...rest } = init ?? {}
   const res = await fetch(`${API_BASE_URL}/api${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-    ...init,
+    ...rest,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(extraHeaders instanceof Headers
+        ? Object.fromEntries(extraHeaders.entries())
+        : (extraHeaders as Record<string, string> | undefined)),
+    },
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -123,6 +135,25 @@ export function searchProcesses(q: string) {
 
 export function getProcessFlow(no: string) {
   return request<ProcessFlowGraph>(`/processes/${encodeURIComponent(no)}/flow`)
+}
+
+export function patchProcessNodeDescriptions(
+  processNo: string,
+  body: {
+    nodeKey: string
+    title?: string | null
+    text?: string | null
+    delete?: boolean
+  },
+) {
+  return request<{ nodeDescriptions: ProcessNodeDescriptionsDoc }>(
+    `/processes/${encodeURIComponent(processNo)}/node-descriptions`,
+    {
+      method: 'PATCH',
+      headers: catalogWriteHeaders(),
+      body: JSON.stringify(body),
+    },
+  )
 }
 
 export function getProcessScreens(no: string) {

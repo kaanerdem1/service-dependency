@@ -263,6 +263,8 @@ function ProcessFlowRouteBuilderInner({
   onRouteSaved,
   onOpenService,
   onOpenSubProcess,
+  canEditCatalog,
+  onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
@@ -272,6 +274,8 @@ function ProcessFlowRouteBuilderInner({
   onRouteSaved?: (route: SavedProcessRoute) => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string, nodeId: string) => void
+  canEditCatalog?: boolean
+  onNodeDescriptionsChange?: (doc: import('../types').ProcessNodeDescriptionsDoc) => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const processTitle = graph.descriptionTr || graph.label || graph.parName || processNo
@@ -723,6 +727,10 @@ function ProcessFlowRouteBuilderInner({
                 ? (nextProcessNo) => onOpenSubProcess(nextProcessNo, selectedNode.id)
                 : undefined
             }
+            processNo={processNo}
+            nodeDescriptions={graph.nodeDescriptions}
+            canEditCatalog={canEditCatalog}
+            onNodeDescriptionsChange={onNodeDescriptionsChange}
           />
         ) : null}
       </div>

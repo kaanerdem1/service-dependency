@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getProcessFlow, getProcessScreens } from '../api/client'
+import { resolveCatalogCanEdit } from '../auth/catalogAccess'
+import type { ProcessNodeDescriptionsDoc } from '../types'
 import { ProcessFlowMap } from './ProcessFlowMap'
 import { ProcessFlowRouteBuilder } from './ProcessFlowRouteBuilder'
 import { ProcessFlowScreens } from './ProcessFlowScreens'
@@ -39,6 +41,10 @@ export function ProcessFlowPage({
   const [savedRoute, setSavedRoute] = useState<SavedProcessRoute | undefined>(() =>
     getProcessRoute(routeId),
   )
+  const canEditCatalog = resolveCatalogCanEdit()
+  const onNodeDescriptionsChange = useCallback((doc: ProcessNodeDescriptionsDoc) => {
+    setGraph((current) => (current ? { ...current, nodeDescriptions: doc } : current))
+  }, [])
 
   useEffect(() => {
     setSavedRoute(getProcessRoute(routeId))
@@ -117,6 +123,8 @@ export function ProcessFlowPage({
             setSavedRoute(route)
             onRouteSaved?.(route.id)
           }}
+          canEditCatalog={canEditCatalog}
+          onNodeDescriptionsChange={onNodeDescriptionsChange}
         />
       ) : null}
       {graph && !routeMode ? (
@@ -137,6 +145,8 @@ export function ProcessFlowPage({
             setRouteNonce((value) => value + 1)
             setRouteMode(true)
           }}
+          canEditCatalog={canEditCatalog}
+          onNodeDescriptionsChange={onNodeDescriptionsChange}
         />
       ) : null}
     </article>

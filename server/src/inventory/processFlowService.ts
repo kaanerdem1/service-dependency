@@ -5,8 +5,10 @@ import {
 } from './processCatalogColumns.js'
 import {
   getProcessCatalogSchema,
+  hasNodeDescriptionsColumn,
   hasProcessDefinitionColumn,
 } from './processCatalogSchema.js'
+import { normalizeNodeDescriptionsDoc, type ProcessNodeDescriptionsDoc } from './processNodeDescriptions.js'
 import { readProcessDefinitionXml } from './processDefinitionSource.js'
 import {
   layoutProcessFlow,
@@ -226,10 +228,15 @@ export async function listProcessScreens(processNo: string): Promise<ProcessScre
 }
 
 export async function getProcessFlow(no: string): Promise<
-  (ProcessFlowGraph & { positions: Record<string, { x: number; y: number }>; oid: string }) | undefined
+  (ProcessFlowGraph & {
+    positions: Record<string, { x: number; y: number }>
+    oid: string
+    nodeDescriptions?: ProcessNodeDescriptionsDoc
+  }) | undefined
 > {
   const schema = await getProcessCatalogSchema()
   const hasDefCol = await hasProcessDefinitionColumn()
+  const hasDescCol = await hasNodeDescriptionsColumn()
 
   type FlowRow = {
     oid: string
@@ -238,6 +245,7 @@ export async function getProcessFlow(no: string): Promise<
     description_tr: string | null
     process_type: string | null
     process_definition: string | null
+    node_descriptions: unknown
     update_date: Date | string | null
     it_owner_name: string | null
     it_business_owner_name: string | null
@@ -247,6 +255,7 @@ export async function getProcessFlow(no: string): Promise<
 
   if (schema === 'extended') {
     const defSelect = hasDefCol ? 'p.process_definition,' : 'NULL::text AS process_definition,'
+    const nodeDescSelect = hasDescCol ? 'p.node_descriptions,' : 'NULL::jsonb AS node_descriptions,'
     const descTr = await sqlProcessDescriptionTr('p')
     const { rows } = await query<FlowRow>(
       `SELECT p.oid::text AS oid,
@@ -255,6 +264,7 @@ export async function getProcessFlow(no: string): Promise<
               ${descTr} AS description_tr,
               p.process_type,
               ${defSelect}
+              ${nodeDescSelect}
               p.update_date,
               po.it_owner_name,
               po.it_business_owner_name
@@ -268,6 +278,7 @@ export async function getProcessFlow(no: string): Promise<
     row = rows[0]
   } else {
     const defSelect = hasDefCol ? 'p.process_definition,' : 'NULL::text AS process_definition,'
+    const nodeDescSelect = hasDescCol ? 'p.node_descriptions,' : 'NULL::jsonb AS node_descriptions,'
     const { rows } = await query<FlowRow>(
       `SELECT p.oid::text AS oid,
               p.name AS no,
@@ -275,6 +286,7 @@ export async function getProcessFlow(no: string): Promise<
               p.description_tr,
               NULL::varchar AS process_type,
               ${defSelect}
+              ${nodeDescSelect}
               p.update_date,
               po.it_owner_name,
               po.it_business_owner_name
@@ -296,6 +308,7 @@ export async function getProcessFlow(no: string): Promise<
 
   const graph = parseProcessDefinitionXml(xml, row.no)
   const laid = layoutProcessFlow(graph)
+  const nodeDescriptions = hasDescCol ? normalizeNodeDescriptionsDoc(row.node_descriptions) : undefined
   return {
     ...laid,
     oid: row.oid,
@@ -306,5 +319,6 @@ export async function getProcessFlow(no: string): Promise<
     processOwnerIt: row.it_owner_name,
     processOwnerBusiness: row.it_business_owner_name,
     updatedAt: row.update_date ? String(row.update_date) : null,
+    ...(hasDescCol ? { nodeDescriptions: nodeDescriptions ?? {} } : {}),
   }
 }

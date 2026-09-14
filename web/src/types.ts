@@ -421,6 +421,16 @@ export type ProcessDetailGroup = { title: string; rows: ProcessDetailRow[] }
 
 export type ProcessNodeDetails = { groups: ProcessDetailGroup[] }
 
+export type ProcessNodeDescriptionEntry = {
+  title?: string
+  text?: string
+  transitions?: Record<string, string>
+}
+
+export type ProcessNodeDescriptionsDoc = {
+  nodes?: Record<string, ProcessNodeDescriptionEntry>
+}
+
 export type ProcessFlowGraph = {
   no: string
   oid: string
@@ -433,6 +443,8 @@ export type ProcessFlowGraph = {
   processOwnerIt?: string | null
   processOwnerBusiness?: string | null
   updatedAt?: string | null
+  /** DB `node_descriptions` — düğüm adına göre doğal dil notları. */
+  nodeDescriptions?: ProcessNodeDescriptionsDoc
   label: string | null
   nodes: {
     id: string

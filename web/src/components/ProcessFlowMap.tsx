@@ -24,6 +24,7 @@ import 'reactflow/dist/style.css'
 import type {
   ProcessDecisionInfo,
   ProcessFlowGraph,
+  ProcessNodeDescriptionsDoc,
   ProcessFlowNodeKind,
   ProcessIncomingTransition,
   ProcessOutgoingTransition,
@@ -1357,6 +1358,8 @@ function ProcessFlowMapInner({
   onOpenService,
   onOpenSubProcess,
   onCreateRoute,
+  canEditCatalog,
+  onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
@@ -1368,6 +1371,8 @@ function ProcessFlowMapInner({
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string, nodeId: string) => void
   onCreateRoute?: () => void
+  canEditCatalog?: boolean
+  onNodeDescriptionsChange?: (doc: ProcessNodeDescriptionsDoc) => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const seed = useMemo(() => {
@@ -1790,6 +1795,10 @@ function ProcessFlowMapInner({
                 ? (processNo) => onOpenSubProcess(processNo, selectedNode.id)
                 : undefined
             }
+            processNo={processNo}
+            nodeDescriptions={graph.nodeDescriptions}
+            canEditCatalog={canEditCatalog}
+            onNodeDescriptionsChange={onNodeDescriptionsChange}
           />
         ) : null}
       </div>
@@ -1808,6 +1817,8 @@ export function ProcessFlowMap({
   onOpenService,
   onOpenSubProcess,
   onCreateRoute,
+  canEditCatalog,
+  onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
@@ -1819,6 +1830,8 @@ export function ProcessFlowMap({
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string, nodeId: string) => void
   onCreateRoute?: () => void
+  canEditCatalog?: boolean
+  onNodeDescriptionsChange?: (doc: ProcessNodeDescriptionsDoc) => void
 }) {
   return (
     <ReactFlowProvider>
@@ -1834,6 +1847,8 @@ export function ProcessFlowMap({
         onOpenService={onOpenService}
         onOpenSubProcess={onOpenSubProcess}
         onCreateRoute={onCreateRoute}
+        canEditCatalog={canEditCatalog}
+        onNodeDescriptionsChange={onNodeDescriptionsChange}
       />
     </ReactFlowProvider>
   )

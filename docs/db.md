@@ -472,7 +472,7 @@ LIMIT 120;  -- UI şu an 100 kesiyor
 
 | Kolon | Tip | Okuma | Yazma | Not |
 | ----- | --- | ----- | ----- | --- |
-| `catalog_overlay` | `jsonb` | `GET /api/processes/:no/flow` içinde `catalogOverlay` | `PATCH /api/processes/:no/catalog-overlay` | PAR ingest **güncellemez**. Düğüm key: XML `name`. |
+| `node_descriptions` | `jsonb` | `GET /api/processes/:no/flow` içinde `nodeDescriptions` | `PATCH /api/processes/:no/node-descriptions` | Karar/görev/… doğal dil notu. PAR ingest **güncellemez**. Key: XML düğüm `name`. |
 
 **Yeni tablo — kullanıcı akış rotaları** (bugün: `sd-process-flow-routes:v1` localStorage):
 
@@ -569,16 +569,16 @@ Kişisel başlangıç; ileride `team_id` ile paylaşımlı klasör.
 
 ### 14.9 Migration / ingest kuralları
 
-1. `ALTER TABLE env.process ADD COLUMN IF NOT EXISTS catalog_overlay jsonb;`
+1. `ALTER TABLE env.process ADD COLUMN IF NOT EXISTS node_descriptions jsonb;` — `server/sql/node_descriptions_migration.sql`
 2. Yeni tablolar için `server/sql/catalog_persistence.sql` (henüz yok — eklenecek).
-3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; **`catalog_overlay`, change log, workflow doc, rotalar** güncellenmez.
+3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; **`node_descriptions`, change log, workflow doc, rotalar** güncellenmez.
 4. İsteğe bağlı: localStorage → DB **bir kerelik import** script (kullanıcı bazlı).
 
 ### 14.10 API özeti (hedef)
 
 | Veri | GET | Yazma |
 | ---- | --- | ----- |
-| Süreç akış + overlay | `/api/processes/:no/flow` | `PATCH …/catalog-overlay` |
+| Süreç akış + düğüm açıklamaları | `/api/processes/:no/flow` (`nodeDescriptions`) | `PATCH …/node-descriptions` |
 | Akış rotaları | `/api/process-routes` | `POST`, `PATCH`, `DELETE` |
 | Harita notları | `/api/processes/:no/map-notes` | `PUT` veya CRUD |
 | Servis change log | `/api/services/:id/changes` | `POST`, `PATCH`, `DELETE` |
@@ -594,4 +594,4 @@ Tüm yazma uçları: `canEdit` / SSO; okuma intranet kullanıcıları.
 | Özellik | Kalıcılık |
 | ------- | --------- |
 | Süreç XML, servis, call-graph | DB — **var** |
-| `catalog_overlay`, rotalar, workflow, change log, CR store, favoriler | **localStorage veya bellek** — §14 hedefi |
+| `node_descriptions`, rotalar, workflow, change log, CR store, favoriler | **localStorage veya bellek** — §14 hedefi |

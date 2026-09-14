@@ -86,6 +86,11 @@ import {
   listServiceProcesses,
   listServiceScreens,
 } from './inventory/contextService.js'
+import { assertCatalogWrite } from './inventory/catalogWriteAccess.js'
+import {
+  patchProcessNodeDescriptions,
+  type NodeDescriptionPatch,
+} from './inventory/processNodeDescriptions.js'
 import {
   getProcessFlow,
   listProcesses,
@@ -382,6 +387,42 @@ app.get('/api/processes/:no/flow', async (req, res) => {
   } catch (e) {
     console.error('[inventory] /api/processes/:no/flow', e)
     res.status(500).json({ error: 'inventory_error' })
+  }
+})
+
+app.patch('/api/processes/:no/node-descriptions', async (req, res) => {
+  if (!isInventoryCatalog()) {
+    res.status(404).json({ error: 'not_available' })
+    return
+  }
+  try {
+    assertCatalogWrite(req)
+    const nodeKey = typeof req.body?.nodeKey === 'string' ? req.body.nodeKey : ''
+    const patch: NodeDescriptionPatch = {
+      nodeKey,
+      delete: req.body?.delete === true,
+    }
+    if (req.body?.title !== undefined) {
+      patch.title = typeof req.body.title === 'string' ? req.body.title : null
+    }
+    if (req.body?.text !== undefined) {
+      patch.text = typeof req.body.text === 'string' ? req.body.text : null
+    }
+    const doc = await patchProcessNodeDescriptions(req.params.no, patch)
+    if (!doc) return res.status(404).json({ error: 'not_found' })
+    res.json({ nodeDescriptions: doc })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'patch_failed'
+    if (msg === 'forbidden_catalog_edit') {
+      res.status(403).json({ error: msg })
+      return
+    }
+    if (msg === 'node_descriptions_unavailable') {
+      res.status(503).json({ error: msg })
+      return
+    }
+    console.error('[inventory] PATCH /api/processes/:no/node-descriptions', e)
+    res.status(400).json({ error: msg })
   }
 })
 
