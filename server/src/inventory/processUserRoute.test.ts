@@ -9,6 +9,9 @@ import {
   goRouteForward,
   reconcileRouteWithGraph,
   routeProgress,
+  routeVisibleVisitsEqual,
+  savedRouteHasChanges,
+  transitionCaption,
   visibleRouteVisits,
 } from '../../../web/src/components/processUserRoute.js'
 import { buildUserRouteSnapshotSteps } from '../../../web/src/components/processPathNarrative.js'
@@ -94,4 +97,33 @@ test('PDF anlatımı seçilen edge ve tekrar ziyaretleri kronolojik korur', () =
   assert.deepEqual(steps.map((step) => step.displayStep), [1, 2, 3, 4])
   assert.equal(steps[1].outgoing[0].label, 'Hayır')
   assert.match(steps[3].name, /2\. ziyaret/)
+})
+
+test('boş XML transition name etiketsiz kalır', () => {
+  assert.equal(transitionCaption(undefined), undefined)
+  assert.equal(transitionCaption('  '), undefined)
+  assert.equal(transitionCaption('Onayla'), 'Onayla')
+
+  const unlabeled: ProcessFlowGraph = {
+    ...graph,
+    edges: [
+      { id: 'start-check', from: 'start', to: 'check' },
+      { id: 'to-end', from: 'check', to: 'done' },
+    ],
+  }
+  const route = autoAdvanceRoute(unlabeled, createUserRoute(unlabeled))
+  assert.deepEqual(visibleRouteVisits(route).map((visit) => visit.nodeId), ['start', 'check', 'done'])
+  const back = goRouteBack(route)
+  assert.equal(visibleRouteVisits(back).at(-1)?.nodeId, 'check')
+  assert.equal(transitionCaption(visibleRouteVisits(back).at(-1)?.incomingLabel), undefined)
+})
+
+test('savedRouteHasChanges adım veya ad farkını algılar', () => {
+  const base = autoAdvanceRoute(graph, createUserRoute(graph))
+  const branched = chooseRouteEdge(graph, goRouteBack(base), 'check-edit')
+  assert.ok(routeVisibleVisitsEqual(base, base))
+  assert.ok(!routeVisibleVisitsEqual(base, branched))
+  assert.ok(!savedRouteHasChanges(base, base, 'Rota A', 'Rota A'))
+  assert.ok(savedRouteHasChanges(base, base, 'Rota B', 'Rota A'))
+  assert.ok(savedRouteHasChanges(branched, base, 'Rota A', 'Rota A'))
 })

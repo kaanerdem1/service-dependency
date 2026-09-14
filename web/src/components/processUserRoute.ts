@@ -114,9 +114,34 @@ export function routeProgress(graph: ProcessFlowGraph, state: UserRouteState): R
   return current && outgoingRouteEdges(graph, current.nodeId).length === 0 ? 'completed' : 'draft'
 }
 
+export function transitionCaption(label?: string | null) {
+  const name = label?.trim()
+  return name || undefined
+}
+
 export function routePrefix(state: UserRouteState, visitIndex: number): UserRouteState {
   const cursor = Math.max(0, Math.min(visitIndex, state.cursor))
   return { visits: state.visits.slice(0, cursor + 1), cursor }
+}
+
+/** Görünür adım dizisi (node + gelen edge) kayıtlı rota ile aynı mı. */
+export function routeVisibleVisitsEqual(a: UserRouteState, b: UserRouteState): boolean {
+  const va = visibleRouteVisits(a)
+  const vb = visibleRouteVisits(b)
+  if (va.length !== vb.length) return false
+  return va.every(
+    (v, i) => v.nodeId === vb[i].nodeId && v.incomingEdgeId === vb[i].incomingEdgeId,
+  )
+}
+
+/** Kayıtlı rota varken “farklı kaydet” anlamlı mı (adım veya ad değişmiş). */
+export function savedRouteHasChanges(
+  state: UserRouteState,
+  saved: UserRouteState,
+  name: string,
+  savedName: string,
+): boolean {
+  return !routeVisibleVisitsEqual(state, saved) || name.trim() !== savedName.trim()
 }
 
 /** Eski bir grafik sürümünde kaydedilmiş rotayı son doğrulanabilir geçişte keser. */

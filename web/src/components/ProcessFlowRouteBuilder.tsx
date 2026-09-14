@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -7,9 +8,11 @@ import ReactFlow, {
   MarkerType,
   Position,
   ReactFlowProvider,
+  useNodesState,
   useReactFlow,
   type Edge,
   type Node,
+  type NodeChange,
   type NodeProps,
 } from 'reactflow'
 import type {
@@ -37,7 +40,10 @@ import {
   reconcileRouteWithGraph,
   routeCurrentVisit,
   routeProgress,
+  savedRouteHasChanges,
+  transitionCaption,
   visibleRouteVisits,
+  type RouteVisit,
   type UserRouteState,
 } from './processUserRoute'
 
@@ -50,11 +56,14 @@ type RouteNodeData = {
 
 type RouteChoiceData = {
   edgeId: string
-  edgeLabel: string
+  edgeLabel?: string
   label: string
   kind: ProcessFlowNodeKind
   services: string[]
 }
+
+type FlowNode = ProcessFlowGraph['nodes'][number]
+type FlowEdge = ProcessFlowGraph['edges'][number]
 
 const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   start: 'Başlangıç',
@@ -73,48 +82,113 @@ const ORIGIN_Y = 168
 const FAN_GAP = 118
 const CHOICE_PREFIX = 'choice:'
 
-function isDummyId(id: string) {
-  return id.startsWith('d:')
+function defaultRoutePosition(
+  index: number,
+  visits: RouteVisit[],
+  positions: Record<string, { x: number; y: number }>,
+) {
+  const previous = index > 0 ? visits[index - 1] : undefined
+  const previousPos = previous ? positions[previous.visitId] : undefined
+  if (previousPos) return { x: previousPos.x + STEP_X, y: previousPos.y }
+  return { x: ORIGIN_X + index * STEP_X, y: ORIGIN_Y }
 }
 
-function incomingTransitionsFor(
+function collectNodePositions(nodes: Node[]) {
+  return Object.fromEntries(nodes.map((node) => [node.id, node.position]))
+}
+
+function buildRouteNodes(
+  visits: RouteVisit[],
+  choices: FlowEdge[],
+  byId: Map<string, FlowNode>,
+  positions: Record<string, { x: number; y: number }>,
+  selectedIndex: number | undefined,
+  readOnly: boolean,
+): Node[] {
+  const committed: Node<RouteNodeData>[] = visits.map((visit, index) => {
+    const source = byId.get(visit.nodeId)
+    return {
+      id: visit.visitId,
+      type: 'routeStep',
+      position: positions[visit.visitId] ?? defaultRoutePosition(index, visits, positions),
+      data: {
+        label: source?.name ?? visit.nodeId,
+        kind: source?.kind ?? 'other',
+        services: source?.services ?? [],
+        visitNumber: visit.ordinal,
+      },
+      className: 'pf-route-node-wrap',
+      selected: selectedIndex === index,
+      draggable: !readOnly,
+      style: { width: 168 },
+    }
+  })
+  if (!choices.length || !visits.length) return committed
+  const last = visits[visits.length - 1]
+  const lastPos =
+    positions[last.visitId] ?? defaultRoutePosition(visits.length - 1, visits, positions)
+  const fan = choiceFan(choices.length, lastPos.x + STEP_X, lastPos.y)
+  const ghosts: Node<RouteChoiceData>[] = choices.map((edge, index) => {
+    const target = byId.get(edge.to)
+    return {
+      id: `${CHOICE_PREFIX}${edge.id}`,
+      type: 'routeChoice',
+      position: fan[index] ?? { x: lastPos.x + STEP_X, y: lastPos.y },
+      data: {
+        edgeId: edge.id,
+        edgeLabel: transitionCaption(edge.label),
+        label: target?.name ?? edge.to,
+        kind: target?.kind ?? 'other',
+        services: target?.services ?? [],
+      },
+      className: 'pf-route-choice-wrap',
+      draggable: false,
+      selectable: false,
+      style: { width: 168 },
+      sourcePosition: Position.Right,
+      targetPosition: Position.Left,
+    }
+  })
+  return [...committed, ...ghosts]
+}
+
+function routeIncomingFor(
   graph: ProcessFlowGraph,
-  nodeId: string,
+  visits: RouteVisit[],
+  index: number,
 ): ProcessIncomingTransition[] {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const rows: ProcessIncomingTransition[] = []
-  for (const edge of graph.edges) {
-    if (edge.to !== nodeId || isDummyId(edge.from)) continue
-    const from = byId.get(edge.from)
-    if (!from) continue
-    rows.push({
-      fromId: edge.from,
+  if (index <= 0) return []
+  const previous = visits[index - 1]
+  const visit = visits[index]
+  const from = graph.nodes.find((node) => node.id === previous.nodeId)
+  if (!from || !visit) return []
+  return [
+    {
+      fromId: previous.nodeId,
       fromName: from.name,
       fromKind: from.kind,
-      label: edge.label?.trim() || undefined,
-    })
-  }
-  return rows
+      label: visit.incomingLabel,
+    },
+  ]
 }
 
-function outgoingTransitionsFor(
+function routeOutgoingFor(
   graph: ProcessFlowGraph,
-  nodeId: string,
+  visits: RouteVisit[],
+  index: number,
 ): ProcessOutgoingTransition[] {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const rows: ProcessOutgoingTransition[] = []
-  for (const edge of graph.edges) {
-    if (edge.from !== nodeId || isDummyId(edge.to)) continue
-    const to = byId.get(edge.to)
-    if (!to) continue
-    rows.push({
-      toId: edge.to,
+  const next = visits[index + 1]
+  if (!next) return []
+  const to = graph.nodes.find((node) => node.id === next.nodeId)
+  if (!to) return []
+  return [
+    {
+      toId: next.nodeId,
       toName: to.name,
       toKind: to.kind,
-      label: edge.label?.trim() || undefined,
-    })
-  }
-  return rows
+      label: next.incomingLabel,
+    },
+  ]
 }
 
 function choiceFan(count: number, x: number, y: number) {
@@ -170,7 +244,7 @@ function RouteChoiceNode({ data }: NodeProps<RouteChoiceData>) {
     <div className={`pf-node pf-route-choice-node is-${data.kind}`}>
       <Handle type="target" position={Position.Left} className="pf-h" />
       <Handle type="source" position={Position.Right} className="pf-h" />
-      <span className="pf-route-choice-kicker">{data.edgeLabel || 'Geçiş'}</span>
+      {data.edgeLabel ? <span className="pf-route-choice-kicker">{data.edgeLabel}</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
       {data.services[0] ? <span className="pf-node-svc">{data.services[0]}</span> : null}
@@ -204,7 +278,7 @@ function ProcessFlowRouteBuilderInner({
   const summary = useMemo(() => summarizeProcessFlow(graph), [graph])
   const [state, setState] = useState<UserRouteState>(() => {
     if (savedRoute) return reconcileRouteWithGraph(graph, savedRoute.state)
-    return autoAdvanceRoute(graph, createUserRoute(graph))
+    return createUserRoute(graph)
   })
   const [readOnly, setReadOnly] = useState(Boolean(savedRoute))
   const [selectedIndex, setSelectedIndex] = useState<number>()
@@ -212,6 +286,10 @@ function ProcessFlowRouteBuilderInner({
   const [routeName, setRouteName] = useState(savedRoute?.name ?? '')
   const [activeRoute, setActiveRoute] = useState(savedRoute)
   const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const [frameVisit, setFrameVisit] = useState<{ id: string; token: number }>()
+  const dragMovedRef = useRef(false)
+  const draggingRef = useRef(false)
+  const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
   const mapCanvasRef = useRef<HTMLDivElement>(null)
   const { getNodes, fitView } = useReactFlow()
   const visits = useMemo(() => visibleRouteVisits(state), [state])
@@ -231,60 +309,67 @@ function ProcessFlowRouteBuilderInner({
     [choices, visits],
   )
   const cameraKey = cameraFocusIds.join('|')
+  const [nodes, setNodes, onNodesChange] = useNodesState(() =>
+    buildRouteNodes(visits, choices, byId, {}, selectedIndex, readOnly),
+  )
+  const syncRouteNodes = useCallback(
+    (current: Node[]) => {
+      const positions = { ...positionsRef.current, ...collectNodePositions(current) }
+      return buildRouteNodes(visits, choices, byId, positions, selectedIndex, readOnly)
+    },
+    [byId, choices, readOnly, selectedIndex, visits],
+  )
 
-  const nodes = useMemo<Node[]>(() => {
-    const committed: Node<RouteNodeData>[] = visits.map((visit, index) => {
-      const source = byId.get(visit.nodeId)
-      return {
-        id: visit.visitId,
-        type: 'routeStep',
-        position: { x: ORIGIN_X + index * STEP_X, y: ORIGIN_Y },
-        data: {
-          label: source?.name ?? visit.nodeId,
-          kind: source?.kind ?? 'other',
-          services: source?.services ?? [],
-          visitNumber: visit.ordinal,
-        },
-        className: 'pf-route-node-wrap',
-        selected: selectedIndex === index,
-        draggable: false,
-        style: { width: 168 },
+  useEffect(() => {
+    if (draggingRef.current) return
+    setNodes((current) => {
+      const committed = current.filter((node) => !node.id.startsWith(CHOICE_PREFIX))
+      const ghosts = current.filter((node) => node.id.startsWith(CHOICE_PREFIX))
+      const sameVisits =
+        committed.length === visits.length &&
+        committed.every((node, index) => node.id === visits[index]?.visitId)
+      const sameChoices =
+        ghosts.length === choices.length &&
+        ghosts.every((node, index) => node.id === `${CHOICE_PREFIX}${choices[index]?.id}`)
+      if (sameVisits && sameChoices) {
+        return current.map((node) => {
+          if (node.id.startsWith(CHOICE_PREFIX)) {
+            return { ...node, selected: false, draggable: false }
+          }
+          const index = visits.findIndex((visit) => visit.visitId === node.id)
+          return {
+            ...node,
+            selected: selectedIndex === index,
+            draggable: !readOnly,
+          }
+        })
       }
+      return syncRouteNodes(current)
     })
-    if (!choices.length || !visits.length) return committed
-    const fan = choiceFan(choices.length, ORIGIN_X + visits.length * STEP_X, ORIGIN_Y)
-    const ghosts: Node<RouteChoiceData>[] = choices.map((edge, index) => {
-      const target = byId.get(edge.to)
-      return {
-        id: `${CHOICE_PREFIX}${edge.id}`,
-        type: 'routeChoice',
-        position: fan[index] ?? { x: ORIGIN_X + visits.length * STEP_X, y: ORIGIN_Y },
-        data: {
-          edgeId: edge.id,
-          edgeLabel: edge.label?.trim() || 'Etiketsiz geçiş',
-          label: target?.name ?? edge.to,
-          kind: target?.kind ?? 'other',
-          services: target?.services ?? [],
-        },
-        className: 'pf-route-choice-wrap',
-        draggable: false,
-        selectable: false,
-        style: { width: 168 },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
+  }, [choices, readOnly, selectedIndex, setNodes, syncRouteNodes, visits])
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes)
+      for (const change of changes) {
+        if (change.type !== 'position' || !change.position || change.id.startsWith(CHOICE_PREFIX)) {
+          continue
+        }
+        if (change.dragging) dragMovedRef.current = true
+        if (change.dragging === false) positionsRef.current[change.id] = change.position
       }
-    })
-    return [...committed, ...ghosts]
-  }, [byId, choices, selectedIndex, visits])
+    },
+    [onNodesChange],
+  )
 
   const edges = useMemo<Edge[]>(() => {
     const committed: Edge[] = visits.slice(1).map((visit, index) => ({
       id: `route:${visits[index].visitId}:${visit.visitId}`,
       source: visits[index].visitId,
       target: visit.visitId,
-      label: visit.incomingLabel,
+      label: transitionCaption(visit.incomingLabel),
       type: 'straight',
-      className: 'pf-edge-onpath',
+      className: 'pf-route-edge',
       style: { stroke: '#2f6fed', strokeWidth: 2.2 },
       labelStyle: { fill: '#1e40af', fontSize: 11, fontWeight: 700 },
       labelBgStyle: { fill: '#fff', fillOpacity: 0.96 },
@@ -327,27 +412,59 @@ function ProcessFlowRouteBuilderInner({
     return [...committed, ...ghosts]
   }, [choices, visits])
 
-  useEffect(() => {
-    let cancelled = false
-    const focusIds = cameraFocusIds
-    const run = () => {
-      if (cancelled) return
-      const present = getNodes().filter((node) => focusIds.includes(node.id))
+  const frameNodes = useCallback(
+    (nodeIds: string[], padding = 0.34) => {
+      if (draggingRef.current || !nodeIds.length) return
+      const present = getNodes().filter((node) => nodeIds.includes(node.id))
       if (!present.length) return
       void fitView({
         nodes: present,
-        padding: 0.34,
+        padding,
         duration: 480,
         minZoom: 0.45,
         maxZoom: 1.15,
       })
+    },
+    [fitView, getNodes],
+  )
+
+  useEffect(() => {
+    if (draggingRef.current) return
+    let cancelled = false
+    const focusIds = cameraFocusIds
+    const run = () => {
+      if (cancelled) return
+      frameNodes(focusIds)
     }
     const frame = requestAnimationFrame(() => requestAnimationFrame(run))
     return () => {
       cancelled = true
       cancelAnimationFrame(frame)
     }
-  }, [cameraFocusIds, cameraKey, fitView, getNodes])
+  }, [cameraFocusIds, cameraKey, frameNodes])
+
+  useEffect(() => {
+    if (!frameVisit || draggingRef.current) return
+    let cancelled = false
+    const run = () => {
+      if (cancelled) return
+      frameNodes([frameVisit.id], 0.46)
+    }
+    const frame = requestAnimationFrame(() => requestAnimationFrame(run))
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+    }
+  }, [frameNodes, frameVisit])
+
+  const selectVisit = useCallback(
+    (index: number) => {
+      setSelectedIndex(index)
+      const visit = visits[index]
+      if (visit) setFrameVisit({ id: visit.visitId, token: Date.now() })
+    },
+    [visits],
+  )
 
   const choose = useCallback(
     (edgeId: string) => {
@@ -357,12 +474,11 @@ function ProcessFlowRouteBuilderInner({
     [graph],
   )
 
-  const save = () => {
+  const persistRoute = (asNew = false) => {
     const name = routeName.trim()
     if (!name) return
-    if (activeRoute && !window.confirm(`“${activeRoute.name}” rotası güncellensin mi?`)) return
     const route = saveProcessRoute({
-      id: activeRoute?.id,
+      id: asNew ? undefined : activeRoute?.id,
       processNo,
       processTitle,
       name,
@@ -408,6 +524,11 @@ function ProcessFlowRouteBuilderInner({
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
+      if (saveOpen) {
+        event.preventDefault()
+        setSaveOpen(false)
+        return
+      }
       if (selectedIndex != null) {
         event.preventDefault()
         setSelectedIndex(undefined)
@@ -415,7 +536,11 @@ function ProcessFlowRouteBuilderInner({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selectedIndex])
+  }, [saveOpen, selectedIndex])
+
+  const canSaveAs =
+    Boolean(activeRoute) &&
+    savedRouteHasChanges(state, activeRoute!.state, routeName, activeRoute!.name)
 
   const stale =
     savedRoute?.graphUpdatedAt &&
@@ -448,7 +573,7 @@ function ProcessFlowRouteBuilderInner({
         graph={graph}
         visits={visits}
         selectedIndex={selectedIndex}
-        onSelect={setSelectedIndex}
+        onSelect={selectVisit}
       />
       <div
         ref={mapCanvasRef}
@@ -490,7 +615,11 @@ function ProcessFlowRouteBuilderInner({
               Düzenle
             </button>
           ) : (
-            <button type="button" className="pf-add-note" onClick={() => setSaveOpen(true)}>
+            <button
+              type="button"
+              className="pf-add-note"
+              onClick={() => setSaveOpen(true)}
+            >
               Kaydet
             </button>
           )}
@@ -503,17 +632,34 @@ function ProcessFlowRouteBuilderInner({
             aria-label="Snapshot indir (PDF)"
           >
             {snapshotBusy ? '…' : <SnapshotGlyph />}
-            Snapshot
           </button>
         </div>
         <ReactFlow
           nodes={nodes}
           edges={edges}
           nodeTypes={nodeTypes}
-          nodesDraggable={false}
+          nodesDraggable={!readOnly}
           nodesConnectable={false}
           elementsSelectable
+          selectNodesOnDrag={false}
+          panOnDrag
+          onNodesChange={handleNodesChange}
+          onNodeDragStart={() => {
+            draggingRef.current = true
+            dragMovedRef.current = false
+          }}
+          onNodeDragStop={(_, node) => {
+            draggingRef.current = false
+            if (!node.id.startsWith(CHOICE_PREFIX)) {
+              positionsRef.current[node.id] = node.position
+            }
+            setNodes((current) => syncRouteNodes(current))
+            window.setTimeout(() => {
+              dragMovedRef.current = false
+            }, 0)
+          }}
           onNodeClick={(_, node) => {
+            if (dragMovedRef.current) return
             if (node.type === 'routeChoice') {
               if (!readOnly) choose((node.data as RouteChoiceData).edgeId)
               return
@@ -544,8 +690,9 @@ function ProcessFlowRouteBuilderInner({
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
             subProcessNo={selectedNode.subProcessNo}
-            incoming={incomingTransitionsFor(graph, selectedNode.id)}
-            outgoing={outgoingTransitionsFor(graph, selectedNode.id)}
+            incoming={routeIncomingFor(graph, visits, selectedIndex ?? 0)}
+            outgoing={routeOutgoingFor(graph, visits, selectedIndex ?? 0)}
+            routeScoped
             path={selectedPathSteps}
             onSnapshot={() => void exportPdf(selectedIndex ?? 0)}
             snapshotBusy={snapshotBusy}
@@ -570,31 +717,74 @@ function ProcessFlowRouteBuilderInner({
         </button>
       ) : null}
 
-      {saveOpen ? (
-        <div className="pf-route-save-backdrop" role="presentation" onMouseDown={() => setSaveOpen(false)}>
-          <section className="pf-route-save-dialog" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
-            <h2>{activeRoute ? 'Rotayı güncelle' : 'Rotayı kaydet'}</h2>
-            <label>
-              Rota adı
-              <input
-                autoFocus
-                value={routeName}
-                onChange={(event) => setRouteName(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') save()
-                  if (event.key === 'Escape') setSaveOpen(false)
-                }}
-                placeholder="Örn. Bölge onay rotası"
-              />
-            </label>
-            <p>Yalnız haritada şu anda görünen {visits.length} adım kaydedilir.</p>
-            <div>
-              <button type="button" onClick={() => setSaveOpen(false)}>Vazgeç</button>
-              <button type="button" className="is-primary" disabled={!routeName.trim()} onClick={save}>Kaydet</button>
-            </div>
-          </section>
-        </div>
-      ) : null}
+      {saveOpen
+        ? createPortal(
+            <div
+              className="pf-route-save-backdrop"
+              role="presentation"
+              onMouseDown={() => setSaveOpen(false)}
+            >
+              <section
+                className="pf-route-save-dialog"
+                role="dialog"
+                aria-modal="true"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <h2>Rotayı kaydet</h2>
+                <label>
+                  Rota adı
+                  <input
+                    autoFocus
+                    value={routeName}
+                    onChange={(event) => setRouteName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && routeName.trim()) persistRoute(false)
+                      if (event.key === 'Escape') setSaveOpen(false)
+                    }}
+                    placeholder="Örn. Bölge onay rotası"
+                  />
+                </label>
+                <p>
+                  Yalnız haritada şu anda görünen {visits.length} adım kaydedilir.
+                  {activeRoute ? (
+                    <>
+                      {' '}
+                      <strong>Kaydet</strong> mevcut “{activeRoute.name}” kaydının üzerine yazar;{' '}
+                      <strong>Farklı kaydet</strong> yeni bir rota oluşturur.
+                    </>
+                  ) : null}
+                </p>
+                <div>
+                  <button type="button" onClick={() => setSaveOpen(false)}>
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSaveAs}
+                    title={
+                      canSaveAs
+                        ? 'Yeni bir rota kaydı oluştur'
+                        : 'Kayıtlı rota yok veya adım/ad kayıtlıyla aynı'
+                    }
+                    onClick={() => persistRoute(true)}
+                  >
+                    Farklı kaydet
+                  </button>
+                  <button
+                    type="button"
+                    className="is-primary"
+                    disabled={!routeName.trim()}
+                    title={activeRoute ? 'Mevcut kaydın üzerine yaz' : 'Rotayı kaydet'}
+                    onClick={() => persistRoute(false)}
+                  >
+                    Kaydet
+                  </button>
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

@@ -1017,14 +1017,15 @@ export async function exportProcessPathSnapshotPdf(opts: {
 
   // Snapshot görseli HER ZAMAN bağımsız bir katmanda üretilir — canlı
   // ProcessFlowMap okları/etiketleri PDF'e yansımaz, chart'a dokunulmaz.
-  const useSnakeLayout = bounds.width > SNAKE_MAX_ROW_WIDTH
+  // Tam akış ve özel rota aynı yılan düzenini kullanır (sabit slot, ok, satır
+  // kırılımı); uzun yollar yatayda sıkışmaz, aşağı doğru satırlara iner.
   const { container, width, height, cleanup } = buildSnapshotCaptureContainer(
     mapEl,
     viewportEl,
     pathNodes,
     steps,
     pathEdges,
-    useSnakeLayout ? 'snake' : 'natural',
+    'snake',
     { x: bounds.x, y: bounds.y },
   )
   const restore = sanitizeAttributesForXml(container)

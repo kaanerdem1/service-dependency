@@ -7,6 +7,7 @@ import {
   type DragEvent as ReactDragEvent,
   type ReactNode,
 } from 'react'
+import { createPortal } from 'react-dom'
 import { searchServices, listPocProcesses, searchProcesses } from '../api/client'
 import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
 import { TreeKindIcon } from './TreeKindIcon'
@@ -494,6 +495,7 @@ export function WorkflowsPanel({
   const [processRoutes, setProcessRoutes] = useState<SavedProcessRoute[]>(() =>
     routesForPanel(processFlowNo),
   )
+  const [pendingDelete, setPendingDelete] = useState<SavedProcessRoute>()
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
 
@@ -835,7 +837,9 @@ export function WorkflowsPanel({
                       className={`sc-process-item${activeRouteId === route.id ? ' is-active' : ''}`}
                       onClick={() => onOpenProcessRoute(route.id)}
                     >
-                      <span className="sc-process-route-glyph" aria-hidden>⑂</span>
+                      <span className="sc-process-route-glyph" aria-hidden>
+                        <GitBranchIcon filled />
+                      </span>
                       <span className="sc-process-item-copy">
                         <span className="sc-process-item-name">{route.name}</span>
                         <span className="sc-process-item-no">
@@ -859,11 +863,7 @@ export function WorkflowsPanel({
                         type="button"
                         title="Sil"
                         aria-label={`${route.name} rotasını sil`}
-                        onClick={() => {
-                          if (window.confirm(`“${route.name}” rotası silinsin mi?`)) {
-                            setProcessRoutes(deleteProcessRoute(route.id).routes)
-                          }
-                        }}
+                        onClick={() => setPendingDelete(route)}
                       >
                         ×
                       </button>
@@ -962,6 +962,44 @@ export function WorkflowsPanel({
           ))}
         </div>
       </aside>
+      {pendingDelete
+        ? createPortal(
+            <div
+              className="sc-confirm-backdrop"
+              role="presentation"
+              onMouseDown={() => setPendingDelete(undefined)}
+            >
+              <section
+                className="sc-confirm-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="sc-route-delete-title"
+                onMouseDown={(event) => event.stopPropagation()}
+              >
+                <h2 id="sc-route-delete-title">Rotayı sil</h2>
+                <p>
+                  “{pendingDelete.name}” rotası kalıcı olarak silinecek. Bu işlem geri alınamaz.
+                </p>
+                <div className="sc-confirm-actions">
+                  <button type="button" onClick={() => setPendingDelete(undefined)}>
+                    Vazgeç
+                  </button>
+                  <button
+                    type="button"
+                    className="is-danger"
+                    onClick={() => {
+                      setProcessRoutes(deleteProcessRoute(pendingDelete.id).routes)
+                      setPendingDelete(undefined)
+                    }}
+                  >
+                    Sil
+                  </button>
+                </div>
+              </section>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

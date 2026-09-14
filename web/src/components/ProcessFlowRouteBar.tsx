@@ -18,9 +18,11 @@ export function ProcessFlowRouteBar({
       {visits.map((visit, index) => (
         <span className="pf-route-bar-part" key={visit.visitId}>
           {index > 0 ? (
-            <span className="pf-route-bar-edge">
-              {visit.incomingLabel || '→'}
-            </span>
+            visit.incomingLabel?.trim() ? (
+              <span className="pf-route-bar-edge">{visit.incomingLabel.trim()}</span>
+            ) : (
+              <span className="pf-route-bar-sep" aria-hidden />
+            )
           ) : null}
           <button
             type="button"

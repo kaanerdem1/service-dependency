@@ -37,6 +37,7 @@ function formatCriteria(criteria: Record<string, string>): string {
 }
 
 import type { ProcessPathSnapshotStep as ProcessPathStep } from '../snapshot/processPathSnapshot'
+import { transitionCaption } from './processUserRoute'
 
 export type { ProcessPathStep }
 
@@ -51,6 +52,8 @@ type Props = {
   subProcessNo?: string
   incoming?: ProcessIncomingTransition[]
   outgoing?: ProcessOutgoingTransition[]
+  /** Rota kurucusunda yalnız bu rotadaki geliş/çıkış gösterilir. */
+  routeScoped?: boolean
   /** start'tan bu düğüme kadar sıralı kanonik yol — Snapshot export'u için. */
   path?: ProcessPathStep[]
   onSnapshot?: () => void
@@ -71,6 +74,7 @@ export function ProcessFlowDetailDrawer({
   subProcessNo,
   incoming = [],
   outgoing = [],
+  routeScoped = false,
   path = [],
   onSnapshot,
   snapshotBusy = false,
@@ -223,7 +227,9 @@ export function ProcessFlowDetailDrawer({
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adıma geliş</h3>
             <p className="pf-detail-lead">
-              Hangi adımdan, hangi geçiş etiketiyle bu noktaya ulaşılıyor?
+              {routeScoped
+                ? 'Bu rotada bu adıma hangi geçişle gelindi?'
+                : 'Hangi adımdan, hangi geçişle bu noktaya ulaşılıyor?'}
             </p>
             <ul className="pf-detail-incoming-list">
               {incoming.map((row, i) => (
@@ -235,12 +241,16 @@ export function ProcessFlowDetailDrawer({
                     <span className="pf-detail-incoming-kind">{KIND_LABEL[row.fromKind]}</span>
                     {row.fromName}
                   </span>
-                  <span className="pf-detail-incoming-arrow" aria-hidden>
-                    →
-                  </span>
-                  <span className="pf-detail-incoming-label">
-                    {row.label ?? 'etiket yok'}
-                  </span>
+                  {transitionCaption(row.label) ? (
+                    <>
+                      <span className="pf-detail-incoming-arrow" aria-hidden>
+                        →
+                      </span>
+                      <span className="pf-detail-incoming-label">
+                        {transitionCaption(row.label)}
+                      </span>
+                    </>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -251,15 +261,21 @@ export function ProcessFlowDetailDrawer({
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adımdan çıkış</h3>
             <p className="pf-detail-lead">
-              Bu noktadan hangi geçiş etiketiyle nereye gidiliyor? (Servisi olmayan geçişler de dahil.)
+              {routeScoped
+                ? 'Bu rotada bu adımdan hangi geçişle devam edildi?'
+                : 'Bu noktadan hangi geçişle nereye gidiliyor? (Servisi olmayan geçişler de dahil.)'}
             </p>
             <ul className="pf-detail-incoming-list">
               {outgoing.map((row, i) => (
                 <li key={`${row.toId}:${row.label ?? ''}:${i}`} className="pf-detail-incoming">
-                  <span className="pf-detail-incoming-label">{row.label ?? 'etiket yok'}</span>
-                  <span className="pf-detail-incoming-arrow" aria-hidden>
-                    →
-                  </span>
+                  {transitionCaption(row.label) ? (
+                    <>
+                      <span className="pf-detail-incoming-label">{transitionCaption(row.label)}</span>
+                      <span className="pf-detail-incoming-arrow" aria-hidden>
+                        →
+                      </span>
+                    </>
+                  ) : null}
                   <span className="pf-detail-incoming-from">
                     <span className="pf-detail-incoming-kind">{KIND_LABEL[row.toKind]}</span>
                     {row.toName}
