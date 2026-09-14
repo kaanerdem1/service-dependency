@@ -20,6 +20,10 @@ dist-ssr/
 *.sln
 *.sw?
 
+# Yerel DB dump'ları (backups/postgres/README.md git'te kalır)
+/backups/postgres/*
+!/backups/postgres/README.md
+
 # Lokal notlar — push edilmez (docs/PRODUCT.md, db.md, README.md hariç)
 /ss.md
 /docs/UI +.md
