@@ -38,6 +38,13 @@ import {
   type WorkflowsStore,
 } from '../workflowStore'
 import type { ProcessCatalogItem, Service } from '../types'
+import {
+  deleteProcessRoute,
+  PROCESS_ROUTES_CHANGED_EVENT,
+  renameProcessRoute,
+  routesForPanel,
+  type SavedProcessRoute,
+} from '../processRouteStore'
 
 type Props = {
   open: boolean
@@ -50,8 +57,10 @@ type Props = {
   onSelectService: (serviceId: string) => void
   onOpenFolder: (folderId: string) => void
   onOpenProcess: (processNo: string) => void
+  onOpenProcessRoute: (routeId: string) => void
   infoFolderId?: string
   processFlowNo?: string
+  activeRouteId?: string
   canEdit?: boolean
 }
 
@@ -467,8 +476,10 @@ export function WorkflowsPanel({
   onSelectService,
   onOpenFolder,
   onOpenProcess,
+  onOpenProcessRoute,
   infoFolderId,
   processFlowNo,
+  activeRouteId,
   canEdit = true,
 }: Props) {
   const [store, setStore] = useState<WorkflowsStore>(() => readWorkflows())
@@ -480,6 +491,9 @@ export function WorkflowsPanel({
   const [processHits, setProcessHits] = useState<ProcessCatalogItem[]>([])
   const [searching, setSearching] = useState(false)
   const [pocProcesses, setPocProcesses] = useState<ProcessCatalogItem[]>([])
+  const [processRoutes, setProcessRoutes] = useState<SavedProcessRoute[]>(() =>
+    routesForPanel(processFlowNo),
+  )
   const searchRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLElement>(null)
 
@@ -517,6 +531,13 @@ export function WorkflowsPanel({
     window.addEventListener(WORKFLOWS_CHANGED_EVENT, refresh)
     return () => window.removeEventListener(WORKFLOWS_CHANGED_EVENT, refresh)
   }, [])
+
+  useEffect(() => {
+    const refresh = () => setProcessRoutes(routesForPanel(processFlowNo))
+    refresh()
+    window.addEventListener(PROCESS_ROUTES_CHANGED_EVENT, refresh)
+    return () => window.removeEventListener(PROCESS_ROUTES_CHANGED_EVENT, refresh)
+  }, [processFlowNo])
 
   useEffect(() => {
     const q = query.trim()
@@ -795,6 +816,58 @@ export function WorkflowsPanel({
                         <span className="sc-process-item-no">{p.no}</span>
                       </span>
                     </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="sc-process-block sc-process-routes-block">
+            <div className="sc-section-label">Akış Rotaları</div>
+            {processRoutes.length === 0 ? (
+              <p className="sc-process-hint">Henüz kaydedilmiş rota yok.</p>
+            ) : (
+              <ul className="sc-process-list">
+                {processRoutes.map((route) => (
+                  <li key={route.id} className="sc-process-route-row">
+                    <button
+                      type="button"
+                      className={`sc-process-item${activeRouteId === route.id ? ' is-active' : ''}`}
+                      onClick={() => onOpenProcessRoute(route.id)}
+                    >
+                      <span className="sc-process-route-glyph" aria-hidden>⑂</span>
+                      <span className="sc-process-item-copy">
+                        <span className="sc-process-item-name">{route.name}</span>
+                        <span className="sc-process-item-no">
+                          {route.processNo} · {route.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                        </span>
+                      </span>
+                    </button>
+                    <span className="sc-process-route-actions">
+                      <button
+                        type="button"
+                        title="Yeniden adlandır"
+                        aria-label={`${route.name} rotasını yeniden adlandır`}
+                        onClick={() => {
+                          const name = window.prompt('Yeni rota adı', route.name)
+                          if (name?.trim()) setProcessRoutes(renameProcessRoute(route.id, name).routes)
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        title="Sil"
+                        aria-label={`${route.name} rotasını sil`}
+                        onClick={() => {
+                          if (window.confirm(`“${route.name}” rotası silinsin mi?`)) {
+                            setProcessRoutes(deleteProcessRoute(route.id).routes)
+                          }
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
                   </li>
                 ))}
               </ul>

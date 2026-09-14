@@ -1,5 +1,6 @@
 import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 import type { ProcessPathSnapshotStep } from '../snapshot/processPathSnapshot'
+import type { RouteVisit } from './processUserRoute'
 
 /** pathToFocus.orderedIds + graph → PDF anlatım adımları (katman = displayStep). */
 export function buildPathSnapshotSteps(
@@ -36,6 +37,38 @@ export function buildPathSnapshotSteps(
       displayStep,
       outgoing,
       label: outgoing[0]?.label,
+    }
+  })
+}
+
+/** Kullanıcının seçtiği tek rotayı occurrence sırasıyla PDF anlatımına çevirir. */
+export function buildUserRouteSnapshotSteps(
+  graph: ProcessFlowGraph,
+  visits: RouteVisit[],
+): ProcessPathSnapshotStep[] {
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  return visits.map((visit, index) => {
+    const node = byId.get(visit.nodeId)
+    const next = visits[index + 1]
+    const edge = next?.incomingEdgeId
+      ? graph.edges.find((candidate) => candidate.id === next.incomingEdgeId)
+      : undefined
+    return {
+      id: visit.visitId,
+      name: `${node?.name ?? visit.nodeId}${visit.ordinal > 1 ? ` (${visit.ordinal}. ziyaret)` : ''}`,
+      kind: (node?.kind ?? 'other') as ProcessFlowNodeKind,
+      displayStep: index + 1,
+      outgoing: next
+        ? [
+            {
+              toId: next.visitId,
+              toName: byId.get(next.nodeId)?.name ?? next.nodeId,
+              label: edge?.label?.trim() || next.incomingLabel,
+              targetStep: index + 2,
+            },
+          ]
+        : [],
+      label: edge?.label?.trim() || next?.incomingLabel,
     }
   })
 }

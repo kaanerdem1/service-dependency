@@ -1357,6 +1357,7 @@ function ProcessFlowMapInner({
   onRestoreConsumed,
   onOpenService,
   onOpenSubProcess,
+  onCreateRoute,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
@@ -1367,6 +1368,7 @@ function ProcessFlowMapInner({
   onRestoreConsumed?: () => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string, nodeId: string) => void
+  onCreateRoute?: () => void
 }) {
   const processNo = graph.catalogNo ?? graph.no
   const seed = useMemo(() => {
@@ -1532,9 +1534,7 @@ function ProcessFlowMapInner({
       const active = neighborhood.nodeIds.has(n.id)
       return {
         ...n,
-        className: [active ? 'pf-node-onpath' : 'pf-node-offpath', n.className]
-          .filter(Boolean)
-          .join(' '),
+        className: [active ? 'pf-node-onpath' : '', n.className].filter(Boolean).join(' '),
         zIndex: (!!selectedNodeId && sinkCopyRealId(n.id) === selectedNodeId) ? 14 : active ? 12 : 6,
       }
     })
@@ -1547,11 +1547,7 @@ function ProcessFlowMapInner({
           pathToFocus.nodeIds.has(sinkCopyRealId(n.id)),
       )
     }
-    return [
-      ...processOnly.filter((n) => n.className !== 'pf-node-onpath'),
-      ...processOnly.filter((n) => n.className === 'pf-node-onpath'),
-      ...notes,
-    ]
+    return [...processOnly, ...notes]
   }, [neighborhood, nodes, selectedNodeId, snapshotCapturing, pathToFocus])
 
   const shownEdges = useMemo(() => {
@@ -1569,10 +1565,7 @@ function ProcessFlowMapInner({
     if (snapshotCapturing && pathToFocus) {
       return decorated.filter((e) => pathToFocus.edgeIds.has(e.id))
     }
-    return [
-      ...decorated.filter((e) => !e.data.active),
-      ...decorated.filter((e) => e.data.active),
-    ]
+    return decorated
   }, [edges, neighborhood, snapshotCapturing, pathToFocus])
 
   const onNodeMouseEnter = useCallback((_: unknown, node: Node) => {
@@ -1699,6 +1692,11 @@ function ProcessFlowMapInner({
         {summary.metaLine ? <p className="pf-map-meta">{summary.metaLine}</p> : null}
         {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
         {screens}
+        {onCreateRoute ? (
+          <button type="button" className="pf-route-start" onClick={onCreateRoute}>
+            Akış Rotanı Oluştur
+          </button>
+        ) : null}
       </header>
       {canGoBack && onBackToParent ? (
         <button type="button" className="pf-map-back" onClick={onBackToParent}>
@@ -1712,7 +1710,7 @@ function ProcessFlowMapInner({
       ) : null}
       <div
         ref={mapCanvasRef}
-        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
+        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${neighborhood ? ' is-path-focus' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
       >
         {selectedNodeId ? (
           <button
@@ -1810,6 +1808,7 @@ export function ProcessFlowMap({
   onRestoreConsumed,
   onOpenService,
   onOpenSubProcess,
+  onCreateRoute,
 }: {
   graph: ProcessFlowGraph
   screens?: ReactNode
@@ -1820,6 +1819,7 @@ export function ProcessFlowMap({
   onRestoreConsumed?: () => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string, nodeId: string) => void
+  onCreateRoute?: () => void
 }) {
   return (
     <ReactFlowProvider>
@@ -1834,6 +1834,7 @@ export function ProcessFlowMap({
         onRestoreConsumed={onRestoreConsumed}
         onOpenService={onOpenService}
         onOpenSubProcess={onOpenSubProcess}
+        onCreateRoute={onCreateRoute}
       />
     </ReactFlowProvider>
   )

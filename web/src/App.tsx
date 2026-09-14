@@ -64,6 +64,7 @@ import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { ProcessFlowPage } from './components/ProcessFlowPage'
+import { getProcessRoute, touchProcessRoute } from './processRouteStore'
 import { FavoriteStarButton } from './components/FavoriteStarButton'
 import { ServiceWorkflowChip } from './components/ServiceWorkflowChip'
 import { CatalogHelp } from './components/CatalogHelp'
@@ -318,6 +319,7 @@ export default function App() {
   const [workflowInfoId, setWorkflowInfoId] = useState<string>()
   const [workflowResumeId, setWorkflowResumeId] = useState<string>()
   const [processFlowNo, setProcessFlowNo] = useState<string>()
+  const [processRouteId, setProcessRouteId] = useState<string>()
   /** Drawer’dan servise gidildiğinde sürece geri dönmek için. */
   const [processFlowReturn, setProcessFlowReturn] = useState<
     { processNo: string; nodeId?: string } | undefined
@@ -338,6 +340,7 @@ export default function App() {
       setWorkflowInfoId(undefined)
       setWorkflowResumeId(undefined)
       setProcessFlowNo(undefined)
+      setProcessRouteId(undefined)
     }
   }, [surface])
 
@@ -677,11 +680,27 @@ export default function App() {
     setProcessFlowReturn(undefined)
     setProcessFlowStack([])
     setProcessFlowRestoreNodeId(undefined)
+    setProcessRouteId(undefined)
     if (!opts?.keepService) {
       setPivotId(undefined)
       setCatalogNode(null)
     }
     setProcessFlowNo(no)
+  }, [])
+
+  const openProcessRoute = useCallback((routeId: string) => {
+    const route = getProcessRoute(routeId)
+    if (!route) return
+    touchProcessRoute(routeId)
+    setWorkflowInfoId(undefined)
+    setWorkflowResumeId(undefined)
+    setProcessFlowReturn(undefined)
+    setProcessFlowStack([])
+    setProcessFlowRestoreNodeId(undefined)
+    setProcessRouteId(routeId)
+    setPivotId(undefined)
+    setCatalogNode(null)
+    setProcessFlowNo(route.processNo)
   }, [])
 
   const selectCatalogNode = useCallback(
@@ -1366,8 +1385,10 @@ export default function App() {
             }}
             onOpenFolder={openWorkflowFolder}
             onOpenProcess={openProcessFlow}
+            onOpenProcessRoute={openProcessRoute}
             infoFolderId={workflowInfoId}
             processFlowNo={processFlowNo}
+            activeRouteId={processRouteId}
             canEdit={canEditCatalog}
           />
           </div>
@@ -1392,6 +1413,8 @@ export default function App() {
             <div className="stage-body pf-map-stage">
               <ProcessFlowPage
                 processNo={processFlowNo}
+                routeId={processRouteId}
+                onRouteSaved={setProcessRouteId}
                 initialSelectedNodeId={processFlowRestoreNodeId}
                 onRestoreConsumed={() => setProcessFlowRestoreNodeId(undefined)}
                 onOpenService={openServiceFromProcessFlow}
@@ -1403,6 +1426,7 @@ export default function App() {
                   setProcessFlowReturn(undefined)
                   setProcessFlowStack([])
                   setProcessFlowRestoreNodeId(undefined)
+                  setProcessRouteId(undefined)
                 }}
               />
             </div>
