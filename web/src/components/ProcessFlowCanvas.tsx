@@ -24,6 +24,7 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import type { ProcessDecisionInfo, ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
+import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 const COLLAPSE_AT = 20
 /** HTML referans: kolon 250, satır ~100. Aşağı oklar kısalsın diye satır daha sık. */
 const RANK_SEP = 250
@@ -144,6 +145,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
             </div>
           </div>
         ) : null}
+        <ProcessNodeServicePreview services={data.services} />
         <Handle type="source" position={Position.Right} />
       </div>
     )
@@ -155,11 +157,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
       <span className="pf-node-kind">{data.orphan ? 'Bağlantısız' : KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
-      {data.services[0] ? (
-        <span className="pf-node-svc" title={data.services.join(', ')}>
-          {data.services[0]}
-        </span>
-      ) : null}
+      <ProcessNodeServicePreview services={data.services} />
       {data.hiddenChildCount > 0 ? (
         <span className="pf-node-more">+{data.hiddenChildCount} adım</span>
       ) : null}

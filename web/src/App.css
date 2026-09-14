@@ -5035,14 +5035,30 @@
   overflow-wrap: anywhere;
 }
 
-.pf-node-svc {
+.pf-node-svc-row {
   display: block;
   margin-top: 4px;
+  min-width: 0;
+}
+
+.pf-node-svc {
+  display: block;
   font-size: 10.5px;
   color: color-mix(in srgb, var(--accent) 70%, var(--ink));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pf-node-svc-more {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  color: #2f5d4a;
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
 }
 
 .pf-node-more {

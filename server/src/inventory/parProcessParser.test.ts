@@ -61,6 +61,29 @@ test('iç içe self-closing aynı tag kapanış derinliğini bozmaz', () => {
   )
 })
 
+test('karar düğümünde geçiş içi servisler details Geçiş grubunda', () => {
+  const graph = parseProcessDefinitionXml(
+    `<process-definition name="P4">
+      <decision name="YetkiKarar">
+        <handler class="tr.example.MakerDecisionHandler"/>
+        <transition name="Onayla" to="Son">
+          <event type="transition">
+            <service service-name="SVC_ONAYLA" call-type="sync"/>
+          </event>
+        </transition>
+        <transition name="Reddet" to="Son"/>
+      </decision>
+      <end-state name="Son"/>
+    </process-definition>`,
+    'fallback',
+  )
+  const node = graph.nodes.find((n) => n.id === 'YetkiKarar')
+  assert.ok(node?.details?.groups.some((g) => g.title === 'Geçiş: Onayla'))
+  const geçis = node?.details?.groups.find((g) => g.title === 'Geçiş: Onayla')
+  assert.ok(geçis?.rows.some((r) => r.value.includes('SVC_ONAYLA')))
+  assert.ok(node?.services.includes('SVC_ONAYLA'))
+})
+
 test('bozuk bir düğümden sonra gelen geçerli kök düğümleri parse eder', () => {
   const originalWarn = console.warn
   const warnings: string[] = []

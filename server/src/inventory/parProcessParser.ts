@@ -361,7 +361,7 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
       services,
       subProcessNo,
       decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
-      details: kind !== 'decision' && kind !== 'subprocess' ? extractNodeDetails(child.inner) : undefined,
+      details: extractNodeDetails(child.inner),
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
       edges.push({

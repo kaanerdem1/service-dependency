@@ -30,6 +30,7 @@ import type {
   ProcessNodeDetails,
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
+import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 import { buildPathSnapshotSteps } from './processPathNarrative'
 import { exportProcessPathSnapshotPdf } from '../snapshot/processPathSnapshot'
@@ -154,6 +155,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
             {data.subProcessNo}
           </span>
         ) : null}
+        <ProcessNodeServicePreview services={data.services} />
       </div>
     )
   }
@@ -167,6 +169,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
           <span className="pf-gateway-mark">✕</span>
         </div>
         <strong className="pf-gateway-label">{data.label}</strong>
+        <ProcessNodeServicePreview services={data.services} />
       </div>
     )
   }
@@ -177,11 +180,7 @@ function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
       {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
-      {data.services[0] ? (
-        <span className="pf-node-svc" title={data.services.join(', ')}>
-          {data.services[0]}
-        </span>
-      ) : null}
+      <ProcessNodeServicePreview services={data.services} />
     </div>
   )
 }

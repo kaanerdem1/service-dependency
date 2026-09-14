@@ -28,6 +28,7 @@ import {
 import { exportProcessPathSnapshotPdf } from '../snapshot/processPathSnapshot'
 import { buildUserRouteSnapshotSteps } from './processPathNarrative'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
+import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { ProcessFlowRouteBar } from './ProcessFlowRouteBar'
 import { summarizeProcessFlow } from './processFlowSummary'
 import {
@@ -233,7 +234,7 @@ function RouteStepNode({ data, selected }: NodeProps<RouteNodeData>) {
       {data.visitNumber > 1 ? (
         <span className="pf-route-visit-badge">{data.visitNumber}. ziyaret</span>
       ) : null}
-      {data.services[0] ? <span className="pf-node-svc">{data.services[0]}</span> : null}
+      <ProcessNodeServicePreview services={data.services} />
     </div>
   )
 }
@@ -246,7 +247,7 @@ function RouteChoiceNode({ data }: NodeProps<RouteChoiceData>) {
       {data.edgeLabel ? <span className="pf-route-choice-kicker">{data.edgeLabel}</span> : null}
       <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
       <strong className="pf-node-title">{data.label}</strong>
-      {data.services[0] ? <span className="pf-node-svc">{data.services[0]}</span> : null}
+      <ProcessNodeServicePreview services={data.services} />
     </div>
   )
 }
@@ -562,9 +563,10 @@ function ProcessFlowRouteBuilderInner({
   const selectedPathSteps = selectedVisit
     ? buildUserRouteSnapshotSteps(graph, visits.slice(0, (selectedIndex ?? 0) + 1))
     : []
-  const routeStatus = `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret · ${
-    routeProgress(graph, state) === 'completed' ? 'Tamamlandı' : 'Taslak'
-  }`
+  const routeStatus =
+    routeProgress(graph, state) === 'completed'
+      ? `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret`
+      : `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret · Taslak`
 
   return (
     <div className="pf-map-wrap pf-route-wrap">

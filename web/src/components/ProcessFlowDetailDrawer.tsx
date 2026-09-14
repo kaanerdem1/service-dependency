@@ -113,6 +113,13 @@ export function ProcessFlowDetailDrawer({
     [services, transitionServiceCodes],
   )
   const hasServices = otherServices.length > 0
+  const transitionServiceCount = transitionServiceCodes.size
+  const serviceSummary =
+    services.length > 0
+      ? transitionServiceCount > 0
+        ? `${services.length} servis (${transitionServiceCount} geçişe bağlı, ${otherServices.length} adım düzeyinde)`
+        : `${services.length} servis`
+      : null
   const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
   const [subProcessMeta, setSubProcessMeta] = useState<ProcessRefResolve | null>(null)
 
@@ -178,6 +185,7 @@ export function ProcessFlowDetailDrawer({
             {nodeName}
           </h2>
           <p className="pf-detail-drawer-id">{nodeId}</p>
+          {serviceSummary ? <p className="pf-detail-meta">{serviceSummary}</p> : null}
         </div>
         <div className="pf-detail-drawer-head-actions">
           {onSnapshot ? (
@@ -353,7 +361,9 @@ export function ProcessFlowDetailDrawer({
 
         {hasServices ? (
           <section className="pf-detail-section">
-            <h3 className="pf-detail-section-title">Diğer servisler</h3>
+            <h3 className="pf-detail-section-title">
+              Diğer servisler{otherServices.length > 1 ? ` (${otherServices.length})` : ''}
+            </h3>
             <p className="pf-detail-lead">
               Belirli bir geçişe/oka bağlı değil — adımın kendisiyle ilgili (örn. atama, bildirim) servisler.
             </p>

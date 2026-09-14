@@ -446,3 +446,152 @@ LIMIT 120;  -- UI şu an 100 kesiyor
 ```
 
 **Jar ağacında 100+ servis:** `treeService.listServicesForArtifact` → `LIMIT 100 OFFSET 0`, `ORDER BY service_name`. 101+ servis **görünmez** (sayfalama yok). Arama global; jar içi “devamını yükle” henüz yok.
+
+---
+
+## 14. Ortak katalog — kalıcılık (localStorage yerine DB)
+
+> Özet tablo: [ss.md](../ss.md) — “Local vs global”.  
+> Amaç: Ekip verisi (not, rota, akış takibi, servis günlüğü) **tarayıcıya değil inventory_db’ye** yazılsın; okuma API ile herkese aynı.
+
+### 14.1 Kapsam üçlüsü
+
+| Kapsam | Kim görür | Örnek |
+| ------ | --------- | ----- |
+| **Katalog (ortak)** | Yetkili yazar, intranet okur | Süreç overlay, servis change log, paylaşılan workflow |
+| **Kullanıcı** | Sadece o kullanıcı (SSO `user_id`) | Kişisel favori, MRU, tema |
+| **Ekip / rol (ileride)** | Grup üyeleri | “Kredi ekibi” rotaları, ortak DWH favori klasörü |
+
+Şema önerilerinde `owner_user_id` NULL → **ortak katalog**; dolu → kişisel kayıt.
+
+### 14.2 Süreç (`env.process` ve ilişkili)
+
+**Mevcut (PAR ingest):** `no`, `name`, `description_tr`, `process_definition`, `process_type`, … — bkz. §13.
+
+**Eklenecek kolon:**
+
+| Kolon | Tip | Okuma | Yazma | Not |
+| ----- | --- | ----- | ----- | --- |
+| `catalog_overlay` | `jsonb` | `GET /api/processes/:no/flow` içinde `catalogOverlay` | `PATCH /api/processes/:no/catalog-overlay` | PAR ingest **güncellemez**. Düğüm key: XML `name`. |
+
+**Yeni tablo — kullanıcı akış rotaları** (bugün: `sd-process-flow-routes:v1` localStorage):
+
+| Tablo (öneri) | Alanlar | Okuma | Yazma |
+| ------------- | ------- | ----- | ----- |
+| `env.process_user_route` | `id uuid PK`, `process_no`, `name`, `status` (`draft`/`completed`), `state jsonb` (visits+cursor), `graph_updated_at`, `owner_user_id`, `created_at`, `updated_at`, `last_opened_at` | `GET /api/process-routes?processNo=` veya `GET …/:id` | `POST` / `PATCH` / `DELETE` |
+
+- `state`: `SavedProcessRoute.state` ile aynı (`web/src/processRouteStore.ts`).
+- Paylaşımlı rota için ileride `visibility` veya `team_id` kolonu eklenebilir.
+
+**Yeni tablo — süreç haritası notları** (bugün: `sd-process-flow-map:{no}` / canvas UI):
+
+| Tablo (öneri) | Alanlar | Okuma | Yazma |
+| ------------- | ------- | ----- | ----- |
+| `env.process_map_note` | `id`, `process_no`, `text`, `x`, `y`, `width`, `height`, `collapsed`, `sort_order`, `author_user_id`, `updated_at` | `GET /api/processes/:no/map-notes` | `PUT` (replace list) veya CRUD |
+
+- Elle sürüklenen **düğüm koordinatları** (`sd-process-flow-v3:{no}`) isteğe bağlı: ya local kalır ya `process_layout jsonb` (düşük öncelik).
+
+### 14.3 Servis katalogu
+
+**Mevcut / F4:**
+
+| Kaynak | Alan | Okuma | Yazma |
+| ------ | ---- | ----- | ----- |
+| `service_definition.service_description` | İşlev özeti (TR) | `GET /api/services/:id` | Ingest veya `PATCH` (editör) — bugün DB doluysa UI read-only |
+| `service_owner` | IT / BU sahibi | F4 join | Ingest |
+
+**Eklenecek — servis değişiklik günlüğü** (bugün: localStorage `sd-service-changes:{serviceId}`):
+
+| Tablo (öneri) | Alanlar | Okuma | Yazma |
+| ------------- | ------- | ----- | ----- |
+| `env.service_change_log` | `id`, `service_definition_id` FK, `commit` (metin), `kinds text[]`, `kind_details jsonb`, `author_user_id`, `created_at` | `GET /api/services/:id/changes` | `POST` / `PATCH` / `DELETE` (canEdit) |
+
+**Eklenecek — servis serbest not** (ss.md “service_notes”, henüz UI yok):
+
+| Tablo (öneri) | Alanlar |
+| ------------- | ------- |
+| `env.service_note` | `id`, `service_definition_id`, `body`, `author_user_id`, `updated_at` |
+
+### 14.4 Akış Takibi (WorkflowsPanel)
+
+Bugün: `sd-service-workflows:v1` — klasörler, adımlar, girdi/çıkış alanları, dokümanlar (`workflowStore.ts`).
+
+| Seçenek | Tablo | Alanlar | API |
+| ------- | ----- | ------- | --- |
+| **A — tek belge** | `env.catalog_workflow_doc` | `id` (singleton veya `scope`), `payload jsonb`, `version`, `updated_at`, `updated_by` | `GET/PUT /api/workflows` |
+| **B — normalize** | `workflow_folder`, `workflow_step`, … | İlişkisel | Daha ağır; sonra |
+
+Öneri: **A** ile başla (mevcut store JSON’u olduğu gibi); ekip tek paylaşımlı belge.
+
+### 14.5 Değişiklik talebi / inbox (onay)
+
+Bugün: `server/src/changeRequests.ts` — **process bellek**, restart sıfırlar.
+
+| Tablo (öneri) | Rol |
+| ------------- | --- |
+| `env.change_request` | Talep başlığı, requester, batch, durum |
+| `env.change_request_task` | Etkilenen servis başına task |
+| `env.change_request_flag` | Owner yanıtı (accepted/rejected/…) |
+| `env.inbox_notification` | Kullanıcı bildirimi |
+
+Okuma/yazma: mevcut CR/inbox UI → REST; F4/F5 + issue entegrasyonu ([entegrasyon.md](./entegrasyon.md)).
+
+### 14.6 DWH lineage favorileri
+
+Bugün: `sd-dwh-favorites:v1` localStorage.
+
+| Tablo (öneri) | Alanlar | API |
+| ------------- | ------- | --- |
+| `env.dwh_favorite_folder` | `id`, `name`, `owner_user_id` (NULL=?) | `GET/PUT /api/dwh/favorites` |
+| `env.dwh_favorite_table` | `id`, `table_id` (stage ref), `canonical_name`, `alias`, `folder_ids jsonb`, `owner_user_id` | aynı |
+
+DWH **veri** katmanı (`stage`) değişmez; yalnızca kullanıcı/ekip **işaretleme** inventory_db’de.
+
+### 14.7 Servis favorileri / kısayollar
+
+Bugün: `sd-service-shortcuts:v1`.
+
+| Tablo (öneri) | Alanlar |
+| ------------- | ------- |
+| `env.user_service_shortcut` | `user_id`, `service_definition_id`, `alias`, `folder_id`, `sort_order` |
+| `env.user_shortcut_folder` | `id`, `user_id`, `name`, `tone` |
+
+Kişisel başlangıç; ileride `team_id` ile paylaşımlı klasör.
+
+### 14.8 Bilinçli local kalabilir (DB şart değil)
+
+| Veri | Anahtar / kod |
+| ---- | ------------- |
+| Tema | `APP_THEME_KEY` |
+| İlişki tablosu mod / sütun genişliği | `RelationshipTable` COL/MODE storage |
+| Oturum içi ziyaret yolu (Cmd+K) | `visitTrail` — bellek |
+| Kişisel MRU (opsiyonel DB) | `sd-service-recents` |
+
+### 14.9 Migration / ingest kuralları
+
+1. `ALTER TABLE env.process ADD COLUMN IF NOT EXISTS catalog_overlay jsonb;`
+2. Yeni tablolar için `server/sql/catalog_persistence.sql` (henüz yok — eklenecek).
+3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; **`catalog_overlay`, change log, workflow doc, rotalar** güncellenmez.
+4. İsteğe bağlı: localStorage → DB **bir kerelik import** script (kullanıcı bazlı).
+
+### 14.10 API özeti (hedef)
+
+| Veri | GET | Yazma |
+| ---- | --- | ----- |
+| Süreç akış + overlay | `/api/processes/:no/flow` | `PATCH …/catalog-overlay` |
+| Akış rotaları | `/api/process-routes` | `POST`, `PATCH`, `DELETE` |
+| Harita notları | `/api/processes/:no/map-notes` | `PUT` veya CRUD |
+| Servis change log | `/api/services/:id/changes` | `POST`, `PATCH`, `DELETE` |
+| Workflow belgesi | `/api/workflows` | `PUT` (canEdit) |
+| CR / inbox | `/api/change-requests`, `/api/inbox` | mevcut akış, DB-backed |
+| DWH favoriler | `/api/dwh/favorites` | `PUT` |
+| Kısayollar | `/api/me/shortcuts` | `PUT` |
+
+Tüm yazma uçları: `canEdit` / SSO; okuma intranet kullanıcıları.
+
+### 14.11 Uygulama durumu (bugün)
+
+| Özellik | Kalıcılık |
+| ------- | --------- |
+| Süreç XML, servis, call-graph | DB — **var** |
+| `catalog_overlay`, rotalar, workflow, change log, CR store, favoriler | **localStorage veya bellek** — §14 hedefi |

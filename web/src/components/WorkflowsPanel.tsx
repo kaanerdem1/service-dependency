@@ -882,7 +882,8 @@ export function WorkflowsPanel({
                       <span className="sc-process-item-copy">
                         <span className="sc-process-item-name">{route.name}</span>
                         <span className="sc-process-item-no">
-                          {route.processNo} · {route.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                          {route.processNo}
+                          {route.status === 'completed' ? null : ' · Taslak'}
                         </span>
                       </span>
                     </button>
@@ -1025,8 +1026,7 @@ export function WorkflowsPanel({
                 <p className="sc-route-rename-meta">
                   {pendingRename.processNo}
                   {pendingRename.processTitle ? ` · ${pendingRename.processTitle}` : ''}
-                  {' · '}
-                  {pendingRename.status === 'completed' ? 'Tamamlandı' : 'Taslak'}
+                  {pendingRename.status === 'completed' ? null : ' · Taslak'}
                 </p>
                 <label className="sc-route-rename-field">
                   <span>Rota adı</span>
