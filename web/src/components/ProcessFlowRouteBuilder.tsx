@@ -15,12 +15,7 @@ import ReactFlow, {
   type NodeChange,
   type NodeProps,
 } from 'reactflow'
-import type {
-  ProcessFlowGraph,
-  ProcessFlowNodeKind,
-  ProcessIncomingTransition,
-  ProcessOutgoingTransition,
-} from '../types'
+import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 import {
   saveProcessRoute,
   type SavedProcessRoute,
@@ -30,6 +25,13 @@ import { buildUserRouteSnapshotSteps } from './processPathNarrative'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { ProcessFlowRouteBar } from './ProcessFlowRouteBar'
+import { ProcessFlowMapSearch } from './ProcessFlowMapSearch'
+import { processFlowSearchMatches } from './processFlowMapSearchMatch'
+import {
+  graphNodeIdSet,
+  incomingTransitionsFor,
+  outgoingTransitionsFor,
+} from './processFlowDrawerNav'
 import { ProcessFlowScreens } from './ProcessFlowScreens'
 import { summarizeProcessFlow } from './processFlowSummary'
 import {
@@ -153,45 +155,6 @@ function buildRouteNodes(
   return [...committed, ...ghosts]
 }
 
-function routeIncomingFor(
-  graph: ProcessFlowGraph,
-  visits: RouteVisit[],
-  index: number,
-): ProcessIncomingTransition[] {
-  if (index <= 0) return []
-  const previous = visits[index - 1]
-  const visit = visits[index]
-  const from = graph.nodes.find((node) => node.id === previous.nodeId)
-  if (!from || !visit) return []
-  return [
-    {
-      fromId: previous.nodeId,
-      fromName: from.name,
-      fromKind: from.kind,
-      label: visit.incomingLabel,
-    },
-  ]
-}
-
-function routeOutgoingFor(
-  graph: ProcessFlowGraph,
-  visits: RouteVisit[],
-  index: number,
-): ProcessOutgoingTransition[] {
-  const next = visits[index + 1]
-  if (!next) return []
-  const to = graph.nodes.find((node) => node.id === next.nodeId)
-  if (!to) return []
-  return [
-    {
-      toId: next.nodeId,
-      toName: to.name,
-      toKind: to.kind,
-      label: next.incomingLabel,
-    },
-  ]
-}
-
 function choiceFan(count: number, x: number, y: number) {
   if (count <= 0) return []
   if (count === 1) return [{ x, y }]
@@ -288,6 +251,7 @@ function ProcessFlowRouteBuilderInner({
   processScreens = [],
   savedRoute,
   onExitRoute,
+  onLeaveRouteForNode,
   onDismiss,
   onRouteSaved,
   onOpenService,
@@ -299,6 +263,8 @@ function ProcessFlowRouteBuilderInner({
   processScreens?: import('../types').ServiceScreenLink[]
   savedRoute?: SavedProcessRoute
   onExitRoute: () => void
+  /** Rotada görünmeyen bir adıma drawer’dan atlarken tam haritaya geç. */
+  onLeaveRouteForNode?: (nodeId: string) => void
   onDismiss?: () => void
   onRouteSaved?: (route: SavedProcessRoute) => void
   onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
@@ -322,6 +288,8 @@ function ProcessFlowRouteBuilderInner({
   const [expanded, setExpanded] = useState(false)
   const [frameVisit, setFrameVisit] = useState<{ id: string; token: number }>()
   const [highlightScreenOid, setHighlightScreenOid] = useState<string>()
+  const [mapSearchQuery, setMapSearchQuery] = useState('')
+  const [mapSearchIndex, setMapSearchIndex] = useState(0)
   const dragMovedRef = useRef(false)
   const draggingRef = useRef(false)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
@@ -501,7 +469,8 @@ function ProcessFlowRouteBuilderInner({
     [visits],
   )
 
-  const jumpableNodeIds = useMemo(() => new Set(visits.map((v) => v.nodeId)), [visits])
+  const routeVisitNodeIds = useMemo(() => new Set(visits.map((v) => v.nodeId)), [visits])
+  const jumpableNodeIds = useMemo(() => graphNodeIdSet(graph), [graph.nodes])
 
   const focusRouteGraphNode = useCallback(
     (nodeId: string) => {
@@ -512,11 +481,67 @@ function ProcessFlowRouteBuilderInner({
           break
         }
       }
-      if (pick < 0) return
-      selectVisit(pick)
+      if (pick >= 0) {
+        selectVisit(pick)
+        return
+      }
+      onLeaveRouteForNode?.(nodeId)
     },
-    [selectVisit, visits],
+    [onLeaveRouteForNode, selectVisit, visits],
   )
+
+  const mapSearchMatches = useMemo(
+    () =>
+      processFlowSearchMatches(graph, mapSearchQuery).filter((id) => routeVisitNodeIds.has(id)),
+    [graph, mapSearchQuery, routeVisitNodeIds],
+  )
+  const mapSearchMatchSet = useMemo(() => new Set(mapSearchMatches), [mapSearchMatches])
+  const mapSearchActive = mapSearchQuery.trim().length > 0
+  const activeMapSearchNodeId =
+    mapSearchMatches.length > 0
+      ? mapSearchMatches[
+          ((mapSearchIndex % mapSearchMatches.length) + mapSearchMatches.length) %
+            mapSearchMatches.length
+        ]
+      : undefined
+
+  useEffect(() => {
+    setMapSearchIndex(0)
+  }, [mapSearchQuery])
+
+  const moveMapSearch = useCallback(
+    (direction: -1 | 1) => {
+      if (!mapSearchMatches.length) return
+      setMapSearchIndex(
+        (current) =>
+          (current + direction + mapSearchMatches.length) % mapSearchMatches.length,
+      )
+    },
+    [mapSearchMatches.length],
+  )
+
+  useEffect(() => {
+    if (!mapSearchActive || !activeMapSearchNodeId) return
+    focusRouteGraphNode(activeMapSearchNodeId)
+  }, [activeMapSearchNodeId, focusRouteGraphNode, mapSearchActive])
+
+  const routeShownNodes = useMemo(() => {
+    if (!mapSearchActive) return nodes
+    return nodes.map((node) => {
+      if (node.type !== 'routeStep') return node
+      const visit = visits.find((row) => row.visitId === node.id)
+      if (!visit) return node
+      const isSearchMatch = mapSearchMatchSet.has(visit.nodeId)
+      const isSearchActive = visit.nodeId === activeMapSearchNodeId
+      return {
+        ...node,
+        className: [node.className, isSearchMatch ? 'pf-search-match' : '', isSearchActive ? 'pf-search-active' : '']
+          .filter(Boolean)
+          .join(' '),
+        zIndex: isSearchActive ? 15 : isSearchMatch ? 11 : node.zIndex,
+      }
+    })
+  }, [activeMapSearchNodeId, mapSearchActive, mapSearchMatchSet, nodes, visits])
 
   const choose = useCallback(
     (edgeId: string) => {
@@ -613,10 +638,6 @@ function ProcessFlowRouteBuilderInner({
 
   const canSaveAs = Boolean(activeRoute) && routeDirty
 
-  const stale =
-    savedRoute?.graphUpdatedAt &&
-    graph.updatedAt &&
-    savedRoute.graphUpdatedAt !== graph.updatedAt
   const selectedPathSteps = selectedVisit
     ? buildUserRouteSnapshotSteps(graph, visits.slice(0, (selectedIndex ?? 0) + 1))
     : []
@@ -642,9 +663,6 @@ function ProcessFlowRouteBuilderInner({
         </div>
         <ProcessFlowScreens screens={processScreens} highlightOid={highlightScreenOid} />
       </header>
-      {stale ? (
-        <p className="pf-route-stale">Süreç tanımı bu rota kaydedildikten sonra güncellenmiş. Düzenlemeden önce adımları kontrol edin.</p>
-      ) : null}
       <ProcessFlowRouteBar
         graph={graph}
         visits={visits}
@@ -655,15 +673,25 @@ function ProcessFlowRouteBuilderInner({
         ref={mapCanvasRef}
         className={`pf-map-canvas pf-route-canvas${selectedNode ? ' is-drawer-open' : ''}`}
       >
-        {selectedNode ? (
+        <ProcessFlowMapSearch
+          query={mapSearchQuery}
+          onQueryChange={setMapSearchQuery}
+          matchCount={mapSearchMatches.length}
+          matchIndex={mapSearchIndex}
+          onPrev={() => moveMapSearch(-1)}
+          onNext={() => moveMapSearch(1)}
+          placeholder="Rotada ara…"
+        />
+        <div className="pf-map-tools">
           <button
             type="button"
-            className="pf-detail-scrim"
-            aria-label="Detayı kapat"
-            onClick={() => setSelectedIndex(undefined)}
-          />
-        ) : null}
-        <div className="pf-map-tools">
+            className="tl-zoom"
+            title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
+            aria-label={expanded ? 'Küçült' : 'Tam ekran'}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <FullscreenGlyph expanded={expanded} />
+          </button>
           <button
             type="button"
             className="pf-add-note"
@@ -709,18 +737,9 @@ function ProcessFlowRouteBuilderInner({
           >
             {snapshotBusy ? '…' : <SnapshotGlyph />}
           </button>
-          <button
-            type="button"
-            className="tl-zoom"
-            title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
-            aria-label={expanded ? 'Küçült' : 'Tam ekran'}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            <FullscreenGlyph expanded={expanded} />
-          </button>
         </div>
         <ReactFlow
-          nodes={nodes}
+          nodes={routeShownNodes}
           edges={edges}
           nodeTypes={nodeTypes}
           nodesDraggable
@@ -750,7 +769,8 @@ function ProcessFlowRouteBuilderInner({
               return
             }
             const index = visits.findIndex((visit) => visit.visitId === node.id)
-            setSelectedIndex(index >= 0 ? index : undefined)
+            if (index >= 0) selectVisit(index)
+            else setSelectedIndex(undefined)
           }}
           onPaneClick={() => setSelectedIndex(undefined)}
           minZoom={0.15}
@@ -775,9 +795,8 @@ function ProcessFlowRouteBuilderInner({
             decisionInfo={selectedNode.decisionInfo}
             services={selectedNode.services}
             subProcessNo={selectedNode.subProcessNo}
-            incoming={routeIncomingFor(graph, visits, selectedIndex ?? 0)}
-            outgoing={routeOutgoingFor(graph, visits, selectedIndex ?? 0)}
-            routeScoped
+            incoming={incomingTransitionsFor(graph, selectedNode.id)}
+            outgoing={outgoingTransitionsFor(graph, selectedNode.id)}
             path={selectedPathSteps}
             onSnapshot={() => void exportPdf(selectedIndex ?? 0)}
             snapshotBusy={snapshotBusy}

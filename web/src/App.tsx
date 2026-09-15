@@ -60,6 +60,7 @@ import {
 import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
 import { TreeKindIcon } from './components/TreeKindIcon'
+import { SidebarHoverTip } from './components/SidebarHoverTip'
 import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
@@ -1165,6 +1166,46 @@ export default function App() {
               <TreeKindIcon kind="method" size={14} />
             </div>
             <span className="sidebar-rail-hint">Paneli Aç</span>
+            <div className="sidebar-rail-actions">
+              <SidebarHoverTip
+                label="Favoriler"
+                sub={favoritesPanelShortcutLabel()}
+                placement="rail"
+              >
+                <MorphHoverButton
+                  type="button"
+                  className={`sidebar-star-btn sidebar-rail-action-btn${shortcutsOpen ? ' is-active' : ''}`}
+                  layoutId="sidebar-star-rail-hover"
+                  aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
+                  aria-expanded={shortcutsOpen}
+                  onClick={() => {
+                    setWorkflowsOpen(false)
+                    setShortcutsOpen((v) => !v)
+                  }}
+                >
+                  <SidebarStarIcon active={shortcutsOpen} />
+                </MorphHoverButton>
+              </SidebarHoverTip>
+              <SidebarHoverTip
+                label="İş akışları"
+                sub={workflowsPanelShortcutLabel()}
+                placement="rail"
+              >
+                <MorphHoverButton
+                  type="button"
+                  className={`sidebar-star-btn sidebar-flow-btn sidebar-rail-action-btn${workflowsOpen ? ' is-active' : ''}`}
+                  layoutId="sidebar-flow-rail-hover"
+                  aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
+                  aria-expanded={workflowsOpen}
+                  onClick={() => {
+                    setShortcutsOpen(false)
+                    setWorkflowsOpen((v) => !v)
+                  }}
+                >
+                  <SidebarFlowIcon active={workflowsOpen} />
+                </MorphHoverButton>
+              </SidebarHoverTip>
+            </div>
           </div>
           <div className="module-sidebar-inner">
           <div className="module-sidebar-head">
@@ -1190,42 +1231,36 @@ export default function App() {
               >
                 <SidebarPinIcon pinned={navPinned} />
               </MorphHoverButton>
-              <MorphHoverButton
-                type="button"
-                className={`sidebar-star-btn${shortcutsOpen ? ' is-active' : ''}`}
-                layoutId="sidebar-star-hover"
-                title={
-                  shortcutsOpen
-                    ? `Favorileri kapat (${favoritesPanelShortcutLabel()})`
-                    : `Favoriler panelini aç (${favoritesPanelShortcutLabel()})`
-                }
-                aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
-                aria-expanded={shortcutsOpen}
-                onClick={() => {
-                  setWorkflowsOpen(false)
-                  setShortcutsOpen((v) => !v)
-                }}
-              >
-                <SidebarStarIcon active={shortcutsOpen} />
-              </MorphHoverButton>
-              <MorphHoverButton
-                type="button"
-                className={`sidebar-star-btn sidebar-flow-btn${workflowsOpen ? ' is-active' : ''}`}
-                layoutId="sidebar-flow-hover"
-                title={
-                  workflowsOpen
-                    ? `İş akışlarını kapat (${workflowsPanelShortcutLabel()})`
-                    : `İş akışları panelini aç (${workflowsPanelShortcutLabel()})`
-                }
-                aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
-                aria-expanded={workflowsOpen}
-                onClick={() => {
-                  setShortcutsOpen(false)
-                  setWorkflowsOpen((v) => !v)
-                }}
-              >
-                <SidebarFlowIcon active={workflowsOpen} />
-              </MorphHoverButton>
+              <SidebarHoverTip label="Favoriler" sub={favoritesPanelShortcutLabel()} placement="head">
+                <MorphHoverButton
+                  type="button"
+                  className={`sidebar-star-btn${shortcutsOpen ? ' is-active' : ''}`}
+                  layoutId="sidebar-star-hover"
+                  aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
+                  aria-expanded={shortcutsOpen}
+                  onClick={() => {
+                    setWorkflowsOpen(false)
+                    setShortcutsOpen((v) => !v)
+                  }}
+                >
+                  <SidebarStarIcon active={shortcutsOpen} />
+                </MorphHoverButton>
+              </SidebarHoverTip>
+              <SidebarHoverTip label="İş akışları" sub={workflowsPanelShortcutLabel()} placement="head">
+                <MorphHoverButton
+                  type="button"
+                  className={`sidebar-star-btn sidebar-flow-btn${workflowsOpen ? ' is-active' : ''}`}
+                  layoutId="sidebar-flow-hover"
+                  aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
+                  aria-expanded={workflowsOpen}
+                  onClick={() => {
+                    setShortcutsOpen(false)
+                    setWorkflowsOpen((v) => !v)
+                  }}
+                >
+                  <SidebarFlowIcon active={workflowsOpen} />
+                </MorphHoverButton>
+              </SidebarHoverTip>
             </div>
           </div>
           <label className="search" ref={searchRef}>

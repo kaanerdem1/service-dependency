@@ -26,13 +26,17 @@ import type {
   ProcessFlowGraph,
   ProcessNodeDescriptionsDoc,
   ProcessFlowNodeKind,
-  ProcessIncomingTransition,
-  ProcessOutgoingTransition,
   ProcessNodeDetails,
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { ProcessFlowScreens } from './ProcessFlowScreens'
-import { graphNodeIdSet } from './processFlowDrawerNav'
+import { ProcessFlowMapSearch } from './ProcessFlowMapSearch'
+import { processFlowSearchMatches } from './processFlowMapSearchMatch'
+import {
+  graphNodeIdSet,
+  incomingTransitionsFor,
+  outgoingTransitionsFor,
+} from './processFlowDrawerNav'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 import { buildPathSnapshotSteps } from './processPathNarrative'
@@ -1113,49 +1117,6 @@ function withEdgeRoutes(
   return assignEdgeLanes(routed)
 }
 
-function incomingTransitionsFor(
-  graph: ProcessFlowGraph,
-  nodeId: string,
-): ProcessIncomingTransition[] {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
-  const rows: ProcessIncomingTransition[] = []
-  for (const e of graph.edges) {
-    if (e.to !== nodeId || isDummyId(e.from)) continue
-    const from = byId.get(e.from)
-    if (!from) continue
-    rows.push({
-      fromId: e.from,
-      fromName: from.name,
-      fromKind: from.kind,
-      label: e.label?.trim() || undefined,
-    })
-  }
-  return rows
-}
-
-/** Seçili adımdan çıkan TÜM geçişler (label + hedef) — servisi olmayan
- * geçişler (örn. "Reddet") "details.groups" içinde hiç görünmüyordu, bu da
- * ekranda 3 ok varken drawer'da 2 "Geçiş:" bölümü görünmesine yol açıyordu.
- * Bu liste, görünen ok sayısıyla her zaman birebir eşleşir. */
-function outgoingTransitionsFor(
-  graph: ProcessFlowGraph,
-  nodeId: string,
-): ProcessOutgoingTransition[] {
-  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
-  const rows: ProcessOutgoingTransition[] = []
-  for (const e of graph.edges) {
-    if (e.from !== nodeId || isDummyId(e.to)) continue
-    const to = byId.get(e.to)
-    if (!to) continue
-    rows.push({
-      toId: e.to,
-      toName: to.name,
-      toKind: to.kind,
-      label: e.label?.trim() || undefined,
-    })
-  }
-  return rows
-}
 
 /** Bir hedefe (örn. "Reddet") birden fazla uzak karardan "back" oku
  * geliyorsa, tek düğüm etrafında kalabalıklaşma ve uzun ray çakışması olur.
@@ -1413,6 +1374,8 @@ function ProcessFlowMapInner({
     initialSelectedNodeId,
   )
   const [expanded, setExpanded] = useState(false)
+  const [mapSearchQuery, setMapSearchQuery] = useState('')
+  const [mapSearchIndex, setMapSearchIndex] = useState(0)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
   const { setViewport, getNodes, fitView } = useReactFlow()
@@ -1479,6 +1442,11 @@ function ProcessFlowMapInner({
     setSelectedNodeId(initialSelectedNodeId)
     onRestoreConsumed?.()
   }, [initialSelectedNodeId, onRestoreConsumed])
+
+  useEffect(() => {
+    if (!selectedNodeId) return
+    frameNodeOnCanvas(fitView, getNodes, selectedNodeId)
+  }, [fitView, getNodes, selectedNodeId])
 
   useEffect(() => {
     if (!wide) return
@@ -1550,27 +1518,76 @@ function ProcessFlowMapInner({
     )
   }, [selectedNodeId, pathToFocus, pathRanksOnFocus, graph])
 
+  const mapSearchMatches = useMemo(
+    () => processFlowSearchMatches(graph, mapSearchQuery),
+    [graph, mapSearchQuery],
+  )
+  const mapSearchMatchSet = useMemo(() => new Set(mapSearchMatches), [mapSearchMatches])
+  const mapSearchActive = mapSearchQuery.trim().length > 0
+  const activeMapSearchId =
+    mapSearchMatches.length > 0
+      ? mapSearchMatches[
+          ((mapSearchIndex % mapSearchMatches.length) + mapSearchMatches.length) %
+            mapSearchMatches.length
+        ]
+      : undefined
+
+  useEffect(() => {
+    setMapSearchIndex(0)
+  }, [mapSearchQuery])
+
+  const moveMapSearch = useCallback(
+    (direction: -1 | 1) => {
+      if (!mapSearchMatches.length) return
+      setMapSearchIndex(
+        (current) =>
+          (current + direction + mapSearchMatches.length) % mapSearchMatches.length,
+      )
+    },
+    [mapSearchMatches.length],
+  )
+
+  useEffect(() => {
+    if (!mapSearchActive || !activeMapSearchId) return
+    setSelectedNodeId(activeMapSearchId)
+    frameNodeOnCanvas(fitView, getNodes, activeMapSearchId)
+  }, [activeMapSearchId, fitView, getNodes, mapSearchActive])
+
   const shownNodes = useMemo(() => {
     const base = nodes.map((n) => {
       if (n.type === 'processNote') {
         return { ...n, zIndex: 6, className: 'pf-note-node' }
       }
-      const isSelected = !!selectedNodeId && sinkCopyRealId(n.id) === selectedNodeId
+      const realId = sinkCopyRealId(n.id)
+      const isSelected = !!selectedNodeId && realId === selectedNodeId
+      const isSearchMatch = mapSearchActive && mapSearchMatchSet.has(realId)
+      const isSearchActive = mapSearchActive && realId === activeMapSearchId
       return {
         ...n,
-        className: [n.className, isSelected ? 'pf-node-detail-selected' : ''].filter(Boolean).join(' '),
+        className: [
+          n.className,
+          isSelected ? 'pf-node-detail-selected' : '',
+          isSearchMatch ? 'pf-search-match' : '',
+          isSearchActive ? 'pf-search-active' : '',
+        ]
+          .filter(Boolean)
+          .join(' '),
         selected: isSelected,
-        zIndex: isSelected ? 14 : 6,
+        zIndex: isSearchActive ? 15 : isSelected ? 14 : isSearchMatch ? 11 : 6,
       }
     })
     if (!neighborhood) return base
     const decorated = base.map((n) => {
       if (n.type === 'processNote') return n
       const active = neighborhood.nodeIds.has(n.id)
+      const realId = sinkCopyRealId(n.id)
+      const isSearchActive = mapSearchActive && realId === activeMapSearchId
+      const isSearchMatch = mapSearchActive && mapSearchMatchSet.has(realId)
+      const isSelected = !!selectedNodeId && realId === selectedNodeId
       return {
         ...n,
         className: [active ? 'pf-node-onpath' : '', n.className].filter(Boolean).join(' '),
-        zIndex: (!!selectedNodeId && sinkCopyRealId(n.id) === selectedNodeId) ? 14 : active ? 12 : 6,
+        zIndex: isSearchActive ? 15 : isSelected ? 14 : active ? 12 : isSearchMatch ? 11 : 6,
       }
     })
     const processOnly = decorated.filter((n) => n.type !== 'processNote')
@@ -1583,7 +1600,16 @@ function ProcessFlowMapInner({
       )
     }
     return [...processOnly, ...notes]
-  }, [neighborhood, nodes, selectedNodeId, snapshotCapturing, pathToFocus])
+  }, [
+    activeMapSearchId,
+    mapSearchActive,
+    mapSearchMatchSet,
+    neighborhood,
+    nodes,
+    selectedNodeId,
+    snapshotCapturing,
+    pathToFocus,
+  ])
 
   const shownEdges = useMemo(() => {
     if (!neighborhood) return edges
@@ -1763,20 +1789,17 @@ function ProcessFlowMapInner({
       ) : null}
       <div
         ref={mapCanvasRef}
-        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${neighborhood ? ' is-path-focus' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
+        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${neighborhood && !selectedNodeId ? ' is-path-focus' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
       >
-        {selectedNodeId ? (
-          <button
-            type="button"
-            className="pf-detail-scrim"
-            aria-label="Detayı kapat"
-            onClick={closeDetail}
-          />
-        ) : null}
+        <ProcessFlowMapSearch
+          query={mapSearchQuery}
+          onQueryChange={setMapSearchQuery}
+          matchCount={mapSearchMatches.length}
+          matchIndex={mapSearchIndex}
+          onPrev={() => moveMapSearch(-1)}
+          onNext={() => moveMapSearch(1)}
+        />
         <div className="pf-map-tools">
-          <button type="button" className="pf-add-note" onClick={addNote}>
-            Not ekle
-          </button>
           <button
             type="button"
             className="tl-zoom"
@@ -1785,6 +1808,9 @@ function ProcessFlowMapInner({
             onClick={() => setExpanded((v) => !v)}
           >
             <FullscreenGlyph expanded={expanded} />
+          </button>
+          <button type="button" className="pf-add-note" onClick={addNote}>
+            Not ekle
           </button>
         </div>
         <EdgeMarkers />

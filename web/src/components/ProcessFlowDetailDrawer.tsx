@@ -6,6 +6,7 @@ import type {
   ProcessIncomingTransition,
   ProcessNodeDescriptionsDoc,
   ProcessNodeDetails,
+  ProcessDetailGroup,
   ProcessOutgoingTransition,
   ProcessRefResolve,
   ServiceNameResolve,
@@ -47,6 +48,23 @@ import type { ProcessPathSnapshotStep as ProcessPathStep } from '../snapshot/pro
 import { transitionCaption } from './processUserRoute'
 
 export type { ProcessPathStep }
+
+function DetailGroups({ groups }: { groups: ProcessDetailGroup[] }) {
+  if (groups.length === 0) return null
+  return groups.map((group) => (
+    <section key={group.title} className="pf-detail-section">
+      <h3 className="pf-detail-section-title">{group.title}</h3>
+      <dl className="pf-detail-dl">
+        {group.rows.map((row) => (
+          <div key={`${group.title}-${row.label}-${row.value}`} className="pf-detail-dl-row">
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  ))
+}
 
 function DrawerNodeJump({
   nodeId,
@@ -143,7 +161,9 @@ export function ProcessFlowDetailDrawer({
 }: Props) {
   const hasPath = path.length > 1
   const rules = decisionInfo?.rules ?? []
-  const hasDetails = (details?.groups.length ?? 0) > 0
+  const detailGroups = details?.groups ?? []
+  const decisionDetailGroups = kind === 'decision' ? detailGroups : []
+  const taskDetailGroups = kind === 'decision' ? [] : detailGroups
   const hasRules = rules.length > 0
   const hasSubProcess = Boolean(subProcessNo?.trim())
   const hasIncoming = incoming.length > 0
@@ -544,6 +564,8 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
+        <DetailGroups groups={decisionDetailGroups} />
+
         {hasRules ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Geçiş kuralları</h3>
@@ -568,21 +590,7 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
-        {hasDetails
-          ? details!.groups.map((group) => (
-              <section key={group.title} className="pf-detail-section">
-                <h3 className="pf-detail-section-title">{group.title}</h3>
-                <dl className="pf-detail-dl">
-                  {group.rows.map((row) => (
-                    <div key={`${group.title}-${row.label}-${row.value}`} className="pf-detail-dl-row">
-                      <dt>{row.label}</dt>
-                      <dd>{row.value}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </section>
-            ))
-          : null}
+        {taskDetailGroups.length > 0 ? <DetailGroups groups={taskDetailGroups} /> : null}
 
         {hasSubProcess && subProcessNo ? (
           <section className="pf-detail-section">
@@ -647,7 +655,7 @@ export function ProcessFlowDetailDrawer({
         ) : null}
 
         {!hasRules &&
-        !hasDetails &&
+        detailGroups.length === 0 &&
         !hasServices &&
         !hasSubProcess &&
         !hasIncoming &&

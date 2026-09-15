@@ -261,6 +261,43 @@ function extractEventBlock(inner: string, eventType: string): string | undefined
   return re.exec(inner)?.[1]
 }
 
+function extractDescriptionText(inner: string): string | undefined {
+  const cdata = inner.match(/<description>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/description>/i)
+  if (cdata?.[1]?.trim()) return decode(cdata[1].trim())
+  const plain = inner.match(/<description>([\s\S]*?)<\/description>/i)
+  if (!plain?.[1]?.trim()) return undefined
+  return decode(plain[1].trim().replace(/\s+/g, ' '))
+}
+
+function extractTransitionDetailGroups(inner: string): ProcessDetailGroup[] {
+  const groups: ProcessDetailGroup[] = []
+  const transitionRe = /<transition\b([^>]*)>([\s\S]*?)<\/transition>/gi
+  let tm: RegExpExecArray | null
+  while ((tm = transitionRe.exec(inner))) {
+    const trName = attr(tm[1], 'name')
+    const body = tm[2]
+    const rows = extractServiceDetailRows(body)
+    if (!rows.length) continue
+    groups.push({
+      title: trName?.trim() ? `Geçiş: ${decode(trName.trim())}` : 'Geçiş servisleri',
+      rows,
+    })
+  }
+  return groups
+}
+
+/** Karar düğümü: XML açıklama + geçiş içi servisler (handler kuralları ayrı). */
+function extractDecisionNodeDetails(inner: string): ProcessNodeDetails | undefined {
+  const groups: ProcessDetailGroup[] = []
+  const desc = extractDescriptionText(inner)
+  if (desc) {
+    groups.push({ title: 'Açıklama', rows: [{ label: 'Metin', value: desc }] })
+  }
+  groups.push(...extractTransitionDetailGroups(inner))
+  if (groups.length === 0) return undefined
+  return { groups }
+}
+
 /** Task/node içindeki dolu XML alanlarını gruplar halinde çıkarır. */
 function extractNodeDetails(inner: string): ProcessNodeDetails | undefined {
   const groups: ProcessDetailGroup[] = []
@@ -315,22 +352,12 @@ function extractNodeDetails(inner: string): ProcessNodeDetails | undefined {
     if (due?.trim()) groups.push({ title: 'Zamanlayıcı', rows: [{ label: 'Vade', value: decode(due) }] })
   }
 
-  const desc = inner.match(/<description>([^<]*)<\/description>/i)
-  if (desc?.[1]?.trim()) {
-    groups.push({ title: 'Açıklama', rows: [{ label: 'Metin', value: decode(desc[1]) }] })
+  const desc = extractDescriptionText(inner)
+  if (desc) {
+    groups.push({ title: 'Açıklama', rows: [{ label: 'Metin', value: desc }] })
   }
 
-  const transitionRe = /<transition\b([^>]*)>([\s\S]*?)<\/transition>/gi
-  let tm: RegExpExecArray | null
-  while ((tm = transitionRe.exec(inner))) {
-    const trName = attr(tm[1], 'name')
-    const rows = extractServiceDetailRows(tm[2])
-    if (!rows.length) continue
-    groups.push({
-      title: trName?.trim() ? `Geçiş: ${decode(trName.trim())}` : 'Geçiş servisleri',
-      rows,
-    })
-  }
+  groups.push(...extractTransitionDetailGroups(inner))
 
   if (groups.length === 0) return undefined
   return { groups }
@@ -361,7 +388,10 @@ export function parseProcessDefinitionXml(xml: string, fallbackNo: string): Proc
       services,
       subProcessNo,
       decisionInfo: kind === 'decision' ? extractDecisionInfo(child.inner) : undefined,
-      details: extractNodeDetails(child.inner),
+      details:
+        kind === 'decision'
+          ? extractDecisionNodeDetails(child.inner)
+          : extractNodeDetails(child.inner),
     })
     for (const tr of extractTransitions(child.inner, child.open)) {
       edges.push({

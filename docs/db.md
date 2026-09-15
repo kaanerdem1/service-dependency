@@ -594,4 +594,18 @@ Tüm yazma uçları: `canEdit` / SSO; okuma intranet kullanıcıları.
 | Özellik | Kalıcılık |
 | ------- | --------- |
 | Süreç XML, servis, call-graph | DB — **var** |
-| `node_descriptions`, rotalar, workflow, change log, CR store, favoriler | **localStorage veya bellek** — §14 hedefi |
+| **`node_descriptions`** (drawer adım açıklaması) | DB — **var** (`process.node_descriptions`, `PATCH /api/processes/:no/node-descriptions`) |
+| Akış rotaları | **localStorage** — `web/src/processRouteStore.ts` (`sd-process-flow-routes:v1`); §14.2 tablo hedefi |
+| Akış Takibi (WorkflowsPanel) | **localStorage** — `web/src/workflowStore.ts` (`sd-service-workflows:v1`) |
+| Süreç haritası yapışkan notları | **localStorage** — `web/src/components/processFlowNotes.ts` (`sd-process-flow-map:{no}`) |
+| Tam akış canvas UI (not + elle konum) | **localStorage** — `ProcessFlowCanvas` / `sd-process-flow-v3:{no}` (not metni DB’ye taşınabilir; konum isteğe bağlı local) |
+| Servis değişiklik günlüğü | **localStorage** — `ServiceChangeLog.tsx` (`sd-service-changes:{id}`) |
+| Değişiklik talebi / inbox | **bellek** — `server/src/changeRequests.ts` (restart sıfırlar) |
+| DWH / servis favorileri, kısayollar | **localStorage** — bkz. §14.6–14.7 |
+| Servis işlev özeti (DB boşken) | **localStorage** yedek; `service_description` doluysa DB |
+
+**Karıştırılmasın:** Drawer’dan yazılan süreç **adım açıklaması** DB’de görünür; bu, rotalar veya workflow ile aynı katman değildir.
+
+### 14.12 Ingest — `node_descriptions` korunur
+
+PAR / süreç XML ingest (`ingest-process-par.mjs`, `processFlowService` güncellemeleri) yalnızca teknik kolonları yazar (`process_definition`, `description_tr`, …). **`node_descriptions` güncelleme listesinde yoktur** — XML yenilense bile ekip notları silinmez. Manuel SQL veya yanlışlıkla genişletilmiş UPDATE dışında ezilmemesi tasarım gereğidir.

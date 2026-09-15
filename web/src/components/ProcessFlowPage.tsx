@@ -37,6 +37,7 @@ export function ProcessFlowPage({
   const [error, setError] = useState<string>()
   const [routeMode, setRouteMode] = useState(Boolean(routeId))
   const [routeNonce, setRouteNonce] = useState(0)
+  const [focusAfterRoute, setFocusAfterRoute] = useState<string>()
   const [savedRoute, setSavedRoute] = useState<SavedProcessRoute | undefined>(() =>
     getProcessRoute(routeId),
   )
@@ -122,6 +123,10 @@ export function ProcessFlowPage({
             setSavedRoute(undefined)
             onRouteSaved?.()
           }}
+          onLeaveRouteForNode={(nodeId) => {
+            setFocusAfterRoute(nodeId)
+            setRouteMode(false)
+          }}
           onDismiss={onDismiss}
           onOpenService={onOpenService}
           onOpenSubProcess={onOpenSubProcess}
@@ -141,8 +146,11 @@ export function ProcessFlowPage({
           onDismiss={onDismiss}
           canGoBack={canGoBack}
           onBackToParent={onBackToParent}
-          initialSelectedNodeId={initialSelectedNodeId}
-          onRestoreConsumed={onRestoreConsumed}
+          initialSelectedNodeId={focusAfterRoute ?? initialSelectedNodeId}
+          onRestoreConsumed={() => {
+            setFocusAfterRoute(undefined)
+            onRestoreConsumed?.()
+          }}
           onOpenService={onOpenService}
           onOpenSubProcess={onOpenSubProcess}
           onCreateRoute={() => {

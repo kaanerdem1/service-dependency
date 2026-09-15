@@ -84,6 +84,45 @@ test('karar düğümünde geçiş içi servisler details Geçiş grubunda', () =
   assert.ok(node?.services.includes('SVC_ONAYLA'))
 })
 
+test('karar düğümünde CDATA açıklama details Açıklama grubunda', () => {
+  const graph = parseProcessDefinitionXml(
+    `<process-definition name="P5">
+      <decision name="SegKarar">
+        <description><![CDATA[Segment kontrolü
+        ikinci satır]]></description>
+        <transition name="Evet" to="Son"/>
+      </decision>
+      <end-state name="Son"/>
+    </process-definition>`,
+    'fallback',
+  )
+  const node = graph.nodes.find((n) => n.id === 'SegKarar')
+  const aciklama = node?.details?.groups.find((g) => g.title === 'Açıklama')
+  assert.ok(aciklama?.rows[0]?.value.includes('Segment kontrolü'))
+  assert.ok(aciklama?.rows[0]?.value.includes('ikinci satır'))
+})
+
+test('karar düğümünde atama/timer ayrıştırılmaz yalnızca açıklama ve geçiş servisleri', () => {
+  const graph = parseProcessDefinitionXml(
+    `<process-definition name="P6">
+      <decision name="KararMix">
+        <description>Düz metin</description>
+        <transition name="Onayla" to="Son">
+          <event type="transition">
+            <service service-name="SVC_A" call-type="sync"/>
+          </event>
+        </transition>
+        <transition name="Reddet" to="Son"/>
+      </decision>
+      <end-state name="Son"/>
+    </process-definition>`,
+    'fallback',
+  )
+  const node = graph.nodes.find((n) => n.id === 'KararMix')
+  const titles = node?.details?.groups.map((g) => g.title) ?? []
+  assert.deepEqual(titles, ['Açıklama', 'Geçiş: Onayla'])
+})
+
 test('bozuk bir düğümden sonra gelen geçerli kök düğümleri parse eder', () => {
   const originalWarn = console.warn
   const warnings: string[] = []
