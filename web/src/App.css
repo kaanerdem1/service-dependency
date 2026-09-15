@@ -4051,12 +4051,26 @@
 }
 
 .pf-map-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--ink);
   flex: 0 0 auto;
+}
+
+.pf-map-title-sep {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--muted) 88%, var(--line));
+}
+
+.pf-map-route-title-name {
+  font-weight: 600;
+  color: color-mix(in srgb, var(--ink) 88%, var(--accent, #2f6fed));
 }
 
 .pf-map-subtitle {

@@ -43,7 +43,6 @@ import {
   outgoingRouteEdges,
   reconcileRouteWithGraph,
   routeCurrentVisit,
-  routeProgress,
   savedRouteHasChanges,
   transitionCaption,
   visibleRouteVisits,
@@ -565,7 +564,7 @@ function ProcessFlowRouteBuilderInner({
         processTitle,
         name,
         state,
-        status: routeProgress(graph, state),
+        status: 'completed' as const,
         graphUpdatedAt: graph.updatedAt,
       })
       setActiveRoute(route)
@@ -641,21 +640,30 @@ function ProcessFlowRouteBuilderInner({
   const selectedPathSteps = selectedVisit
     ? buildUserRouteSnapshotSteps(graph, visits.slice(0, (selectedIndex ?? 0) + 1))
     : []
-  const routeStatus =
-    routeProgress(graph, state) === 'completed'
-      ? `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret`
-      : `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret · Taslak`
+  const headerRouteName = activeRoute?.name.trim() ?? ''
 
   return (
     <div className={`pf-map-wrap pf-route-wrap${expanded ? ' is-expanded' : ''}`}>
       <header className="pf-map-head">
         <div className="pf-map-head-primary">
-          <h1 className="pf-map-title">{summary.title}</h1>
+          <h1 className="pf-map-title">
+            <span>{summary.title}</span>
+            {headerRouteName ? (
+              <>
+                <span className="pf-map-title-sep" aria-hidden>
+                  ·
+                </span>
+                <span className="pf-map-route-title-name">{headerRouteName}</span>
+              </>
+            ) : null}
+          </h1>
           <div className="pf-map-head-cluster">
             <span className="pf-map-subtitle">{summary.subtitle}</span>
             {summary.metaLine ? <span className="pf-map-meta">{summary.metaLine}</span> : null}
             {summary.statsLine ? <span className="pf-map-stats">{summary.statsLine}</span> : null}
-            <span className="pf-map-route-status">{routeStatus}</span>
+            {visits.length > 0 ? (
+              <span className="pf-map-route-status">{visits.length} ziyaret</span>
+            ) : null}
           </div>
           <button type="button" className="pf-route-start" onClick={onExitRoute}>
             Tüm Akış
