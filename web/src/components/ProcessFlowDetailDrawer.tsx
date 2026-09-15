@@ -9,7 +9,9 @@ import type {
   ProcessOutgoingTransition,
   ProcessRefResolve,
   ServiceNameResolve,
+  ServiceScreenLink,
 } from '../types'
+import { collectScreenNamesFromDetails, matchProcessScreens } from './processFlowDrawerNav'
 
 const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
   start: 'Başlangıç',
@@ -46,6 +48,40 @@ import { transitionCaption } from './processUserRoute'
 
 export type { ProcessPathStep }
 
+function DrawerNodeJump({
+  nodeId,
+  nodeName,
+  kind,
+  jumpable,
+  onFocusNode,
+}: {
+  nodeId: string
+  nodeName: string
+  kind: ProcessFlowNodeKind
+  jumpable: boolean
+  onFocusNode?: (nodeId: string) => void
+}) {
+  if (jumpable && onFocusNode) {
+    return (
+      <button
+        type="button"
+        className="pf-detail-node-jump"
+        title="Haritada göster"
+        onClick={() => onFocusNode(nodeId)}
+      >
+        <span className="pf-detail-incoming-kind">{KIND_LABEL[kind]}</span>
+        {nodeName}
+      </button>
+    )
+  }
+  return (
+    <span className="pf-detail-incoming-from">
+      <span className="pf-detail-incoming-kind">{KIND_LABEL[kind]}</span>
+      {nodeName}
+    </span>
+  )
+}
+
 type Props = {
   open: boolean
   nodeId: string
@@ -66,6 +102,12 @@ type Props = {
   onClose: () => void
   onOpenService?: (serviceName: string, serviceId?: string) => void
   onOpenSubProcess?: (processNo: string) => void
+  /** Süreç `screen_process` listesi — XML Ekran satırı ile eşleştirilir. */
+  processScreens?: ServiceScreenLink[]
+  onHighlightScreen?: (screenOid: string) => void
+  /** Haritada düğüme git + drawer değiştir (tam akış / rota). */
+  onFocusNode?: (nodeId: string) => void
+  jumpableNodeIds?: ReadonlySet<string>
   processNo?: string
   nodeDescriptions?: ProcessNodeDescriptionsDoc
   canEditCatalog?: boolean
@@ -83,13 +125,17 @@ export function ProcessFlowDetailDrawer({
   subProcessNo,
   incoming = [],
   outgoing = [],
-  routeScoped = false,
+  routeScoped: _routeScoped = false,
   path = [],
   onSnapshot,
   snapshotBusy = false,
   onClose,
   onOpenService,
   onOpenSubProcess,
+  processScreens = [],
+  onHighlightScreen,
+  onFocusNode,
+  jumpableNodeIds,
   processNo,
   nodeDescriptions,
   canEditCatalog = false,
@@ -239,6 +285,15 @@ export function ProcessFlowDetailDrawer({
   }, [hasSubProcess, open, subProcessNo])
 
   const subProcessKnown = Boolean(subProcessMeta?.descriptionTr || subProcessMeta?.name)
+
+  const matchedScreens = useMemo(
+    () => matchProcessScreens(collectScreenNamesFromDetails(details), processScreens),
+    [details, processScreens],
+  )
+  const canJump = useCallback(
+    (id: string) => Boolean(onFocusNode && jumpableNodeIds?.has(id)),
+    [jumpableNodeIds, onFocusNode],
+  )
 
   return (
     <aside
@@ -402,24 +457,50 @@ export function ProcessFlowDetailDrawer({
           </section>
         ) : null}
 
+        {matchedScreens.length > 0 ? (
+          <section className="pf-detail-section">
+            <h3 className="pf-detail-section-title">Bu adımın ekranı</h3>
+            <p className="pf-detail-lead">
+              XML onaycı/ekran adı, süreçteki ilgili ekran listesiyle eşleştirildi.
+            </p>
+            <ul className="pf-detail-screen-links">
+              {matchedScreens.map((screen) => (
+                <li key={screen.oid} className="pf-detail-screen-link">
+                  <span className="pf-detail-screen-link-name">{screen.name}</span>
+                  {screen.descriptionTr ? (
+                    <span className="pf-detail-screen-link-desc">{screen.descriptionTr}</span>
+                  ) : null}
+                  {onHighlightScreen ? (
+                    <button
+                      type="button"
+                      className="pf-detail-screen-link-go"
+                      onClick={() => onHighlightScreen(screen.oid)}
+                    >
+                      Üst listede göster
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {hasIncoming ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adıma geliş</h3>
-            <p className="pf-detail-lead">
-              {routeScoped
-                ? 'Bu rotada bu adıma hangi geçişle gelindi?'
-                : 'Hangi adımdan, hangi geçişle bu noktaya ulaşılıyor?'}
-            </p>
             <ul className="pf-detail-incoming-list">
               {incoming.map((row, i) => (
                 <li
                   key={`${row.fromId}:${row.label ?? ''}:${i}`}
                   className="pf-detail-incoming"
                 >
-                  <span className="pf-detail-incoming-from">
-                    <span className="pf-detail-incoming-kind">{KIND_LABEL[row.fromKind]}</span>
-                    {row.fromName}
-                  </span>
+                  <DrawerNodeJump
+                    nodeId={row.fromId}
+                    nodeName={row.fromName}
+                    kind={row.fromKind}
+                    jumpable={canJump(row.fromId)}
+                    onFocusNode={onFocusNode}
+                  />
                   {transitionCaption(row.label) ? (
                     <>
                       <span className="pf-detail-incoming-arrow" aria-hidden>
@@ -439,11 +520,6 @@ export function ProcessFlowDetailDrawer({
         {hasOutgoing ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adımdan çıkış</h3>
-            <p className="pf-detail-lead">
-              {routeScoped
-                ? 'Bu rotada bu adımdan hangi geçişle devam edildi?'
-                : 'Bu noktadan hangi geçişle nereye gidiliyor? (Servisi olmayan geçişler de dahil.)'}
-            </p>
             <ul className="pf-detail-incoming-list">
               {outgoing.map((row, i) => (
                 <li key={`${row.toId}:${row.label ?? ''}:${i}`} className="pf-detail-incoming">
@@ -455,10 +531,13 @@ export function ProcessFlowDetailDrawer({
                       </span>
                     </>
                   ) : null}
-                  <span className="pf-detail-incoming-from">
-                    <span className="pf-detail-incoming-kind">{KIND_LABEL[row.toKind]}</span>
-                    {row.toName}
-                  </span>
+                  <DrawerNodeJump
+                    nodeId={row.toId}
+                    nodeName={row.toName}
+                    kind={row.toKind}
+                    jumpable={canJump(row.toId)}
+                    onFocusNode={onFocusNode}
+                  />
                 </li>
               ))}
             </ul>

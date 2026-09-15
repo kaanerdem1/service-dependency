@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getProcessFlow, getProcessScreens } from '../api/client'
 import { resolveCatalogCanEdit } from '../auth/catalogAccess'
 import type { ProcessNodeDescriptionsDoc } from '../types'
 import { ProcessFlowMap } from './ProcessFlowMap'
 import { ProcessFlowRouteBuilder } from './ProcessFlowRouteBuilder'
-import { ProcessFlowScreens } from './ProcessFlowScreens'
 import { getProcessRoute, PROCESS_ROUTES_CHANGED_EVENT, type SavedProcessRoute } from '../processRouteStore'
 import type { ProcessFlowGraph, ServiceScreenLink } from '../types'
 
@@ -42,6 +41,8 @@ export function ProcessFlowPage({
     getProcessRoute(routeId),
   )
   const canEditCatalog = resolveCatalogCanEdit()
+  /** Akış Rotanı Oluştur: parent routeId temizler; yine de rota modunda kalınmalı. */
+  const pendingNewRouteRef = useRef(false)
   const onNodeDescriptionsChange = useCallback((doc: ProcessNodeDescriptionsDoc) => {
     setGraph((current) => (current ? { ...current, nodeDescriptions: doc } : current))
   }, [])
@@ -49,15 +50,20 @@ export function ProcessFlowPage({
   useEffect(() => {
     setSavedRoute(getProcessRoute(routeId))
     setRouteMode(Boolean(routeId))
-    // routeId kasıtlı olarak yok: Akış Rotanı Oluştur parent id'yi temizleyince
-    // bu effect yeniden çalışıp rota modunu kapatmasın.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- process değişimi ayrı reset
+    pendingNewRouteRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- süreç değişince rota eşlemesi
   }, [processNo])
 
   useEffect(() => {
-    if (!routeId) return
-    setSavedRoute(getProcessRoute(routeId))
-    setRouteMode(true)
+    if (routeId) {
+      pendingNewRouteRef.current = false
+      setSavedRoute(getProcessRoute(routeId))
+      setRouteMode(true)
+      return
+    }
+    if (pendingNewRouteRef.current) return
+    setSavedRoute(undefined)
+    setRouteMode(false)
   }, [routeId])
 
   useEffect(() => {
@@ -109,7 +115,7 @@ export function ProcessFlowPage({
         <ProcessFlowRouteBuilder
           key={`${graph.no}:route:${savedRoute?.id ?? 'new'}:${routeNonce}`}
           graph={graph}
-          screens={<ProcessFlowScreens screens={screens} />}
+          processScreens={screens}
           savedRoute={savedRoute}
           onExitRoute={() => {
             setRouteMode(false)
@@ -131,7 +137,7 @@ export function ProcessFlowPage({
         <ProcessFlowMap
           key={`${graph.no}:${initialSelectedNodeId ?? ''}`}
           graph={graph}
-          screens={<ProcessFlowScreens screens={screens} />}
+          processScreens={screens}
           onDismiss={onDismiss}
           canGoBack={canGoBack}
           onBackToParent={onBackToParent}
@@ -140,6 +146,7 @@ export function ProcessFlowPage({
           onOpenService={onOpenService}
           onOpenSubProcess={onOpenSubProcess}
           onCreateRoute={() => {
+            pendingNewRouteRef.current = true
             setSavedRoute(undefined)
             onRouteSaved?.()
             setRouteNonce((value) => value + 1)

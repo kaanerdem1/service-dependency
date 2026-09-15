@@ -3930,26 +3930,58 @@
   background: color-mix(in srgb, #fff 94%, transparent);
 }
 
+.pf-map-head-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+}
+
+.pf-map-head-cluster {
+  display: flex;
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 0;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.pf-map-head-cluster > * + *::before {
+  content: '·';
+  margin: 0 8px;
+  color: color-mix(in srgb, var(--muted) 88%, var(--line));
+  font-weight: 500;
+}
+
 .pf-map-title {
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--ink);
+  flex: 0 0 auto;
 }
 
 .pf-map-subtitle {
-  margin: 4px 0 0;
-  font-size: 12.5px;
+  margin: 0;
+  font-size: inherit;
   color: var(--muted);
   font-family: var(--mono, ui-monospace, monospace);
 }
 
 .pf-map-meta {
-  margin: 4px 0 0;
-  font-size: 12px;
-  line-height: 1.45;
+  margin: 0;
+  font-size: inherit;
   color: color-mix(in srgb, var(--ink) 75%, var(--muted));
+}
+
+.pf-map-stats,
+.pf-map-route-status {
+  margin: 0;
+  font-size: inherit;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
 }
 
 .pf-map-summary {
@@ -3994,6 +4026,12 @@
   background: color-mix(in srgb, var(--ink) 4%, #fff);
   border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
   font-size: 11.5px;
+}
+
+.pf-map-screens-item.is-highlighted {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .pf-map-screens-name {
@@ -4061,6 +4099,31 @@
   z-index: 10000;
   height: 100%;
   min-height: 0;
+}
+
+.pf-map-wrap.is-expanded .pf-map-head {
+  padding: 8px 120px 6px 14px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-close {
+  top: 9px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-head-primary {
+  align-items: center;
+}
+
+.pf-map-wrap.is-expanded .pf-map-screens {
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-canvas {
+  flex: 1 1 0;
+}
+
+.pf-map-wrap.is-expanded .pf-detail-drawer {
+  width: min(440px, 36vw);
 }
 
 .pf-map-status {
@@ -4399,6 +4462,72 @@
 
 .pf-detail-incoming:last-child {
   border-bottom: 0;
+}
+
+.pf-detail-node-jump {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.pf-detail-node-jump:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.pf-detail-screen-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-detail-screen-link {
+  padding: 8px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.pf-detail-screen-link:last-child {
+  border-bottom: 0;
+}
+
+.pf-detail-screen-link-name {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.pf-detail-screen-link-desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
+}
+
+.pf-detail-screen-link-go {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pf-detail-screen-link-go:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
 }
 
 .pf-detail-incoming-from {
@@ -17410,6 +17539,12 @@ button.linkish {
 }
 
 /* Akış Rotanı Oluştur */
+.pf-map-head-primary > .pf-route-start {
+  margin-top: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
 .pf-route-start {
   margin-top: 10px;
   border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
@@ -17430,7 +17565,19 @@ button.linkish {
 }
 
 .pf-route-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   min-height: 0;
+  height: 100%;
+}
+
+.pf-map-wrap.is-expanded.pf-route-wrap .pf-route-bar {
+  flex: 0 0 auto;
+}
+
+.pf-map-wrap.is-expanded.pf-route-wrap .pf-route-canvas {
+  flex: 1 1 0;
 }
 
 .pf-route-stale {

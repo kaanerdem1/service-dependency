@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import ReactFlow, {
   Background,
@@ -30,6 +30,7 @@ import { buildUserRouteSnapshotSteps } from './processPathNarrative'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { ProcessFlowRouteBar } from './ProcessFlowRouteBar'
+import { ProcessFlowScreens } from './ProcessFlowScreens'
 import { summarizeProcessFlow } from './processFlowSummary'
 import {
   autoAdvanceRoute,
@@ -201,6 +202,34 @@ function choiceFan(count: number, x: number, y: number) {
   }))
 }
 
+function FullscreenGlyph({ expanded }: { expanded: boolean }) {
+  return (
+    <span className="tl-zoom-glyph" aria-hidden>
+      {expanded ? (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M4.5 1.5H1.5v3M7.5 1.5h3v3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      ) : (
+        <svg viewBox="0 0 12 12" width="10" height="10">
+          <path
+            d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </span>
+  )
+}
+
 function SnapshotGlyph() {
   return (
     <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden focusable="false">
@@ -256,7 +285,7 @@ const nodeTypes = { routeStep: RouteStepNode, routeChoice: RouteChoiceNode }
 
 function ProcessFlowRouteBuilderInner({
   graph,
-  screens,
+  processScreens = [],
   savedRoute,
   onExitRoute,
   onDismiss,
@@ -267,7 +296,7 @@ function ProcessFlowRouteBuilderInner({
   onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
-  screens?: ReactNode
+  processScreens?: import('../types').ServiceScreenLink[]
   savedRoute?: SavedProcessRoute
   onExitRoute: () => void
   onDismiss?: () => void
@@ -290,7 +319,9 @@ function ProcessFlowRouteBuilderInner({
   const [routeName, setRouteName] = useState(savedRoute?.name ?? '')
   const [activeRoute, setActiveRoute] = useState(savedRoute)
   const [snapshotBusy, setSnapshotBusy] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const [frameVisit, setFrameVisit] = useState<{ id: string; token: number }>()
+  const [highlightScreenOid, setHighlightScreenOid] = useState<string>()
   const dragMovedRef = useRef(false)
   const draggingRef = useRef(false)
   const positionsRef = useRef<Record<string, { x: number; y: number }>>({})
@@ -470,6 +501,23 @@ function ProcessFlowRouteBuilderInner({
     [visits],
   )
 
+  const jumpableNodeIds = useMemo(() => new Set(visits.map((v) => v.nodeId)), [visits])
+
+  const focusRouteGraphNode = useCallback(
+    (nodeId: string) => {
+      let pick = -1
+      for (let i = visits.length - 1; i >= 0; i--) {
+        if (visits[i]?.nodeId === nodeId) {
+          pick = i
+          break
+        }
+      }
+      if (pick < 0) return
+      selectVisit(pick)
+    },
+    [selectVisit, visits],
+  )
+
   const choose = useCallback(
     (edgeId: string) => {
       setState((currentState) => chooseRouteEdge(graph, currentState, edgeId))
@@ -552,11 +600,16 @@ function ProcessFlowRouteBuilderInner({
       if (selectedIndex != null) {
         event.preventDefault()
         setSelectedIndex(undefined)
+        return
+      }
+      if (expanded) {
+        event.preventDefault()
+        setExpanded(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [saveOpen, selectedIndex])
+  }, [expanded, saveOpen, selectedIndex])
 
   const canSaveAs = Boolean(activeRoute) && routeDirty
 
@@ -573,17 +626,21 @@ function ProcessFlowRouteBuilderInner({
       : `${activeRoute?.name ?? 'Yeni rota'} · ${visits.length} ziyaret · Taslak`
 
   return (
-    <div className="pf-map-wrap pf-route-wrap">
+    <div className={`pf-map-wrap pf-route-wrap${expanded ? ' is-expanded' : ''}`}>
       <header className="pf-map-head">
-        <h1 className="pf-map-title">{summary.title}</h1>
-        <p className="pf-map-subtitle">{summary.subtitle}</p>
-        {summary.metaLine ? <p className="pf-map-meta">{summary.metaLine}</p> : null}
-        {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
-        <p className="pf-map-summary">{routeStatus}</p>
-        {screens}
-        <button type="button" className="pf-route-start" onClick={onExitRoute}>
-          Tüm Akış
-        </button>
+        <div className="pf-map-head-primary">
+          <h1 className="pf-map-title">{summary.title}</h1>
+          <div className="pf-map-head-cluster">
+            <span className="pf-map-subtitle">{summary.subtitle}</span>
+            {summary.metaLine ? <span className="pf-map-meta">{summary.metaLine}</span> : null}
+            {summary.statsLine ? <span className="pf-map-stats">{summary.statsLine}</span> : null}
+            <span className="pf-map-route-status">{routeStatus}</span>
+          </div>
+          <button type="button" className="pf-route-start" onClick={onExitRoute}>
+            Tüm Akış
+          </button>
+        </div>
+        <ProcessFlowScreens screens={processScreens} highlightOid={highlightScreenOid} />
       </header>
       {stale ? (
         <p className="pf-route-stale">Süreç tanımı bu rota kaydedildikten sonra güncellenmiş. Düzenlemeden önce adımları kontrol edin.</p>
@@ -651,6 +708,15 @@ function ProcessFlowRouteBuilderInner({
             aria-label="Snapshot indir (PDF)"
           >
             {snapshotBusy ? '…' : <SnapshotGlyph />}
+          </button>
+          <button
+            type="button"
+            className="tl-zoom"
+            title={expanded ? 'Küçült (Esc)' : 'Tam ekran'}
+            aria-label={expanded ? 'Küçült' : 'Tam ekran'}
+            onClick={() => setExpanded((value) => !value)}
+          >
+            <FullscreenGlyph expanded={expanded} />
           </button>
         </div>
         <ReactFlow
@@ -727,6 +793,10 @@ function ProcessFlowRouteBuilderInner({
                 ? (nextProcessNo) => onOpenSubProcess(nextProcessNo, selectedNode.id)
                 : undefined
             }
+            processScreens={processScreens}
+            onHighlightScreen={setHighlightScreenOid}
+            onFocusNode={focusRouteGraphNode}
+            jumpableNodeIds={jumpableNodeIds}
             processNo={processNo}
             nodeDescriptions={graph.nodeDescriptions}
             canEditCatalog={canEditCatalog}

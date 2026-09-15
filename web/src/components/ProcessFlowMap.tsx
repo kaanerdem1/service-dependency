@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -31,6 +31,8 @@ import type {
   ProcessNodeDetails,
 } from '../types'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
+import { ProcessFlowScreens } from './ProcessFlowScreens'
+import { graphNodeIdSet } from './processFlowDrawerNav'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 import { buildPathSnapshotSteps } from './processPathNarrative'
@@ -1347,9 +1349,30 @@ function FullscreenGlyph({ expanded }: { expanded: boolean }) {
   )
 }
 
+function frameNodeOnCanvas(
+  fitView: ReturnType<typeof useReactFlow>['fitView'],
+  getNodes: ReturnType<typeof useReactFlow>['getNodes'],
+  targetId: string,
+) {
+  requestAnimationFrame(() => {
+    const candidates = getNodes().filter(
+      (n) => n.type !== 'processNote' && sinkCopyRealId(n.id) === targetId,
+    )
+    const primary = candidates.find((n) => !n.id.includes('::near')) ?? candidates[0]
+    if (!primary) return
+    void fitView({
+      nodes: [primary],
+      padding: 0.46,
+      duration: 480,
+      minZoom: 0.45,
+      maxZoom: 1.15,
+    })
+  })
+}
+
 function ProcessFlowMapInner({
   graph,
-  screens,
+  processScreens = [],
   onDismiss,
   canGoBack,
   onBackToParent,
@@ -1362,7 +1385,7 @@ function ProcessFlowMapInner({
   onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
-  screens?: ReactNode
+  processScreens?: import('../types').ServiceScreenLink[]
   onDismiss?: () => void
   canGoBack?: boolean
   onBackToParent?: () => void
@@ -1392,7 +1415,9 @@ function ProcessFlowMapInner({
   const [expanded, setExpanded] = useState(false)
   const dragRef = useRef<string | undefined>(undefined)
   const dragMovedRef = useRef(false)
-  const { setViewport, getNodes } = useReactFlow()
+  const { setViewport, getNodes, fitView } = useReactFlow()
+  const [highlightScreenOid, setHighlightScreenOid] = useState<string>()
+  const jumpableNodeIds = useMemo(() => graphNodeIdSet(graph), [graph.nodes])
   const [snapshotCapturing, setSnapshotCapturing] = useState(false)
   const [snapshotBusy, setSnapshotBusy] = useState(false)
   const mapCanvasRef = useRef<HTMLDivElement>(null)
@@ -1605,15 +1630,29 @@ function ProcessFlowMapInner({
       dragMovedRef.current = false
     }, 0)
   }, [persistNotes, refreshEdgeRoutes])
-  const onNodeClick = useCallback((_: unknown, node: Node) => {
-    if (dragMovedRef.current) return
-    if (node.type === 'processNote') {
-      const data = node.data as NoteNodeData
-      if (data.collapsed) data.onToggleCollapse()
-      return
-    }
-    setSelectedNodeId(sinkCopyRealId(node.id))
-  }, [])
+  const focusGraphNode = useCallback(
+    (targetId: string) => {
+      if (!jumpableNodeIds.has(targetId)) return
+      setSelectedNodeId(targetId)
+      frameNodeOnCanvas(fitView, getNodes, targetId)
+    },
+    [fitView, getNodes, jumpableNodeIds],
+  )
+
+  const onNodeClick = useCallback(
+    (_: unknown, node: Node) => {
+      if (dragMovedRef.current) return
+      if (node.type === 'processNote') {
+        const data = node.data as NoteNodeData
+        if (data.collapsed) data.onToggleCollapse()
+        return
+      }
+      const id = sinkCopyRealId(node.id)
+      setSelectedNodeId(id)
+      frameNodeOnCanvas(fitView, getNodes, id)
+    },
+    [fitView, getNodes],
+  )
   const addNote = useCallback(() => {
     const id = `note-${Date.now()}`
     setNodes((curr) => {
@@ -1697,16 +1736,20 @@ function ProcessFlowMapInner({
   return (
     <div className={`pf-map-wrap${expanded ? ' is-expanded' : ''}`}>
       <header className="pf-map-head">
-        <h1 className="pf-map-title">{summary.title}</h1>
-        <p className="pf-map-subtitle">{summary.subtitle}</p>
-        {summary.metaLine ? <p className="pf-map-meta">{summary.metaLine}</p> : null}
-        {summary.statsLine ? <p className="pf-map-summary">{summary.statsLine}</p> : null}
-        {screens}
-        {onCreateRoute ? (
-          <button type="button" className="pf-route-start" onClick={onCreateRoute}>
-            Akış Rotanı Oluştur
-          </button>
-        ) : null}
+        <div className="pf-map-head-primary">
+          <h1 className="pf-map-title">{summary.title}</h1>
+          <div className="pf-map-head-cluster">
+            <span className="pf-map-subtitle">{summary.subtitle}</span>
+            {summary.metaLine ? <span className="pf-map-meta">{summary.metaLine}</span> : null}
+            {summary.statsLine ? <span className="pf-map-stats">{summary.statsLine}</span> : null}
+          </div>
+          {onCreateRoute ? (
+            <button type="button" className="pf-route-start" onClick={onCreateRoute}>
+              Akış Rotanı Oluştur
+            </button>
+          ) : null}
+        </div>
+        <ProcessFlowScreens screens={processScreens} highlightOid={highlightScreenOid} />
       </header>
       {canGoBack && onBackToParent ? (
         <button type="button" className="pf-map-back" onClick={onBackToParent}>
@@ -1801,6 +1844,10 @@ function ProcessFlowMapInner({
                 ? (processNo) => onOpenSubProcess(processNo, selectedNode.id)
                 : undefined
             }
+            processScreens={processScreens}
+            onHighlightScreen={setHighlightScreenOid}
+            onFocusNode={focusGraphNode}
+            jumpableNodeIds={jumpableNodeIds}
             processNo={processNo}
             nodeDescriptions={graph.nodeDescriptions}
             canEditCatalog={canEditCatalog}
@@ -1814,7 +1861,7 @@ function ProcessFlowMapInner({
 
 export function ProcessFlowMap({
   graph,
-  screens,
+  processScreens,
   onDismiss,
   canGoBack,
   onBackToParent,
@@ -1827,7 +1874,7 @@ export function ProcessFlowMap({
   onNodeDescriptionsChange,
 }: {
   graph: ProcessFlowGraph
-  screens?: ReactNode
+  processScreens?: import('../types').ServiceScreenLink[]
   onDismiss?: () => void
   canGoBack?: boolean
   onBackToParent?: () => void
@@ -1844,7 +1891,7 @@ export function ProcessFlowMap({
       <ProcessFlowMapInner
         key={graph.no}
         graph={graph}
-        screens={screens}
+        processScreens={processScreens}
         onDismiss={onDismiss}
         canGoBack={canGoBack}
         onBackToParent={onBackToParent}
