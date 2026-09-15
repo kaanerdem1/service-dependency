@@ -46,6 +46,11 @@ function formatCriteria(criteria: Record<string, string>): string {
 
 import type { ProcessPathSnapshotStep as ProcessPathStep } from '../snapshot/processPathSnapshot'
 import { transitionCaption } from './processUserRoute'
+import {
+  allTransitionServiceCodes,
+  detailGroupsWithoutTransitionServices,
+  servicesForOutgoingLabel,
+} from './processFlowTransitionServices'
 
 export type { ProcessPathStep }
 
@@ -162,8 +167,12 @@ export function ProcessFlowDetailDrawer({
   const hasPath = path.length > 1
   const rules = decisionInfo?.rules ?? []
   const detailGroups = details?.groups ?? []
-  const decisionDetailGroups = kind === 'decision' ? detailGroups : []
-  const taskDetailGroups = kind === 'decision' ? [] : detailGroups
+  const xmlGroupsWithoutTransitions = useMemo(
+    () => detailGroupsWithoutTransitionServices(detailGroups),
+    [detailGroups],
+  )
+  const decisionDetailGroups = kind === 'decision' ? xmlGroupsWithoutTransitions : []
+  const taskDetailGroups = kind === 'decision' ? [] : xmlGroupsWithoutTransitions
   const hasRules = rules.length > 0
   const hasSubProcess = Boolean(subProcessNo?.trim())
   const hasIncoming = incoming.length > 0
@@ -175,30 +184,29 @@ export function ProcessFlowDetailDrawer({
   // — ekrandaki oklarla eşleşmeyen servisler varmış gibi görünüyordu. Bu
   // yüzden burada sadece HİÇBİR "Geçiş:" grubunda geçmeyen (adım seviyesi,
   // belirli bir çıkışa bağlı olmayan) servisler kalır.
-  const transitionServiceCodes = useMemo(() => {
-    const set = new Set<string>()
-    for (const group of details?.groups ?? []) {
-      if (!group.title.toLowerCase().startsWith('geçiş')) continue
-      for (const row of group.rows) {
-        if (row.label !== 'Servis') continue
-        const code = row.value.split('·')[0]?.trim()
-        if (code) set.add(code)
-      }
-    }
-    return set
-  }, [details])
+  const transitionServiceCodeList = useMemo(
+    () => allTransitionServiceCodes(details),
+    [details],
+  )
+  const transitionServiceCodes = useMemo(
+    () => new Set(transitionServiceCodeList),
+    [transitionServiceCodeList],
+  )
   const otherServices = useMemo(
     () => services.filter((s) => !transitionServiceCodes.has(s)),
     [services, transitionServiceCodes],
   )
   const hasServices = otherServices.length > 0
-  const transitionServiceCount = transitionServiceCodes.size
   const serviceSummary =
     services.length > 0
-      ? transitionServiceCount > 0
-        ? `${services.length} servis (${transitionServiceCount} geçişe bağlı, ${otherServices.length} adım düzeyinde)`
-        : `${services.length} servis`
+      ? transitionServiceCodeList.length > 0
+        ? `${transitionServiceCodeList.length} geçiş servisi · ${otherServices.length} adım servisi`
+        : `${services.length} servis (adım düzeyinde)`
       : null
+  const catalogServiceCodes = useMemo(
+    () => [...new Set([...otherServices, ...transitionServiceCodeList])],
+    [otherServices, transitionServiceCodeList],
+  )
   const [resolved, setResolved] = useState<ServiceNameResolve[]>([])
   const [subProcessMeta, setSubProcessMeta] = useState<ProcessRefResolve | null>(null)
 
@@ -259,27 +267,33 @@ export function ProcessFlowDetailDrawer({
     [nodeId, onNodeDescriptionsChange, processNo],
   )
 
-  const serviceKey = useMemo(() => services.join('\0'), [services])
+  const serviceKey = useMemo(() => catalogServiceCodes.join('\0'), [catalogServiceCodes])
 
   useEffect(() => {
-    if (!open || !hasServices) {
+    if (!open || catalogServiceCodes.length === 0) {
       setResolved([])
       return
     }
     let cancelled = false
-    void resolveServiceNames(services)
+    void resolveServiceNames(catalogServiceCodes)
       .then((rows) => {
         if (!cancelled) setResolved(rows)
       })
       .catch(() => {
         if (!cancelled) {
-          setResolved(services.map((serviceName) => ({ serviceName, id: null, descriptionTr: null })))
+          setResolved(
+            catalogServiceCodes.map((serviceName) => ({
+              serviceName,
+              id: null,
+              descriptionTr: null,
+            })),
+          )
         }
       })
     return () => {
       cancelled = true
     }
-  }, [hasServices, open, serviceKey, services])
+  }, [catalogServiceCodes, open, serviceKey])
 
   const resolvedByName = useMemo(
     () => new Map(resolved.map((row) => [row.serviceName, row])),
@@ -540,26 +554,67 @@ export function ProcessFlowDetailDrawer({
         {hasOutgoing ? (
           <section className="pf-detail-section">
             <h3 className="pf-detail-section-title">Bu adımdan çıkış</h3>
-            <ul className="pf-detail-incoming-list">
-              {outgoing.map((row, i) => (
-                <li key={`${row.toId}:${row.label ?? ''}:${i}`} className="pf-detail-incoming">
-                  {transitionCaption(row.label) ? (
-                    <>
-                      <span className="pf-detail-incoming-label">{transitionCaption(row.label)}</span>
-                      <span className="pf-detail-incoming-arrow" aria-hidden>
-                        →
-                      </span>
-                    </>
-                  ) : null}
-                  <DrawerNodeJump
-                    nodeId={row.toId}
-                    nodeName={row.toName}
-                    kind={row.toKind}
-                    jumpable={canJump(row.toId)}
-                    onFocusNode={onFocusNode}
-                  />
-                </li>
-              ))}
+            <p className="pf-detail-lead">
+              Her satır haritadaki bir ok. Geçiş servisi varsa, o dal seçildiğinde çalışır.
+            </p>
+            <ul className="pf-detail-outgoing-list">
+              {outgoing.map((row, i) => {
+                const branchServices = servicesForOutgoingLabel(details, row.label)
+                const branchLabel = transitionCaption(row.label) ?? 'Adsız geçiş'
+                return (
+                  <li key={`${row.toId}:${row.label ?? ''}:${i}`} className="pf-detail-outgoing-block">
+                    <div className="pf-detail-incoming pf-detail-outgoing-head">
+                      {transitionCaption(row.label) ? (
+                        <>
+                          <span className="pf-detail-incoming-label">{branchLabel}</span>
+                          <span className="pf-detail-incoming-arrow" aria-hidden>
+                            →
+                          </span>
+                        </>
+                      ) : (
+                        <span className="pf-detail-incoming-label">Geçiş</span>
+                      )}
+                      <DrawerNodeJump
+                        nodeId={row.toId}
+                        nodeName={row.toName}
+                        kind={row.toKind}
+                        jumpable={canJump(row.toId)}
+                        onFocusNode={onFocusNode}
+                      />
+                    </div>
+                    {branchServices.length > 0 ? (
+                      <ul className="pf-detail-service-cards pf-detail-outgoing-services">
+                        {branchServices.map((serviceName) => {
+                          const meta = resolvedByName.get(serviceName)
+                          const labelTr = meta?.descriptionTr?.trim()
+                          const canGo = Boolean(onOpenService && meta?.id)
+                          return (
+                            <li key={serviceName} className="pf-detail-service-card">
+                              <p className="pf-detail-service-label">
+                                {labelTr || 'Türkçe açıklama yok'}
+                              </p>
+                              <p className="pf-detail-service-code">{serviceName}</p>
+                              {onOpenService ? (
+                                <button
+                                  type="button"
+                                  className="pf-detail-service-go"
+                                  disabled={!canGo}
+                                  title={canGo ? undefined : 'Katalogda eşleşen servis bulunamadı'}
+                                  onClick={() => onOpenService(serviceName, meta?.id ?? undefined)}
+                                >
+                                  Servise git
+                                </button>
+                              ) : null}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    ) : (
+                      <p className="pf-detail-outgoing-no-svc">Bu dalda geçiş servisi yok.</p>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </section>
         ) : null}

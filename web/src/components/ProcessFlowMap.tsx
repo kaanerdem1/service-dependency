@@ -37,6 +37,7 @@ import {
   incomingTransitionsFor,
   outgoingTransitionsFor,
 } from './processFlowDrawerNav'
+import { servicesForOutgoingLabels } from './processFlowTransitionServices'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from './processFlowReferenceLayout'
 import { buildPathSnapshotSteps } from './processPathNarrative'
@@ -102,6 +103,7 @@ type ProcessEdgeData = {
   bandMaxY?: number
   active?: boolean
   dim?: boolean
+  transitionServices?: string[]
 }
 
 const KIND_LABEL: Record<ProcessFlowNodeKind, string> = {
@@ -436,6 +438,14 @@ function ProcessEdge({
   const chevronGap = 20
   const preChevron = { x: labelX - ux * chevronGap, y: labelY - uy * chevronGap }
   const postChevron = { x: labelX + ux * chevronGap, y: labelY + uy * chevronGap }
+  const labelTitle = [
+    typeof label === 'string' ? label : undefined,
+    data?.transitionServices?.length
+      ? `Geçiş servisi: ${data.transitionServices.join(', ')}`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n')
   return (
     <>
       <BaseEdge
@@ -462,8 +472,8 @@ function ProcessEdge({
             </span>
           ) : null}
           <div
-            className={`pf-edge-label${stateClass}`}
-            title={data?.labels?.length ? mergeTransitionLabels(data.labels) : undefined}
+            className={`pf-edge-label${stateClass}${data?.transitionServices?.length ? ' has-transition-svc' : ''}`}
+            title={labelTitle || undefined}
             style={{
               position: 'absolute',
               pointerEvents: 'auto',
@@ -893,6 +903,48 @@ function pathToTarget(
 
 type PathHighlight = NonNullable<ReturnType<typeof pathToTarget>>
 
+/** Start'tan DAG ile ulaşılamayan sinyal / ada düğümleri (ör. 105116 Krediler Yönetimi Onay, PBSMUD). */
+function localIncidentHighlight(
+  focusNodeId: string,
+  reactFlowEdges: Edge[],
+): { nodeIds: Set<string>; edgeIds: Set<string>; orderedIds: string[] } {
+  const realFocus = sinkCopyRealId(focusNodeId)
+  const nodeIds = new Set<string>([focusNodeId, realFocus])
+  const edgeIds = new Set<string>()
+  for (const e of reactFlowEdges) {
+    const fromReal = sinkCopyRealId(e.source)
+    const toReal = sinkCopyRealId(e.target)
+    if (
+      e.source === focusNodeId ||
+      e.target === focusNodeId ||
+      fromReal === realFocus ||
+      toReal === realFocus
+    ) {
+      edgeIds.add(e.id)
+      nodeIds.add(e.source)
+      nodeIds.add(e.target)
+    }
+  }
+  return { nodeIds, edgeIds, orderedIds: [realFocus] }
+}
+
+function focusHighlightFor(
+  graph: ProcessFlowGraph,
+  focusNodeId: string,
+  reactFlowEdges: Edge[],
+): { highlight: PathHighlight; canonical: boolean } | null {
+  const realFocus = sinkCopyRealId(focusNodeId)
+  const path = pathToTarget(graph, realFocus, reactFlowEdges)
+  if (path) {
+    path.nodeIds.add(focusNodeId)
+    return {
+      highlight: extendPathOneStepForward(graph, path, focusNodeId, reactFlowEdges),
+      canonical: true,
+    }
+  }
+  return { highlight: localIncidentHighlight(focusNodeId, reactFlowEdges), canonical: false }
+}
+
 /** Odak düğümün hemen sonraki adım(lar)ını da vurguya dahil et (chart + snapshot). */
 function extendPathOneStepForward(
   graph: ProcessFlowGraph,
@@ -1219,6 +1271,8 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
   const posMap = Object.fromEntries(nodes.map((n) => [n.id, n.position]))
   const baseEdges: Edge[] = visualEdges(graph).map((e) => {
     const route = routeFor(graph, e.from, e.to, posOf(e.from).x, posOf(e.to).x)
+    const sourceNode = graph.nodes.find((n) => n.id === e.from)
+    const transitionServices = servicesForOutgoingLabels(sourceNode?.details, e.labels)
     return {
       id: `b:${e.from}\0${e.to}`,
       source: e.from,
@@ -1231,6 +1285,7 @@ function buildGraph(graph: ProcessFlowGraph): { nodes: Node[]; edges: Edge[] } {
         labels: e.labels,
         route,
         lane: e.lane,
+        transitionServices,
       } satisfies ProcessEdgeData,
       markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: '#a8b0bc' },
     }
@@ -1411,14 +1466,26 @@ function ProcessFlowMapInner({
     })
   }, [processNo, setNodes])
 
-  const refreshEdgeRoutes = useCallback(() => {
-    const posMap = Object.fromEntries(
-      getNodes()
-        .filter((n) => n.type !== 'processNote')
-        .map((n) => [n.id, n.position]),
-    )
-    setEdges((curr) => withEdgeRoutes(graph, curr, posMap))
-  }, [getNodes, graph, setEdges])
+  const refreshEdgeRoutes = useCallback(
+    (touchedNodeIds?: ReadonlySet<string>) => {
+      const posMap = Object.fromEntries(
+        getNodes()
+          .filter((n) => n.type !== 'processNote')
+          .map((n) => [n.id, n.position]),
+      )
+      setEdges((curr) => {
+        const next = withEdgeRoutes(graph, curr, posMap)
+        if (!touchedNodeIds?.size) return next
+        const byId = new Map(next.map((e) => [e.id, e]))
+        return curr.map((e) =>
+          touchedNodeIds.has(e.source) || touchedNodeIds.has(e.target)
+            ? (byId.get(e.id) ?? e)
+            : e,
+        )
+      })
+    },
+    [getNodes, graph, setEdges],
+  )
 
   useEffect(() => {
     const built = buildGraph(graph)
@@ -1483,14 +1550,12 @@ function ProcessFlowMapInner({
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded, selectedNodeId])
 
-  const pathToFocus = useMemo(() => {
+  const focusBundle = useMemo(() => {
     if (!focusId) return null
-    const realFocus = sinkCopyRealId(focusId)
-    const path = pathToTarget(graph, realFocus, edges)
-    if (!path) return null
-    path.nodeIds.add(focusId)
-    return extendPathOneStepForward(graph, path, focusId, edges)
+    return focusHighlightFor(graph, focusId, edges)
   }, [edges, focusId, graph])
+  const pathToFocus = focusBundle?.highlight ?? null
+  const focusIsCanonical = focusBundle?.canonical ?? false
 
   const neighborhood = useMemo(() => {
     if (!pathToFocus) return null
@@ -1647,15 +1712,18 @@ function ProcessFlowMapInner({
     dragRef.current = node.id
     setDragId(node.id)
   }, [])
-  const onNodeDragStop = useCallback(() => {
-    dragRef.current = undefined
-    setDragId(undefined)
-    persistNotes()
-    refreshEdgeRoutes()
-    window.setTimeout(() => {
-      dragMovedRef.current = false
-    }, 0)
-  }, [persistNotes, refreshEdgeRoutes])
+  const onNodeDragStop = useCallback(
+    (_: unknown, node: Node) => {
+      dragRef.current = undefined
+      setDragId(undefined)
+      persistNotes()
+      refreshEdgeRoutes(new Set([node.id, sinkCopyRealId(node.id)]))
+      window.setTimeout(() => {
+        dragMovedRef.current = false
+      }, 0)
+    },
+    [persistNotes, refreshEdgeRoutes],
+  )
   const focusGraphNode = useCallback(
     (targetId: string) => {
       if (!jumpableNodeIds.has(targetId)) return
@@ -1789,7 +1857,7 @@ function ProcessFlowMapInner({
       ) : null}
       <div
         ref={mapCanvasRef}
-        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${neighborhood && !selectedNodeId ? ' is-path-focus' : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
+        className={`pf-map-canvas${selectedNodeId ? ' is-drawer-open' : ''}${neighborhood && !selectedNodeId ? (focusIsCanonical ? ' is-path-focus' : ' is-local-focus') : ''}${snapshotCapturing ? ' is-snapshot-capturing' : ''}`}
       >
         <ProcessFlowMapSearch
           query={mapSearchQuery}

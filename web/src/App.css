@@ -4704,6 +4704,39 @@
   border-bottom: 0;
 }
 
+.pf-detail-outgoing-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pf-detail-outgoing-block {
+  padding: 10px 0 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+
+.pf-detail-outgoing-block:last-child {
+  border-bottom: 0;
+}
+
+.pf-detail-outgoing-head {
+  border-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 6px;
+}
+
+.pf-detail-outgoing-services {
+  margin-top: 4px;
+  margin-left: 0;
+}
+
+.pf-detail-outgoing-no-svc {
+  margin: 0;
+  padding: 0 0 0 2px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
 .pf-detail-node-jump {
   display: inline-flex;
   flex-wrap: wrap;
@@ -5386,6 +5419,27 @@
   opacity: 0.28;
 }
 
+.pf-map-canvas.is-local-focus .react-flow__node:not(.pf-node-onpath):not(.pf-note-node) {
+  opacity: 1;
+}
+
+.pf-map-canvas.is-local-focus .pf-edge-offpath {
+  opacity: 0.45;
+}
+
+.pf-map-wrap .react-flow__node-processStep:hover .pf-node:not(.pf-node-event):not(.pf-node-gateway) {
+  border-color: color-mix(in srgb, #2f6fed 45%, var(--line));
+  box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 18%, transparent);
+}
+
+.pf-map-wrap .react-flow__node-processStep:hover .pf-event-circle {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 24%, transparent);
+}
+
+.pf-map-wrap .react-flow__node-processStep:hover .pf-gateway-diamond {
+  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 24%, transparent);
+}
+
 .react-flow__node.pf-node-onpath {
   opacity: 1;
   z-index: 2;
@@ -5454,6 +5508,11 @@
   z-index: 8;
   isolation: isolate;
   transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
+}
+
+.pf-edge-label.has-transition-svc {
+  cursor: help;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #2f6fed 42%, transparent);
 }
 
 .pf-edge-label.is-dim {
