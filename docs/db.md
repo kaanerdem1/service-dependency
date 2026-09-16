@@ -2,26 +2,32 @@
 
 **inventory_db**, `env` şemasında servis, metod, call-graph ve süreç XML verisini tutar. UI’daki modül ağacı, etki haritası ve süreç akışı bu tablolardan beslenir.
 
-**İlgili:** [Kurulum](../README.md) · [process-flow.md](./process-flow.md) · bağlantı: `server/.env` (`INVENTORY_PG*`)
+**İlgili:** [Kurulum](../README.md) · [process-flow.md](./process-flow.md) · bağlantı: `server/.env` (`INVENTORY_PG`*)
 
 ### İçindekiler (okuma sırası)
 
-| § | Konu |
-|---|------|
-| [2](#2-tablolar) | Tablolar ve hiyerarşi |
-| [3](#3-api--db) | API ↔ DB eşlemesi |
-| [4](#4-sol-ağaç-uygulama) | Sol ağaç davranışı |
-| [5](#5-kenarlar) | Kenar / rollup kuralları |
-| [6](#6-ortam) | Postgres ortamı (inventory vs stage) |
-| [7–12](#7-fazlar) | Fazlar, SSS, SQL, ölçümler |
-| [13](#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor) | **Acil:** süreç XML boş / ingest |
-| [14](#14-ortak-katalog--kalıcılık-localstorage-yerine-db) | localStorage → DB kalıcılık planı |
+
+| §                                                             | Konu                                 |
+| ------------------------------------------------------------- | ------------------------------------ |
+| [2](#2-tablolar)                                              | Tablolar ve hiyerarşi                |
+| [3](#3-api--db)                                               | API ↔ DB eşlemesi                    |
+| [4](#4-sol-ağaç-uygulama)                                     | Sol ağaç davranışı                   |
+| [5](#5-kenarlar)                                              | Kenar / rollup kuralları             |
+| [6](#6-ortam)                                                 | Postgres ortamı (inventory vs stage) |
+| [7–12](#7-fazlar)                                             | Fazlar, SSS, SQL, ölçümler           |
+| [13](#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor) | **Acil:** süreç XML boş / ingest     |
+| [14](#14-ortak-katalog--kalıcılık-localstorage-yerine-db)     | localStorage → DB kalıcılık planı    |
+
 
 > §13 numarası tarihsel; sorun giderme için erken bölüme alınmıştır.
 
 ---
 
+
+
 ## 2. Tablolar
+
+
 
 ### 2.1 Hiyerarşi (sahiplik)
 
@@ -136,7 +142,10 @@ Süreç haritası açılmıyorsa veya isimler ham `.par` görünüyorsa önce bu
 - `env.process.process_definition` **NULL** veya çok kısa; ingest “updated=0”.
 - Dün düzgündü, bugün dump **restore** / yeni katalog import sonrası bozuldu.
 
+
+
 ### Neden (veri silinmedi — zenginleştirme gitti)
+
 
 | Olay                                                                                             | Sonuç                                                                    |
 | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
@@ -649,7 +658,7 @@ Kişisel başlangıç; ileride `team_id` ile paylaşımlı klasör.
 ### 14.9 Migration / ingest kuralları
 
 1. `ALTER TABLE env.process ADD COLUMN IF NOT EXISTS node_descriptions jsonb;` — `server/sql/node_descriptions_migration.sql`
-2. Yeni tablolar için `server/sql/catalog_persistence.sql` (henüz yok — eklenecek).
+2. Yeni tablolar: [catalog-persistence.md](./catalog-persistence.md) (açıklama + DDL bölüm bölüm) · çalıştır: `server/sql/catalog_persistence.sql`.
 3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; `node_descriptions`**, change log, workflow doc, rotalar** güncellenmez.
 4. İsteğe bağlı: localStorage → DB **bir kerelik import** script (kullanıcı bazlı).
 
