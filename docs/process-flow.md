@@ -1,51 +1,57 @@
-# Process katalogu — tam akış ve kullanıcı rotası
+# Süreç katalogu — tam akış ve kullanıcı rotası
 
-> Ürün özeti: [PRODUCT.md](./PRODUCT.md) · Test servisleri: [ss.md](../ss.md)
+PAR / jBPM XML inventory’den gelir (`env.process`). UI’da iki mod vardır: **tüm grafiği gezmek** ve **kendi adım adım rotanı kaydetmek**.
 
-Süreç tanımı (jBPM / PAR XML) inventory’den gelir; UI’da **tam grafik** ve **adım adım kendi rotanı oluşturma** iki mod olarak sunulur.
-
----
-
-## Tam akış (`ProcessFlowMap`)
-
-- Süreç ağacından veya aramadan açılır; katmanlı layout, path focus, alt süreç / servis drill-down.
-- Düğüm seçilince drawer: gelen/giden geçişler, ekranlar, **Snapshot** (PDF).
-- Snapshot: seçili düğüme kadar yol, `exportProcessPathSnapshotPdf` — görsel **yılan (snake)** düzeni; uzun yollar satır kırarak aşağı iner (`web/src/snapshot/processPathSnapshot.ts`).
+Ürün bağlamı: [PRODUCT.md](./PRODUCT.md) · Veri / ingest: [db.md §13](./db.md#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor)
 
 ---
 
-## Akış rotanı oluştur (`ProcessFlowRouteBuilder`)
+## 1. Tam akış (`ProcessFlowMap`)
 
-- Tam akış ekranındaki **Akış Rotanı Oluştur** ile açılır; **sıfırdan** başlar (yalnız başlangıç düğümü, taslak oturumu devam etmez).
-- Kullanıcı canvas’taki hayalet düğümlerden geçiş seçer; rota yatay occurrence zinciri olarak çizilir.
-- **Geri / İleri** cursor; breadcrumb (`ProcessFlowRouteBar`) ile adım seçimi ve kamera.
-- **Kaydet** diyaloğu:
-  - **Kaydet** — kayıtlı rota açıksa aynı kaydın üzerine yazar; yoksa yeni kayıt.
-  - **Farklı kaydet** — yeni id (orijinal durur); yalnız kayıtlı rota varken ve adım/ad kayıtlıdan farklıysa aktif.
-- Kayıtlar `localStorage` (`web/src/processRouteStore.ts`); sol panel **Akış Rotaları** (`WorkflowsPanel`).
+**Nereden açılır:** Modül ağacı → Process sekmesi, iş akışları panelindeki süreç listesi, arama.
+
+**Ne yaparsın:**
+
+- Katmanlı layout; düğüm hover / tık ile **path focus** veya komşuluk vurgusu.
+- Drawer: gelen ve giden geçişler, ilişkili ekranlar, servise git, alt süreç.
+- **Snapshot:** Seçili düğüme kadar yol → PDF (yılan düzeni, `processPathSnapshot.ts`).
+- Haritaya **not** ekleme (konum localStorage’da; DB kalıcılığı planı [db.md §14](./db.md#14-ortak-katalog--kalıcılık-localstorage-yerine-db)).
+
+**Buton:** **Akış Rotanı Oluştur** → rota moduna geçer (aşağı).
 
 ---
 
-## Kod referansı
+## 2. Akış rotanı oluştur (`ProcessFlowRouteBuilder`)
+
+| Adım | Davranış |
+|------|-----------|
+| Başlangıç | Sıfırdan; yalnız start düğümü (taslak oturumu devam etmez) |
+| İlerleme | Canvas’taki hayalet seçeneklerden geçiş seç; yatay **occurrence** zinciri |
+| Gezinme | Geri / ileri imleç; üst **breadcrumb** (`ProcessFlowRouteBar`) ile atlama |
+| Kaydet | **Kaydet** — açık kaydın üzerine yazar veya yeni id; **Farklı kaydet** — yeni kayıt |
+| Durum | Kayıt sonrası rota **`completed`** sayılır (Taslak ayrımı UI’da yok) |
+| Saklama | `localStorage` — `web/src/processRouteStore.ts` |
+| Liste | Sol panel → **İş akışları** → **Akış Rotaları** |
+
+---
+
+## 3. Kod referansı
 
 | Konu | Dosya |
 |------|--------|
 | Sayfa / mod geçişi | `web/src/components/ProcessFlowPage.tsx` |
 | Rota state makinesi | `web/src/components/processUserRoute.ts` |
-| PDF adım metni | `web/src/components/processPathNarrative.ts` |
+| PDF anlatım metni | `web/src/components/processPathNarrative.ts` |
 | XML parse | `server/src/inventory/parProcessParser.ts` |
 | API | `server/src/inventory/processFlowService.ts` |
-| XML DB onarımı | [db.md §13](./db.md#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor) |
-| Unit testler | `server/src/inventory/processUserRoute.test.ts` |
+| Testler | `server/src/inventory/processUserRoute.test.ts` |
 
 ---
 
-## Açık iyileştirmeler (layout)
+## 4. Layout backlog (tam akış)
 
-Tam akış haritasında hâlâ backlog:
+- Uzun katman atlayan kenarlar için kanal / dummy-node routing.
+- Karar düğümünde çoklu ok port yayılımı.
+- Çok katmanlı layout’ta ek barycenter iterasyonu.
 
-- Uzun katman atlayan kenarlar için dummy-node / kanal routing (spagetti azaltma).
-- Karar düğümünde aynı noktadan giren/çıkan okların port yayılımı.
-- Çok katmanlı layout’ta ek barycenter iterasyonları.
-
-Detay ve örnek süreç notları: [ss.md](../ss.md) (backlog bölümü).
+Örnek süreç notları: [ss.md](../ss.md)

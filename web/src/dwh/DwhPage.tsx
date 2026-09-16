@@ -945,11 +945,31 @@ export function DwhPage({
   const [sidebarPinned, setSidebarPinned] = useState(true)
   const [sidebarHover, setSidebarHover] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(320)
+  const sidebarWidthPreferredRef = useRef(320)
   const searchRef = useRef<HTMLLabelElement>(null)
   const sidebarExpanded = sidebarPinned || sidebarHover
   const pageStyle = {
     '--dwh-sidebar-panel-width': `${sidebarWidth}px`,
   } as CSSProperties
+
+  useEffect(() => {
+    const NARROW_MAX = 1100
+    const rail = 76
+    const minMapViewport = 340
+    const clampSidebar = () => {
+      const w = window.innerWidth
+      if (w >= NARROW_MAX) {
+        setSidebarWidth(sidebarWidthPreferredRef.current)
+        return
+      }
+      const cap = Math.max(272, Math.min(460, w - rail - minMapViewport))
+      setSidebarWidth((current) => (current > cap ? cap : current))
+    }
+    clampSidebar()
+    window.addEventListener('resize', clampSidebar)
+    return () => window.removeEventListener('resize', clampSidebar)
+  }, [])
+
   const { store: dwhFavorites, setStore: setDwhFavorites } = useDwhFavorites()
 
   const entityNameByVisitKey = useMemo(() => {
@@ -1295,11 +1315,14 @@ export function DwhPage({
       event.preventDefault()
       const startX = event.clientX
       const startWidth = sidebarWidth
+      let latestWidth = startWidth
       const handleMove = (moveEvent: PointerEvent) => {
         const nextWidth = Math.max(272, Math.min(460, startWidth + moveEvent.clientX - startX))
+        latestWidth = nextWidth
         setSidebarWidth(nextWidth)
       }
       const handleUp = () => {
+        sidebarWidthPreferredRef.current = latestWidth
         window.removeEventListener('pointermove', handleMove)
         window.removeEventListener('pointerup', handleUp)
       }

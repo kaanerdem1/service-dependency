@@ -1,13 +1,16 @@
 # Issue management entegrasyonu
 
-> Issue aracı da React kullanıyorsa asıl değer **UI/UX taşımaktır**; veri/API tarafı zaten ayrılabilir durumda.  
-> İlgili: [README](./README.md) · [db.md](./db.md) · [PRODUCT.md](./PRODUCT.md)
+Intranet **issue / change** aracı onay ve ticket tutar; **Service Dependency (SD)** statik katalogdan **etkilenen servis listesi ve haritayı** üretir. İki sistem birbirinin yerine geçmez — [PRODUCT.md §2](./PRODUCT.md#2-sınır-sd-vs-issue-management).
+
+Issue aracı da React ise hedef, harita/ağaç UX’ini **embed** etmek; API ayrı kalabilir (`server/` + Postgres).
+
+**Diğer dokümanlar:** [Kurulum](../README.md) · [db.md](./db.md)
 
 ---
 
 ## 1. “App.tsx kabuğu” ne demek?
 
-Bugün uygulama **tek bir React bileşeninde** (`web/src/App.tsx`, ~1500 satır) toplanmış durumda. Bu dosya sadece layout değil; **tüm uygulama beyni**:
+Orchestration bugün **`web/src/App.tsx`** içinde: seçim state’i, veri yükleme, sidebar, surface (Servis / DWH), süreç akışı geçişleri. Alt bileşenler (`ModuleTree`, `ImpactMap`, …) ayrı dosyalarda; **bağlantıları** App kuruyor.
 
 
 | Sorumluluk         | Örnek state / fonksiyon                                       |

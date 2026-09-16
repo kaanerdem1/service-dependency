@@ -1,6 +1,6 @@
 # Ürün — Service Dependency
 
-> Çalıştırma ve mimari: [README](./README.md) · Veri / API: [db.md](./db.md) · Issue entegrasyonu: [entegrasyon.md](./entegrasyon.md)
+> Kurulum: [README](../README.md) · Veri / API: [db.md](./db.md) · Issue entegrasyonu: [entegrasyon.md](./entegrasyon.md)
 
 **Statik katalog + etki analizi.** Değişiklik onayı, flag, inbox ve rol modeli **bu uygulamada değil** — intranet **issue management** aracında kalır. SD, issue’ya “bu servis değişirse kim etkilenir?” cevabını verir.
 
@@ -74,7 +74,8 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 | Favoriler · iş akışları | ✅ | ⌃F / ⌃G — kişisel gezinme |
 | Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre; **process akış haritası** ayrıntı: [process-flow.md](./process-flow.md) |
 | Process — tam akış haritası | ✅ | XML ingest, path focus, drawer, yol snapshot (PDF) |
-| Process — akış rotası oluştur | ✅ | Adım adım seçim, kayıt (Kaydet / Farklı kaydet), rotalar paneli |
+| Process — akış rotası oluştur | ✅ | Adım adım seçim; kayıt `completed`; Kaydet / Farklı kaydet; rotalar paneli |
+| Responsive (dar pencere) | ✅ kısmi | `<1100px` sidebar ölçekleme, harita içi yatay scroll — `responsive.css` |
 | DWH lineage sekmesi | ✅ | Ayrı `surface=dwh` |
 | Inventory DB entegrasyonu | ✅ | Postgres (`env.*`) |
 | Issue deep link / embed | ⏳ | F1: `?service=` — [entegrasyon.md](./entegrasyon.md) |
@@ -146,7 +147,7 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 | Konu | Doküman / kod |
 |------|----------------|
 | API ↔ DB, ağaç, smoke | [db.md](./db.md) |
-| Mimari, çalıştırma | [README](./README.md) |
+| Kurulum, mimari | [README](../README.md) |
 | Issue link, embed, `CatalogWorkbench` | [entegrasyon.md](./entegrasyon.md) |
 | Etki BFS | `server/src/impactGraph.ts` |
 | Harita layout | `web/src/impact/mapLayout.ts`, `ImpactMap.tsx` |
@@ -154,4 +155,4 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 
 ---
 
-*Son güncelleme: 2026-09-14 — Process akış rotası ve snapshot dokümantasyonu eklendi.*
+*Son güncelleme: 2026-09-16 — README/teknoloji özeti, rota `completed`, responsive notu.*

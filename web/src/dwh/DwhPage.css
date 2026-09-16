@@ -562,7 +562,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-kind-legend {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 7px 10px;
   margin: 0 3px 14px;
 }
@@ -1646,12 +1646,95 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 @media (max-width: 680px) {
   .dwh-map-search {
-    left: 112px;
-    max-width: calc(100% - 120px);
+    left: clamp(72px, 18vw, 112px);
+    max-width: calc(100% - clamp(80px, 20vw, 120px));
   }
 
   .dwh-map-search input {
-    width: 130px;
+    width: clamp(96px, 28vw, 130px);
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1100px) {
+  html.dwh-map-drawer-open .main.dwh-main.main-map .dwh-header-metrics {
+    margin-right: clamp(40px, 20vw, 268px);
+  }
+}
+
+@media (max-width: 1100px) {
+  .main.dwh-main .dwh-sidebar-inner {
+    width: var(--dwh-sidebar-panel-width, 320px);
+    max-width: min(
+      var(--dwh-sidebar-panel-width, 320px),
+      calc(100vw - var(--dwh-sidebar-rail-width, 76px) - 360px)
+    );
+    padding: 10px 8px 14px 10px;
+    font-size: 13px;
+  }
+
+  .dwh-tree-panel .dwh-sidebar-head h3,
+  .dwh-catalog-search input {
+    font-size: 12px;
+  }
+
+  .dwh-kind-legend {
+    flex-wrap: wrap;
+  }
+
+  .map-stage.is-docked:not(.is-expanded) .dwh-map-canvas-row {
+    min-width: max(100%, calc(360px + 268px));
+    width: max(100%, calc(360px + 268px));
+  }
+
+  .map-stage.is-docked:not(.is-expanded) .dwh-lineage-map.is-drawer-collapsed .dwh-map-canvas-row {
+    min-width: max(100%, calc(360px + 40px));
+    width: max(100%, calc(360px + 40px));
+  }
+}
+
+@media (max-width: 900px) {
+  .dwh-lineage-map:not(.is-drawer-collapsed) .dwh-map-canvas-row {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  }
+
+  .dwh-detail-panel,
+  .dwh-lineage-sidebar .dwh-tree-panel {
+    min-width: 0;
+  }
+
+  .dwh-toolbar {
+    row-gap: 8px;
+  }
+}
+
+@media (max-width: 720px) {
+  .dwh-header-metrics {
+    width: 100%;
+    justify-content: flex-start;
+    margin-right: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .dwh-map-canvas-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dwh-map-canvas-row > .dwh-map-info-drawer {
+    grid-column: 1;
+    grid-row: 2;
+    max-height: min(42vh, 320px);
+    border-left: 0;
+    border-top: 1px solid #d6dce2;
+  }
+
+  .map-stage:not(.is-expanded) .dwh-map-info-drawer {
+    position: relative;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
   }
 }
 

@@ -105,6 +105,7 @@ import type {
   Snapshot,
 } from './types'
 import './App.css'
+import './responsive.css'
 import {
   favoritesPanelShortcutLabel,
   matchPanelShortcut,
@@ -282,6 +283,8 @@ export default function App() {
   const [navHover, setNavHover] = useState(true)
   const [navPinned, setNavPinned] = useState(true)
   const [navWidth, setNavWidth] = useState(300)
+  /** Daraltmada otomatik kısma sonrası geniş ekranda geri yüklenecek genişlik. */
+  const navWidthPreferredRef = useRef(300)
   const [allowNavCollapse, setAllowNavCollapse] = useState(false)
   const navExpanded = navPinned || navHover || !allowNavCollapse
   const appFrameStyle = {
@@ -365,14 +368,17 @@ export default function App() {
       event.preventDefault()
       const startX = event.clientX
       const startWidth = navWidth
+      let latestWidth = startWidth
       const handleMove = (moveEvent: PointerEvent) => {
         const nextWidth = Math.max(
           272,
           Math.min(460, startWidth + moveEvent.clientX - startX),
         )
+        latestWidth = nextWidth
         setNavWidth(nextWidth)
       }
       const handleUp = () => {
+        navWidthPreferredRef.current = latestWidth
         window.removeEventListener('pointermove', handleMove)
         window.removeEventListener('pointerup', handleUp)
       }
@@ -386,6 +392,24 @@ export default function App() {
     document.documentElement.dataset.theme = appTheme
     window.localStorage.setItem(APP_THEME_KEY, appTheme)
   }, [appTheme])
+
+  useEffect(() => {
+    const NARROW_MAX = 1100
+    const rail = 76
+    const minMapViewport = 340
+    const clampNav = () => {
+      const w = window.innerWidth
+      if (w >= NARROW_MAX) {
+        setNavWidth(navWidthPreferredRef.current)
+        return
+      }
+      const cap = Math.max(240, Math.min(460, w - rail - minMapViewport))
+      setNavWidth((current) => (current > cap ? cap : current))
+    }
+    clampNav()
+    window.addEventListener('resize', clampNav)
+    return () => window.removeEventListener('resize', clampNav)
+  }, [])
 
   useEffect(() => {
     if (!snapshotToast) return

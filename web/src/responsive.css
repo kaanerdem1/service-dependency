@@ -1,0 +1,404 @@
+/**
+ * Dar / sıkışık viewport kuralları.
+ * Geniş ekran (varsayılan) App.css düzenini değiştirmez — yalnızca @media blokları.
+ */
+
+/* —— Dar ekran (<1100px): sidebar ölçekle + harita içi yatay scroll —— */
+@media (max-width: 1100px) {
+  .app-frame {
+    --map-h-scroll-canvas-min: 360px;
+    --map-h-scroll-drawer-open: 268px;
+    --map-h-scroll-drawer-collapsed: 40px;
+  }
+
+  .app-frame.sidebar-panel-open .workspace-column {
+    padding-left: var(--sidebar-overlay-spill);
+    box-sizing: border-box;
+  }
+
+  .module-sidebar.is-expanded .module-sidebar-inner {
+    width: var(--sidebar-panel-width, 300px);
+    max-width: min(
+      var(--sidebar-panel-width, 300px),
+      calc(100vw - var(--sidebar-rail-width, 76px) - var(--map-h-scroll-canvas-min, 360px))
+    );
+    padding: 10px 8px 14px 10px;
+    font-size: 13px;
+  }
+
+  .module-kind-legend {
+    flex-wrap: wrap;
+  }
+
+  .module-sidebar .search input {
+    font-size: 12px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .module-sidebar h3,
+  .module-sidebar .tree-row {
+    font-size: 12px;
+  }
+
+  .sidebar-rail-label {
+    font-size: 10px;
+  }
+
+  /* Servis / metod haritası: yalnızca harita gövdesinde yatay kaydırma */
+  .map-stage.is-docked:not(.is-expanded) .map-stage-body {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .map-stage.is-docked:not(.is-expanded) .impact-map.dd-map {
+    min-height: 100%;
+    height: 100%;
+  }
+
+  .map-stage.is-docked:not(.is-expanded) .map-canvas-row {
+    min-width: max(
+      100%,
+      calc(var(--map-h-scroll-canvas-min) + var(--map-h-scroll-drawer-open))
+    );
+    width: max(
+      100%,
+      calc(var(--map-h-scroll-canvas-min) + var(--map-h-scroll-drawer-open))
+    );
+  }
+
+  .map-stage.is-docked:not(.is-expanded) .impact-map.is-drawer-collapsed .map-canvas-row {
+    min-width: max(
+      100%,
+      calc(var(--map-h-scroll-canvas-min) + var(--map-h-scroll-drawer-collapsed))
+    );
+    width: max(
+      100%,
+      calc(var(--map-h-scroll-canvas-min) + var(--map-h-scroll-drawer-collapsed))
+    );
+  }
+
+  /* Süreç haritası */
+  .main.main-process-flow .pf-map-canvas:not(.is-snapshot-capturing) {
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+
+  .main.main-process-flow .pf-map-canvas .react-flow {
+    width: max(100%, var(--map-h-scroll-canvas-min));
+    min-width: var(--map-h-scroll-canvas-min);
+  }
+}
+
+@media (max-width: 900px) {
+  .module-sidebar.is-expanded .module-sidebar-inner {
+    max-width: min(var(--sidebar-panel-width, 300px), calc(100vw - 24px));
+    box-shadow: 12px 0 32px rgba(0, 0, 0, 0.28);
+  }
+}
+
+/* —— Stage / masthead: sıkışınca —— */
+@media (max-width: 1100px) {
+  html.sd-map-drawer-open .main.main-map .stage-actions,
+  .main.main-map:has(.impact-map.dd-map:not(.is-drawer-collapsed)) .stage-actions {
+    margin-right: clamp(40px, 20vw, 268px);
+  }
+}
+
+@media (max-width: 960px) {
+  .app-masthead {
+    padding: 8px 12px;
+    gap: 10px;
+  }
+
+  .stage-top {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .main.main-map .stage-top {
+    min-height: auto;
+  }
+
+  .stage-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .stage-tabs {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+  }
+
+  .stage-tab {
+    font-size: 12px;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+
+  .stage-wf-chip-btn {
+    max-width: min(100%, 220px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stage-visit-path {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .stage-visit-path-list {
+    flex-wrap: wrap;
+  }
+
+  .stage-visit-path-btn {
+    max-width: min(180px, 100%);
+  }
+}
+
+/* —— Süreç haritası: dar ekran —— */
+@media (max-width: 960px) {
+  .pf-map-page {
+    min-width: 0;
+  }
+
+  .pf-map-head {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'primary close'
+      'screens screens';
+    column-gap: 8px;
+    align-items: start;
+    padding: 12px 12px 10px;
+  }
+
+  .pf-map-head-primary {
+    grid-area: primary;
+    min-width: 0;
+  }
+
+  .pf-map-screens {
+    grid-area: screens;
+  }
+
+  .pf-map-title {
+    font-size: 16px;
+  }
+
+  .pf-map-head-cluster {
+    font-size: 12px;
+  }
+
+  .pf-map-head-primary > .pf-route-start {
+    flex: 0 1 auto;
+    max-width: 100%;
+    margin-left: 0;
+    align-self: flex-start;
+    white-space: normal;
+    line-height: 1.25;
+  }
+
+  .pf-map-close {
+    position: static;
+    grid-area: close;
+    align-self: start;
+    justify-self: end;
+  }
+
+  .pf-map-back {
+    position: static;
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  .pf-map-canvas .pf-map-tools {
+    left: auto;
+    right: 10px;
+    top: auto;
+    bottom: 56px;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: calc(100% - 16px);
+  }
+
+  .pf-map-canvas.is-drawer-open .pf-map-search {
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
+
+  .pf-map-canvas.is-drawer-open .pf-map-tools {
+    bottom: 56px;
+    right: max(10px, calc(min(380px, 92%) + 14px));
+  }
+}
+
+/* —— Favoriler / iş akışları drawer —— */
+@media (max-width: 960px) {
+  .shortcuts-drawer-head {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .shortcuts-drawer-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shortcuts-drawer-panel,
+  .shortcuts-drawer-body {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .shortcuts-panel-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .sc-toolbar-btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: min(100%, 96px);
+    white-space: normal;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .sc-process-item-name,
+  .sc-row-label,
+  .sc-row-alias,
+  .sc-hit-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* —— Harita dock —— */
+@media (max-width: 960px) {
+  .map-dock-float.is-default {
+    max-width: calc(100% - 12px);
+  }
+
+  .map-dock-float.is-default .map-dock {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+}
+
+@media (max-width: 720px) {
+  .stage-actions {
+    width: 100%;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    justify-content: flex-end;
+  }
+
+  .main-heading-wrap,
+  .main-heading-title-row {
+    min-width: 0;
+  }
+
+  .service-overview-head {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'identity'
+      'location'
+      'changes';
+  }
+
+  .rel-table-toolbar,
+  .rel-table-tools {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .rel-table-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .stage-catalog-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .wf-info-hero {
+    flex-direction: column;
+  }
+
+  .modal,
+  .modal.wide {
+    width: min(480px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .app-masthead {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'left actions'
+      'brand brand';
+  }
+
+  .app-masthead-left {
+    grid-area: left;
+  }
+
+  .app-masthead-actions {
+    grid-area: actions;
+  }
+
+  .app-masthead-brand-wrap {
+    grid-area: brand;
+    justify-self: stretch;
+    max-width: none;
+  }
+
+  .app-brand {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .sc-toolbar-btn {
+    flex: 1 1 100%;
+  }
+
+  .react-flow__panel.map-info-panel {
+    max-width: min(248px, calc(100vw - 24px));
+  }
+}
+
+@media (max-width: 520px) {
+  .theme-switch-wrap {
+    display: none;
+  }
+
+  .stage-tab {
+    padding: 6px 8px;
+    gap: 4px;
+  }
+
+  .module-sidebar-rail {
+    width: 56px;
+  }
+
+  .app-frame {
+    --sidebar-rail-width: 56px;
+  }
+
+  .sidebar-rail-label {
+    font-size: 9px;
+    letter-spacing: 0.04em;
+  }
+}

@@ -2271,7 +2271,7 @@
 
 .module-kind-legend {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 7px 10px;
   margin: 2px 3px 8px;
   flex-shrink: 0;
@@ -16944,40 +16944,7 @@ button.linkish {
   font-weight: 600;
 }
 
-@media (max-width: 960px) {
-  .topbar {
-    grid-template-columns: 1fr;
-  }
-
-  .shell {
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .workspace {
-    height: auto;
-    overflow: visible;
-  }
-
-  .module-sidebar {
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    max-height: 240px;
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .app-frame.is-nav-collapsed .module-sidebar {
-    max-height: 44px;
-  }
-
-  .main.main-map {
-    overflow: auto;
-    min-height: 70vh;
-  }
-}
+/* Eski .shell/.topbar düzeni — güncel kabuk için web/src/responsive.css */
 
 /* Task detay — 4 sekme */
 .task-detail {
