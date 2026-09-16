@@ -1898,8 +1898,9 @@ function ProcessFlowMapInner({
         nodesConnectable={false}
         nodesDraggable
         panOnDrag
-        panOnScroll
+        panOnScroll={false}
         zoomOnScroll
+        zoomOnPinch
         minZoom={0.06}
         maxZoom={1.8}
         fitView={!wide}

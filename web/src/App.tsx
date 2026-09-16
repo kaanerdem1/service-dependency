@@ -66,6 +66,24 @@ import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { ProcessFlowPage } from './components/ProcessFlowPage'
 import { getProcessRoute, touchProcessRoute } from './processRouteStore'
+import {
+  readPersistedAppNav,
+  writePersistedAppNav,
+  type PersistedSidebarDrawer,
+} from './appNavPersist'
+
+function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
+  shortcutsOpen: boolean
+  workflowsOpen: boolean
+} {
+  const drawer = restored?.sidebarDrawer
+  if (drawer === 'shortcuts') return { shortcutsOpen: true, workflowsOpen: false }
+  if (drawer === 'workflows') return { shortcutsOpen: false, workflowsOpen: true }
+  if (restored?.processFlowNo || restored?.processRouteId || restored?.workflowInfoId) {
+    return { shortcutsOpen: false, workflowsOpen: true }
+  }
+  return { shortcutsOpen: false, workflowsOpen: false }
+}
 import { FavoriteStarButton } from './components/FavoriteStarButton'
 import { ServiceWorkflowChip } from './components/ServiceWorkflowChip'
 import { CatalogHelp } from './components/CatalogHelp'
@@ -251,35 +269,47 @@ function StageVisitPath({
 }
 
 export default function App() {
+  const restoredNav = useMemo(() => readPersistedAppNav(), [])
+  const initialDrawer = useMemo(() => initialSidebarDrawer(restoredNav), [restoredNav])
+  const lastServicesDrawerRef = useRef<PersistedSidebarDrawer>(
+    restoredNav?.sidebarDrawer ??
+      (initialDrawer.workflowsOpen
+        ? 'workflows'
+        : initialDrawer.shortcutsOpen
+          ? 'shortcuts'
+          : 'none'),
+  )
   const [tree, setTree] = useState<ModuleNode[]>([])
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState(() => restoredNav?.treeQuery ?? '')
   const [hits, setHits] = useState<Service[]>([])
   const [methodHits, setMethodHits] = useState<MethodRef[]>([])
-  const [pivotId, setPivotId] = useState<string | undefined>()
+  const [pivotId, setPivotId] = useState<string | undefined>(() => restoredNav?.pivotId)
   const [catalogNode, setCatalogNode] = useState<{
     id: string
     kind: 'group' | 'package'
     name: string
-  } | null>(null)
+  } | null>(() => restoredNav?.catalogNode ?? null)
   const [showNonServiceMethods, setShowNonServiceMethods] = useState(false)
   const [treePinServiceId, setTreePinServiceId] = useState<string>()
-  const [selectedMethodId, setSelectedMethodId] = useState<string>()
+  const [selectedMethodId, setSelectedMethodId] = useState<string | undefined>(
+    () => restoredNav?.selectedMethodId,
+  )
   const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
   /** Metod seçilmeden Metodlar sekmesini aç (harita +N) — saklandı; detay paneli kaldırıldı */
-  const [history, setHistory] = useState<VisitEntry[]>([])
-  const [historyIndex, setHistoryIndex] = useState(-1)
+  const [history, setHistory] = useState<VisitEntry[]>(() => restoredNav?.history ?? [])
+  const [historyIndex, setHistoryIndex] = useState(() => restoredNav?.historyIndex ?? -1)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
   const [callees, setCallees] = useState<AffectedService[]>([])
   const [impact, setImpact] = useState<ImpactGraph>()
   const [loading, setLoading] = useState(false)
-  const [tab, setTab] = useState<Tab>('map')
+  const [tab, setTab] = useState<Tab>(() => restoredNav?.tab ?? 'map')
   const [apiError, setApiError] = useState<string>()
   const [mapExpanded, setMapExpanded] = useState(false)
   const [mapForceLtrSignal, setMapForceLtrSignal] = useState(0)
   const [tableProjectFilter, setTableProjectFilter] = useState<string | undefined>()
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
-  const [surface, setSurface] = useState<AppSurface>('services')
+  const [surface, setSurface] = useState<AppSurface>(() => restoredNav?.surface ?? 'services')
   const [navHover, setNavHover] = useState(true)
   const [navPinned, setNavPinned] = useState(true)
   const [navWidth, setNavWidth] = useState(300)
@@ -318,12 +348,20 @@ export default function App() {
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
   const [cmdkOpen, setCmdkOpen] = useState(false)
-  const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [workflowsOpen, setWorkflowsOpen] = useState(false)
-  const [workflowInfoId, setWorkflowInfoId] = useState<string>()
-  const [workflowResumeId, setWorkflowResumeId] = useState<string>()
-  const [processFlowNo, setProcessFlowNo] = useState<string>()
-  const [processRouteId, setProcessRouteId] = useState<string>()
+  const [shortcutsOpen, setShortcutsOpen] = useState(() => initialDrawer.shortcutsOpen)
+  const [workflowsOpen, setWorkflowsOpen] = useState(() => initialDrawer.workflowsOpen)
+  const [workflowInfoId, setWorkflowInfoId] = useState<string | undefined>(
+    () => restoredNav?.workflowInfoId,
+  )
+  const [workflowResumeId, setWorkflowResumeId] = useState<string | undefined>(
+    () => restoredNav?.workflowResumeId,
+  )
+  const [processFlowNo, setProcessFlowNo] = useState<string | undefined>(
+    () => restoredNav?.processFlowNo,
+  )
+  const [processRouteId, setProcessRouteId] = useState<string | undefined>(
+    () => restoredNav?.processRouteId,
+  )
   /** Drawer’dan servise gidildiğinde sürece geri dönmek için. */
   const [processFlowReturn, setProcessFlowReturn] = useState<
     { processNo: string; nodeId?: string } | undefined
@@ -331,7 +369,7 @@ export default function App() {
   /** Alt sürece gidildiğinde üst süreç + drawer adımı. */
   const [processFlowStack, setProcessFlowStack] = useState<
     { processNo: string; nodeId?: string }[]
-  >([])
+  >(() => restoredNav?.processFlowStack ?? [])
   const [processFlowRestoreNodeId, setProcessFlowRestoreNodeId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
@@ -341,12 +379,48 @@ export default function App() {
     if (surface !== 'services') {
       setShortcutsOpen(false)
       setWorkflowsOpen(false)
-      setWorkflowInfoId(undefined)
-      setWorkflowResumeId(undefined)
-      setProcessFlowNo(undefined)
-      setProcessRouteId(undefined)
+      return
     }
-  }, [surface])
+    lastServicesDrawerRef.current = shortcutsOpen
+      ? 'shortcuts'
+      : workflowsOpen
+        ? 'workflows'
+        : 'none'
+  }, [surface, shortcutsOpen, workflowsOpen])
+
+  useEffect(() => {
+    writePersistedAppNav({
+      v: 1,
+      surface,
+      sidebarDrawer: lastServicesDrawerRef.current,
+      tab,
+      pivotId,
+      selectedMethodId,
+      catalogNode,
+      processFlowNo,
+      processRouteId,
+      workflowInfoId,
+      workflowResumeId,
+      processFlowStack,
+      history,
+      historyIndex,
+      treeQuery: query.trim() || undefined,
+    })
+  }, [
+    surface,
+    tab,
+    pivotId,
+    selectedMethodId,
+    catalogNode,
+    processFlowNo,
+    processRouteId,
+    workflowInfoId,
+    workflowResumeId,
+    processFlowStack,
+    history,
+    historyIndex,
+    query,
+  ])
 
   const toggleNavPinned = useCallback(() => {
     setNavPinned((pinned) => {
@@ -706,6 +780,8 @@ export default function App() {
     setProcessFlowStack([])
     setProcessFlowRestoreNodeId(undefined)
     setProcessRouteId(undefined)
+    setShortcutsOpen(false)
+    setWorkflowsOpen(true)
     if (!opts?.keepService) {
       setPivotId(undefined)
       setCatalogNode(null)
@@ -723,6 +799,8 @@ export default function App() {
     setProcessFlowStack([])
     setProcessFlowRestoreNodeId(undefined)
     setProcessRouteId(routeId)
+    setShortcutsOpen(false)
+    setWorkflowsOpen(true)
     setPivotId(undefined)
     setCatalogNode(null)
     setProcessFlowNo(route.processNo)
@@ -1577,7 +1655,7 @@ export default function App() {
                     {session && service && (
                       <button
                         type="button"
-                        className="btn primary compact"
+                        className="btn primary compact im-action"
                         onClick={() => setCrOpen(true)}
                       >
                         Değişiklik talebi

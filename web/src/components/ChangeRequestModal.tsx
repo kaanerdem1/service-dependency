@@ -277,7 +277,7 @@ export function ChangeRequestModal({
               <button type="button" className="btn ghost" onClick={onClose}>
                 Vazgeç
               </button>
-              <button type="submit" className="btn primary compact" disabled={saving}>
+              <button type="submit" className="btn primary compact im-action" disabled={saving}>
                 {saving
                   ? 'Gönderiliyor…'
                   : `${affected.length || ''} Task Aç`.trim()}

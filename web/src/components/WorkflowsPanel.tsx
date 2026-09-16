@@ -581,6 +581,16 @@ export function WorkflowsPanel({
   }, [processFlowNo])
 
   useEffect(() => {
+    if (!open || (!processFlowNo && !activeRouteId)) return
+    const timer = window.setTimeout(() => {
+      panelRef.current
+        ?.querySelector<HTMLElement>('.sc-process-item.is-active')
+        ?.scrollIntoView({ block: 'nearest' })
+    }, 160)
+    return () => window.clearTimeout(timer)
+  }, [open, processFlowNo, activeRouteId, pocProcesses.length, processRoutes.length])
+
+  useEffect(() => {
     const q = query.trim()
     if (!open || q.length < 2) {
       setHits([])

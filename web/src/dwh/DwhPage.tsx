@@ -49,6 +49,7 @@ import type {
   DwhTable,
   DwhTableImpact,
 } from './types'
+import { readPersistedDwhNav, writePersistedDwhNav } from './dwhNavPersist'
 import './DwhPage.css'
 
 type DwhTab = 'tables' | 'reports'
@@ -914,25 +915,32 @@ export function DwhPage({
   surface: AppSurface
   onSurfaceChange: (next: AppSurface) => void
 }) {
-  const [catalogTab, setCatalogTab] = useState<DwhTab>('tables')
-  const [stageTab, setStageTab] = useState<DwhStageTab>('map')
+  const restoredDwh = useMemo(() => readPersistedDwhNav(), [])
+  const [catalogTab, setCatalogTab] = useState<DwhTab>(() => restoredDwh?.catalogTab ?? 'tables')
+  const [stageTab, setStageTab] = useState<DwhStageTab>(() => restoredDwh?.stageTab ?? 'map')
   const [query, setQuery] = useState('')
   const [tables, setTables] = useState<DwhTable[]>([])
   const [reports, setReports] = useState<DwhReport[]>([])
-  const [rootTableId, setRootTableId] = useState<number>()
-  const [rootReportId, setRootReportId] = useState<number>()
-  const [selectedTableId, setSelectedTableId] = useState<number>()
-  const [selectedReportId, setSelectedReportId] = useState<number>()
+  const [rootTableId, setRootTableId] = useState<number | undefined>(() => restoredDwh?.rootTableId)
+  const [rootReportId, setRootReportId] = useState<number | undefined>(() => restoredDwh?.rootReportId)
+  const [selectedTableId, setSelectedTableId] = useState<number | undefined>(
+    () => restoredDwh?.selectedTableId,
+  )
+  const [selectedReportId, setSelectedReportId] = useState<number | undefined>(
+    () => restoredDwh?.selectedReportId,
+  )
   const [selectedTable, setSelectedTable] = useState<DwhTable>()
   const [columns, setColumns] = useState<DwhColumn[]>([])
   const [statements, setStatements] = useState<DwhSqlStatement[]>([])
   const [selectedReport, setSelectedReport] = useState<DwhReportDetail>()
-  const [visitHistory, setVisitHistory] = useState<DwhVisitEntry[]>([])
-  const [visitIndex, setVisitIndex] = useState(-1)
+  const [visitHistory, setVisitHistory] = useState<DwhVisitEntry[]>(
+    () => restoredDwh?.visitHistory ?? [],
+  )
+  const [visitIndex, setVisitIndex] = useState(() => restoredDwh?.visitIndex ?? -1)
   const [impact, setImpact] = useState<DwhTableImpact>()
-  const [detailKind, setDetailKind] = useState<DetailKind>('table')
+  const [detailKind, setDetailKind] = useState<DetailKind>(() => restoredDwh?.detailKind ?? 'table')
   const [simpleTree, setSimpleTree] = useState(false)
-  const [favoritesOpen, setFavoritesOpen] = useState(false)
+  const [favoritesOpen, setFavoritesOpen] = useState(() => restoredDwh?.favoritesOpen ?? false)
   const [lineageGraph, setLineageGraph] = useState<DwhLineageGraph>()
   const [columnLineage, setColumnLineage] = useState<DwhColumnLineageResponse>()
   const [mapExpanded, setMapExpanded] = useState(false)
@@ -951,6 +959,33 @@ export function DwhPage({
   const pageStyle = {
     '--dwh-sidebar-panel-width': `${sidebarWidth}px`,
   } as CSSProperties
+
+  useEffect(() => {
+    writePersistedDwhNav({
+      v: 1,
+      catalogTab,
+      favoritesOpen,
+      stageTab,
+      detailKind,
+      selectedTableId,
+      selectedReportId,
+      rootTableId,
+      rootReportId,
+      visitHistory,
+      visitIndex,
+    })
+  }, [
+    catalogTab,
+    favoritesOpen,
+    stageTab,
+    detailKind,
+    selectedTableId,
+    selectedReportId,
+    rootTableId,
+    rootReportId,
+    visitHistory,
+    visitIndex,
+  ])
 
   useEffect(() => {
     const NARROW_MAX = 1100

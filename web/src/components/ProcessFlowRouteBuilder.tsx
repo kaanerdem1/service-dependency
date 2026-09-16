@@ -755,6 +755,9 @@ function ProcessFlowRouteBuilderInner({
           elementsSelectable
           selectNodesOnDrag={false}
           panOnDrag
+          panOnScroll={false}
+          zoomOnScroll
+          zoomOnPinch
           onNodesChange={handleNodesChange}
           onNodeDragStart={() => {
             draggingRef.current = true

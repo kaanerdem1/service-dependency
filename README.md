@@ -162,7 +162,7 @@ flowchart LR
 
 ## Tema / geri dönüş
 
-Marka rengi Issue Management (SLA İzleme) mavisiyle hizalanır (`--accent: #0078d4`). Önceki yeşil palet git etiketi:
+Marka rengi Issue Management ile hizalanır: sidebar zemin `#353943`, yükseltilmiş alan `#404452`, metin `#b5bbcd`, hover `#9ebbdd`, buton `#0079f8`. Önceki yeşil palet:
 
 ```bash
 git checkout safe/green-theme-pre-im

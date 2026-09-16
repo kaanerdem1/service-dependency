@@ -1456,6 +1456,9 @@ function FlowInner({ graph }: Props) {
           onNodeMouseEnter={handleNodeMouseEnter}
           onNodeMouseLeave={handleNodeMouseLeave}
           nodesConnectable={false}
+          panOnScroll={false}
+          zoomOnScroll
+          zoomOnPinch
           minZoom={0.15}
           maxZoom={1.8}
           fitView

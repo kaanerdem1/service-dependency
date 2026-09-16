@@ -113,6 +113,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   grid-row: 1 / 4;
   position: relative;
   z-index: 8;
+  font-family: 'Open Sans Variable', 'Open Sans', 'IBM Plex Sans', 'Segoe UI', sans-serif;
   width: var(--dwh-sidebar-rail-width);
   height: 100%;
   min-width: 0;
@@ -331,7 +332,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-sidebar-pin-btn.is-pinned {
   color: #f4faf7;
   border-color: #245a45;
-  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
+  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
   box-shadow:
     0 2px 10px rgba(47, 93, 74, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -363,7 +364,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 [data-theme='mixed'] .dwh-sidebar-pin-btn.is-pinned {
   border-color: #3d9a72;
-  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
+  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
   color: #f4faf7;
 }
 
@@ -1247,7 +1248,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-family: inherit;
   font-synthesis: none;
 }
 
@@ -1290,7 +1291,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   background: transparent;
   color: var(--shell-tree-fg);
   box-shadow: none;
-  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-family: inherit;
 }
 
 .dwh-tree-row:hover {
@@ -1300,7 +1301,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-tree-row.selected {
   background: var(--shell-tree-selected-bg);
-  box-shadow: inset 5px 0 0 var(--shell-tree-selected-accent);
+  box-shadow: none;
+  color: var(--shell-tree-selected-fg, var(--shell-tree-fg));
 }
 
 .dwh-tree-row.is-cycle {
@@ -1345,7 +1347,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-family: 'IBM Plex Sans', 'Source Sans 3', 'Segoe UI', sans-serif;
+  font-family: inherit;
   font-variant-numeric: tabular-nums;
   font-weight: 500;
   letter-spacing: -0.012em;
@@ -1407,6 +1409,15 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 .dwh-tree-row.selected .dwh-tree-label {
   font-weight: 600;
+}
+
+[data-theme='mixed'] .dwh-tree-row.selected .dwh-tree-label,
+[data-theme='mixed'] .dwh-tree-row.selected .dwh-tree-meta {
+  color: #ffffff;
+}
+
+[data-theme='mixed'] .dwh-tree-row.selected .dwh-chev-btn {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .dwh-list-main {
@@ -2157,7 +2168,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge.direct .react-flow__edge-path {
-  stroke: #0078d4 !important;
+  stroke: var(--accent) !important;
   stroke-width: 2.4px !important;
 }
 
@@ -2180,7 +2191,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge marker path {
-  fill: #0078d4;
+  fill: var(--accent);
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge.report-link marker path {
@@ -2304,7 +2315,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   min-height: 48px;
   padding: 8px 12px 9px;
   border: 1px solid rgba(155, 184, 171, 0.72);
-  border-top: 3px solid #0078d4;
+  border-top: 3px solid var(--accent);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   color: #43514a;
@@ -3502,7 +3513,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-col-flow-legend i {
   width: 24px;
   height: 0;
-  border-top: 2px solid #0078d4;
+  border-top: 2px solid var(--accent);
 }
 
 .dwh-col-flow-legend i.is-derived {
@@ -3545,7 +3556,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   gap: 3px;
   padding: 9px 12px 10px;
   border: 1px solid #dfe3e7;
-  border-left: 4px solid #0078d4;
+  border-left: 4px solid var(--accent);
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
@@ -3560,7 +3571,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #0078d4;
+  background: var(--accent);
   box-shadow: 0 0 0 3px rgba(47, 111, 85, 0.1);
   content: '';
 }
@@ -3570,8 +3581,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-node.is-target {
-  border-color: #0078d4;
-  border-left-color: #0078d4;
+  border-color: var(--accent);
+  border-left-color: var(--accent);
   background: #f1f7f4;
 }
 
@@ -3612,7 +3623,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   width: 7px;
   height: 7px;
   border: 1px solid #fff;
-  background: #0078d4;
+  background: var(--accent);
 }
 
 .dwh-col-flow-edge .react-flow__edge-path {
@@ -3621,7 +3632,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-edge .dwh-column-edge-arrow {
-  fill: #0078d4;
+  fill: var(--accent);
 }
 
 .dwh-col-flow-edge.is-derived .dwh-column-edge-arrow {
