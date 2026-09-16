@@ -160,6 +160,16 @@ flowchart LR
 
 ---
 
+## Tema / geri dönüş
+
+Marka rengi Issue Management (SLA İzleme) mavisiyle hizalanır (`--accent: #0078d4`). Önceki yeşil palet git etiketi:
+
+```bash
+git checkout safe/green-theme-pre-im
+```
+
+---
+
 ## README dosyaları
 
 Yalnızca **bu dosya** (`README.md`, repo kökü) güncel kurulum ve giriş rehberidir.

@@ -251,8 +251,8 @@
   height: 2px;
   z-index: 0;
   border-radius: 2px 2px 0 0;
-  background: linear-gradient(90deg, #5cba8a 0%, #2f6b50 100%);
-  box-shadow: 0 0 10px rgba(92, 186, 138, 0.35);
+  background: linear-gradient(90deg, #4da6ff 0%, #0078d4 100%);
+  box-shadow: 0 0 10px rgba(0, 120, 212, 0.35);
 }
 
 .app-surface-switch-hover {
@@ -1130,7 +1130,7 @@
 .sidebar-pin-btn.is-pinned {
   color: #f4faf7;
   border-color: #245a45;
-  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
+  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
   box-shadow:
     0 2px 10px rgba(47, 93, 74, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -1632,8 +1632,8 @@
 }
 
 .sc-toolbar-btn.is-primary {
-  border-color: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 45%, transparent);
-  background: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 16%, transparent);
+  border-color: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 45%, transparent);
+  background: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 16%, transparent);
 }
 
 .sc-toolbar-btn:hover:not(:disabled) {
@@ -1739,8 +1739,8 @@
 }
 
 .sc-drop-zone.is-over {
-  background: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 40%, transparent);
+  background: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 12%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 40%, transparent);
 }
 
 .sc-root-list,
@@ -1753,9 +1753,9 @@
 
 .sc-hit-row.is-kbd-focus,
 .sc-row.is-kbd-focus {
-  background: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 14%, transparent);
+  background: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 14%, transparent);
   border-radius: 8px;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 35%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 35%, transparent);
 }
 
 .sc-folder {
@@ -2023,8 +2023,8 @@
 .module-sidebar button.tree-row.is-kbd-focus,
 .module-sidebar .tree-load-more.is-kbd-focus,
 .module-sidebar .tree-focus-more-btn.is-kbd-focus {
-  background: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 14%, transparent);
-  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #5cba8a);
+  background: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #0078d4);
 }
 
 .module-sidebar .tree-label-btn:focus,
@@ -2042,7 +2042,7 @@
 .module-sidebar .tree-row.kind-group.catalog-selected:not(.is-kbd-focus),
 .module-sidebar .tree-row.kind-package.catalog-selected:not(.is-kbd-focus) {
   background: var(--shell-tree-selected-bg);
-  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #5cba8a);
+  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #0078d4);
 }
 
 [data-theme='mixed'] .sidebar-pin-btn {
@@ -2061,8 +2061,8 @@
 }
 
 [data-theme='mixed'] .sidebar-pin-btn.is-pinned {
-  border-color: #3d9a72;
-  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
+  border-color: #0078d4;
+  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
   color: #f4faf7;
 }
 
@@ -2612,8 +2612,8 @@
 
 .module-sidebar .tree-row.kind-group.catalog-selected.is-kbd-focus,
 .module-sidebar .tree-row.kind-package.catalog-selected.is-kbd-focus {
-  background: color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 14%, transparent);
-  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #5cba8a);
+  background: color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 14%, transparent);
+  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #0078d4);
 }
 
 .module-sidebar .tree-row.kind-group.catalog-selected:not(.is-kbd-focus) .tree-label,
@@ -2840,7 +2840,7 @@
 .tree-row.kind-group.catalog-selected,
 .tree-row.kind-package.catalog-selected {
   background: color-mix(in srgb, var(--accent) 14%, transparent);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, #2f6b50);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 70%, #005a9e);
 }
 
 .tree-label {
@@ -3357,7 +3357,7 @@
 }
 
 .status-badge-morph.is-new {
-  background: color-mix(in srgb, #2f6f55 18%, #fff);
+  background: color-mix(in srgb, #0078d4 18%, #fff);
   color: #1e4a38;
 }
 
@@ -3427,7 +3427,7 @@
 }
 
 .theme-switch-wrap.is-light .theme-switch-hover-morph {
-  background: color-mix(in srgb, #2f5d4a 10%, transparent);
+  background: color-mix(in srgb, #0078d4 10%, transparent);
 }
 
 .map-dock-wrap-morph.is-hover {
@@ -5333,7 +5333,7 @@
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 20%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-  color: #2f5d4a;
+  color: #0078d4;
   font-size: 9.5px;
   font-weight: 750;
   white-space: nowrap;
@@ -5602,7 +5602,7 @@
   border-radius: 999px;
   font-size: 10px;
   font-weight: 650;
-  color: #2f5d4a;
+  color: #0078d4;
   background: color-mix(in srgb, var(--accent) 14%, #fff);
 }
 
@@ -5612,7 +5612,7 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 16%, #fff);
-  color: #2f5d4a;
+  color: #0078d4;
   font-size: 11px;
   font-weight: 700;
 }
@@ -5898,7 +5898,7 @@
   display: grid;
   place-items: center;
   border-radius: 10px;
-  color: #2f6b50;
+  color: #005a9e;
   background: color-mix(in srgb, var(--accent) 14%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
 }
@@ -6283,7 +6283,7 @@
 .wf-canvas-chip.is-stable,
 .wf-canvas-edge.is-stable .wf-canvas-chip {
   background: color-mix(in srgb, var(--accent) 16%, #fff);
-  color: #2f5d4a;
+  color: #0078d4;
 }
 
 .wf-canvas-chip.is-must-change,
@@ -7074,7 +7074,7 @@
   display: grid;
   place-items: center;
   border-radius: 12px;
-  color: #2f6b50;
+  color: #005a9e;
   background: color-mix(in srgb, var(--accent) 14%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--line));
 }
@@ -7100,7 +7100,7 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #2f6b50;
+  color: #005a9e;
   background: color-mix(in srgb, var(--accent) 12%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
 }
@@ -9223,7 +9223,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .module-sidebar .tree-row.is-path-pulse {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
-  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #5cba8a);
+  box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #0078d4);
   animation: tree-path-pulse 0.95s ease;
 }
 
@@ -9238,14 +9238,14 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   }
   35% {
     background: color-mix(in srgb, var(--accent) 32%, transparent);
-    box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #5cba8a);
+    box-shadow: inset 3px 0 0 var(--shell-tree-selected-accent, #0078d4);
   }
   70% {
     background: color-mix(in srgb, var(--accent) 20%, transparent);
   }
   100% {
     background: color-mix(in srgb, var(--accent) 10%, transparent);
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--shell-tree-selected-accent, #5cba8a) 40%, transparent);
+    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--shell-tree-selected-accent, #0078d4) 40%, transparent);
   }
 }
 
@@ -9914,7 +9914,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .neighbor-callers {
-  border-top: 3px solid var(--map-path, #2f6f55);
+  border-top: 3px solid var(--map-path, #0078d4);
 }
 
 .neighbor-callees {
@@ -9922,7 +9922,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .neighbor-callers .neighbor-count {
-  background: color-mix(in srgb, var(--map-path, #2f6f55) 18%, #fff);
+  background: color-mix(in srgb, var(--map-path, #0078d4) 18%, #fff);
   color: #245c44;
 }
 
@@ -10009,7 +10009,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   gap: 10px;
   border: 1px dashed #6f9b86;
   background: #e8f0eb;
-  color: #2f5d4a;
+  color: #0078d4;
   font: inherit;
   font-size: 12px;
   font-weight: 650;
@@ -10031,18 +10031,18 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #2f5d4a;
+  color: #0078d4;
   white-space: nowrap;
 }
 
 .neighbor-more:hover {
   background: #e4efe9;
-  border-color: #2f5d4a;
+  border-color: #0078d4;
   box-shadow: 0 2px 8px rgba(47, 93, 74, 0.1);
 }
 
 .neighbor-more:focus-visible {
-  outline: 2px solid color-mix(in srgb, #2f5d4a 45%, transparent);
+  outline: 2px solid color-mix(in srgb, #0078d4 45%, transparent);
   outline-offset: 2px;
 }
 
@@ -10126,7 +10126,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .neighbor-callers .rel-pill {
   color: #245c44;
-  background: color-mix(in srgb, var(--map-path, #2f6f55) 14%, #fff);
+  background: color-mix(in srgb, var(--map-path, #0078d4) 14%, #fff);
 }
 
 .neighbor-callees .rel-pill {
@@ -10457,7 +10457,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   --ink: #20242a;
   --muted: #66707b;
   --line: #d6dce2;
-  --accent-soft: #dcebe5;
+  --accent-soft: #deecf9;
   --map-bg: #e8ecef;
   --map-bg-alt: #dde3e8;
   --map-surface: #f7f8fa;
@@ -10830,7 +10830,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #2f6f55;
+  color: #0078d4;
 }
 
 .dd-radial-core::before {
@@ -10853,7 +10853,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-map.is-radial.is-focusing .react-flow__node.rf-path-on .dd-radial-core {
-  background: #2f6f55;
+  background: #0078d4;
   transform: scale(1.55);
   transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
   box-shadow:
@@ -10895,7 +10895,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-map.is-radial .react-flow__edge.radial-link.dd-edge-on .react-flow__edge-path {
-  stroke: #2f6f55 !important;
+  stroke: #0078d4 !important;
   stroke-width: 2.6px !important;
   opacity: 1 !important;
 }
@@ -10915,7 +10915,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .dd-map.is-radial .react-flow__edge.radial-link.dd-edge-on .dd-radial-mid-arrow,
 .dd-map.is-radial .react-flow__edge.radial-link.dd-edge-on .react-flow__arrowhead path {
-  fill: #2f6f55;
+  fill: #0078d4;
 }
 
 .dd-map.is-radial .dd-node.radial-dot .dd-note-badge {
@@ -11056,7 +11056,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .react-flow__node.pivot-incoming .dd-node-ring {
-  border-color: #2f6f55;
+  border-color: #0078d4;
   box-shadow: 0 0 0 6px rgba(47, 111, 85, 0.22);
 }
 
@@ -11070,7 +11070,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-node.center .dd-node-ring {
-  border-color: #2f6f55;
+  border-color: #0078d4;
   box-shadow: 0 0 0 4px rgba(47, 111, 85, 0.12);
 }
 
@@ -11091,7 +11091,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-node.active .dd-node-ring {
-  border-color: #2f6f55;
+  border-color: #0078d4;
   box-shadow: 0 0 0 5px rgba(47, 111, 85, 0.18);
 }
 
@@ -11145,17 +11145,17 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .path-layer-btn.on {
-  background: #2f6f55;
-  border-color: #2f6f55;
+  background: #0078d4;
+  border-color: #0078d4;
   color: #f4f7f5;
 }
 
 .dd-method-badge {
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid #2f6f55;
+  border: 1px solid #0078d4;
   background: #eef6f1;
-  color: #2f6f55;
+  color: #0078d4;
   font-size: 11px;
   font-weight: 700;
   cursor: pointer;
@@ -11164,7 +11164,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-method-badge.expanded {
-  background: #2f6f55;
+  background: #0078d4;
   color: #fff;
 }
 
@@ -11274,7 +11274,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .notes-item.is-lead {
-  border-left: 3px solid #2f6f55;
+  border-left: 3px solid #0078d4;
   padding-left: 11px;
 }
 
@@ -11300,7 +11300,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #2f6f55;
+  color: #0078d4;
   background: #eef6f1;
   border-radius: 4px;
   padding: 1px 5px;
@@ -11381,10 +11381,10 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   font: inherit;
   font-size: 11px;
   font-weight: 700;
-  border: 1px solid #2f6f55;
+  border: 1px solid #0078d4;
   border-radius: 6px;
   padding: 4px 10px;
-  background: #2f6f55;
+  background: #0078d4;
   color: #fff;
   cursor: pointer;
 }
@@ -11570,12 +11570,12 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .method-impact-map .react-flow__edge.method-via path {
-  stroke: #2f6f55 !important;
+  stroke: #0078d4 !important;
   stroke-width: 2.5 !important;
 }
 
 .method-impact-map .react-flow__edge.method-via marker path {
-  fill: #2f6f55 !important;
+  fill: #0078d4 !important;
 }
 
 .method-impact-map.is-focusing .react-flow__edge.dd-edge-off {
@@ -11619,7 +11619,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 .dd-node.collapsed .dd-node-body {
   background: #e8f0eb;
   border: 1px dashed #6f9b86;
-  color: #2f5d4a;
+  color: #0078d4;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -11629,19 +11629,19 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 .dd-node.collapsed:hover .dd-node-body {
   background: #e4efe9;
-  border-color: #2f5d4a;
+  border-color: #0078d4;
   box-shadow: 0 2px 10px rgba(47, 93, 74, 0.12);
 }
 
 .dd-node-hop.dd-node-open-radial {
   font-weight: 700;
-  color: #2f5d4a;
+  color: #0078d4;
 }
 
 [data-theme='mixed'] .impact-map.dd-map .dd-node.collapsed .dd-node-body {
   background: #e4efe9;
   border-color: #75ad95;
-  color: #2f5d4a;
+  color: #0078d4;
 }
 
 .dd-node-label {
@@ -13346,7 +13346,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 [data-theme='mixed'] .impact-map.dd-map .map-dock-project-opt.is-on {
   background: #dcebe5;
   border-color: rgba(47, 93, 74, 0.28);
-  color: #2f5d4a;
+  color: #0078d4;
 }
 
 .map-dock-project-check {
@@ -13716,7 +13716,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .path-bc-crumb.center {
-  color: #2f5d4a;
+  color: #0078d4;
   font-weight: 650;
 }
 
@@ -13812,13 +13812,13 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .path-chip.match {
-  border: 2px solid #2f6f55;
+  border: 2px solid #0078d4;
   background: #eef5f1;
   box-shadow: 0 0 0 3px rgba(47, 111, 85, 0.12);
 }
 
 .path-chip.match .path-chip-meta {
-  color: #2f5d4a;
+  color: #0078d4;
   font-weight: 600;
 }
 
@@ -13839,13 +13839,13 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-node.match .dd-node-body {
-  border: 2px solid #2f6f55;
+  border: 2px solid #0078d4;
   background: #eef5f1;
   box-shadow: 0 4px 14px rgba(47, 111, 85, 0.14);
 }
 
 .dd-node.match .dd-node-hop {
-  color: #2f5d4a;
+  color: #0078d4;
   font-weight: 600;
 }
 
@@ -13981,7 +13981,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .path-edge.on {
-  stroke: var(--map-path, #2f6f55);
+  stroke: var(--map-path, #0078d4);
   stroke-width: 2.6;
   opacity: 1;
 }
@@ -14038,7 +14038,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-map.is-focusing .react-flow__edge.dd-edge-on .react-flow__edge-path {
-  stroke: var(--map-path, #2f6f55) !important;
+  stroke: var(--map-path, #0078d4) !important;
   stroke-width: 2.8px !important;
   stroke-dasharray: 8 6;
   animation: dd-edge-flow 0.95s linear infinite;
@@ -14054,8 +14054,8 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-map.is-focusing .react-flow__edge.dd-edge-on marker path {
-  fill: var(--map-path, #2f6f55) !important;
-  stroke: var(--map-path, #2f6f55) !important;
+  fill: var(--map-path, #0078d4) !important;
+  stroke: var(--map-path, #0078d4) !important;
 }
 
 .dd-map.is-focusing .react-flow__edge.dd-edge-on.cascade marker path {
@@ -14088,7 +14088,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .dd-map .react-flow__edge.dd-edge-on .react-flow__edge-path {
-  stroke: var(--map-path, #2f6f55) !important;
+  stroke: var(--map-path, #0078d4) !important;
 }
 
 .dd-map .react-flow__edge.dd-edge.cascade path {
@@ -14116,7 +14116,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .blast-segment.is-direct {
-  background: #2f6f55;
+  background: #0078d4;
 }
 
 .blast-segment.is-indirect {
@@ -14145,7 +14145,7 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 }
 
 .blast-segment-legend i.is-direct {
-  background: #2f6f55;
+  background: #0078d4;
 }
 
 .blast-segment-legend i.is-indirect {
@@ -15154,7 +15154,7 @@ body.rel-table-resizing * {
 
 .entity-tabs button.on {
   color: #1e3a2f;
-  border-bottom-color: #2f6f55;
+  border-bottom-color: #0078d4;
 }
 
 .entity-tab-body {
@@ -15238,7 +15238,7 @@ body.rel-table-resizing * {
 }
 
 .method-list > li.selected {
-  border-color: #2f6f55;
+  border-color: #0078d4;
   background: #f3faf6;
 }
 
@@ -15307,7 +15307,7 @@ body.rel-table-resizing * {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #2f6f55;
+  color: #0078d4;
 }
 
 .method-children {
@@ -15446,7 +15446,7 @@ button.linkish {
 
 .btn.primary {
   background: var(--accent);
-  color: #f4f7f5;
+  color: var(--on-accent);
   border-color: var(--accent);
   width: 100%;
   margin-top: 12px;

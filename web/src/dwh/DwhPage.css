@@ -331,7 +331,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-sidebar-pin-btn.is-pinned {
   color: #f4faf7;
   border-color: #245a45;
-  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
+  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
   box-shadow:
     0 2px 10px rgba(47, 93, 74, 0.38),
     inset 0 1px 0 rgba(255, 255, 255, 0.14);
@@ -363,7 +363,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 
 [data-theme='mixed'] .dwh-sidebar-pin-btn.is-pinned {
   border-color: #3d9a72;
-  background: linear-gradient(180deg, #3f8066 0%, #2f5d4a 100%);
+  background: linear-gradient(180deg, #106ebe 0%, #0078d4 100%);
   color: #f4faf7;
 }
 
@@ -2157,7 +2157,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge.direct .react-flow__edge-path {
-  stroke: #2f6f55 !important;
+  stroke: #0078d4 !important;
   stroke-width: 2.4px !important;
 }
 
@@ -2180,7 +2180,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge marker path {
-  fill: #2f6f55;
+  fill: #0078d4;
 }
 
 .dwh-lineage-map .react-flow__edge.dwh-edge.report-link marker path {
@@ -2304,7 +2304,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   min-height: 48px;
   padding: 8px 12px 9px;
   border: 1px solid rgba(155, 184, 171, 0.72);
-  border-top: 3px solid #2f6f55;
+  border-top: 3px solid #0078d4;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.82);
   color: #43514a;
@@ -3502,7 +3502,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 .dwh-col-flow-legend i {
   width: 24px;
   height: 0;
-  border-top: 2px solid #2f6f55;
+  border-top: 2px solid #0078d4;
 }
 
 .dwh-col-flow-legend i.is-derived {
@@ -3545,7 +3545,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   gap: 3px;
   padding: 9px 12px 10px;
   border: 1px solid #dfe3e7;
-  border-left: 4px solid #2f6f55;
+  border-left: 4px solid #0078d4;
   border-radius: 8px;
   background: #fff;
   color: var(--ink);
@@ -3560,7 +3560,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: #2f6f55;
+  background: #0078d4;
   box-shadow: 0 0 0 3px rgba(47, 111, 85, 0.1);
   content: '';
 }
@@ -3570,8 +3570,8 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-node.is-target {
-  border-color: #2f6f55;
-  border-left-color: #2f6f55;
+  border-color: #0078d4;
+  border-left-color: #0078d4;
   background: #f1f7f4;
 }
 
@@ -3612,7 +3612,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
   width: 7px;
   height: 7px;
   border: 1px solid #fff;
-  background: #2f6f55;
+  background: #0078d4;
 }
 
 .dwh-col-flow-edge .react-flow__edge-path {
@@ -3621,7 +3621,7 @@ html.dwh-map-drawer-collapsed .main.dwh-main.main-map .dwh-header-metrics {
 }
 
 .dwh-col-flow-edge .dwh-column-edge-arrow {
-  fill: #2f6f55;
+  fill: #0078d4;
 }
 
 .dwh-col-flow-edge.is-derived .dwh-column-edge-arrow {
