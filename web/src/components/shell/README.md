@@ -11,6 +11,8 @@
  * | `ModuleSidebar.tsx` | Sol modül paneli + arama + drawer’lar |
  * | `StageVisitPath.tsx` | Harita üstü ziyaret yolu |
  * | `ServiceStage.tsx` | Seçili servisin sekmeli sahnesi |
+ * | `ServicesMainStage.tsx` | Orta sahne dallanması (süreç / klasör / servis) |
+ * | `ServicesWorkspace.tsx` | Sidebar + workspace sütunu |
  *
  * İlgili: docs/refactor-plan.md — Faz 1.
  */

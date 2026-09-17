@@ -1,3 +1,10 @@
+/**
+ * Süreç katalog şeması — legacy vs extended.
+ *
+ * extended: import sonrası `process.no` kolonu ayrı; legacy: numara `name` içinde.
+ * `process_definition` ve `node_descriptions` kolonları ayrı feature flag’ler
+ * (`hasProcessDefinitionColumn`, `hasNodeDescriptionsColumn`).
+ */
 import { INVENTORY_SCHEMA, query } from './db.js'
 
 export type ProcessCatalogSchema = 'legacy' | 'extended'

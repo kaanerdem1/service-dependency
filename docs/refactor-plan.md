@@ -90,11 +90,12 @@ server/src/
 
 
 
-### Faz 0 — Harita ve “README her klasörde” (1 PR, düşük risk)
+### Faz 0 — Harita ve “README her klasörde” (1 PR, düşük risk) ✅ tamam
 
-- [ ] `web/src/components/process/` altında süreç UI’sını toplamak için **boş klasör + README.md** (hangi dosya ne zaman taşınacak listesi).
-- [ ] `web/src/features/` veya mevcut yapıda **ARCHITECTURE.md** (web kökünde): yüzeyler, store’lar, event’ler tablosu.
-- [ ] `docs/refactor-plan.md` maddelerini issue/PR checklist’e bağla.
+- [x] `web/src/components/process/` — README (Faz 3 ile güncellendi).
+- [x] `web/ARCHITECTURE.md` — yüzeyler, store’lar, event’ler.
+- [x] `navigation/README.md`, `components/shell/README.md` genişletildi.
+- [x] PR checklist bu belgenin §7 bölümünde (issue açmadan kullanılabilir).
 
 **Çıktı:** Yeni gelen “nereye kod yazarım?” sorusunun cevabı.
 
@@ -102,7 +103,7 @@ server/src/
 
 
 
-### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 5. adım (selectPivot) tamam
+### Faz 1 — `App.tsx` parçalama (2–4 PR) ✅ tamam
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
@@ -114,7 +115,9 @@ server/src/
 | Render: kabuk JSX (sidebar + servis sahnesi) | `components/shell/*` | ✅ İlk dilim |
 | Seçim: pivot / metod / katalog / temizle | `navigation/useServiceSelection.ts` | ✅ Yapıldı |
 | Sahne verisi: servis + etki + metod grafı | `navigation/useServiceStageData.ts` | ✅ Yapıldı |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ JSX/dallanma hâlâ App’te (~950) |
+| Render: servis workspace | `components/shell/ServicesWorkspace.tsx` | ✅ Yapıldı |
+| Render: masthead + overlay | `AppMasthead`, `AppShellOverlays` | ✅ Yapıldı |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ ~780 satır (state + workspace props) |
 
 **Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
 kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
@@ -143,6 +146,11 @@ ayrı dosyalara taşındı. Satır ~1800 → ~1200.
 **Yapıldı (5. adım):** `useServiceSelection` — `selectPivot` / `selectMethod` /
 `selectCatalogNode` / `clearSelection` / workflow dönüşü; `useServiceStageData`
 pivot ve metod graf yüklemesi. Drawer başlangıcı `appShellHelpers.ts`.
+
+**Yapıldı (6–7. adım):** `ServicesWorkspace` + `ServicesMainStage`; `AppMasthead` +
+`AppShellOverlays`. Yeni servis seçimi her zaman Harita sekmesi (`useServiceSelection`).
+
+**Bitti sayılır:** İş kuralları `navigation/*`; App kabuk + persist + workspace prop bağlama.
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 
@@ -212,18 +220,18 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 
 
 
-### Faz 5 — CSS bölme (2–3 PR, görsel regresyon dikkat)
+### Faz 5 — CSS bölme (2–3 PR, görsel regresyon dikkat) ⏳ 1. dilim
 
 **Sorun:** Tek `App.css`.
 
 
-| Dosya                         | İçerik                                           |
-| ----------------------------- | ------------------------------------------------ |
-| `styles/shell.css`            | Sidebar, drawer, masthead                        |
-| `styles/process-flow.css`     | PF harita, rota çubuğu                           |
-| `styles/workflows-drawer.css` | sc-process-*, sc-route-*                         |
-| `styles/dwh.css`              | DWH stage                                        |
-| `App.css`                     | `@import` veya Vite’ta `main.tsx` import zinciri |
+| Dosya                         | İçerik                                           | Durum |
+| ----------------------------- | ------------------------------------------------ | ----- |
+| `styles/process-flow.css`     | PF harita, rota, `hl-*` (~2130 satır)            | ✅ |
+| `styles/shell.css`            | Sidebar, drawer, masthead                        | ⏳ |
+| `styles/workflows-drawer.css` | sc-process-*, sc-route-* (App.css içinde)        | ⏳ |
+| `styles/dwh.css`              | DWH stage — **refactor kapsam dışı taşıma**      | — |
+| `App.css`                     | `@import './styles/process-flow.css'` + geri kalan | ⏳ |
 
 
 **Kural:** Taşırken class adı **değiştirilmez** (sadece dosya taşınır).
@@ -232,13 +240,13 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 
 
 
-### Faz 6 — Sunucu `inventory/` (1–2 PR)
+### Faz 6 — Sunucu `inventory/` (1–2 PR) ✅ çekirdek doc
 
-- [ ] `processFlowService.ts`: featured süreç listesi vs arama — fonksiyon başına 1 satır Türkçe doc.
-- [ ] `parProcessParser.ts`: XML → graph; parser adımları numaralı yorum (audit ile uyumlu).
-- [ ] Ortak: `processCatalogSchema.ts` “extended vs legacy” tek paragraf.
+- [x] `processFlowService.ts` — modül + `listProcesses` doc.
+- [x] `parProcessParser.ts` — modül + adım özeti.
+- [x] `processCatalogSchema.ts` — extended vs legacy paragraf.
 
-**Bitti sayılır:** API route dosyası (`index.ts`) ince; iş mantığı service’te.
+**Bitti sayılır (doc):** Route ince kalması ayrı issue; parser/service davranışı değişmedi.
 
 ---
 

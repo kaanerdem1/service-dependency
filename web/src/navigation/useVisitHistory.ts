@@ -28,6 +28,7 @@
  * İlgili: docs/refactor-plan.md — Faz 1.
  */
 import { useCallback, useMemo, useState } from 'react'
+import type { StageTabId } from '../motion/StageTabs'
 import type { TrailAction, TrailEntry } from '../types'
 
 export type VisitEntry = {
@@ -61,6 +62,8 @@ type Params = {
   onClearMethod: () => void
   onRestoreProcessFlow: () => void
   setPivotId: (id: string) => void
+  /** Servis değişince sahne sekmesi — yeni pivot her zaman harita. */
+  setTab: (tab: StageTabId) => void
   /** Metod seçimini ve metod etki grafını temizler (`setSelectedMethodId(undefined)` + `setMethodImpact(undefined)`). */
   resetMethodSelection: () => void
   trail: TrailRecorder
@@ -76,6 +79,7 @@ export function useVisitHistory({
   onClearMethod,
   onRestoreProcessFlow,
   setPivotId,
+  setTab,
   resetMethodSelection,
   trail,
   serviceNameById,
@@ -99,6 +103,7 @@ export function useVisitHistory({
     const i = historyIndex - 1
     setNavDirection('back')
     setHistoryIndex(i)
+    setTab('map')
     setPivotId(history[i]!.id)
   }, [
     selectedMethodId,
@@ -109,6 +114,7 @@ export function useVisitHistory({
     historyIndex,
     history,
     setPivotId,
+    setTab,
   ])
 
   const goForward = useCallback(() => {
@@ -118,8 +124,9 @@ export function useVisitHistory({
     setNavDirection('forward')
     setHistoryIndex(i)
     resetMethodSelection()
+    setTab('map')
     setPivotId(history[i]!.id)
-  }, [historyIndex, history, trail, resetMethodSelection, setPivotId])
+  }, [historyIndex, history, trail, resetMethodSelection, setPivotId, setTab])
 
   const selectVisitIndex = useCallback(
     (i: number) => {
@@ -127,9 +134,10 @@ export function useVisitHistory({
       setNavDirection(i < historyIndex ? 'back' : 'forward')
       setHistoryIndex(i)
       resetMethodSelection()
+      setTab('map')
       setPivotId(history[i]!.id)
     },
-    [history, historyIndex, resetMethodSelection, setPivotId],
+    [history, historyIndex, resetMethodSelection, setPivotId, setTab],
   )
 
   const saveMapViewState = useCallback(

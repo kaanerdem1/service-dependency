@@ -1,3 +1,10 @@
+/**
+ * Süreç kataloğu API — listeleme, arama, graf yükleme.
+ *
+ * Ne yapar: DB’den süreç satırlarını okur; XML varsa `parProcessParser` ile
+ *   `ProcessFlowGraph` üretir; drawer featured listesi (`FEATURED_PROCESS_NOS`).
+ * Ne yapmaz: XML parse detayı burada değil (`parProcessParser.ts`).
+ */
 import { query, tableName } from './db.js'
 import {
   sqlProcessDescriptionTr,
@@ -47,6 +54,7 @@ async function flowReadySql(prefix = ''): Promise<string> {
   return `AND ${p}process_definition IS NOT NULL`
 }
 
+/** Tüm / arama ile süreç listesi (drawer katalog). */
 export async function listProcesses(q?: string): Promise<ProcessListItem[]> {
   const schema = await getProcessCatalogSchema()
   const needle = q?.trim() ?? ''

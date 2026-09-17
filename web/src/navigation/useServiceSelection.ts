@@ -6,7 +6,8 @@
  * Ne yapmaz: Graf yüklemez (o `useServiceStageData`); süreç rotasını yönetmez
  *   (`useProcessFlowNav` — `selectPivotRef` ile bağlanır).
  * Kural: Aynı servise ağaçtan tekrar tıklamak seçimi kapatır; workflow kaynağı
- *   hariç. Kayıt sırası / geçmiş yığını `visitEntry` ile push edilir.
+ *   hariç. Yeni servis seçimi her zaman Harita sekmesinden açılır (tablo /
+ *   servis işlevi vb. son sekme hatırlanmaz).
  */
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { pushServiceRecent } from '../serviceRecents'
@@ -220,6 +221,7 @@ export function useServiceSelection({
       setSelectedMethodId(undefined)
       setMethodImpact(undefined)
       setAllowNavCollapse(true)
+      setTab('map')
       if (opts?.resetHistory) {
         setNavDirection(null)
         setHistory([visitEntry(id)])
@@ -242,7 +244,16 @@ export function useServiceSelection({
         pushServiceRecent(id, label).map((r) => ({ id: r.id, name: r.name })),
       )
     },
-    [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
+    [
+      clearSelection,
+      history,
+      historyIndex,
+      pivotId,
+      selectedMethodId,
+      trail,
+      catalogServices,
+      setTab,
+    ],
   )
   selectPivotRef.current = selectPivot
 

@@ -1,3 +1,10 @@
+/**
+ * PAR/jBPM süreç tanımı (XML) → UI grafı.
+ *
+ * Adımlar (özet): 1) XML parse 2) düğüm/kenar çıkarımı 3) dummy/hub
+ *   birleştirmeleri 4) layout koordinatları 5) karar handler kuralları.
+ * Audit: `processParseAudit.ts` ile uyumlu kalır; davranış değişince audit güncellenir.
+ */
 import { ELEMENT_SIZES, layoutProcess, type BpmnElementType, type BpmnFlowElement, type BpmnProcess } from '@bpmnkit/core'
 
 export type ProcessFlowNodeKind =

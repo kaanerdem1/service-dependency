@@ -18,8 +18,8 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { AnimatePresence, LayoutGroup } from 'motion/react'
-import { MotionBanner, MotionToast } from './motion/MotionToast'
+import { LayoutGroup } from 'motion/react'
+import { MotionBanner } from './motion/MotionToast'
 import { buildServiceStageTabs, type StageTabId } from './motion/StageTabs'
 import {
   packageLabelsFromTree,
@@ -27,26 +27,12 @@ import {
   projectLabelsFromTree,
   projectsInImpact,
 } from './impact/projectFilter'
-import { ChangeRequestModal } from './components/ChangeRequestModal'
-import { InboxPanel } from './components/InboxPanel'
-import { CatalogEntityOverview } from './components/CatalogEntityOverview'
-import { CommandPalette } from './components/CommandPalette'
-import { WelcomeScreen } from './components/WelcomeScreen'
-import { RequestDetailModal } from './components/RequestDetailModal'
 import { DwhPage } from './dwh/DwhPage'
-import {
-  APP_THEME_KEY,
-  readAppTheme,
-  themeLabel,
-  type AppTheme,
-} from './theme'
-import { ThemeSwitch } from './components/ThemeSwitch'
-import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
-import { WorkflowInfoPage } from './components/WorkflowInfoPage'
-import { ProcessFlowPage } from './components/ProcessFlowPage'
-import { InboxIcon } from './components/shell/sidebarIcons'
-import { ModuleSidebar } from './components/shell/ModuleSidebar'
-import { ServiceStage } from './components/shell/ServiceStage'
+import { APP_THEME_KEY, readAppTheme, type AppTheme } from './theme'
+import { type AppSurface } from './components/SurfaceSwitch'
+import { AppMasthead } from './components/shell/AppMasthead'
+import { AppShellOverlays } from './components/shell/AppShellOverlays'
+import { ServicesWorkspace } from './components/shell/ServicesWorkspace'
 import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
 import { useNavDrawers } from './navigation/useNavDrawers'
 import {
@@ -262,6 +248,7 @@ export default function App() {
     onClearMethod: clearMethodKeepService,
     onRestoreProcessFlow: restoreProcessFlowFromService,
     setPivotId,
+    setTab,
     resetMethodSelection,
     trail,
     serviceNameById,
@@ -654,55 +641,16 @@ export default function App() {
         className={`app-frame${navExpanded ? ' sidebar-panel-open' : ' is-nav-collapsed'}${surface === 'dwh' ? ' is-dwh-surface' : ''}`}
         style={appFrameStyle}
       >
-        <header className="app-masthead">
-          <div className="app-masthead-left">
-            <SurfaceSwitch surface={surface} onSurfaceChange={setSurface} />
-          </div>
-          <div className="app-masthead-brand-wrap">
-            <div className="app-brand">
-              <img className="brand-mark brand-logo" src="/dwh-logo.png" alt="" aria-hidden />
-              <div className="app-brand-copy">
-                <strong>{surface === 'dwh' ? 'DWH Katalog' : 'Servis Kataloğu'}</strong>
-                <span className="brand-tagline">
-                  {surface === 'dwh'
-                    ? 'Tablo, kolon ve rapor lineage kataloğu'
-                    : 'Servis bağımlılıkları ve değişiklik etkisi'}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="app-masthead-actions">
-            <ThemeSwitch
-              theme={appTheme}
-              onChange={(next) => {
-                trail.record(
-                  'theme_toggle',
-                  undefined,
-                  `${themeLabel(appTheme)} → ${themeLabel(next)}`,
-                )
-                setAppTheme(next)
-              }}
-            />
-            {surface === 'services' && session ? (
-              <button
-                type="button"
-                className="masthead-icon-btn"
-                aria-label={
-                  inbox && inbox.pending > 0
-                    ? `Gelen kutusu, ${inbox.pending} okunmamış`
-                    : 'Gelen kutusu'
-                }
-                title="Gelen kutusu"
-                onClick={() => setInboxOpen(true)}
-              >
-                <InboxIcon />
-                {inbox && inbox.pending > 0 ? (
-                  <span className="masthead-icon-badge">{inbox.pending}</span>
-                ) : null}
-              </button>
-            ) : null}
-          </div>
-        </header>
+        <AppMasthead
+          surface={surface}
+          onSurfaceChange={setSurface}
+          appTheme={appTheme}
+          onThemeChange={setAppTheme}
+          trail={trail}
+          session={session}
+          inboxPending={inbox?.pending}
+          onOpenInbox={() => setInboxOpen(true)}
+        />
 
         <div className="app-frame-body">
         {surface === 'dwh' ? (
@@ -712,278 +660,224 @@ export default function App() {
             </div>
           </div>
         ) : (
-        <>
-        <ModuleSidebar
-          navExpanded={navExpanded}
-          navPinned={navPinned}
-          allowNavCollapse={allowNavCollapse}
-          onNavHoverChange={setNavHover}
-          shortcutsOpen={shortcutsOpen}
-          workflowsOpen={workflowsOpen}
-          onToggleShortcuts={() => {
-            setWorkflowsOpen(false)
-            setShortcutsOpen((v) => !v)
-          }}
-          onToggleWorkflows={() => {
-            setShortcutsOpen(false)
-            setWorkflowsOpen((v) => !v)
-          }}
-          onTogglePin={toggleNavPinned}
-          onResizePointerDown={startNavResize}
-          searchRef={searchRef}
-          query={query}
-          onQueryChange={setQuery}
-          hits={hits}
-          methodHits={methodHits}
-          appTheme={appTheme}
-          onOpenCommandPalette={() => setCmdkOpen(true)}
-          onSelectServiceFromSearch={(id) => {
-            selectPivot(id, { resetHistory: true, source: 'search' })
-            setQuery('')
-          }}
-          onSelectMethod={selectMethod}
-          tree={tree}
-          pivotId={pivotId}
-          pivotName={service?.name}
-          selectedMethodId={selectedMethodId}
-          catalogNodeId={catalogNode?.id}
-          sidebarBodyRef={sidebarBodyRef}
-          showNonServiceMethods={showNonServiceMethods}
-          onShowNonServiceMethodsChange={setShowNonServiceMethods}
-          treePinServiceId={treePinServiceId}
-          onClearPin={() => setTreePinServiceId(undefined)}
-          onSelectCatalogNode={selectCatalogNode}
-          onSelectServiceFromTree={(id) =>
-            selectPivot(id, { resetHistory: true, source: 'tree' })
-          }
-          mapExpanded={mapExpanded}
-          onCloseShortcuts={() => setShortcutsOpen(false)}
-          onCloseWorkflows={() => setWorkflowsOpen(false)}
-          onOpenFolder={openWorkflowFolder}
-          onOpenProcess={openProcessFlow}
-          onOpenProcessRoute={openProcessRoute}
-          workflowInfoId={workflowInfoId}
-          processFlowNo={processFlowNo}
-          processRouteId={processRouteId}
-          canEditCatalog={canEditCatalog}
-          setTreePinServiceId={setTreePinServiceId}
-          setQuery={setQuery}
-          selectPivot={selectPivot}
-        />
-
-        <div className="workspace-column">
-          <div className="workspace" ref={workspaceRef}>
-          <main
-          className={`main${hasServiceSelection && tab === 'map' ? ' main-map' : ''}${hasServiceSelection && isCatalogTab ? ' main-overview' : ''}${catalogNode && !pivotId ? ' main-catalog-entity' : ''}${workflowInfoId && !processFlowNo ? ' main-catalog-entity main-overview' : ''}${processFlowNo ? ' main-process-flow' : ''}${!hasSelection ? ' is-empty' : ''}`}
-          ref={mainRef}
-        >
-          {!hasSelection && <WelcomeScreen />}
-
-          {processFlowNo ? (
-            <div className="stage-body pf-map-stage">
-              <ProcessFlowPage
-                processNo={processFlowNo}
-                routeId={processRouteId}
-                onRouteSaved={setProcessRouteId}
-                initialSelectedNodeId={processFlowRestoreNodeId}
-                onRestoreConsumed={consumeRestoreNode}
-                onOpenService={openServiceFromProcessFlow}
-                onOpenSubProcess={openSubProcessFromFlow}
-                canGoBack={processFlowStack.length > 0}
-                onBackToParent={backToParentProcessFlow}
-                onDismiss={dismissProcessFlow}
-              />
-            </div>
-          ) : null}
-
-          {workflowInfoId && !processFlowNo ? (
-            <div className="stage-body wf-info-stage">
-              <WorkflowInfoPage
-                folderId={workflowInfoId}
-                onOpenFolder={openWorkflowFolder}
-                onSelectService={(id) => {
-                  setWorkflowResumeId(workflowInfoId)
-                  setTreePinServiceId(undefined)
-                  setQuery('')
-                  selectPivot(id, { resetHistory: true, source: 'workflow' })
-                }}
-                onDismiss={() => setWorkflowInfoId(undefined)}
-                canEdit={canEditCatalog}
-              />
-            </div>
-          ) : null}
-
-          {catalogNode && !pivotId && !workflowInfoId && !processFlowNo ? (
-            <div className="stage-body">
-              <CatalogEntityOverview
-                nodeId={catalogNode.id}
-                kind={catalogNode.kind}
-                onSelectGroup={(id, name) => selectCatalogNode({ id, kind: 'group', name })}
-                onSelectJar={(id, name) => selectCatalogNode({ id, kind: 'package', name })}
-                onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'tree' })}
-                onDismiss={clearSelection}
-              />
-            </div>
-          ) : null}
-
-          {hasServiceSelection && (
-            <ServiceStage
-              service={service}
-              pivotId={pivotId}
-              tab={tab}
-              stageTabs={stageTabs}
-              stageTopRef={stageTopRef}
-              isFavorite={isFavorite}
-              onToggleFavorite={toggleFavorite}
-              onOpenWorkflowFolder={(folderId) => {
-                setShortcutsOpen(false)
+          <ServicesWorkspace
+            workspaceRef={workspaceRef}
+            sidebar={{
+              navExpanded,
+              navPinned,
+              allowNavCollapse,
+              onNavHoverChange: setNavHover,
+              shortcutsOpen,
+              workflowsOpen,
+              onToggleShortcuts: () => {
                 setWorkflowsOpen(false)
-                openWorkflowFolder(folderId)
-              }}
-              onOpenWorkflowsRoot={() => {
+                setShortcutsOpen((v) => !v)
+              },
+              onToggleWorkflows: () => {
                 setShortcutsOpen(false)
-                setWorkflowInfoId(undefined)
-                setWorkflowsOpen(true)
-              }}
-              workflowResumeId={workflowResumeId}
-              onReturnToWorkflow={returnToWorkflow}
-              onClearSelection={clearSelection}
-              session={session}
-              onOpenChangeRequest={() => setCrOpen(true)}
-              trail={trail}
-              setTab={setTab}
-              setMapExpanded={setMapExpanded}
-              visitSteps={visitSteps}
-              historyIndex={historyIndex}
-              historyLength={history.length}
-              onSelectVisitIndex={selectVisitIndex}
-              selectedMethodId={selectedMethodId}
-              methodImpact={methodImpact}
-              mapExpanded={mapExpanded}
-              onSelectMethod={selectMethod}
-              onClearMethod={clearMethodKeepService}
-              selectPivot={selectPivot}
-              goBack={goBack}
-              goForward={goForward}
-              processFlowReturn={processFlowReturn}
-              impact={impact}
-              mapForceLtrSignal={mapForceLtrSignal}
-              impactProjectOptions={impactProjectOptions}
-              impactPackageOptions={impactPackageOptions}
-              onBrowseMethods={browseServiceMethods}
-              onLeaveServiceSelection={leaveServiceSelection}
-              currentVisit={currentVisit}
-              onViewStateChange={saveMapViewState}
-              navDirection={navDirection}
-              onNavDirectionConsumed={() => setNavDirection(null)}
-              mapRootRef={mapRootRef}
-              onBeforeSnapshot={flushSnapshotChrome}
-              onSnapshotToast={setSnapshotToast}
-              loading={loading}
-              affected={affected}
-              callees={callees}
-              tableProjectFilter={tableProjectFilter}
-              projectLabels={projectLabels}
-              packageLabels={packageLabels}
-              onClearProjectFilter={() => setTableProjectFilter(undefined)}
-              setTableProjectFilter={setTableProjectFilter}
-              screens={screens}
-              processes={processes}
-              catalogLinksLoading={catalogLinksLoading}
-              canEditCatalog={canEditCatalog}
-              onOpenProcessKeepService={(no) => openProcessFlow(no, { keepService: true })}
-            />
-          )}
-        </main>
-          </div>
-        </div>
-        </>
+                setWorkflowsOpen((v) => !v)
+              },
+              onTogglePin: toggleNavPinned,
+              onResizePointerDown: startNavResize,
+              searchRef,
+              query,
+              onQueryChange: setQuery,
+              hits,
+              methodHits,
+              appTheme,
+              onOpenCommandPalette: () => setCmdkOpen(true),
+              onSelectServiceFromSearch: (id) => {
+                selectPivot(id, { resetHistory: true, source: 'search' })
+                setQuery('')
+              },
+              onSelectMethod: selectMethod,
+              tree,
+              pivotId,
+              pivotName: service?.name,
+              selectedMethodId,
+              catalogNodeId: catalogNode?.id,
+              sidebarBodyRef,
+              showNonServiceMethods,
+              onShowNonServiceMethodsChange: setShowNonServiceMethods,
+              treePinServiceId,
+              onClearPin: () => setTreePinServiceId(undefined),
+              onSelectCatalogNode: selectCatalogNode,
+              onSelectServiceFromTree: (id) =>
+                selectPivot(id, { resetHistory: true, source: 'tree' }),
+              mapExpanded,
+              onCloseShortcuts: () => setShortcutsOpen(false),
+              onCloseWorkflows: () => setWorkflowsOpen(false),
+              onOpenFolder: openWorkflowFolder,
+              onOpenProcess: openProcessFlow,
+              onOpenProcessRoute: openProcessRoute,
+              workflowInfoId,
+              processFlowNo,
+              processRouteId,
+              canEditCatalog,
+              setTreePinServiceId,
+              setQuery,
+              selectPivot,
+            }}
+            stage={{
+              mainRef,
+              hasSelection,
+              hasServiceSelection,
+              tab,
+              pivotId,
+              isCatalogTab,
+              catalogNode,
+              workflowInfoId,
+              processFlow: processFlowNo
+                ? {
+                    processNo: processFlowNo,
+                    routeId: processRouteId,
+                    restoreNodeId: processFlowRestoreNodeId,
+                    stackDepth: processFlowStack.length,
+                    onRouteSaved: setProcessRouteId,
+                    onRestoreConsumed: consumeRestoreNode,
+                    onOpenService: openServiceFromProcessFlow,
+                    onOpenSubProcess: openSubProcessFromFlow,
+                    onBackToParent: backToParentProcessFlow,
+                    onDismiss: dismissProcessFlow,
+                  }
+                : null,
+              canEditCatalog,
+              selectPivot,
+              selectCatalogNode,
+              clearSelection,
+              openWorkflowFolder,
+              onWorkflowSelectService: (id) => {
+                setWorkflowResumeId(workflowInfoId)
+                setTreePinServiceId(undefined)
+                setQuery('')
+                selectPivot(id, { resetHistory: true, source: 'workflow' })
+              },
+              onDismissWorkflow: () => setWorkflowInfoId(undefined),
+              serviceStage: hasServiceSelection
+                ? {
+                    service,
+                    pivotId,
+                    tab,
+                    stageTabs,
+                    stageTopRef,
+                    isFavorite,
+                    onToggleFavorite: toggleFavorite,
+                    onOpenWorkflowFolder: (folderId) => {
+                      setShortcutsOpen(false)
+                      setWorkflowsOpen(false)
+                      openWorkflowFolder(folderId)
+                    },
+                    onOpenWorkflowsRoot: () => {
+                      setShortcutsOpen(false)
+                      setWorkflowInfoId(undefined)
+                      setWorkflowsOpen(true)
+                    },
+                    workflowResumeId,
+                    onReturnToWorkflow: returnToWorkflow,
+                    onClearSelection: clearSelection,
+                    session,
+                    onOpenChangeRequest: () => setCrOpen(true),
+                    trail,
+                    setTab,
+                    setMapExpanded,
+                    visitSteps,
+                    historyIndex,
+                    historyLength: history.length,
+                    onSelectVisitIndex: selectVisitIndex,
+                    selectedMethodId,
+                    methodImpact,
+                    mapExpanded,
+                    onSelectMethod: selectMethod,
+                    onClearMethod: clearMethodKeepService,
+                    selectPivot,
+                    goBack,
+                    goForward,
+                    processFlowReturn,
+                    impact,
+                    mapForceLtrSignal,
+                    impactProjectOptions,
+                    impactPackageOptions,
+                    onBrowseMethods: browseServiceMethods,
+                    onLeaveServiceSelection: leaveServiceSelection,
+                    currentVisit,
+                    onViewStateChange: saveMapViewState,
+                    navDirection,
+                    onNavDirectionConsumed: () => setNavDirection(null),
+                    mapRootRef,
+                    onBeforeSnapshot: flushSnapshotChrome,
+                    onSnapshotToast: setSnapshotToast,
+                    loading,
+                    affected,
+                    callees,
+                    tableProjectFilter,
+                    projectLabels,
+                    packageLabels,
+                    onClearProjectFilter: () => setTableProjectFilter(undefined),
+                    setTableProjectFilter,
+                    screens,
+                    processes,
+                    catalogLinksLoading,
+                    canEditCatalog,
+                    onOpenProcessKeepService: (no) => openProcessFlow(no, { keepService: true }),
+                  }
+                : null,
+            }}
+          />
         )}
         </div>
       </div>
 
-      <MotionToast open={!!snapshotToast}>
-        {snapshotToast}
-        <button type="button" onClick={() => setSnapshotToast(undefined)}>
-          ×
-        </button>
-      </MotionToast>
-
-      <CommandPalette
-        open={cmdkOpen}
-        theme={appTheme}
-        onOpenChange={setCmdkOpen}
-        frequent={frequentRecents}
-        visitTrail={visitTrailForCmdk}
-        onSelectService={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
+      <AppShellOverlays
+        snapshotToast={snapshotToast}
+        onDismissSnapshotToast={() => setSnapshotToast(undefined)}
+        cmdkOpen={cmdkOpen}
+        onCmdkOpenChange={setCmdkOpen}
+        appTheme={appTheme}
+        frequentRecents={frequentRecents}
+        visitTrailForCmdk={visitTrailForCmdk}
+        onSelectServiceFromCmdk={(id) => selectPivot(id, { resetHistory: true, source: 'search' })}
         onSelectMethod={selectMethod}
         onOpenInbox={() => setInboxOpen(true)}
-        onOpenFavorites={() => {
+        onToggleFavoritesDrawer={() => {
           setWorkflowsOpen(false)
           setShortcutsOpen((v) => !v)
         }}
-        onOpenWorkflows={() => {
+        onToggleWorkflowsDrawer={() => {
           setShortcutsOpen(false)
           setWorkflowsOpen((v) => !v)
         }}
+        crOpen={crOpen}
+        service={service}
+        session={session}
+        affected={affected}
+        buildSnapshotContext={makeSnapshotContext}
+        onCloseCr={() => setCrOpen(false)}
+        onCrCreated={() => {
+          setCrOpen(false)
+          setSnapshotToast('Talep açıldı — Snapshot sekmesinden PNG indirebilirsiniz')
+          void refreshInbox()
+        }}
+        inboxOpen={inboxOpen}
+        inbox={inbox}
+        onOpenRequest={(id) => void openRequestDetail(id, true)}
+        onCloseInbox={() => setInboxOpen(false)}
+        onMarkInboxRead={() => {
+          if (!session) return
+          void markInboxRead(session.id).then(() => refreshInbox())
+        }}
+        requestDetail={requestDetail}
+        returnToInbox={returnToInbox}
+        onBackToInbox={backToInbox}
+        onCloseRequestDetail={() => {
+          if (returnToInbox) backToInbox()
+          else setRequestDetail(undefined)
+        }}
+        onRequestUpdated={(req) => {
+          setRequestDetail(req)
+          setSnapshotToast('Onay kaydedildi — snapshot alındı')
+          void refreshInbox()
+        }}
       />
-
-      <AnimatePresence>
-      {crOpen && service && session && (
-        <ChangeRequestModal
-          key="cr-modal"
-          service={service}
-          affected={affected}
-          session={session}
-          buildSnapshotContext={makeSnapshotContext}
-          onClose={() => setCrOpen(false)}
-          onCreated={() => {
-            setCrOpen(false)
-            setSnapshotToast(
-              'Talep açıldı — Snapshot sekmesinden PNG indirebilirsiniz',
-            )
-            void refreshInbox()
-          }}
-        />
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-      {inboxOpen && session && inbox && (
-        <InboxPanel
-          key="inbox-panel"
-          actions={inbox.actions}
-          updates={inbox.updates}
-          onOpen={(id) => void openRequestDetail(id, true)}
-          onClose={() => setInboxOpen(false)}
-          onMarkRead={() => {
-            if (!session) return
-            void markInboxRead(session.id).then(() => refreshInbox())
-          }}
-        />
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-      {requestDetail && session && (
-        <RequestDetailModal
-          key={`request-${requestDetail.id}`}
-          request={requestDetail}
-          session={session}
-          buildSnapshotContext={makeSnapshotContext}
-          onBackToInbox={returnToInbox ? backToInbox : undefined}
-          onClose={() => {
-            if (returnToInbox) backToInbox()
-            else setRequestDetail(undefined)
-          }}
-          onUpdated={(req) => {
-            setRequestDetail(req)
-            setSnapshotToast('Onay kaydedildi — snapshot alındı')
-            void refreshInbox()
-          }}
-        />
-      )}
-      </AnimatePresence>
     </div>
     </LayoutGroup>
   )
