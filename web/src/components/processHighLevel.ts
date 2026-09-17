@@ -1,3 +1,7 @@
+/**
+ * KTF yüksek seviye blok modeli (gruplar, çatallar) — demo / özet görünüm verisi.
+ * Kullanan: `ProcessHighLevelView.tsx`. Tam canvas: `ProcessFlowMap`.
+ */
 import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 
 export type HlKind = ProcessFlowNodeKind | 'group'

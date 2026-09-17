@@ -1,3 +1,7 @@
+/**
+ * Favoriler drawer — servis kısayolları, arama, pin.
+ * Kullanan: `ModuleSidebar.tsx`. Store: `serviceShortcuts.ts`, `useServiceFavorites`.
+ */
 import {
   useCallback,
   useEffect,

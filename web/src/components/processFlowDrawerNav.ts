@@ -1,3 +1,9 @@
+/**
+ * Süreç düğümü drawer — gelen/giden geçiş listeleri.
+ *
+ * Ne yapar: Graf kenarlarından transition listesi; detay drawer ve Map vurgusu.
+ * Ne yapmaz: Layout veya rota state. İlgili: `ProcessFlowDetailDrawer.tsx`.
+ */
 import type {
   ProcessFlowGraph,
   ProcessIncomingTransition,

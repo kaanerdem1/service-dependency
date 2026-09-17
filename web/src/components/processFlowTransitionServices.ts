@@ -1,3 +1,7 @@
+/**
+ * Geçiş etiketlerinden servis adayları çıkarımı.
+ * Kullanan: `ProcessFlowMap` kenar tooltip / servis ipuçları.
+ */
 import type { ProcessNodeDetails, ProcessDetailGroup } from '../types'
 import { transitionCaption } from './processUserRoute'
 

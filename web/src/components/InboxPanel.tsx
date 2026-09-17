@@ -1,5 +1,6 @@
 /**
  * Inbox: Yapman gerekenler + Açtığın talepler (iki bölüm).
+ * Kullanan: `AppShellOverlays.tsx`. API: `getInbox`.
  */
 import { useMemo, useState } from 'react'
 import { EmptyState } from './EmptyState'

@@ -1,3 +1,7 @@
+/**
+ * Süreç düğümü sağ drawer — detay, geçişler, düğüm notu (PATCH API).
+ * Kullanan: `ProcessFlowMap`, `ProcessFlowRouteBuilder`.
+ */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { patchProcessNodeDescriptions, resolveProcessRefs, resolveServiceNames } from '../api/client'
 import type {

@@ -1,3 +1,7 @@
+/**
+ * Grup/jar katalog özeti (proje veya paket seçilince orta sahne).
+ * Kullanan: `ServicesMainStage.tsx`. API: `getCatalogGroupDetail`, `getCatalogArtifactDetail`.
+ */
 import { animate, useReducedMotion } from 'motion/react'
 import { useEffect, useMemo, useState } from 'react'
 import {

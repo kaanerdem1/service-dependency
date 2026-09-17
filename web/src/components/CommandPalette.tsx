@@ -1,3 +1,7 @@
+/**
+ * Komut paleti (⌘K) — servis/metod arama ve kısayollar.
+ * Kullanan: `AppShellOverlays.tsx`. Stil: `styles/cmdk.css`.
+ */
 import { Command } from 'cmdk'
 import { useEffect, useMemo, useState } from 'react'
 import { searchMethods, searchServices } from '../api/client'

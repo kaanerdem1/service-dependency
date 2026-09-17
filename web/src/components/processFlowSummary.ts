@@ -1,3 +1,7 @@
+/**
+ * Süreç grafı kısa özet metni (başlık, adım sayısı).
+ * Kullanan: `ProcessFlowMap` üst bilgi / arama bağlamı.
+ */
 import type { ProcessFlowGraph } from '../types'
 
 export type ProcessFlowSummary = {

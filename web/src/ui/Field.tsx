@@ -1,3 +1,7 @@
+/**
+ * Label + input/textarea — paylaşılan form alanı.
+ * Kullanan: DWH ve modallar. Stil: `ui/ui.css`. Rehber: [rehber.md](./rehber.md)
+ */
 import type { ReactNode, TextareaHTMLAttributes, InputHTMLAttributes } from 'react'
 
 type BaseProps = {

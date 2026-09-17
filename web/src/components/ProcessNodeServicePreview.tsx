@@ -1,4 +1,7 @@
-/** Düğüm kutusunda: birincil servis + fazlası varsa "+N servis" (ikon yok). */
+/**
+ * Map düğüm kartında servis satırı (+N).
+ * Kullanan: `ProcessFlowMap` node renderer.
+ */
 export function ProcessNodeServicePreview({ services }: { services: string[] }) {
   if (services.length === 0) return null
   const title = services.join(', ')

@@ -1,3 +1,12 @@
+/**
+ * Tam BPM akışı canvas — React Flow.
+ *
+ * Ne yapar: API grafını çizer; arama, not, detay drawer, path snapshot PDF.
+ * Layout: `graph.no !== '105116'` → `layeredLayout()` (otomatik); KTF →
+ *   `processFlowReferenceLayout.ts` koordinat override + aynı ok mantığı.
+ * Ne yapmaz: Kayıtlı rota modu (`ProcessFlowRouteBuilder`).
+ * İlgili: [process/rehber.md](./process/rehber.md)
+ */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,

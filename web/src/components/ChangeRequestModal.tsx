@@ -1,6 +1,7 @@
 /**
  * Mevcut servis için değişiklik talebi formu.
  * Onay listesi = hop-1 downstream (affected); her etkilenen için ayrı task açılır.
+ * Kullanan: `AppShellOverlays.tsx` → `ServiceStage` “Talep aç”.
  */
 import { useMemo, useState } from 'react'
 import type { AffectedService, Service } from '../types'

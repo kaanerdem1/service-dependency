@@ -1,3 +1,11 @@
+/**
+ * Kayıtlı / oluşturulan akış rotası canvas.
+ *
+ * Ne yapar: `processUserRoute` state ile prefix yol; geçiş seçimi, rota çubuğu,
+ *   kaydet (`useSaveProcessRoute`). Layout rota ziyaretlerine göre dinamik.
+ * Ne yapmaz: Tam graf keşfi (`ProcessFlowMap`). KTF referans koordinat dosyasına bağlı değil.
+ * İlgili: [process/rehber.md](./process/rehber.md)
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import ReactFlow, {

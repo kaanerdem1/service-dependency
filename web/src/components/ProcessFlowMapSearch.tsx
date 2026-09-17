@@ -1,3 +1,7 @@
+/**
+ * Tam akış haritası arama kutusu (sonraki/önceki eşleşme).
+ * Kullanan: `ProcessFlowMap.tsx`.
+ */
 type Props = {
   query: string
   onQueryChange: (value: string) => void

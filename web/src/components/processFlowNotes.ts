@@ -1,3 +1,9 @@
+/**
+ * Süreç haritası yapışkan notları (localStorage).
+ *
+ * Ne yapar: Not CRUD + boyut sabitleri. `ProcessFlowMap` canvas üzerinde gösterir.
+ * Ne yapmaz: Sunucuya yazmaz (Faz 7: `process_map_note` hedefi).
+ */
 export type ProcessFlowNote = {
   id: string
   text: string

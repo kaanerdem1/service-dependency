@@ -1,3 +1,7 @@
+/**
+ * Süreç ekranları listesi (servis ekran linkleri).
+ * Kullanan: `ProcessFlowDetailDrawer`.
+ */
 import { useEffect, useRef } from 'react'
 import type { ServiceScreenLink } from '../types'
 

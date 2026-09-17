@@ -1,3 +1,7 @@
+/**
+ * Boş seçim — hoş geldin ve mini ürün turu.
+ * Kullanan: `ServicesMainStage.tsx` (`!hasSelection`).
+ */
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useState } from 'react'
 import { springSoft } from '../motion/config'

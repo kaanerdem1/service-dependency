@@ -1,6 +1,10 @@
 /**
  * Servis etki haritası (React Flow, gelişmiş görünüm).
  *
+ * Ne yapar: Merkez servis + etki hop sütunları; cascade kenarlar, katman, proje filtresi.
+ * Ne yapmaz: BPM süreç haritası (`ProcessFlowMap`). Layout: `impact/mapLayout.ts`.
+ * CSS: `App.css` (harita kuralları). Kullanan: `MapStage.tsx` → `ServiceStage.tsx`.
+ *
  * - Merkez solda; hop sütunları sağa doğru
  * - Yeşil ok = ana etki yolu; turuncu kesikli = yan (cascade) bağ
  * - Katman aç/kapa, proje filtresi, “bağlı methodları göster”

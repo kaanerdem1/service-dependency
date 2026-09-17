@@ -1,3 +1,10 @@
+/**
+ * İş akışları drawer — composition root.
+ *
+ * Ne yapar: `workflows/*` parçalarını birleştirir (katalog, rotalar, klasör, arama).
+ * Ne yapmaz: Store mantığı `workflowStore.ts` / `processRouteStore.ts`; süreç açma App’te.
+ * İlgili: [workflows/rehber.md](./workflows/rehber.md), `ModuleSidebar.tsx`.
+ */
 import {
   useCallback,
   useEffect,

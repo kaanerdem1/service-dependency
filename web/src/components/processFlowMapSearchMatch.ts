@@ -1,3 +1,7 @@
+/**
+ * Harita içi arama — düğüm adı / id eşlemesi.
+ * Kullanan: `ProcessFlowMapSearch.tsx` → `ProcessFlowMap`.
+ */
 import type { ProcessFlowGraph } from '../types'
 
 function isDummyId(id: string) {

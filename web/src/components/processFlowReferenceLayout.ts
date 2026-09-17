@@ -1,4 +1,17 @@
-// Generated from the approved KTF reference HTML; node content remains rendered by React.
+/**
+ * KTF (süreç no 105116) — onaylı piksel yerleşim ve ok rotası referansı.
+ *
+ * Ne yapar: `ProcessFlowMap.positionsFor` / `routeFor` bu sözlükleri **yalnızca
+ * graph.no === '105116'** iken kullanır; düğüm koordinatları ve bazı
+ * direct/jump/back sınıfları bankanın HTML referansından türetilmiş sabit veridir.
+ * Ne yapmaz: Diğer BPM süreçleri için layout üretmez — onlar `layeredLayout()`
+ * ile otomatik çizilir. İçerik (düğüm metni, servisler) yine API/XML + React.
+ *
+ * Neden elle: KTF çok dallı; otomatik layout okları üst üste bindiriyordu. Referans
+ * HTML’den üretilmiş koordinat dosyası (güncelleme: referans değişince yeniden export).
+ *
+ * İlgili: `ProcessFlowMap.tsx`, [process/rehber.md](./process/rehber.md)
+ */
 export const KTF_REFERENCE_POSITIONS: Record<string, { x: number; y: number }> = {
   "start": {
     "x": 60,

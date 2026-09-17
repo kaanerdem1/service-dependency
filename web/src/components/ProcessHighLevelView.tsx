@@ -1,3 +1,7 @@
+/**
+ * Süreç yüksek seviye UI (gruplu kartlar). API grafından türetir; tam harita değil.
+ * İlgili: `processHighLevel.ts`, [process/rehber.md](./process/rehber.md)
+ */
 import { useMemo, useState } from 'react'
 import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 import {

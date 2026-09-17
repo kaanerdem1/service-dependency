@@ -1,3 +1,7 @@
+/**
+ * Servis katalog sekmeleri — ekranlar / süreçler listesi hook + paneller.
+ * Kullanan: `ServiceStage.tsx` (`useServiceCatalogLinks` export). API: `/services/:id/screens|processes`.
+ */
 import { useEffect, useMemo, useState } from 'react'
 import { getServiceProcesses, getServiceScreens } from '../api/client'
 import { EmptyState } from './EmptyState'

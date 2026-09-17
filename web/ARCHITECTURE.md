@@ -2,6 +2,8 @@
 
 Davranış değiştirmeden refactor için “nereye dokunurum?” haritası. Ayrıntı: [docs/refactor-plan.md](../docs/refactor-plan.md).
 
+**Türkçe modül rehberi (klasör → dosya bağlantıları):** [src/rehber.md](src/rehber.md).
+
 ## Yüzeyler
 
 | Yüzey | Bileşen | Not |
@@ -27,7 +29,7 @@ Tümü `web/src/navigation/` — bkz. [navigation/README.md](src/navigation/READ
 
 ## Süreç akışı
 
-Domain: `components/processUserRoute.ts`, UI: `ProcessFlowMap`, `ProcessFlowRouteBuilder`, orchestrator `ProcessFlowPage` + `useProcessFlowPage`. Harita: [components/process/README.md](src/components/process/README.md).
+Domain: `components/processUserRoute.ts`, UI: `ProcessFlowMap`, `ProcessFlowRouteBuilder`, orchestrator `ProcessFlowPage` + `useProcessFlowPage`. Harita: [components/process/rehber.md](src/components/process/rehber.md). **Layout:** çoğu süreç otomatik (`layeredLayout`); yalnızca KTF (`105116`) `processFlowReferenceLayout.ts`.
 
 ## Sunucu
 
@@ -35,4 +37,4 @@ Servis envanteri ve süreç XML: `server/src/inventory/` (Faz 6 refactor hedefi)
 
 ## CSS
 
-`App.css` → `@import` `process-flow`, `service-map`, `shell`, `workflows-drawer`, `cmdk` + katalog/tablo. `responsive.css`. Smoke: [refactor-visual-regression.md](../docs/refactor-visual-regression.md).
+`App.css` → `@import` `process-flow`, `shell`, `workflows-drawer`, `cmdk` + harita/katalog/tablo. `responsive.css`. (Harita CSS ayrı dosyaya taşınması — güvenli split bekliyor.) Smoke: [refactor-visual-regression.md](../docs/refactor-visual-regression.md).

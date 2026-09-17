@@ -230,8 +230,8 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 | `styles/workflows-drawer.css` | `sc-*` klasör, süreç listesi, rota satırları     | ✅ |
 | `styles/dwh.css`              | DWH stage — **taşınmadı** (kapsam dışı)          | — |
 | `styles/cmdk.css`             | Komut paleti                                     | ✅ |
-| `styles/service-map.css`      | Etki haritası, map-stage, React Flow              | ✅ |
-| `App.css`                     | `@import` zinciri + katalog / tablo / welcome      | ✅ |
+| `styles/service-map.css`      | Etki haritası (placeholder; stiller `App.css`)     | ⏳ |
+| `App.css`                     | `@import` + harita + katalog / tablo / welcome     | ✅ |
 
 
 **Kural:** Taşırken class adı **değiştirilmez** (sadece dosya taşınır).

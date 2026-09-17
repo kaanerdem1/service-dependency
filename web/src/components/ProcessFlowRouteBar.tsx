@@ -1,3 +1,7 @@
+/**
+ * Rota modu — seçili ziyaret adımları yatay şerit.
+ * Kullanan: `ProcessFlowRouteBuilder.tsx`.
+ */
 import type { ProcessFlowGraph } from '../types'
 import type { RouteVisit } from './processUserRoute'
 

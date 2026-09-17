@@ -15,4 +15,4 @@
 | `useInboxAndChangeRequests.ts` | Inbox + CR modal |
 | `useCommandPaletteKeyboard.ts` | ⌘K / Esc |
 
-İlgili: [web/ARCHITECTURE.md](../../ARCHITECTURE.md), [docs/refactor-plan.md](../../../docs/refactor-plan.md)
+İlgili: [rehber.md](./rehber.md), [web/ARCHITECTURE.md](../../ARCHITECTURE.md)

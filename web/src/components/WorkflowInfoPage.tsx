@@ -1,3 +1,7 @@
+/**
+ * Tek iş akışı klasörü bilgi / adım özeti sayfası.
+ * Kullanan: `ServicesMainStage.tsx`. Store: `workflowStore.ts`.
+ */
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '../ui'
 import { WorkflowFolderGlyph } from './WorkflowIcons'
