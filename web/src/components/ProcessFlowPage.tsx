@@ -140,7 +140,17 @@ export function ProcessFlowPage({
       ) : null}
       {graph && !routeMode ? (
         <ProcessFlowMap
-          key={`${graph.no}:${initialSelectedNodeId ?? ''}`}
+          // Not: key'de `initialSelectedNodeId` KULLANILMAZ. `ProcessFlowMap`
+          // seçili node'u prop değiştiğinde kendi içindeki effect ile
+          // reaktif olarak günceller (bkz. ProcessFlowMap.tsx). Eskiden
+          // burada nodeId de key'e giriyordu; bu, "servisten sürece geri
+          // dön" akışında kendini bozan bir döngüye yol açıyordu: node
+          // seçilip drawer açılıyor → effect bunu "tükettiğini" App'e
+          // bildiriyor (`onRestoreConsumed`) → App `processFlowRestoreNodeId`'yi
+          // temizliyor → bu prop key'i değiştirdiği için component ANINDA
+          // yeniden mount oluyor, bu sefer seçili node olmadan → drawer
+          // hemen kapanıyordu.
+          key={graph.no}
           graph={graph}
           processScreens={screens}
           onDismiss={onDismiss}
