@@ -16,12 +16,7 @@ import ReactFlow, {
   type NodeProps,
 } from 'reactflow'
 import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
-import {
-  saveProcessRoute,
-  type SavedProcessRoute,
-} from '../processRouteStore'
-import { exportProcessPathSnapshotPdf } from '../snapshot/processPathSnapshot'
-import { buildUserRouteSnapshotSteps } from './processPathNarrative'
+import type { SavedProcessRoute } from '../processRouteStore'
 import { ProcessFlowDetailDrawer } from './ProcessFlowDetailDrawer'
 import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { ProcessFlowRouteBar } from './ProcessFlowRouteBar'
@@ -34,6 +29,7 @@ import {
 } from './processFlowDrawerNav'
 import { ProcessFlowScreens } from './ProcessFlowScreens'
 import { summarizeProcessFlow } from './processFlowSummary'
+import { buildUserRouteSnapshotSteps } from './processPathNarrative'
 import {
   autoAdvanceRoute,
   chooseRouteEdge,
@@ -43,12 +39,12 @@ import {
   outgoingRouteEdges,
   reconcileRouteWithGraph,
   routeCurrentVisit,
-  savedRouteHasChanges,
   transitionCaption,
   visibleRouteVisits,
   type RouteVisit,
   type UserRouteState,
 } from './processUserRoute'
+import { useSaveProcessRoute } from './useSaveProcessRoute'
 
 type RouteNodeData = {
   label: string
@@ -278,12 +274,7 @@ function ProcessFlowRouteBuilderInner({
     if (savedRoute) return reconcileRouteWithGraph(graph, savedRoute.state)
     return createUserRoute(graph)
   })
-  const [readOnly, setReadOnly] = useState(Boolean(savedRoute))
   const [selectedIndex, setSelectedIndex] = useState<number>()
-  const [saveOpen, setSaveOpen] = useState(false)
-  const [routeName, setRouteName] = useState(savedRoute?.name ?? '')
-  const [activeRoute, setActiveRoute] = useState(savedRoute)
-  const [snapshotBusy, setSnapshotBusy] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [frameVisit, setFrameVisit] = useState<{ id: string; token: number }>()
   const [highlightScreenOid, setHighlightScreenOid] = useState<string>()
@@ -297,6 +288,31 @@ function ProcessFlowRouteBuilderInner({
   const visits = useMemo(() => visibleRouteVisits(state), [state])
   const current = routeCurrentVisit(state)
   const byId = useMemo(() => new Map(graph.nodes.map((node) => [node.id, node])), [graph.nodes])
+  const {
+    readOnly,
+    setReadOnly,
+    saveOpen,
+    setSaveOpen,
+    routeName,
+    setRouteName,
+    activeRoute,
+    snapshotBusy,
+    canSaveAs,
+    persistRoute,
+    openSave,
+    exportPdf,
+  } = useSaveProcessRoute({
+    graph,
+    processNo,
+    processTitle,
+    state,
+    savedRoute,
+    onRouteSaved,
+    mapCanvasRef,
+    visits,
+    getNodes,
+    byId,
+  })
   const choices = useMemo(() => {
     if (readOnly || !current) return []
     return outgoingRouteEdges(graph, current.nodeId)
@@ -550,69 +566,6 @@ function ProcessFlowRouteBuilderInner({
     [graph],
   )
 
-  const routeDirty = activeRoute
-    ? savedRouteHasChanges(state, activeRoute.state, routeName, activeRoute.name)
-    : true
-
-  const persistRoute = useCallback(
-    (asNew = false) => {
-      const name = routeName.trim()
-      if (!name) return
-      const route = saveProcessRoute({
-        id: asNew ? undefined : activeRoute?.id,
-        processNo,
-        processTitle,
-        name,
-        state,
-        status: 'completed' as const,
-        graphUpdatedAt: graph.updatedAt,
-      })
-      setActiveRoute(route)
-      setRouteName(route.name)
-      setSaveOpen(false)
-      setReadOnly(true)
-      onRouteSaved?.(route)
-    },
-    [activeRoute?.id, graph, onRouteSaved, processNo, processTitle, routeName, state],
-  )
-
-  const openSave = useCallback(() => {
-    const name = routeName.trim()
-    if (activeRoute && name && !routeDirty) {
-      persistRoute(false)
-      return
-    }
-    setSaveOpen(true)
-  }, [activeRoute, persistRoute, routeDirty, routeName])
-
-  const exportPdf = useCallback(
-    async (endIndex: number) => {
-      const mapEl = mapCanvasRef.current
-      if (!mapEl || visits.length === 0 || snapshotBusy) return
-      const prefix = visits.slice(0, Math.max(0, endIndex) + 1)
-      setSnapshotBusy(true)
-      try {
-        await exportProcessPathSnapshotPdf({
-          mapEl,
-          pathNodeIds: new Set(prefix.map((visit) => visit.visitId)),
-          pathEdges: prefix.slice(1).map((visit, index) => ({
-            fromId: prefix[index].visitId,
-            toId: visit.visitId,
-            label: visit.incomingLabel,
-          })),
-          getNodes,
-          steps: buildUserRouteSnapshotSteps(graph, prefix),
-          processTitle: `${processTitle} · ${activeRoute?.name ?? (routeName.trim() || 'Akış Rotası')}`,
-          processNo,
-          targetName: byId.get(prefix.at(-1)?.nodeId ?? '')?.name ?? 'Rota',
-        })
-      } finally {
-        setSnapshotBusy(false)
-      }
-    },
-    [activeRoute?.name, byId, getNodes, graph, processNo, processTitle, routeName, snapshotBusy, visits],
-  )
-
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
@@ -634,8 +587,6 @@ function ProcessFlowRouteBuilderInner({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [expanded, saveOpen, selectedIndex])
-
-  const canSaveAs = Boolean(activeRoute) && routeDirty
 
   const selectedPathSteps = selectedVisit
     ? buildUserRouteSnapshotSteps(graph, visits.slice(0, (selectedIndex ?? 0) + 1))

@@ -102,7 +102,7 @@ server/src/
 
 
 
-### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 4. adım (kabuk JSX) tamam
+### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 5. adım (selectPivot) tamam
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
@@ -112,7 +112,9 @@ server/src/
 | Servis geçmişi / breadcrumb (geri/ileri yığını) | `navigation/useVisitHistory.ts` | ✅ Yapıldı |
 | Süreç açma / rota açma | `navigation/useProcessFlowNav.ts` | ✅ Yapıldı |
 | Render: kabuk JSX (sidebar + servis sahnesi) | `components/shell/*` | ✅ İlk dilim |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ State/selectPivot hâlâ App’te |
+| Seçim: pivot / metod / katalog / temizle | `navigation/useServiceSelection.ts` | ✅ Yapıldı |
+| Sahne verisi: servis + etki + metod grafı | `navigation/useServiceStageData.ts` | ✅ Yapıldı |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ JSX/dallanma hâlâ App’te (~950) |
 
 **Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
 kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
@@ -136,8 +138,11 @@ hook'tan *sonra* tanımlandığı için ref ile bağlandı (`selectPivotRef`, `h
 
 **Yapıldı (4. adım):** Kabuk JSX — sol kenar çubuğu `components/shell/ModuleSidebar.tsx`,
 seçili servis sahnesi `components/shell/ServiceStage.tsx`, ziyaret yolu ve sidebar ikonları
-ayrı dosyalara taşındı. `App.tsx` hâlâ state, `selectPivot` ve yüzey/dallanma (DWH / süreç /
-klasör özeti / servis) içeriyor; satır sayısı ~1800 → ~1200.
+ayrı dosyalara taşındı. Satır ~1800 → ~1200.
+
+**Yapıldı (5. adım):** `useServiceSelection` — `selectPivot` / `selectMethod` /
+`selectCatalogNode` / `clearSelection` / workflow dönüşü; `useServiceStageData`
+pivot ve metod graf yüklemesi. Drawer başlangıcı `appShellHelpers.ts`.
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 
@@ -169,7 +174,7 @@ arama, klasör ağacı ayrı dosyalar; state hâlâ panelde merkezi.
 
 
 
-### Faz 3 — Süreç haritası ve rota modu (3–5 PR) ⏳ 3a tamam
+### Faz 3 — Süreç haritası ve rota modu (3–5 PR) ✅ tamam
 
 **Sorun:** `ProcessFlowCanvas.tsx`, `ProcessFlowRouteBuilder.tsx`, `ProcessFlowMap.tsx` büyük; state makinesi dağınık.
 
@@ -177,12 +182,19 @@ arama, klasör ağacı ayrı dosyalar; state hâlâ panelde merkezi.
 | Adım | İş                                                                                                   | Durum |
 | ---- | ---------------------------------------------------------------------------------------------------- | ----- |
 | 3a   | `processUserRoute.ts` + `processPathNarrative.ts` — tek “rota domain” README                         | ✅ |
-| 3b   | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) | ⏳ |
-| 3c   | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook                            | ⏳ |
-| 3d   | `ProcessFlowPage.tsx` ince orchestrator                                                              | ⏳ |
+| 3b   | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) | ✅ |
+| 3c   | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook                            | ✅ |
+| 3d   | `ProcessFlowPage.tsx` ince orchestrator                                                              | ✅ |
 
 
 **3a:** Domain dosyalarına Türkçe üst yorum eklendi; harita `components/process/README.md`.
+
+**3b:** Keşif canvas yerleşimi + hover komşuluğu `processFlowCanvasLayout.ts`; tam akış kamerası `processFlowCamera.ts`; hover/drag `useProcessFlowHover.ts` (Map + Canvas). `ProcessFlowMap` layout gövdesi hâlâ Map’te (ayrı invariant / ORIGIN).
+
+**3c:** `useSaveProcessRoute` — kaydet / farklı kaydet / PDF; RouteBuilder yalnız UI.
+
+**3d:** `useProcessFlowPage` yükleme + rota modu; `ProcessFlowPage` JSX orchestrator. Map `key` = `graph.no`.
+
 Davranış değişmedi.
 
 **Yorum odağı:** Tam akış vs kayıtlı rota farkı ([process-flow.md](./process-flow.md) ile aynı cümleler).

@@ -54,29 +54,24 @@ import {
   type ProcessFlowHistoryApi,
   type SelectPivotFn,
 } from './navigation/useProcessFlowNav'
-import { useVisitHistory, visitEntry } from './navigation/useVisitHistory'
+import { useVisitHistory } from './navigation/useVisitHistory'
+import { useServiceSelection } from './navigation/useServiceSelection'
+import { useServiceStageData } from './navigation/useServiceStageData'
+import { initialSidebarDrawer, isTextEditingTarget } from './navigation/appShellHelpers'
 import { useServiceFavorites } from './useServiceFavorites'
 import { useServiceCatalogLinks } from './components/ServiceCatalogPanels'
 import {
   getChangeRequest,
-  getImpactGraph,
   getInbox,
   markInboxRead,
-  getMethodImpactGraph,
   getModuleTree,
-  getNeighbors,
-  getService,
   getSessionUsers,
   searchMethods,
   searchServices,
 } from './api/client'
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
 import { sidebarOpenAtSnapshot } from './snapshot/sidebarState'
-import {
-  pushServiceRecent,
-  readServiceRecents,
-  renameServiceRecent,
-} from './serviceRecents'
+import { readServiceRecents } from './serviceRecents'
 import { resolveCatalogCanEdit } from './auth/catalogAccess'
 import type { SessionUser } from './mock/session'
 import type {
@@ -90,26 +85,6 @@ import type {
 } from './types'
 import './App.css'
 import './responsive.css'
-
-function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
-  shortcutsOpen: boolean
-  workflowsOpen: boolean
-} {
-  const drawer = restored?.sidebarDrawer
-  if (drawer === 'shortcuts') return { shortcutsOpen: true, workflowsOpen: false }
-  if (drawer === 'workflows') return { shortcutsOpen: false, workflowsOpen: true }
-  if (restored?.processFlowNo || restored?.processRouteId || restored?.workflowInfoId) {
-    return { shortcutsOpen: false, workflowsOpen: true }
-  }
-  return { shortcutsOpen: false, workflowsOpen: false }
-}
-
-function isTextEditingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-}
 
 type Tab = StageTabId
 
@@ -218,8 +193,8 @@ export default function App() {
   }, [catalogServices, service])
 
   /**
-   * `selectPivot` ve ziyaret geçmişi setter'ları bu hook'tan sonra tanımlanır.
-   * Süreç→servis / servis→süreç geçişleri onları ref üzerinden çağırır.
+   * `selectPivot` `useServiceSelection` içinde; süreç→servis geçişi
+   * `selectPivotRef` üzerinden bağlanır.
    */
   const selectPivotRef = useRef<SelectPivotFn>(() => {})
   const historyApiRef = useRef<ProcessFlowHistoryApi>({
@@ -292,6 +267,50 @@ export default function App() {
     serviceNameById,
   })
   historyApiRef.current = { setHistory, setHistoryIndex }
+
+  const {
+    clearSelection,
+    returnToWorkflow,
+    leaveServiceSelection,
+    openWorkflowFolder,
+    selectCatalogNode,
+    selectPivot,
+    selectMethod,
+    browseServiceMethods,
+  } = useServiceSelection({
+    pivotId,
+    selectedMethodId,
+    catalogNode,
+    catalogServices,
+    history,
+    historyIndex,
+    workflowResumeId,
+    trail,
+    selectPivotRef,
+    resetMethodSelection,
+    setPivotId,
+    setCatalogNode,
+    setTreePinServiceId,
+    setSelectedMethodId,
+    setMethodImpact,
+    setHistory,
+    setHistoryIndex,
+    setNavDirection,
+    setService,
+    setAffected,
+    setCallees,
+    setImpact,
+    setMapExpanded,
+    setAllowNavCollapse,
+    setNavHover,
+    setWorkflowInfoId,
+    setWorkflowResumeId,
+    setProcessFlowNo,
+    setProcessFlowReturn,
+    setTab,
+    setFrequentRecents,
+    setMapForceLtrSignal,
+  })
 
   useEffect(() => {
     writePersistedAppNav({
@@ -449,56 +468,6 @@ export default function App() {
     void searchMethods(q).then(setMethodHits).catch(() => setMethodHits([]))
   }, [query])
 
-  useEffect(() => {
-    if (!selectedMethodId) {
-      setMethodImpact(undefined)
-      return
-    }
-    let cancelled = false
-    void getMethodImpactGraph(selectedMethodId)
-      .then((g) => {
-        if (!cancelled) setMethodImpact(g)
-      })
-      .catch(() => {
-        if (!cancelled) setMethodImpact(undefined)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [selectedMethodId])
-
-  useEffect(() => {
-    if (!pivotId) {
-      setService(undefined)
-      setAffected([])
-      setCallees([])
-      setImpact(undefined)
-      setLoading(false)
-      return
-    }
-    let cancelled = false
-    setLoading(true)
-    void Promise.all([
-      getService(pivotId),
-      getNeighbors(pivotId),
-      getImpactGraph(pivotId),
-    ])
-      .then(([svc, neighbors, graph]) => {
-        if (cancelled) return
-        setService(svc)
-        setAffected(neighbors.downstream)
-        setCallees(neighbors.upstream)
-        setImpact(graph)
-        setLoading(false)
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [pivotId])
-
   const refreshInbox = useCallback(async () => {
     if (!session) return
     try {
@@ -621,218 +590,23 @@ export default function App() {
     requestAnimationFrame(() => requestAnimationFrame(run))
   }, [])
 
-  const clearSelection = useCallback(() => {
-    setPivotId(undefined)
-    setCatalogNode(null)
-    setTreePinServiceId(undefined)
-    setSelectedMethodId(undefined)
-    setMethodImpact(undefined)
-    setHistory([])
-    setHistoryIndex(-1)
-    setService(undefined)
-    setAffected([])
-    setCallees([])
-    setImpact(undefined)
-    setMapExpanded(false)
-    setAllowNavCollapse(false)
-    setNavHover(true)
-    setWorkflowInfoId(undefined)
-    setWorkflowResumeId(undefined)
-    setProcessFlowNo(undefined)
-  }, [])
-
-  const returnToWorkflow = useCallback(() => {
-    const resume = workflowResumeId
-    if (!resume) {
-      clearSelection()
-      return
-    }
-    setPivotId(undefined)
-    setCatalogNode(null)
-    setTreePinServiceId(undefined)
-    setSelectedMethodId(undefined)
-    setMethodImpact(undefined)
-    setHistory([])
-    setHistoryIndex(-1)
-    setService(undefined)
-    setAffected([])
-    setCallees([])
-    setImpact(undefined)
-    setMapExpanded(false)
-    setAllowNavCollapse(false)
-    setNavHover(true)
-    setWorkflowInfoId(resume)
-  }, [clearSelection, workflowResumeId])
-
-  const leaveServiceSelection = useCallback(() => {
-    if (workflowResumeId) {
-      returnToWorkflow()
-      return
-    }
-    clearSelection()
-  }, [clearSelection, returnToWorkflow, workflowResumeId])
-
-  const openWorkflowFolder = useCallback((id: string) => {
-    setProcessFlowNo(undefined)
-    setWorkflowResumeId(id)
-    setWorkflowInfoId(id)
-  }, [])
-
-  const selectCatalogNode = useCallback(
-    (node: ModuleNode) => {
-      if (node.kind !== 'group' && node.kind !== 'package') return
-      if (catalogNode?.id === node.id && !pivotId) {
-        clearSelection()
-        return
-      }
-      trail.record('tree_select', {
-        level: node.kind,
-        id: node.id,
-        label: node.name,
-      }, node.kind === 'group' ? 'Proje grubundan katalog özeti açıldı' : 'Jar katalog özeti açıldı')
-      setPivotId(undefined)
-      setSelectedMethodId(undefined)
-      setMethodImpact(undefined)
-      setService(undefined)
-      setAffected([])
-      setCallees([])
-      setImpact(undefined)
-      setMapExpanded(false)
-      setCatalogNode({ id: node.id, kind: node.kind, name: node.name })
-      setWorkflowInfoId(undefined)
-      setWorkflowResumeId(undefined)
-      setProcessFlowNo(undefined)
-      setAllowNavCollapse(true)
-    },
-    [catalogNode?.id, pivotId, clearSelection, trail],
-  )
-
-  const selectPivot = useCallback(
-    (
-      id: string,
-      opts?: {
-        resetHistory?: boolean
-        source?: 'tree' | 'map' | 'search' | 'table' | 'workflow'
-        keepProcessFlowReturn?: boolean
-      },
-    ) => {
-      if (!opts?.keepProcessFlowReturn) {
-        setProcessFlowReturn(undefined)
-      }
-      setCatalogNode(null)
-      setWorkflowInfoId(undefined)
-      setProcessFlowNo(undefined)
-      if (opts?.source !== 'workflow') setWorkflowResumeId(undefined)
-      setTreePinServiceId(
-        opts?.source === 'search' || opts?.source === 'table' ? id : undefined,
-      )
-      if (id === pivotId && !selectedMethodId) {
-        if (opts?.source === 'workflow') return
-        clearSelection()
-        return
-      }
-      const label = catalogServices.find((s) => s.id === id)?.name ?? id
-      trail.record(
-        opts?.source === 'map'
-          ? 'map_select'
-          : opts?.source === 'search' || opts?.source === 'table'
-            ? 'search_select'
-            : 'tree_select',
-        {
-        level: 'service',
-        id,
-        label,
-      },
-        opts?.source === 'map'
-          ? 'Haritadan yeni servis seçildi'
-          : opts?.source === 'table'
-            ? 'Tablodan servis seçildi'
-            : opts?.source === 'search'
-              ? 'Arama ile servis seçildi'
-              : 'Ağaçtan servis seçildi',
-      )
-      setSelectedMethodId(undefined)
-      setMethodImpact(undefined)
-      setAllowNavCollapse(true)
-      if (opts?.resetHistory) {
-        setNavDirection(null)
-        setHistory([visitEntry(id)])
-        setHistoryIndex(0)
-        setPivotId(id)
-        setMapExpanded(false)
-        window.sessionStorage.setItem('sd-impact-map-layout-mode', 'ltr')
-        setMapForceLtrSignal((n) => n + 1)
-        setFrequentRecents(
-          pushServiceRecent(id, label).map((r) => ({ id: r.id, name: r.name })),
-        )
-        return
-      }
-      setNavDirection('forward')
-      const next = [...history.slice(0, historyIndex + 1), visitEntry(id)]
-      setHistory(next)
-      setHistoryIndex(next.length - 1)
-      setPivotId(id)
-      setFrequentRecents(
-        pushServiceRecent(id, label).map((r) => ({ id: r.id, name: r.name })),
-      )
-    },
-    [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
-  )
-  selectPivotRef.current = selectPivot
-
-  const selectMethod = useCallback(
-    (serviceId: string, methodId: string) => {
-      setAllowNavCollapse(true)
-      setSelectedMethodId(methodId)
-      setTab('map')
-      if (serviceId && serviceId !== pivotId) {
-        setHistory([visitEntry(serviceId)])
-        setHistoryIndex(0)
-        setPivotId(serviceId)
-        const name =
-          catalogServices.find((s) => s.id === serviceId)?.name ?? serviceId
-        setFrequentRecents(
-          pushServiceRecent(serviceId, name).map((r) => ({ id: r.id, name: r.name })),
-        )
-      }
-    },
-    [pivotId, catalogServices],
-  )
-
-  useEffect(() => {
-    if (!pivotId) return
-    scrollToStageTop()
-  }, [pivotId, selectedMethodId, scrollToStageTop])
-
-  useEffect(() => {
-    setTableProjectFilter(undefined)
-  }, [pivotId])
-
-  const browseServiceMethods = useCallback(
-    (serviceId: string) => {
-      resetMethodSelection()
-      setTab('map')
-      if (serviceId !== pivotId) {
-        setHistory([visitEntry(serviceId)])
-        setHistoryIndex(0)
-        setPivotId(serviceId)
-      }
-    },
-    [pivotId, resetMethodSelection, setHistory, setHistoryIndex],
-  )
+  useServiceStageData({
+    pivotId,
+    selectedMethodId,
+    service,
+    scrollToStageTop,
+    setService,
+    setAffected,
+    setCallees,
+    setImpact,
+    setLoading,
+    setMethodImpact,
+    setTableProjectFilter,
+    setFrequentRecents,
+  })
 
   const hasSelection = !!pivotId || !!catalogNode || !!workflowInfoId || !!processFlowNo
   const hasServiceSelection = !!pivotId && !workflowInfoId && !processFlowNo
-
-  useEffect(() => {
-    if (!service?.id?.startsWith('sd-') || !service.name) return
-    setFrequentRecents(
-      renameServiceRecent(service.id, service.name).map((r) => ({
-        id: r.id,
-        name: r.name,
-      })),
-    )
-  }, [service?.id, service?.name])
 
   // Favoriler/İş akışları drawer kısayolları `useNavDrawers` içinde ayrı bir
   // dinleyicide ele alınıyor; burada yalnızca komut paleti (⌘K / Esc) kalıyor.

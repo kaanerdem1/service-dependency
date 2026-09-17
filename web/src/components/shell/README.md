@@ -1,7 +1,8 @@
 /**
  * Uygulama kabuğu parçaları — `App.tsx` JSX’inin sunum katmanı.
  *
- * State ve iş kuralları hâlâ `App.tsx` / `navigation/*` hook’larında.
+ * State: `App.tsx` + `navigation/*` (`useNavDrawers`, `useVisitHistory`,
+ *   `useProcessFlowNav`, `useServiceSelection`, `useServiceStageData`).
  * Bu klasör yalnızca layout’u render eder.
  *
  * | Dosya | Ne gösterir |

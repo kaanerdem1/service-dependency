@@ -56,6 +56,15 @@ import {
   type ProcessFlowNote,
 } from './processFlowNotes'
 import { summarizeProcessFlow } from './processFlowSummary'
+import { sinkCopyRealId } from './processFlowIds'
+import {
+  frameNodeOnCanvas,
+  graphSpanX,
+  PROCESS_FLOW_ORIGIN as ORIGIN,
+  PROCESS_FLOW_WIDE_SPAN as WIDE_SPAN,
+  startCamera,
+} from './processFlowCamera'
+import { useProcessFlowHover } from './useProcessFlowHover'
 
 /** Snapshot çekimi öncesi DOM/layout'un yeni (daraltılmış) düğüm kümesiyle
  * gerçekten render/reflow olmasını beklemek için — bir animasyon
@@ -68,16 +77,12 @@ const RANK_SEP = 250
 const NODE_SEP = 108
 const FAN_GAP = 122
 const COL_GAP = 112
-const ORIGIN = { x: 60, y: 49.2 }
 const NODE_W = 168
 const NODE_H = 76
 const GATEWAY_H = 108
 const RAIL_PAD = 36
 const RAIL_GAP = 28
 const CORNER = 36
-const WIDE_SPAN = 1600
-const START_ZOOM = 0.9
-
 type ProcessNodeData = {
   label: string
   kind: ProcessFlowNodeKind
@@ -1179,11 +1184,6 @@ function withEdgeRoutes(
 const SINK_COPY_GAP_X = 40
 const SINK_COPY_OFFSET_Y = -52
 
-function sinkCopyRealId(id: string): string {
-  const at = id.indexOf('::near:')
-  return at < 0 ? id : id.slice(0, at)
-}
-
 function splitCrowdedBackSinks(
   graph: ProcessFlowGraph,
   nodes: Node[],
@@ -1316,27 +1316,6 @@ function EdgeMarkers() {
   )
 }
 
-function startCamera(nodes: Node[]) {
-  const start =
-    nodes.find((n) => (n.data as ProcessNodeData | undefined)?.kind === 'start') ?? nodes[0]
-  const zoom = START_ZOOM
-  return {
-    x: 72 - (start?.position.x ?? ORIGIN.x) * zoom,
-    y: 120 - (start?.position.y ?? ORIGIN.y) * zoom,
-    zoom,
-  }
-}
-
-function graphSpanX(nodes: Node[]) {
-  let minX = Infinity
-  let maxX = -Infinity
-  for (const n of nodes) {
-    minX = Math.min(minX, n.position.x)
-    maxX = Math.max(maxX, n.position.x)
-  }
-  return Number.isFinite(minX) ? maxX - minX : 0
-}
-
 function FullscreenGlyph({ expanded }: { expanded: boolean }) {
   return (
     <span className="tl-zoom-glyph" aria-hidden>
@@ -1363,27 +1342,6 @@ function FullscreenGlyph({ expanded }: { expanded: boolean }) {
       )}
     </span>
   )
-}
-
-function frameNodeOnCanvas(
-  fitView: ReturnType<typeof useReactFlow>['fitView'],
-  getNodes: ReturnType<typeof useReactFlow>['getNodes'],
-  targetId: string,
-) {
-  requestAnimationFrame(() => {
-    const candidates = getNodes().filter(
-      (n) => n.type !== 'processNote' && sinkCopyRealId(n.id) === targetId,
-    )
-    const primary = candidates.find((n) => !n.id.includes('::near')) ?? candidates[0]
-    if (!primary) return
-    void fitView({
-      nodes: [primary],
-      padding: 0.46,
-      duration: 480,
-      minZoom: 0.45,
-      maxZoom: 1.15,
-    })
-  })
 }
 
 function ProcessFlowMapInner({
@@ -1423,16 +1381,22 @@ function ProcessFlowMapInner({
   }, [graph.edges, graph.nodes, processNo])
   const [nodes, setNodes, onNodesChange] = useNodesState(seed.nodes)
   const [edges, setEdges] = useEdgesState(seed.edges)
-  const [hoverId, setHoverId] = useState<string>()
-  const [dragId, setDragId] = useState<string>()
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
     initialSelectedNodeId,
   )
   const [expanded, setExpanded] = useState(false)
   const [mapSearchQuery, setMapSearchQuery] = useState('')
   const [mapSearchIndex, setMapSearchIndex] = useState(0)
-  const dragRef = useRef<string | undefined>(undefined)
-  const dragMovedRef = useRef(false)
+  const {
+    hoverId,
+    dragId,
+    dragMovedRef,
+    onNodeMouseEnter,
+    onNodeMouseLeave,
+    onNodeDragStart,
+    onNodeDrag,
+    clearDrag,
+  } = useProcessFlowHover({ skipNotes: true })
   const { setViewport, getNodes, fitView } = useReactFlow()
   const [highlightScreenOid, setHighlightScreenOid] = useState<string>()
   const jumpableNodeIds = useMemo(() => graphNodeIdSet(graph), [graph.nodes])
@@ -1694,35 +1658,13 @@ function ProcessFlowMapInner({
     return decorated
   }, [edges, neighborhood, snapshotCapturing, pathToFocus])
 
-  const onNodeMouseEnter = useCallback((_: unknown, node: Node) => {
-    if (node.type === 'processNote') return
-    setHoverId(node.id)
-  }, [])
-  const onNodeMouseLeave = useCallback(() => {
-    if (!dragRef.current) setHoverId(undefined)
-  }, [])
-  const onNodeDragStart = useCallback((_: unknown, node: Node) => {
-    dragMovedRef.current = false
-    dragRef.current = node.id
-    setDragId(node.id)
-    setHoverId(node.id)
-  }, [])
-  const onNodeDrag = useCallback((_: unknown, node: Node) => {
-    dragMovedRef.current = true
-    dragRef.current = node.id
-    setDragId(node.id)
-  }, [])
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
-      dragRef.current = undefined
-      setDragId(undefined)
       persistNotes()
       refreshEdgeRoutes(new Set([node.id, sinkCopyRealId(node.id)]))
-      window.setTimeout(() => {
-        dragMovedRef.current = false
-      }, 0)
+      clearDrag()
     },
-    [persistNotes, refreshEdgeRoutes],
+    [clearDrag, persistNotes, refreshEdgeRoutes],
   )
   const focusGraphNode = useCallback(
     (targetId: string) => {
