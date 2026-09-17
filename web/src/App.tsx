@@ -15,8 +15,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { LayoutGroup } from 'motion/react'
 import { MotionBanner } from './motion/MotionToast'
@@ -33,7 +31,7 @@ import { type AppSurface } from './components/SurfaceSwitch'
 import { AppMasthead } from './components/shell/AppMasthead'
 import { AppShellOverlays } from './components/shell/AppShellOverlays'
 import { ServicesWorkspace } from './components/shell/ServicesWorkspace'
-import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
+import { readPersistedAppNav } from './appNavPersist'
 import { useNavDrawers } from './navigation/useNavDrawers'
 import {
   useProcessFlowNav,
@@ -44,12 +42,12 @@ import { useVisitHistory } from './navigation/useVisitHistory'
 import { useServiceSelection } from './navigation/useServiceSelection'
 import { useServiceStageData } from './navigation/useServiceStageData'
 import { initialSidebarDrawer, isTextEditingTarget } from './navigation/appShellHelpers'
+import { usePersistedAppNav } from './navigation/usePersistedAppNav'
+import { useSidebarLayout } from './navigation/useSidebarLayout'
+import { useInboxAndChangeRequests } from './navigation/useInboxAndChangeRequests'
 import { useServiceFavorites } from './useServiceFavorites'
 import { useServiceCatalogLinks } from './components/ServiceCatalogPanels'
 import {
-  getChangeRequest,
-  getInbox,
-  markInboxRead,
   getModuleTree,
   getSessionUsers,
   searchMethods,
@@ -62,7 +60,6 @@ import { resolveCatalogCanEdit } from './auth/catalogAccess'
 import type { SessionUser } from './mock/session'
 import type {
   AffectedService,
-  ChangeRequest,
   ImpactGraph,
   MethodImpactGraph,
   MethodRef,
@@ -106,16 +103,18 @@ export default function App() {
   const [tableProjectFilter, setTableProjectFilter] = useState<string | undefined>()
   const [appTheme, setAppTheme] = useState<AppTheme>(() => readAppTheme())
   const [surface, setSurface] = useState<AppSurface>(() => restoredNav?.surface ?? 'services')
-  const [navHover, setNavHover] = useState(true)
-  const [navPinned, setNavPinned] = useState(true)
-  const [navWidth, setNavWidth] = useState(300)
-  /** Daraltmada otomatik kısma sonrası geniş ekranda geri yüklenecek genişlik. */
-  const navWidthPreferredRef = useRef(300)
-  const [allowNavCollapse, setAllowNavCollapse] = useState(false)
-  const navExpanded = navPinned || navHover || !allowNavCollapse
-  const appFrameStyle = {
-    '--sidebar-panel-width': `${navWidth}px`,
-  } as CSSProperties
+  const { trail, buildClientPayload } = useSnapshotPack()
+  const {
+    navHover,
+    setNavHover,
+    navPinned,
+    navExpanded,
+    allowNavCollapse,
+    setAllowNavCollapse,
+    appFrameStyle,
+    toggleNavPinned,
+    startNavResize,
+  } = useSidebarLayout(trail)
   const stageTopRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
   const mapRootRef = useRef<HTMLDivElement | null>(null)
@@ -123,23 +122,27 @@ export default function App() {
   const searchRef = useRef<HTMLLabelElement>(null)
   const sidebarBodyRef = useRef<HTMLDivElement>(null)
 
-  const { trail, buildClientPayload } = useSnapshotPack()
   const { isFavorite, toggleFavorite } = useServiceFavorites()
 
   const [session, setSession] = useState<SessionUser>()
   const canEditCatalog = resolveCatalogCanEdit()
   const [catalogServices, setCatalogServices] = useState<Service[]>([])
   const [liveStatus, setLiveStatus] = useState('')
-  const [crOpen, setCrOpen] = useState(false)
-  const [inboxOpen, setInboxOpen] = useState(false)
-  const [inbox, setInbox] = useState<{
-    actions: { request: ChangeRequest; row: import('./types').ImpactedFlag }[]
-    updates: import('./types').InboxNotification[]
-    pending: number
-  }>()
-  const [requestDetail, setRequestDetail] = useState<ChangeRequest>()
-  const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
+  const {
+    crOpen,
+    setCrOpen,
+    inboxOpen,
+    setInboxOpen,
+    inbox,
+    requestDetail,
+    returnToInbox,
+    refreshInbox,
+    openRequestDetail,
+    backToInbox,
+    markAllInboxRead,
+    closeRequestDetail,
+  } = useInboxAndChangeRequests(session, (message) => setSnapshotToast(message))
   const [cmdkOpen, setCmdkOpen] = useState(false)
   const closeCommandPalette = useCallback(() => setCmdkOpen(false), [])
   const { shortcutsOpen, setShortcutsOpen, workflowsOpen, setWorkflowsOpen, lastServicesDrawerRef } =
@@ -299,25 +302,7 @@ export default function App() {
     setMapForceLtrSignal,
   })
 
-  useEffect(() => {
-    writePersistedAppNav({
-      v: 1,
-      surface,
-      sidebarDrawer: lastServicesDrawerRef.current,
-      tab,
-      pivotId,
-      selectedMethodId,
-      catalogNode,
-      processFlowNo,
-      processRouteId,
-      workflowInfoId,
-      workflowResumeId,
-      processFlowStack,
-      history,
-      historyIndex,
-      treeQuery: query.trim() || undefined,
-    })
-  }, [
+  usePersistedAppNav({
     surface,
     tab,
     pivotId,
@@ -330,71 +315,14 @@ export default function App() {
     processFlowStack,
     history,
     historyIndex,
-    query,
-  ])
-
-  const toggleNavPinned = useCallback(() => {
-    setNavPinned((pinned) => {
-      const next = !pinned
-      if (next) setNavHover(true)
-      trail.record(
-        'sidebar_toggle',
-        undefined,
-        next
-          ? 'Modül paneli sabitlendi'
-          : 'Modül paneli sabitlemesi kaldırıldı',
-      )
-      return next
-    })
-  }, [trail])
-
-  const startNavResize = useCallback(
-    (event: ReactPointerEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      const startX = event.clientX
-      const startWidth = navWidth
-      let latestWidth = startWidth
-      const handleMove = (moveEvent: PointerEvent) => {
-        const nextWidth = Math.max(
-          272,
-          Math.min(460, startWidth + moveEvent.clientX - startX),
-        )
-        latestWidth = nextWidth
-        setNavWidth(nextWidth)
-      }
-      const handleUp = () => {
-        navWidthPreferredRef.current = latestWidth
-        window.removeEventListener('pointermove', handleMove)
-        window.removeEventListener('pointerup', handleUp)
-      }
-      window.addEventListener('pointermove', handleMove)
-      window.addEventListener('pointerup', handleUp)
-    },
-    [navWidth],
-  )
+    treeQuery: query,
+    sidebarDrawerRef: lastServicesDrawerRef,
+  })
 
   useEffect(() => {
     document.documentElement.dataset.theme = appTheme
     window.localStorage.setItem(APP_THEME_KEY, appTheme)
   }, [appTheme])
-
-  useEffect(() => {
-    const NARROW_MAX = 1100
-    const rail = 76
-    const minMapViewport = 340
-    const clampNav = () => {
-      const w = window.innerWidth
-      if (w >= NARROW_MAX) {
-        setNavWidth(navWidthPreferredRef.current)
-        return
-      }
-      const cap = Math.max(240, Math.min(460, w - rail - minMapViewport))
-      setNavWidth((current) => (current > cap ? cap : current))
-    }
-    clampNav()
-    window.addEventListener('resize', clampNav)
-    return () => window.removeEventListener('resize', clampNav)
-  }, [])
 
   useEffect(() => {
     if (!snapshotToast) return
@@ -455,20 +383,6 @@ export default function App() {
     void searchMethods(q).then(setMethodHits).catch(() => setMethodHits([]))
   }, [query])
 
-  const refreshInbox = useCallback(async () => {
-    if (!session) return
-    try {
-      const data = await getInbox(session.id)
-      setInbox(data)
-    } catch {
-      /* mock */
-    }
-  }, [session])
-
-  useEffect(() => {
-    void refreshInbox()
-  }, [refreshInbox])
-
   useEffect(() => {
     if (!crOpen && !requestDetail && !inboxOpen) return
     if (allowNavCollapse && !navPinned) setNavHover(false)
@@ -511,28 +425,6 @@ export default function App() {
       watermarkLines: snapshotWatermarkLines([service.name]),
     })
   }, [buildClientPayload, service, flushSnapshotChrome])
-
-  const openRequestDetail = useCallback(async (requestId: string, fromInbox = false) => {
-    try {
-      const req = await getChangeRequest(requestId)
-      setRequestDetail(req)
-      if (fromInbox) {
-        setReturnToInbox(true)
-        setInboxOpen(false)
-      } else {
-        setReturnToInbox(false)
-      }
-    } catch {
-      setSnapshotToast('Talep yüklenemedi')
-    }
-  }, [])
-
-  const backToInbox = useCallback(() => {
-    setRequestDetail(undefined)
-    setReturnToInbox(false)
-    setInboxOpen(true)
-    void refreshInbox()
-  }, [refreshInbox])
 
   const projectLabels = useMemo(() => {
     const m = projectLabelsFromTree(tree)
@@ -861,17 +753,11 @@ export default function App() {
         inbox={inbox}
         onOpenRequest={(id) => void openRequestDetail(id, true)}
         onCloseInbox={() => setInboxOpen(false)}
-        onMarkInboxRead={() => {
-          if (!session) return
-          void markInboxRead(session.id).then(() => refreshInbox())
-        }}
+        onMarkInboxRead={markAllInboxRead}
         requestDetail={requestDetail}
         returnToInbox={returnToInbox}
         onBackToInbox={backToInbox}
-        onCloseRequestDetail={() => {
-          if (returnToInbox) backToInbox()
-          else setRequestDetail(undefined)
-        }}
+        onCloseRequestDetail={closeRequestDetail}
         onRequestUpdated={(req) => {
           setRequestDetail(req)
           setSnapshotToast('Onay kaydedildi — snapshot alındı')

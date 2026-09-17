@@ -35,4 +35,4 @@ Servis envanteri ve süreç XML: `server/src/inventory/` (Faz 6 refactor hedefi)
 
 ## CSS
 
-`App.css` (`@import './styles/process-flow.css'`) + `responsive.css`. Faz 5: shell/workflows ayrılacak; class adları değişmez.
+`App.css` → `@import` `styles/process-flow.css`, `shell.css`, `workflows-drawer.css` + servis sahnesi. `responsive.css`. Görsel smoke: [docs/refactor-visual-regression.md](../docs/refactor-visual-regression.md).

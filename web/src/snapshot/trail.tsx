@@ -18,7 +18,7 @@ import type {
   UiChromeState,
 } from '../types'
 
-type SnapshotTrailContextValue = {
+export type SnapshotTrailContextValue = {
   record: (action: TrailAction, target?: TrailEntry['target'], detail?: string) => void
   syncUi: (patch: Partial<UiChromeState>) => void
   syncView: (view: SnapshotViewState) => void

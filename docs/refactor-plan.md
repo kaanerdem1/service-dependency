@@ -117,7 +117,7 @@ server/src/
 | Sahne verisi: servis + etki + metod grafı | `navigation/useServiceStageData.ts` | ✅ Yapıldı |
 | Render: servis workspace | `components/shell/ServicesWorkspace.tsx` | ✅ Yapıldı |
 | Render: masthead + overlay | `AppMasthead`, `AppShellOverlays` | ✅ Yapıldı |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ ~780 satır (state + workspace props) |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ ~770 satır (persist, sidebar, inbox hook’ları ayrıldı) |
 
 **Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
 kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
@@ -151,8 +151,6 @@ pivot ve metod graf yüklemesi. Drawer başlangıcı `appShellHelpers.ts`.
 `AppShellOverlays`. Yeni servis seçimi her zaman Harita sekmesi (`useServiceSelection`).
 
 **Bitti sayılır:** İş kuralları `navigation/*`; App kabuk + persist + workspace prop bağlama.
-
-**Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 
 ---
 
@@ -220,21 +218,23 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 
 
 
-### Faz 5 — CSS bölme (2–3 PR, görsel regresyon dikkat) ⏳ 1. dilim
+### Faz 5 — CSS bölme (2–3 PR, görsel regresyon dikkat) ✅ (DWH hariç)
 
 **Sorun:** Tek `App.css`.
 
 
 | Dosya                         | İçerik                                           | Durum |
 | ----------------------------- | ------------------------------------------------ | ----- |
-| `styles/process-flow.css`     | PF harita, rota, `hl-*` (~2130 satır)            | ✅ |
-| `styles/shell.css`            | Sidebar, drawer, masthead                        | ⏳ |
-| `styles/workflows-drawer.css` | sc-process-*, sc-route-* (App.css içinde)        | ⏳ |
-| `styles/dwh.css`              | DWH stage — **refactor kapsam dışı taşıma**      | — |
-| `App.css`                     | `@import './styles/process-flow.css'` + geri kalan | ⏳ |
+| `styles/process-flow.css`     | PF harita, rota, `hl-*`                          | ✅ |
+| `styles/shell.css`            | Masthead, sidebar, drawer iskeleti                | ✅ |
+| `styles/workflows-drawer.css` | `sc-*` klasör, süreç listesi, rota satırları     | ✅ |
+| `styles/dwh.css`              | DWH stage — **taşınmadı** (kapsam dışı)          | — |
+| `App.css`                     | `@import` zinciri + servis sahnesi / harita / cmdk | ✅ |
 
 
 **Kural:** Taşırken class adı **değiştirilmez** (sadece dosya taşınır).
+
+**Smoke:** [refactor-visual-regression.md](./refactor-visual-regression.md)
 
 ---
 
@@ -291,16 +291,14 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 ## 8. Bilinen teknik borç (refactor sırasında dokunma / ayrı issue)
 
 - Web `tsc` uyarıları: `ProcessFlowCanvas`, `ProcessFlowRouteBuilder`, `workflowStore`, `DwhLineageMap` (2026-03).
-- `App.css` boyutu — Faz 5’e bırak.
+- `App.css` hâlâ büyük (harita/cmdk); Faz 5 shell/workflows/PF ayrıldı.
 
 ---
 
 
 
-## 9. Sonraki adım (seninle netleştirelim)
+## 9. Sonraki adım
 
-1. Faz 0 + **ProcessRoutesPanel** ayırma ile başlayalım mı?
-2. Refactor PR’larında yorum dili **tamamen Türkçe** mi, yoksa modül başlığı TR / detay EN mi?
-3. CSS bölme Vite’ta tek bundle mı kalsın, yoksa lazy yüzey (DWH) ayrı chunk mu?
-
-Onayladığın sıraya göre ilk PR’ı açabiliriz.
+- **Refactor (kalan):** `App.tsx` prop wiring inceltme (opsiyonel); `App.css` servis sahnesi parçalama (düşük öncelik).
+- **Feature:** Faz 7 kalıcılık adapter ([catalog-persistence.md](./catalog-persistence.md)).
+- **Borç:** Web `tsc` hataları ayrı PR/issue.

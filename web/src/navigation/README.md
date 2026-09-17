@@ -10,5 +10,8 @@
 | `useServiceSelection.ts` | selectPivot, katalog, temizleme |
 | `useServiceStageData.ts` | Pivot → API graf yüklemesi |
 | `appShellHelpers.ts` | Drawer restore, klavye hedefi |
+| `usePersistedAppNav.ts` | localStorage navigasyon yazma |
+| `useSidebarLayout.ts` | Sidebar genişlik / sabitleme |
+| `useInboxAndChangeRequests.ts` | Inbox + CR modal |
 
 İlgili: [web/ARCHITECTURE.md](../../ARCHITECTURE.md), [docs/refactor-plan.md](../../../docs/refactor-plan.md)
