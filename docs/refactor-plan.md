@@ -102,7 +102,7 @@ server/src/
 
 
 
-### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 3. adım tamam
+### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 4. adım (kabuk JSX) tamam
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
@@ -111,7 +111,8 @@ server/src/
 | Drawer görünürlük (shortcuts, workflows) | `navigation/useNavDrawers.ts` | ✅ Yapıldı |
 | Servis geçmişi / breadcrumb (geri/ileri yığını) | `navigation/useVisitHistory.ts` | ✅ Yapıldı |
 | Süreç açma / rota açma | `navigation/useProcessFlowNav.ts` | ✅ Yapıldı |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ Sonraki adım |
+| Render: kabuk JSX (sidebar + servis sahnesi) | `components/shell/*` | ✅ İlk dilim |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ State/selectPivot hâlâ App’te |
 
 **Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
 kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
@@ -132,6 +133,11 @@ aynı şekilde doğrudan güncelliyor) — davranışı hiç değiştirmeden, d�
 `dismissProcessFlow`) tek dosyaya taşındı. `selectPivot` ve ziyaret geçmişi setter'ları bu
 hook'tan *sonra* tanımlandığı için ref ile bağlandı (`selectPivotRef`, `historyApiRef`) —
 önceki `onRestoreProcessFlowRef` deseni buraya taşındı, `App.tsx`'te ayrıca restore ref'i yok.
+
+**Yapıldı (4. adım):** Kabuk JSX — sol kenar çubuğu `components/shell/ModuleSidebar.tsx`,
+seçili servis sahnesi `components/shell/ServiceStage.tsx`, ziyaret yolu ve sidebar ikonları
+ayrı dosyalara taşındı. `App.tsx` hâlâ state, `selectPivot` ve yüzey/dallanma (DWH / süreç /
+klasör özeti / servis) içeriyor; satır sayısı ~1800 → ~1200.
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 

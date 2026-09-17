@@ -19,36 +19,19 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { AnimatePresence, LayoutGroup } from 'motion/react'
-import { MotionListItem } from './motion/MotionList'
-import { MorphHoverButton } from './motion/MorphHoverButton'
 import { MotionBanner, MotionToast } from './motion/MotionToast'
-import { StageTabs, buildServiceStageTabs, SERVICE_STAGE_TAB_ORDER, type StageTabId } from './motion/StageTabs'
-import { StageTabPanels } from './motion/StageTabPanels'
-import { MapLoadingSkeleton, SkeletonShimmer } from './motion/SkeletonShimmer'
+import { buildServiceStageTabs, type StageTabId } from './motion/StageTabs'
 import {
   packageLabelsFromTree,
   packagesInImpact,
   projectLabelsFromTree,
   projectsInImpact,
 } from './impact/projectFilter'
-import { RelationshipTable } from './components/RelationshipTable'
 import { ChangeRequestModal } from './components/ChangeRequestModal'
-import { ImpactMap } from './components/ImpactMap'
 import { InboxPanel } from './components/InboxPanel'
-import { MapStage } from './components/MapStage'
-import { MethodImpactMap } from './components/MethodImpactMap'
 import { CatalogEntityOverview } from './components/CatalogEntityOverview'
-import { ModuleTree } from './components/ModuleTree'
 import { CommandPalette } from './components/CommandPalette'
-import { SearchHitContent } from './components/SearchHitContent'
-import { ServiceOverview } from './components/ServiceOverview'
-import {
-  ServiceProcessesStage,
-  ServiceScreensStage,
-  useServiceCatalogLinks,
-} from './components/ServiceCatalogPanels'
 import { WelcomeScreen } from './components/WelcomeScreen'
-import { SearchHitsPortal } from './components/SearchHitsPortal'
 import { RequestDetailModal } from './components/RequestDetailModal'
 import { DwhPage } from './dwh/DwhPage'
 import {
@@ -59,12 +42,11 @@ import {
 } from './theme'
 import { ThemeSwitch } from './components/ThemeSwitch'
 import { SurfaceSwitch, type AppSurface } from './components/SurfaceSwitch'
-import { TreeKindIcon } from './components/TreeKindIcon'
-import { SidebarHoverTip } from './components/SidebarHoverTip'
-import { ShortcutsPanel } from './components/ShortcutsPanel'
-import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { ProcessFlowPage } from './components/ProcessFlowPage'
+import { InboxIcon } from './components/shell/sidebarIcons'
+import { ModuleSidebar } from './components/shell/ModuleSidebar'
+import { ServiceStage } from './components/shell/ServiceStage'
 import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
 import { useNavDrawers } from './navigation/useNavDrawers'
 import {
@@ -72,25 +54,9 @@ import {
   type ProcessFlowHistoryApi,
   type SelectPivotFn,
 } from './navigation/useProcessFlowNav'
-import { useVisitHistory, visitEntry, type VisitPathStep } from './navigation/useVisitHistory'
-
-function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
-  shortcutsOpen: boolean
-  workflowsOpen: boolean
-} {
-  const drawer = restored?.sidebarDrawer
-  if (drawer === 'shortcuts') return { shortcutsOpen: true, workflowsOpen: false }
-  if (drawer === 'workflows') return { shortcutsOpen: false, workflowsOpen: true }
-  if (restored?.processFlowNo || restored?.processRouteId || restored?.workflowInfoId) {
-    return { shortcutsOpen: false, workflowsOpen: true }
-  }
-  return { shortcutsOpen: false, workflowsOpen: false }
-}
-import { FavoriteStarButton } from './components/FavoriteStarButton'
-import { ServiceWorkflowChip } from './components/ServiceWorkflowChip'
-import { CatalogHelp } from './components/CatalogHelp'
-import { TreeOptionsRadial } from './components/TreeOptionsRadial'
+import { useVisitHistory, visitEntry } from './navigation/useVisitHistory'
 import { useServiceFavorites } from './useServiceFavorites'
+import { useServiceCatalogLinks } from './components/ServiceCatalogPanels'
 import {
   getChangeRequest,
   getImpactGraph,
@@ -105,7 +71,6 @@ import {
   searchServices,
 } from './api/client'
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
-import { snapshotHasMapImage } from './snapshot/imageUrl'
 import { sidebarOpenAtSnapshot } from './snapshot/sidebarState'
 import {
   pushServiceRecent,
@@ -122,11 +87,22 @@ import type {
   MethodRef,
   ModuleNode,
   Service,
-  Snapshot,
 } from './types'
 import './App.css'
 import './responsive.css'
-import { favoritesPanelShortcutLabel, workflowsPanelShortcutLabel } from './panelShortcuts'
+
+function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
+  shortcutsOpen: boolean
+  workflowsOpen: boolean
+} {
+  const drawer = restored?.sidebarDrawer
+  if (drawer === 'shortcuts') return { shortcutsOpen: true, workflowsOpen: false }
+  if (drawer === 'workflows') return { shortcutsOpen: false, workflowsOpen: true }
+  if (restored?.processFlowNo || restored?.processRouteId || restored?.workflowInfoId) {
+    return { shortcutsOpen: false, workflowsOpen: true }
+  }
+  return { shortcutsOpen: false, workflowsOpen: false }
+}
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -136,116 +112,6 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
 }
 
 type Tab = StageTabId
-
-function SidebarStarIcon({ active }: { active: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-star-icon">
-      <path
-        d="M12 2.5l2.55 5.17 5.7.83-4.12 4.02.97 5.67L12 15.9l-5.1 2.68.97-5.67-4.12-4.02 5.7-.83L12 2.5z"
-        fill={active ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth={active ? 0 : 1.4}
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function SidebarFlowIcon({ active }: { active: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
-      <circle cx="6" cy="6" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="6" cy="18" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="18" cy="6" r="2.15" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" />
-      <path d="M6 8.2v7.6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <path
-        d="M8.2 6h5.4A4.4 4.4 0 0 1 18 10.4V18"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function SidebarPinIcon({ pinned }: { pinned: boolean }) {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden className="sidebar-pin-icon">
-      <path
-        d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1.03-1 1.03 1v-7H19v-2c-1.66 0-3-1.34-3-3z"
-        fill={pinned ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth={pinned ? 0 : 1.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function InboxIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden>
-      <path
-        d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m22 6-10 7L2 6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.75"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function StageVisitPath({
-  steps,
-  currentIndex,
-  onSelect,
-}: {
-  steps: VisitPathStep[]
-  currentIndex: number
-  onSelect: (index: number) => void
-}) {
-  if (steps.length === 0) return null
-
-  return (
-    <nav className="stage-visit-path" aria-label="Ziyaret yolu">
-      <span className="stage-visit-path-label">Ziyaret yolu</span>
-      <ol className="stage-visit-path-list">
-        {steps.map((step, i) => {
-          const current = i === currentIndex
-          return (
-            <li key={`${step.id}-${i}`} className="stage-visit-path-item">
-              {i > 0 && (
-                <span className="stage-visit-path-sep" aria-hidden>
-                  /
-                </span>
-              )}
-              <button
-                type="button"
-                className={`stage-visit-path-btn${current ? ' is-current' : ''}`}
-                title={step.name}
-                aria-current={current ? 'page' : undefined}
-                onClick={() => onSelect(i)}
-              >
-                {step.name}
-              </button>
-            </li>
-          )
-        })}
-      </ol>
-    </nav>
-  )
-}
 
 export default function App() {
   const restoredNav = useMemo(() => readPersistedAppNav(), [])
@@ -1073,294 +939,63 @@ export default function App() {
           </div>
         ) : (
         <>
-        <aside
-          className={`module-sidebar${navExpanded ? ' is-expanded' : ''}${navPinned ? ' is-pinned' : ''}`}
-          data-motion="sidebar-overlay"
-          data-expanded={navExpanded ? 'true' : 'false'}
-          data-pinned={navPinned ? 'true' : 'false'}
-          onMouseEnter={() => setNavHover(true)}
-          onMouseLeave={() => {
-            if (allowNavCollapse && !navPinned) setNavHover(false)
+        <ModuleSidebar
+          navExpanded={navExpanded}
+          navPinned={navPinned}
+          allowNavCollapse={allowNavCollapse}
+          onNavHoverChange={setNavHover}
+          shortcutsOpen={shortcutsOpen}
+          workflowsOpen={workflowsOpen}
+          onToggleShortcuts={() => {
+            setWorkflowsOpen(false)
+            setShortcutsOpen((v) => !v)
           }}
-        >
-          <div className="module-sidebar-rail" aria-hidden={navExpanded}>
-            <span className="sidebar-rail-label">Modüller</span>
-            <div className="sidebar-rail-kinds" aria-hidden>
-              <TreeKindIcon kind="group" size={14} />
-              <TreeKindIcon kind="package" size={14} />
-              <TreeKindIcon kind="service" size={14} />
-              <TreeKindIcon kind="method" size={14} />
-            </div>
-            <span className="sidebar-rail-hint">Paneli Aç</span>
-            <div className="sidebar-rail-actions">
-              <SidebarHoverTip
-                label="Favoriler"
-                sub={favoritesPanelShortcutLabel()}
-                placement="rail"
-              >
-                <MorphHoverButton
-                  type="button"
-                  className={`sidebar-star-btn sidebar-rail-action-btn${shortcutsOpen ? ' is-active' : ''}`}
-                  layoutId="sidebar-star-rail-hover"
-                  aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
-                  aria-expanded={shortcutsOpen}
-                  onClick={() => {
-                    setWorkflowsOpen(false)
-                    setShortcutsOpen((v) => !v)
-                  }}
-                >
-                  <SidebarStarIcon active={shortcutsOpen} />
-                </MorphHoverButton>
-              </SidebarHoverTip>
-              <SidebarHoverTip
-                label="İş akışları"
-                sub={workflowsPanelShortcutLabel()}
-                placement="rail"
-              >
-                <MorphHoverButton
-                  type="button"
-                  className={`sidebar-star-btn sidebar-flow-btn sidebar-rail-action-btn${workflowsOpen ? ' is-active' : ''}`}
-                  layoutId="sidebar-flow-rail-hover"
-                  aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
-                  aria-expanded={workflowsOpen}
-                  onClick={() => {
-                    setShortcutsOpen(false)
-                    setWorkflowsOpen((v) => !v)
-                  }}
-                >
-                  <SidebarFlowIcon active={workflowsOpen} />
-                </MorphHoverButton>
-              </SidebarHoverTip>
-            </div>
-          </div>
-          <div className="module-sidebar-inner">
-          <div className="module-sidebar-head">
-            <h3>Modüller</h3>
-            <div className="module-sidebar-head-actions">
-              <MorphHoverButton
-                type="button"
-                className={`sidebar-pin-btn${navPinned ? ' is-pinned' : ''}`}
-                layoutId="sidebar-pin-hover"
-                title={
-                  navPinned
-                    ? 'Sabitlemeyi bırak (fare dışına çıkınca panel kapanır)'
-                    : 'Paneli sabitle (açık kalsın)'
-                }
-                aria-label={
-                  navPinned
-                    ? 'Modül paneli sabitli — sabitlemeyi bırak'
-                    : 'Modül panelini sabitle — açık kalsın'
-                }
-                aria-expanded={navExpanded}
-                aria-pressed={navPinned}
-                onClick={toggleNavPinned}
-              >
-                <SidebarPinIcon pinned={navPinned} />
-              </MorphHoverButton>
-              <SidebarHoverTip label="Favoriler" sub={favoritesPanelShortcutLabel()} placement="head">
-                <MorphHoverButton
-                  type="button"
-                  className={`sidebar-star-btn${shortcutsOpen ? ' is-active' : ''}`}
-                  layoutId="sidebar-star-hover"
-                  aria-label={shortcutsOpen ? 'Favoriler panelini kapat' : 'Favoriler panelini aç'}
-                  aria-expanded={shortcutsOpen}
-                  onClick={() => {
-                    setWorkflowsOpen(false)
-                    setShortcutsOpen((v) => !v)
-                  }}
-                >
-                  <SidebarStarIcon active={shortcutsOpen} />
-                </MorphHoverButton>
-              </SidebarHoverTip>
-              <SidebarHoverTip label="İş akışları" sub={workflowsPanelShortcutLabel()} placement="head">
-                <MorphHoverButton
-                  type="button"
-                  className={`sidebar-star-btn sidebar-flow-btn${workflowsOpen ? ' is-active' : ''}`}
-                  layoutId="sidebar-flow-hover"
-                  aria-label={workflowsOpen ? 'İş akışları panelini kapat' : 'İş akışları panelini aç'}
-                  aria-expanded={workflowsOpen}
-                  onClick={() => {
-                    setShortcutsOpen(false)
-                    setWorkflowsOpen((v) => !v)
-                  }}
-                >
-                  <SidebarFlowIcon active={workflowsOpen} />
-                </MorphHoverButton>
-              </SidebarHoverTip>
-            </div>
-          </div>
-          <label className="search" ref={searchRef}>
-            <span className="sr-only">Servis veya metod ara</span>
-            <svg className="search-icon" viewBox="0 0 16 16" fill="none" aria-hidden>
-              <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.35" />
-              <path d="M10.2 10.2 13 13" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
-            </svg>
-            <input
-              className={[query ? 'has-clear' : 'has-shortcut'].filter(Boolean).join(' ')}
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Servis veya metod ara…"
-            />
-            {query ? (
-              <button
-                type="button"
-                className="search-clear-btn"
-                aria-label="Aramayı temizle"
-                title="Aramayı temizle"
-                onClick={() => setQuery('')}
-              >
-                ×
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="search-shortcut"
-                aria-label="Komut paletini aç"
-                title="Komut paleti (⌘K)"
-                onClick={() => setCmdkOpen(true)}
-              >
-                ⌘K
-              </button>
-            )}
-            {query && (hits.length > 0 || methodHits.length > 0) && (
-              <>
-                <button
-                  type="button"
-                  className="search-backdrop"
-                  aria-label="Aramayı kapat"
-                  onClick={() => setQuery('')}
-                />
-                <SearchHitsPortal open theme={appTheme} anchorRef={searchRef}>
-                <AnimatePresence initial={false}>
-                {hits.map((s, i) => (
-                  <MotionListItem key={s.id} id={s.id} index={i}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectPivot(s.id, { resetHistory: true, source: 'search' })
-                        setQuery('')
-                      }}
-                    >
-                      <SearchHitContent
-                        title={s.name}
-                        kind="service"
-                        metaId={s.id}
-                        tip={s.name}
-                      />
-                    </button>
-                  </MotionListItem>
-                ))}
-                {methodHits.map((m, i) => (
-                  <MotionListItem key={m.id} id={m.id} index={hits.length + i}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        selectMethod(m.serviceId, m.id)
-                        setQuery('')
-                      }}
-                    >
-                      <SearchHitContent
-                        title={`${m.className}.${m.name}`}
-                        kind="method"
-                        metaId={m.id}
-                        subtitle={m.serviceName}
-                        tip={`${m.className}.${m.name}`}
-                      />
-                    </button>
-                  </MotionListItem>
-                ))}
-                </AnimatePresence>
-                </SearchHitsPortal>
-              </>
-            )}
-          </label>
-          <div className="module-kind-legend" aria-label="Ağaç türleri">
-            <span className="module-kind-key">
-              <TreeKindIcon kind="group" size={13} />
-              Proje Grubu
-            </span>
-            <span className="module-kind-key">
-              <TreeKindIcon kind="package" size={13} />
-              Jar
-            </span>
-            <span className="module-kind-key">
-              <TreeKindIcon kind="service" size={13} />
-              Servis
-            </span>
-            <span className="module-kind-key">
-              <TreeKindIcon kind="method" size={13} />
-              Metod
-            </span>
-          </div>
-          <div className="module-sidebar-body" ref={sidebarBodyRef} tabIndex={-1}>
-            <ModuleTree
-              nodes={tree}
-              selectedServiceId={pivotId}
-              selectedMethodId={selectedMethodId}
-              selectedCatalogNodeId={catalogNode?.id}
-              scrollParentRef={sidebarBodyRef}
-              showNonServiceMethods={showNonServiceMethods}
-              pinServiceId={treePinServiceId}
-              keyboardEnabled={!shortcutsOpen && !workflowsOpen}
-              onClearPin={() => setTreePinServiceId(undefined)}
-              onSelectCatalogNode={selectCatalogNode}
-              onSelectService={(id) =>
-                selectPivot(id, { resetHistory: true, source: 'tree' })
-              }
-              onSelectMethod={selectMethod}
-            />
-          </div>
-          <div className="module-sidebar-foot">
-            <CatalogHelp />
-            <TreeOptionsRadial
-              showNonServiceMethods={showNonServiceMethods}
-              onShowNonServiceMethodsChange={setShowNonServiceMethods}
-            />
-          </div>
-          <ShortcutsPanel
-            open={shortcutsOpen && surface === 'services'}
-            pivotId={pivotId}
-            pivotName={service?.name}
-            navPinned={navPinned}
-            mapExpanded={mapExpanded}
-            onTogglePin={toggleNavPinned}
-            onClose={() => setShortcutsOpen(false)}
-            onSelectService={(id) => {
-              setTreePinServiceId(undefined)
-              setQuery('')
-              selectPivot(id, { resetHistory: true, source: 'tree' })
-            }}
-          />
-          <WorkflowsPanel
-            open={workflowsOpen && surface === 'services'}
-            pivotId={pivotId}
-            pivotName={service?.name}
-            navPinned={navPinned}
-            mapExpanded={mapExpanded}
-            onTogglePin={toggleNavPinned}
-            onClose={() => setWorkflowsOpen(false)}
-            onSelectService={(id) => {
-              setTreePinServiceId(undefined)
-              setQuery('')
-              selectPivot(id, { resetHistory: true, source: 'tree' })
-            }}
-            onOpenFolder={openWorkflowFolder}
-            onOpenProcess={openProcessFlow}
-            onOpenProcessRoute={openProcessRoute}
-            infoFolderId={workflowInfoId}
-            processFlowNo={processFlowNo}
-            activeRouteId={processRouteId}
-            canEdit={canEditCatalog}
-          />
-          </div>
-          <button
-            type="button"
-            className="module-sidebar-resize"
-            aria-label="Modül panel genişliğini ayarla"
-            title="Panel genişliğini ayarla"
-            onPointerDown={startNavResize}
-          />
-        </aside>
+          onToggleWorkflows={() => {
+            setShortcutsOpen(false)
+            setWorkflowsOpen((v) => !v)
+          }}
+          onTogglePin={toggleNavPinned}
+          onResizePointerDown={startNavResize}
+          searchRef={searchRef}
+          query={query}
+          onQueryChange={setQuery}
+          hits={hits}
+          methodHits={methodHits}
+          appTheme={appTheme}
+          onOpenCommandPalette={() => setCmdkOpen(true)}
+          onSelectServiceFromSearch={(id) => {
+            selectPivot(id, { resetHistory: true, source: 'search' })
+            setQuery('')
+          }}
+          onSelectMethod={selectMethod}
+          tree={tree}
+          pivotId={pivotId}
+          pivotName={service?.name}
+          selectedMethodId={selectedMethodId}
+          catalogNodeId={catalogNode?.id}
+          sidebarBodyRef={sidebarBodyRef}
+          showNonServiceMethods={showNonServiceMethods}
+          onShowNonServiceMethodsChange={setShowNonServiceMethods}
+          treePinServiceId={treePinServiceId}
+          onClearPin={() => setTreePinServiceId(undefined)}
+          onSelectCatalogNode={selectCatalogNode}
+          onSelectServiceFromTree={(id) =>
+            selectPivot(id, { resetHistory: true, source: 'tree' })
+          }
+          mapExpanded={mapExpanded}
+          onCloseShortcuts={() => setShortcutsOpen(false)}
+          onCloseWorkflows={() => setWorkflowsOpen(false)}
+          onOpenFolder={openWorkflowFolder}
+          onOpenProcess={openProcessFlow}
+          onOpenProcessRoute={openProcessRoute}
+          workflowInfoId={workflowInfoId}
+          processFlowNo={processFlowNo}
+          processRouteId={processRouteId}
+          canEditCatalog={canEditCatalog}
+          setTreePinServiceId={setTreePinServiceId}
+          setQuery={setQuery}
+          selectPivot={selectPivot}
+        />
 
         <div className="workspace-column">
           <div className="workspace" ref={workspaceRef}>
@@ -1418,335 +1053,72 @@ export default function App() {
           ) : null}
 
           {hasServiceSelection && (
-            <>
-              <div ref={stageTopRef} className="stage-top">
-                <div className="stage-head">
-                  <div className="main-heading-wrap">
-                    <span className="service-status-dot" aria-hidden />
-                    <div className="main-heading-title-row">
-                      <h1 className="main-heading" title={service?.name}>
-                        {service?.name}
-                      </h1>
-                      {pivotId && service ? (
-                        <>
-                          <FavoriteStarButton
-                            active={isFavorite(pivotId)}
-                            className="fav-star-btn is-plain stage-heading-fav"
-                            size={16}
-                            onToggle={() => toggleFavorite(pivotId, service.name)}
-                          />
-                          <ServiceWorkflowChip
-                            serviceId={pivotId}
-                            onOpenFlow={(folderId) => {
-                              setShortcutsOpen(false)
-                              setWorkflowsOpen(false)
-                              openWorkflowFolder(folderId)
-                            }}
-                            onOpenRoot={() => {
-                              setShortcutsOpen(false)
-                              setWorkflowInfoId(undefined)
-                              setWorkflowsOpen(true)
-                            }}
-                          />
-                        </>
-                      ) : null}
-                    </div>
-                  </div>
-                  <div className="stage-actions">
-                    {workflowResumeId ? (
-                      <button
-                        type="button"
-                        className="btn ghost clear-sel"
-                        onClick={returnToWorkflow}
-                      >
-                        Geri
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn ghost clear-sel"
-                        onClick={clearSelection}
-                      >
-                        Seçimi bırak
-                      </button>
-                    )}
-                    {session && service && (
-                      <button
-                        type="button"
-                        className="btn primary compact im-action"
-                        onClick={() => setCrOpen(true)}
-                      >
-                        Değişiklik talebi
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <StageTabs
-                  tab={tab}
-                  tabs={stageTabs}
-                  onSelect={(next) => {
-                    if (next === 'map') {
-                      trail.record('tab_change', undefined, 'Harita sekmesine geçildi')
-                      setTab('map')
-                      return
-                    }
-                    if (next === 'affected') {
-                      trail.record('tab_change', undefined, 'Tablo sekmesine geçildi')
-                      setMapExpanded(false)
-                      setTab('affected')
-                      return
-                    }
-                    if (next === 'screens') {
-                      trail.record('tab_change', undefined, 'Ekranlar sekmesine geçildi')
-                      setMapExpanded(false)
-                      setTab('screens')
-                      return
-                    }
-                    if (next === 'processes') {
-                      trail.record('tab_change', undefined, 'Process sekmesine geçildi')
-                      setMapExpanded(false)
-                      setTab('processes')
-                      return
-                    }
-                    trail.record('tab_change', undefined, 'Servis işlevi sekmesine geçildi')
-                    setMapExpanded(false)
-                    setTab('overview')
-                  }}
-                />
-                {tab === 'map' && (
-                  <StageVisitPath
-                    steps={visitSteps}
-                    currentIndex={historyIndex}
-                    onSelect={selectVisitIndex}
-                  />
-                )}
-              </div>
-
-              <div className={`stage-body${tab === 'map' ? ' is-map-view' : ''}`}>
-                <StageTabPanels tab={tab} tabOrder={SERVICE_STAGE_TAB_ORDER}>
-                  <section
-                    className="stage-panel stage-panel-map"
-                    aria-hidden={tab !== 'map'}
-                    aria-label="Harita"
-                  >
-                    {selectedMethodId && methodImpact && (
-                      <MapStage
-                        title="Method haritası"
-                        expanded={mapExpanded}
-                        onExpandedChange={setMapExpanded}
-                        active={tab === 'map'}
-                      >
-                        <MethodImpactMap
-                          key={`method-${selectedMethodId}`}
-                          graph={methodImpact}
-                          onSelectMethod={selectMethod}
-                          onSelectService={(id) => {
-                            clearMethodKeepService()
-                            if (id !== pivotId)
-                              selectPivot(id, { resetHistory: true })
-                          }}
-                          onClearMethod={clearMethodKeepService}
-                          onPivotBack={goBack}
-                          onPivotForward={goForward}
-                          canPivotBack={
-                            historyIndex > 0 ||
-                            Boolean(selectedMethodId) ||
-                            Boolean(processFlowReturn)
-                          }
-                          canPivotForward={
-                            historyIndex >= 0 &&
-                            historyIndex < history.length - 1
-                          }
-                        />
-                      </MapStage>
-                    )}
-
-                    {!selectedMethodId && impact && (
-                      <MapStage
-                        title={service?.name ?? 'Harita'}
-                        expanded={mapExpanded}
-                        onExpandedChange={setMapExpanded}
-                        active={tab === 'map'}
-                      >
-                        <ImpactMap
-                          graph={impact}
-                          mapExpanded={mapExpanded}
-                          forceLtrSignal={mapForceLtrSignal}
-                          onOpenAffectedTab={(projectId) => {
-                            trail.record(
-                              'tab_change',
-                              undefined,
-                              projectId
-                                ? 'Tablo sekmesine geçildi (proje filtresi)'
-                                : 'Tablo sekmesine geçildi (hub banner)',
-                            )
-                            setTableProjectFilter(projectId)
-                            setMapExpanded(false)
-                            setTab('affected')
-                          }}
-                          projectOptions={impactProjectOptions}
-                          packageOptions={impactPackageOptions}
-                          onPivot={(id) => selectPivot(id, { source: 'map' })}
-                          onSelectMethod={selectMethod}
-                          onBrowseMethods={browseServiceMethods}
-                          onClearCenter={leaveServiceSelection}
-                          onPivotBack={goBack}
-                          onPivotForward={goForward}
-                          canPivotBack={historyIndex > 0 || Boolean(processFlowReturn)}
-                          canPivotForward={
-                            historyIndex >= 0 &&
-                            historyIndex < history.length - 1
-                          }
-                          restoredView={
-                            currentVisit
-                              ? {
-                                  visibleMaxHop: currentVisit.visibleMaxHop,
-                                  expandedLayers: currentVisit.expandedLayers,
-                                }
-                              : undefined
-                          }
-                          onViewStateChange={saveMapViewState}
-                          navDirection={navDirection}
-                          onNavDirectionConsumed={() => setNavDirection(null)}
-                          sessionUserId={session?.id}
-                          sessionUserName={session?.name}
-                          onMapRoot={(el) => {
-                            mapRootRef.current = el
-                          }}
-                          onBeforeSnapshot={flushSnapshotChrome}
-                          onSnapshotSaved={(snap: Snapshot) => {
-                            setSnapshotToast(
-                              snapshotHasMapImage(snap)
-                                ? `${snap.id} kaydedildi — PNG indirildi (İndirilenler)`
-                                : `${snap.id} kaydedildi — harita görüntüsü alınamadı`,
-                            )
-                          }}
-                        />
-                      </MapStage>
-                    )}
-
-                    {selectedMethodId && !methodImpact && (
-                      <MapLoadingSkeleton />
-                    )}
-
-                    {loading && pivotId && !impact && !selectedMethodId && (
-                      <MapLoadingSkeleton />
-                    )}
-                  </section>
-
-                  <section
-                    className="stage-panel stage-panel-affected"
-                    aria-hidden={tab !== 'affected'}
-                    aria-label="Tablo"
-                  >
-                    <div className="relations-nav">
-                      <div
-                        className="list-scope-nav"
-                        role="group"
-                        aria-label="Gezinme geçmişi — Harita ile aynı"
-                      >
-                        <button
-                          type="button"
-                          className="map-nav-btn"
-                          onClick={goBack}
-                          disabled={historyIndex <= 0 && !processFlowReturn}
-                          title="Önceki servis (Harita ile aynı geçmiş)"
-                        >
-                          ← Geri
-                        </button>
-                        <button
-                          type="button"
-                          className="map-nav-btn"
-                          onClick={goForward}
-                          disabled={
-                            historyIndex < 0 ||
-                            historyIndex >= history.length - 1
-                          }
-                          title="Sonraki servis (Harita ile aynı geçmiş)"
-                        >
-                          İleri →
-                        </button>
-                      </div>
-                    </div>
-                    {service ? (
-                      <RelationshipTable
-                        pivot={service}
-                        impact={impact}
-                        callers={affected}
-                        callees={callees}
-                        loading={loading}
-                        visibleMaxHop={currentVisit?.visibleMaxHop ?? 1}
-                        onVisibleMaxHopChange={(hop) =>
-                          saveMapViewState({
-                            visibleMaxHop: hop,
-                            expandedLayers: currentVisit?.expandedLayers ?? [],
-                          })
-                        }
-                        onPivot={(id) => selectPivot(id, { source: 'table' })}
-                        projectLabels={projectLabels}
-                        projectFilter={tableProjectFilter}
-                        projectFilterLabel={
-                          tableProjectFilter
-                            ? projectLabels.get(tableProjectFilter) ?? tableProjectFilter
-                            : undefined
-                        }
-                        onClearProjectFilter={() => setTableProjectFilter(undefined)}
-                      />
-                    ) : loading ? (
-                      <div className="rel-table-wrap" data-motion="rel-table-skeleton">
-                        <SkeletonShimmer lines={6} />
-                      </div>
-                    ) : null}
-                  </section>
-
-                  <section
-                    className="stage-panel stage-panel-overview"
-                    aria-hidden={tab !== 'overview'}
-                    aria-label="Servis işlevi"
-                  >
-                    {service && (
-                      <ServiceOverview
-                        service={service}
-                        projectLabel={
-                          service.projectGroupLabel && service.projectLabel
-                            ? `${service.projectGroupLabel} › ${service.projectLabel}`
-                            : service.projectLabel ??
-                              projectLabels.get(service.projectId)
-                        }
-                        packageLabel={
-                          service.packageLabel ??
-                          packageLabels.get(service.packageId)
-                        }
-                        callerCount={affected.length}
-                        calleeCount={callees.length}
-                        loading={loading}
-                        canEdit={canEditCatalog}
-                      />
-                    )}
-                  </section>
-
-                  <section
-                    className="stage-panel stage-panel-catalog"
-                    aria-hidden={tab !== 'screens'}
-                    aria-label="Ekranlar"
-                  >
-                    <ServiceScreensStage screens={screens} loading={catalogLinksLoading} />
-                  </section>
-
-                  <section
-                    className="stage-panel stage-panel-catalog"
-                    aria-hidden={tab !== 'processes'}
-                    aria-label="Process"
-                  >
-                    <ServiceProcessesStage
-                      processes={processes}
-                      loading={catalogLinksLoading}
-                      onOpenProcess={(no) => openProcessFlow(no, { keepService: true })}
-                    />
-                  </section>
-                </StageTabPanels>
-              </div>
-            </>
+            <ServiceStage
+              service={service}
+              pivotId={pivotId}
+              tab={tab}
+              stageTabs={stageTabs}
+              stageTopRef={stageTopRef}
+              isFavorite={isFavorite}
+              onToggleFavorite={toggleFavorite}
+              onOpenWorkflowFolder={(folderId) => {
+                setShortcutsOpen(false)
+                setWorkflowsOpen(false)
+                openWorkflowFolder(folderId)
+              }}
+              onOpenWorkflowsRoot={() => {
+                setShortcutsOpen(false)
+                setWorkflowInfoId(undefined)
+                setWorkflowsOpen(true)
+              }}
+              workflowResumeId={workflowResumeId}
+              onReturnToWorkflow={returnToWorkflow}
+              onClearSelection={clearSelection}
+              session={session}
+              onOpenChangeRequest={() => setCrOpen(true)}
+              trail={trail}
+              setTab={setTab}
+              setMapExpanded={setMapExpanded}
+              visitSteps={visitSteps}
+              historyIndex={historyIndex}
+              historyLength={history.length}
+              onSelectVisitIndex={selectVisitIndex}
+              selectedMethodId={selectedMethodId}
+              methodImpact={methodImpact}
+              mapExpanded={mapExpanded}
+              onSelectMethod={selectMethod}
+              onClearMethod={clearMethodKeepService}
+              selectPivot={selectPivot}
+              goBack={goBack}
+              goForward={goForward}
+              processFlowReturn={processFlowReturn}
+              impact={impact}
+              mapForceLtrSignal={mapForceLtrSignal}
+              impactProjectOptions={impactProjectOptions}
+              impactPackageOptions={impactPackageOptions}
+              onBrowseMethods={browseServiceMethods}
+              onLeaveServiceSelection={leaveServiceSelection}
+              currentVisit={currentVisit}
+              onViewStateChange={saveMapViewState}
+              navDirection={navDirection}
+              onNavDirectionConsumed={() => setNavDirection(null)}
+              mapRootRef={mapRootRef}
+              onBeforeSnapshot={flushSnapshotChrome}
+              onSnapshotToast={setSnapshotToast}
+              loading={loading}
+              affected={affected}
+              callees={callees}
+              tableProjectFilter={tableProjectFilter}
+              projectLabels={projectLabels}
+              packageLabels={packageLabels}
+              onClearProjectFilter={() => setTableProjectFilter(undefined)}
+              setTableProjectFilter={setTableProjectFilter}
+              screens={screens}
+              processes={processes}
+              catalogLinksLoading={catalogLinksLoading}
+              canEditCatalog={canEditCatalog}
+              onOpenProcessKeepService={(no) => openProcessFlow(no, { keepService: true })}
+            />
           )}
         </main>
           </div>
