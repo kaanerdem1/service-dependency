@@ -9,5 +9,6 @@ Aşağıdaki dosyalar ürün, veri modeli ve entegrasyonu anlatır. İlk okuma i
 3. **[catalog-persistence.md](./catalog-persistence.md)** — localStorage/bellek verisinin Postgres’e taşınması: tablolar, okuma/yazma uçları, DDL (§14 detayı).
 4. **[process-flow.md](./process-flow.md)** — Süreç haritası: tam akış vs kayıtlı rota.
 5. **[entegrasyon.md](./entegrasyon.md)** — Issue management ile deep link / embed.
+6. **[refactor-plan.md](./refactor-plan.md)** — Kod okunabilirliği, modül bölme ve Türkçe yorum rehberi (refactor yol haritası).
 
 **Manuel smoke:** Ekip içi test servis listesi kökte `ss.md` dosyasında tutulabilir (`.gitignore` — repoda yok). Dokümanlarda geçen “ss.md smoke” buna işaret eder.
