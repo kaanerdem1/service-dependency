@@ -68,6 +68,7 @@ import { ProcessFlowPage } from './components/ProcessFlowPage'
 import { getProcessRoute, touchProcessRoute } from './processRouteStore'
 import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
 import { useNavDrawers } from './navigation/useNavDrawers'
+import { useVisitHistory, visitEntry, type VisitPathStep } from './navigation/useVisitHistory'
 
 function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
   shortcutsOpen: boolean
@@ -201,25 +202,6 @@ function InboxIcon() {
   )
 }
 
-type VisitEntry = {
-  id: string
-  visibleMaxHop: number
-  expandedLayers: number[]
-}
-
-type VisitPathStep = {
-  id: string
-  name: string
-}
-
-function visitEntry(id: string, view?: Partial<Omit<VisitEntry, 'id'>>): VisitEntry {
-  return {
-    id,
-    visibleMaxHop: view?.visibleMaxHop ?? 1,
-    expandedLayers: view?.expandedLayers ? [...view.expandedLayers] : [],
-  }
-}
-
 function StageVisitPath({
   steps,
   currentIndex,
@@ -281,8 +263,6 @@ export default function App() {
   )
   const [methodImpact, setMethodImpact] = useState<MethodImpactGraph>()
   /** Metod seçilmeden Metodlar sekmesini aç (harita +N) — saklandı; detay paneli kaldırıldı */
-  const [history, setHistory] = useState<VisitEntry[]>(() => restoredNav?.history ?? [])
-  const [historyIndex, setHistoryIndex] = useState(() => restoredNav?.historyIndex ?? -1)
   const [service, setService] = useState<Service>()
   const [affected, setAffected] = useState<AffectedService[]>([])
   const [callees, setCallees] = useState<AffectedService[]>([])
@@ -305,9 +285,6 @@ export default function App() {
   const appFrameStyle = {
     '--sidebar-panel-width': `${navWidth}px`,
   } as CSSProperties
-  const [navDirection, setNavDirection] = useState<'back' | 'forward' | null>(
-    null,
-  )
   const stageTopRef = useRef<HTMLDivElement>(null)
   const mainRef = useRef<HTMLElement>(null)
   const mapRootRef = useRef<HTMLDivElement | null>(null)
@@ -366,6 +343,64 @@ export default function App() {
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
+
+  // Metod seçimini temizleyen iki küçük yardımcı — `useVisitHistory`'nin
+  // `goBack`/`goForward`/`selectVisitIndex` fonksiyonları bunları kullanıyor.
+  // Erken tanımlanma nedeni: hook çağrısı bunlara ihtiyaç duyuyor.
+  const resetMethodSelection = useCallback(() => {
+    setSelectedMethodId(undefined)
+    setMethodImpact(undefined)
+  }, [])
+  const clearMethodKeepService = useCallback(() => {
+    resetMethodSelection()
+    setTab('map')
+  }, [resetMethodSelection])
+
+  const serviceNameById = useMemo(() => {
+    const m = new Map(catalogServices.map((s) => [s.id, s.name]))
+    if (service) m.set(service.id, service.name)
+    return m
+  }, [catalogServices, service])
+
+  /**
+   * `restoreProcessFlowFromService` (süreç akışına geri dönüş) daha aşağıda,
+   * `useVisitHistory`'nin döndürdüğü `setHistory`/`setHistoryIndex`'e ihtiyaç
+   * duyduğu için tanımlanıyor — ama hook da `goBack` içinde onu çağırabilmek
+   * için bir referansa ihtiyaç duyuyor. Döngüyü kırmak için "her zaman en
+   * güncel fonksiyonu tutan ref" deseni kullanılıyor: hook, sabit kimlikli
+   * `() => onRestoreProcessFlowRef.current()` çağırır; gerçek fonksiyon her
+   * render'da bu ref'e atanır (aşağıda, `restoreProcessFlowFromService`
+   * tanımının hemen altında).
+   */
+  const onRestoreProcessFlowRef = useRef<() => void>(() => {})
+  const onRestoreProcessFlow = useCallback(() => onRestoreProcessFlowRef.current(), [])
+
+  const {
+    history,
+    setHistory,
+    historyIndex,
+    setHistoryIndex,
+    navDirection,
+    setNavDirection,
+    goBack,
+    goForward,
+    selectVisitIndex,
+    saveMapViewState,
+    currentVisit,
+    visitSteps,
+    visitTrailForCmdk,
+  } = useVisitHistory({
+    restoredHistory: restoredNav?.history,
+    restoredHistoryIndex: restoredNav?.historyIndex,
+    selectedMethodId,
+    hasProcessFlowReturn: Boolean(processFlowReturn),
+    onClearMethod: clearMethodKeepService,
+    onRestoreProcessFlow,
+    setPivotId,
+    resetMethodSelection,
+    trail,
+    serviceNameById,
+  })
 
   useEffect(() => {
     writePersistedAppNav({
@@ -919,8 +954,7 @@ export default function App() {
     setProcessFlowRestoreNodeId(ret.nodeId)
     setProcessFlowNo(ret.processNo)
     setPivotId(undefined)
-    setSelectedMethodId(undefined)
-    setMethodImpact(undefined)
+    resetMethodSelection()
     setHistory([])
     setHistoryIndex(-1)
     setService(undefined)
@@ -929,7 +963,10 @@ export default function App() {
     setImpact(undefined)
     setMapExpanded(false)
     setTab('map')
-  }, [processFlowReturn])
+  }, [processFlowReturn, resetMethodSelection, setHistory, setHistoryIndex])
+  // `useVisitHistory`'nin `goBack`'i bu fonksiyonu döngüsel olmadan
+  // çağırabilsin diye her render'da en güncel hâlini ref'e yazıyoruz.
+  onRestoreProcessFlowRef.current = restoreProcessFlowFromService
 
   const openSubProcessFromFlow = useCallback(
     (subNo: string, nodeId: string) => {
@@ -979,16 +1016,9 @@ export default function App() {
     setTableProjectFilter(undefined)
   }, [pivotId])
 
-  const clearMethodKeepService = useCallback(() => {
-    setSelectedMethodId(undefined)
-    setMethodImpact(undefined)
-    setTab('map')
-  }, [])
-
   const browseServiceMethods = useCallback(
     (serviceId: string) => {
-      setSelectedMethodId(undefined)
-      setMethodImpact(undefined)
+      resetMethodSelection()
       setTab('map')
       if (serviceId !== pivotId) {
         setHistory([visitEntry(serviceId)])
@@ -996,93 +1026,11 @@ export default function App() {
         setPivotId(serviceId)
       }
     },
-    [pivotId],
+    [pivotId, resetMethodSelection, setHistory, setHistoryIndex],
   )
 
-  const goBack = () => {
-    if (selectedMethodId) {
-      clearMethodKeepService()
-      return
-    }
-    if (processFlowReturn) {
-      trail.record('nav_back', undefined, 'Süreç akışına geri dönüldü')
-      restoreProcessFlowFromService()
-      return
-    }
-    if (historyIndex <= 0) return
-    trail.record('nav_back')
-    const i = historyIndex - 1
-    setNavDirection('back')
-    setHistoryIndex(i)
-    setPivotId(history[i].id)
-  }
-
-  const goForward = () => {
-    if (historyIndex < 0 || historyIndex >= history.length - 1) return
-    trail.record('nav_forward')
-    const i = historyIndex + 1
-    setNavDirection('forward')
-    setHistoryIndex(i)
-    setSelectedMethodId(undefined)
-    setMethodImpact(undefined)
-    setPivotId(history[i].id)
-  }
-
-  const saveMapViewState = useCallback(
-    (view: { visibleMaxHop: number; expandedLayers: number[] }) => {
-      setHistory((prev) => {
-        if (historyIndex < 0 || historyIndex >= prev.length) return prev
-        const cur = prev[historyIndex]!
-        const sameLayers =
-          cur.expandedLayers.length === view.expandedLayers.length &&
-          cur.expandedLayers.every((h, i) => h === view.expandedLayers[i])
-        if (cur.visibleMaxHop === view.visibleMaxHop && sameLayers) return prev
-        const next = [...prev]
-        next[historyIndex] = {
-          ...cur,
-          visibleMaxHop: view.visibleMaxHop,
-          expandedLayers: [...view.expandedLayers],
-        }
-        return next
-      })
-    },
-    [historyIndex],
-  )
-
-  const breadcrumb = historyIndex >= 0 ? history.slice(0, historyIndex + 1) : []
-  const currentVisit =
-    historyIndex >= 0 && historyIndex < history.length
-      ? history[historyIndex]
-      : undefined
   const hasSelection = !!pivotId || !!catalogNode || !!workflowInfoId || !!processFlowNo
   const hasServiceSelection = !!pivotId && !workflowInfoId && !processFlowNo
-
-  const serviceNameById = useMemo(() => {
-    const m = new Map(catalogServices.map((s) => [s.id, s.name]))
-    if (service) m.set(service.id, service.name)
-    return m
-  }, [catalogServices, service])
-
-  const visitSteps = useMemo(
-    () =>
-      breadcrumb.map((e) => ({
-        id: e.id,
-        name: serviceNameById.get(e.id) ?? e.id,
-      })),
-    [breadcrumb, serviceNameById],
-  )
-
-  const visitTrailForCmdk = useMemo(() => {
-    const seen = new Set<string>()
-    const out: { id: string; name: string }[] = []
-    for (let i = history.length - 1; i >= 0; i--) {
-      const id = history[i]!.id
-      if (seen.has(id)) continue
-      seen.add(id)
-      out.push({ id, name: serviceNameById.get(id) ?? id })
-    }
-    return out
-  }, [history, serviceNameById])
 
   useEffect(() => {
     if (!service?.id?.startsWith('sd-') || !service.name) return
@@ -1114,18 +1062,6 @@ export default function App() {
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
   }, [cmdkOpen])
-
-  const selectVisitIndex = useCallback(
-    (i: number) => {
-      if (i === historyIndex || i < 0 || i >= history.length) return
-      setNavDirection(i < historyIndex ? 'back' : 'forward')
-      setHistoryIndex(i)
-      setSelectedMethodId(undefined)
-      setMethodImpact(undefined)
-      setPivotId(history[i]!.id)
-    },
-    [history, historyIndex],
-  )
 
   return (
     <LayoutGroup id="app-shell">

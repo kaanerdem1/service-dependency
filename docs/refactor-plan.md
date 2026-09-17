@@ -102,21 +102,35 @@ server/src/
 
 
 
-### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ ilk adım tamam
+### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ 2. adım tamam
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
 | Taşınacak parça | Hedef | Durum |
 |---|---|---|
 | Drawer görünürlük (shortcuts, workflows) | `navigation/useNavDrawers.ts` | ✅ Yapıldı |
-| Servis geçmişi / breadcrumb | `navigation/useCatalogHistory.ts` + ince hook | ⏳ Sonraki adım |
+| Servis geçmişi / breadcrumb (geri/ileri yığını) | `navigation/useVisitHistory.ts` | ✅ Yapıldı |
 | Süreç açma / rota açma | `navigation/openProcess.ts` veya `process/openProcessVisit.ts` | ⏳ Sonraki adım |
 | Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ Sonraki adım |
 
-**Yapıldı:** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince kapatma,
-son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye kısayolları
-tek dosyaya taşındı. `App.tsx`'teki diğer 20+ çağrı noktası (`setShortcutsOpen(false)` vb.)
-aynı isimlerle hook'tan geliyor — davranış birebir korundu, sadece tanım yeri değişti.
+**Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
+kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
+kısayolları tek dosyaya taşındı. `App.tsx`'teki diğer 20+ çağrı noktası (`setShortcutsOpen(false)`
+vb.) aynı isimlerle hook'tan geliyor — davranış birebir korundu, sadece tanım yeri değişti.
+
+**Yapıldı (2. adım):** `useVisitHistory` — Geri/İleri yığını (`history`, `historyIndex`,
+`navDirection`), `goBack`/`goForward`/`selectVisitIndex`/`saveMapViewState` ve bunlardan türeyen
+`breadcrumb`/`visitSteps`/`visitTrailForCmdk` tek dosyaya taşındı. `history`/`historyIndex`/
+`setHistory`/`setHistoryIndex`/`setNavDirection` bilinçli olarak **ham state** olarak dışa açık
+bırakıldı (`clearSelection`, `selectPivot`, `selectMethod` gibi fonksiyonlar öncekiyle birebir
+aynı şekilde doğrudan güncelliyor) — davranışı hiç değiştirmeden, düşük riskli bir taşıma.
+
+`goBack`, "seçili metod temizle" ve "süreç akışına geri dön" durumlarını da yönetiyor; bu iki
+işlev hâlâ `App.tsx`'te tanımlı (`resetMethodSelection`, `restoreProcessFlowFromService`) ve
+hook'a callback olarak veriliyor. `restoreProcessFlowFromService`, hook'un döndürdüğü
+`setHistory`/`setHistoryIndex`'e ihtiyaç duyduğu için hook çağrısından **sonra** tanımlanıyor;
+hook ise onu `goBack` içinde çağırabilmek için — bu döngüsel bağımlılığı kırmak amacıyla —
+"her render'da güncellenen ref" deseni kullanıldı (`onRestoreProcessFlowRef`).
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 
