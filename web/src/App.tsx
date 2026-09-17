@@ -65,9 +65,13 @@ import { ShortcutsPanel } from './components/ShortcutsPanel'
 import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { ProcessFlowPage } from './components/ProcessFlowPage'
-import { getProcessRoute, touchProcessRoute } from './processRouteStore'
 import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
 import { useNavDrawers } from './navigation/useNavDrawers'
+import {
+  useProcessFlowNav,
+  type ProcessFlowHistoryApi,
+  type SelectPivotFn,
+} from './navigation/useProcessFlowNav'
 import { useVisitHistory, visitEntry, type VisitPathStep } from './navigation/useVisitHistory'
 
 function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
@@ -325,21 +329,6 @@ export default function App() {
   const [workflowResumeId, setWorkflowResumeId] = useState<string | undefined>(
     () => restoredNav?.workflowResumeId,
   )
-  const [processFlowNo, setProcessFlowNo] = useState<string | undefined>(
-    () => restoredNav?.processFlowNo,
-  )
-  const [processRouteId, setProcessRouteId] = useState<string | undefined>(
-    () => restoredNav?.processRouteId,
-  )
-  /** Drawer’dan servise gidildiğinde sürece geri dönmek için. */
-  const [processFlowReturn, setProcessFlowReturn] = useState<
-    { processNo: string; nodeId?: string } | undefined
-  >()
-  /** Alt sürece gidildiğinde üst süreç + drawer adımı. */
-  const [processFlowStack, setProcessFlowStack] = useState<
-    { processNo: string; nodeId?: string }[]
-  >(() => restoredNav?.processFlowStack ?? [])
-  const [processFlowRestoreNodeId, setProcessFlowRestoreNodeId] = useState<string>()
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
@@ -363,17 +352,52 @@ export default function App() {
   }, [catalogServices, service])
 
   /**
-   * `restoreProcessFlowFromService` (süreç akışına geri dönüş) daha aşağıda,
-   * `useVisitHistory`'nin döndürdüğü `setHistory`/`setHistoryIndex`'e ihtiyaç
-   * duyduğu için tanımlanıyor — ama hook da `goBack` içinde onu çağırabilmek
-   * için bir referansa ihtiyaç duyuyor. Döngüyü kırmak için "her zaman en
-   * güncel fonksiyonu tutan ref" deseni kullanılıyor: hook, sabit kimlikli
-   * `() => onRestoreProcessFlowRef.current()` çağırır; gerçek fonksiyon her
-   * render'da bu ref'e atanır (aşağıda, `restoreProcessFlowFromService`
-   * tanımının hemen altında).
+   * `selectPivot` ve ziyaret geçmişi setter'ları bu hook'tan sonra tanımlanır.
+   * Süreç→servis / servis→süreç geçişleri onları ref üzerinden çağırır.
    */
-  const onRestoreProcessFlowRef = useRef<() => void>(() => {})
-  const onRestoreProcessFlow = useCallback(() => onRestoreProcessFlowRef.current(), [])
+  const selectPivotRef = useRef<SelectPivotFn>(() => {})
+  const historyApiRef = useRef<ProcessFlowHistoryApi>({
+    setHistory: () => {},
+    setHistoryIndex: () => {},
+  })
+
+  const {
+    processFlowNo,
+    setProcessFlowNo,
+    processRouteId,
+    setProcessRouteId,
+    processFlowReturn,
+    setProcessFlowReturn,
+    processFlowStack,
+    processFlowRestoreNodeId,
+    openProcessFlow,
+    openProcessRoute,
+    openServiceFromProcessFlow,
+    restoreProcessFlowFromService,
+    openSubProcessFromFlow,
+    backToParentProcessFlow,
+    dismissProcessFlow,
+    consumeRestoreNode,
+  } = useProcessFlowNav({
+    restoredProcessFlowNo: restoredNav?.processFlowNo,
+    restoredProcessRouteId: restoredNav?.processRouteId,
+    restoredProcessFlowStack: restoredNav?.processFlowStack,
+    setWorkflowInfoId,
+    setWorkflowResumeId,
+    setShortcutsOpen,
+    setWorkflowsOpen,
+    setPivotId,
+    setCatalogNode,
+    resetMethodSelection,
+    setTab,
+    setService,
+    setAffected,
+    setCallees,
+    setImpact,
+    setMapExpanded,
+    selectPivotRef,
+    historyApiRef,
+  })
 
   const {
     history,
@@ -395,12 +419,13 @@ export default function App() {
     selectedMethodId,
     hasProcessFlowReturn: Boolean(processFlowReturn),
     onClearMethod: clearMethodKeepService,
-    onRestoreProcessFlow,
+    onRestoreProcessFlow: restoreProcessFlowFromService,
     setPivotId,
     resetMethodSelection,
     trail,
     serviceNameById,
   })
+  historyApiRef.current = { setHistory, setHistoryIndex }
 
   useEffect(() => {
     writePersistedAppNav({
@@ -787,39 +812,6 @@ export default function App() {
     setWorkflowInfoId(id)
   }, [])
 
-  const openProcessFlow = useCallback((no: string, opts?: { keepService?: boolean }) => {
-    setWorkflowInfoId(undefined)
-    setWorkflowResumeId(undefined)
-    setProcessFlowReturn(undefined)
-    setProcessFlowStack([])
-    setProcessFlowRestoreNodeId(undefined)
-    setProcessRouteId(undefined)
-    setShortcutsOpen(false)
-    setWorkflowsOpen(true)
-    if (!opts?.keepService) {
-      setPivotId(undefined)
-      setCatalogNode(null)
-    }
-    setProcessFlowNo(no)
-  }, [])
-
-  const openProcessRoute = useCallback((routeId: string) => {
-    const route = getProcessRoute(routeId)
-    if (!route) return
-    touchProcessRoute(routeId)
-    setWorkflowInfoId(undefined)
-    setWorkflowResumeId(undefined)
-    setProcessFlowReturn(undefined)
-    setProcessFlowStack([])
-    setProcessFlowRestoreNodeId(undefined)
-    setProcessRouteId(routeId)
-    setShortcutsOpen(false)
-    setWorkflowsOpen(true)
-    setPivotId(undefined)
-    setCatalogNode(null)
-    setProcessFlowNo(route.processNo)
-  }, [])
-
   const selectCatalogNode = useCallback(
     (node: ModuleNode) => {
       if (node.kind !== 'group' && node.kind !== 'package') return
@@ -920,73 +912,7 @@ export default function App() {
     },
     [clearSelection, history, historyIndex, pivotId, selectedMethodId, trail, catalogServices],
   )
-
-  const openServiceFromProcessFlow = useCallback(
-    async (serviceName: string, nodeId: string, serviceId?: string) => {
-      if (!processFlowNo) return
-      let pivotServiceId = serviceId
-      if (!pivotServiceId) {
-        const hits = await searchServices(serviceName).catch(() => [] as Service[])
-        const exact =
-          hits.find((h) => h.name === serviceName) ??
-          hits.find((h) => h.name.toUpperCase() === serviceName.toUpperCase())
-        pivotServiceId = exact?.id ?? (hits.length === 1 ? hits[0]?.id : undefined)
-      }
-      if (!pivotServiceId) return
-
-      const returnTo = { processNo: processFlowNo, nodeId }
-      setProcessFlowRestoreNodeId(undefined)
-      setProcessFlowNo(undefined)
-      selectPivot(pivotServiceId, {
-        resetHistory: true,
-        source: 'table',
-        keepProcessFlowReturn: true,
-      })
-      setProcessFlowReturn(returnTo)
-    },
-    [processFlowNo, selectPivot],
-  )
-
-  const restoreProcessFlowFromService = useCallback(() => {
-    if (!processFlowReturn) return
-    const ret = processFlowReturn
-    setProcessFlowReturn(undefined)
-    setProcessFlowRestoreNodeId(ret.nodeId)
-    setProcessFlowNo(ret.processNo)
-    setPivotId(undefined)
-    resetMethodSelection()
-    setHistory([])
-    setHistoryIndex(-1)
-    setService(undefined)
-    setAffected([])
-    setCallees([])
-    setImpact(undefined)
-    setMapExpanded(false)
-    setTab('map')
-  }, [processFlowReturn, resetMethodSelection, setHistory, setHistoryIndex])
-  // `useVisitHistory`'nin `goBack`'i bu fonksiyonu döngüsel olmadan
-  // çağırabilsin diye her render'da en güncel hâlini ref'e yazıyoruz.
-  onRestoreProcessFlowRef.current = restoreProcessFlowFromService
-
-  const openSubProcessFromFlow = useCallback(
-    (subNo: string, nodeId: string) => {
-      if (!processFlowNo) return
-      setProcessFlowStack((prev) => [...prev, { processNo: processFlowNo, nodeId }])
-      setProcessFlowRestoreNodeId(undefined)
-      setProcessFlowNo(subNo)
-    },
-    [processFlowNo],
-  )
-
-  const backToParentProcessFlow = useCallback(() => {
-    setProcessFlowStack((prev) => {
-      if (!prev.length) return prev
-      const parent = prev[prev.length - 1]
-      setProcessFlowRestoreNodeId(parent.nodeId)
-      setProcessFlowNo(parent.processNo)
-      return prev.slice(0, -1)
-    })
-  }, [])
+  selectPivotRef.current = selectPivot
 
   const selectMethod = useCallback(
     (serviceId: string, methodId: string) => {
@@ -1451,18 +1377,12 @@ export default function App() {
                 routeId={processRouteId}
                 onRouteSaved={setProcessRouteId}
                 initialSelectedNodeId={processFlowRestoreNodeId}
-                onRestoreConsumed={() => setProcessFlowRestoreNodeId(undefined)}
+                onRestoreConsumed={consumeRestoreNode}
                 onOpenService={openServiceFromProcessFlow}
                 onOpenSubProcess={openSubProcessFromFlow}
                 canGoBack={processFlowStack.length > 0}
                 onBackToParent={backToParentProcessFlow}
-                onDismiss={() => {
-                  setProcessFlowNo(undefined)
-                  setProcessFlowReturn(undefined)
-                  setProcessFlowStack([])
-                  setProcessFlowRestoreNodeId(undefined)
-                  setProcessRouteId(undefined)
-                }}
+                onDismiss={dismissProcessFlow}
               />
             </div>
           ) : null}

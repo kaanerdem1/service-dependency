@@ -11,8 +11,7 @@
  *   - `goBack`, geçmişte servis yoksa da çalışır: önce "seçili metod" varsa
  *     onu temizler, sonra "süreç akışından gelinmişse" oraya döner — bu
  *     nedenle hook, bu iki durumu `onClearMethod` / `onRestoreProcessFlow`
- *     callback'leri ve `selectedMethodId` / `hasProcessFlowReturn` ile
- *     parametre olarak alır (o state'lerin sahibi hâlâ `App.tsx`).
+ *     callback'leri ile alır. Restore'un sahibi `useProcessFlowNav`'dır.
  *
  * Ne yapmaz:
  *   - `pivotId`'yi (hangi servisin o an ekranda gösterildiği) kendi başına
