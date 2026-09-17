@@ -616,7 +616,7 @@ Bugün: `server/src/changeRequests.ts` — **process bellek**, restart sıfırla
 | `env.inbox_notification`  | Kullanıcı bildirimi                    |
 
 
-Okuma/yazma: mevcut CR/inbox UI → REST; F4/F5 + issue entegrasyonu ([entegrasyon.md](./entegrasyon.md)).
+Okuma/yazma: mevcut CR/inbox UI → REST; F4/F5 + intranet issue aracı (repoda ayrı spec yok).
 
 ### 14.6 DWH lineage favorileri
 

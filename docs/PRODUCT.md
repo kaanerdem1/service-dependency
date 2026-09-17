@@ -1,6 +1,6 @@
 # Ürün — Service Dependency
 
-> Kurulum: [README](../README.md) · Veri / API: [db.md](./db.md) · Issue entegrasyonu: [entegrasyon.md](./entegrasyon.md)
+> Kurulum: [README](../README.md) · Veri / API: [db.md](./db.md)
 
 **Statik katalog + etki analizi.** Değişiklik onayı, flag, inbox ve rol modeli **bu uygulamada değil** — intranet **issue management** aracında kalır. SD, issue’ya “bu servis değişirse kim etkilenir?” cevabını verir.
 
@@ -39,9 +39,9 @@ Uzun vadede servis → metod → veri katmanı tek etki hikâyesinde birleşir.
 | Harita / tablo / metod call-graph | Inbox, bildirim, rol / yetki |
 | Deep link veya embed (`?service=`) | Workflow, sahiplik, audit |
 
-Issue kaydından SD’ye link veya gömülü sekme: [entegrasyon.md](./entegrasyon.md).
+Issue kaydından SD’ye deep link veya embed intranet issue aracında tanımlanır (bu repoda ayrı belge yok).
 
-Standalone uygulamadaki **değişiklik talebi / inbox / flag** ekranları yalnızca erken POC mock’udur; ürün sınırı değildir, issue entegrasyonu gelince kapatılacak (`features.cr: false`).
+Standalone uygulamadaki **değişiklik talebi / inbox / flag** ekranları yalnızca erken POC mock’udur; ürün sınırı değildir, issue aracı devreye girince kapatılacak (`features.cr: false`).
 
 ---
 
@@ -79,7 +79,7 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 | Responsive (dar pencere) | ✅ kısmi | `<1100px` sidebar ölçekleme, harita içi yatay scroll — `responsive.css` |
 | DWH lineage sekmesi | ✅ | Ayrı `surface=dwh` |
 | Inventory DB entegrasyonu | ✅ | Postgres (`env.*`) |
-| Issue deep link / embed | ⏳ | F1: `?service=` — [entegrasyon.md](./entegrasyon.md) |
+| Issue deep link / embed | ⏳ | F1: `?service=` (intranet issue aracı) |
 | Gerçek owner (F4) | ⏳ | `service_owner` + issue sahiplik alanları |
 | Kenar tipi (`http` / `queue`) | ⏳ | P2 |
 
@@ -150,7 +150,7 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 | API ↔ DB, ağaç, ingest | [db.md](./db.md) |
 | Kalıcılık tabloları + DDL | [catalog-persistence.md](./catalog-persistence.md) |
 | Kurulum, mimari | [README](../README.md) |
-| Issue link, embed, `CatalogWorkbench` | [entegrasyon.md](./entegrasyon.md) |
+| Issue link / embed | Intranet issue aracı (repoda ayrı spec yok) |
 | Etki BFS | `server/src/impactGraph.ts` |
 | Harita layout | `web/src/impact/mapLayout.ts`, `ImpactMap.tsx` |
 | Process tam akış + rota | [process-flow.md](./process-flow.md) · `ProcessFlowMap.tsx`, `ProcessFlowRouteBuilder.tsx` |

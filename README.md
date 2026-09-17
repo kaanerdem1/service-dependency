@@ -133,7 +133,7 @@ flowchart LR
 ```
 
 - **Servis etkisi:** `call_edge` rollup + BFS → hop-1 onay listesi, 2–4 hop harita keşfi.
-- **Issue/onay workflow** bu repoda değil; entegrasyon: [docs/entegrasyon.md](docs/entegrasyon.md).
+- **Issue/onay workflow** bu repoda değil; deep link/embed intranet issue aracında tanımlanır.
 
 ---
 
@@ -158,8 +158,6 @@ flowchart LR
 | [docs/db.md](docs/db.md) | Tablolar, API↔DB, ingest, kalıcılık özeti (§14) |
 | [docs/catalog-persistence.md](docs/catalog-persistence.md) | Kalıcılık tabloları, API↔DDL, migration |
 | [docs/process-flow.md](docs/process-flow.md) | Tam akış vs kullanıcı rotası |
-| [docs/entegrasyon.md](docs/entegrasyon.md) | Issue tool embed / deep link |
-
 ---
 
 ## Tema / geri dönüş
