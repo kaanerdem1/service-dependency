@@ -102,18 +102,21 @@ server/src/
 
 
 
-### Faz 1 — `App.tsx` parçalama (2–4 PR)
+### Faz 1 — `App.tsx` parçalama (2–4 PR) ⏳ ilk adım tamam
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
+| Taşınacak parça | Hedef | Durum |
+|---|---|---|
+| Drawer görünürlük (shortcuts, workflows) | `navigation/useNavDrawers.ts` | ✅ Yapıldı |
+| Servis geçmişi / breadcrumb | `navigation/useCatalogHistory.ts` + ince hook | ⏳ Sonraki adım |
+| Süreç açma / rota açma | `navigation/openProcess.ts` veya `process/openProcessVisit.ts` | ⏳ Sonraki adım |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ Sonraki adım |
 
-| Taşınacak parça                          | Hedef                                                          | Üst yorum konusu                           |
-| ---------------------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
-| Servis geçmişi / breadcrumb              | `navigation/useCatalogHistory.ts` + ince hook                  | Geri/ileri stack                           |
-| Süreç açma / rota açma                   | `navigation/openProcess.ts` veya `process/openProcessVisit.ts` | `processFlowNo`, `processRouteId` birlikte |
-| Drawer görünürlük (shortcuts, workflows) | `shell/useNavDrawers.ts`                                       | Pin, overlay                               |
-| Render: sadece kabuk                     | `App.tsx` ~400–600 satır                                       | Yüzey seçimi + outlet                      |
-
+**Yapıldı:** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince kapatma,
+son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye kısayolları
+tek dosyaya taşındı. `App.tsx`'teki diğer 20+ çağrı noktası (`setShortcutsOpen(false)` vb.)
+aynı isimlerle hook'tan geliyor — davranış birebir korundu, sadece tanım yeri değişti.
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 

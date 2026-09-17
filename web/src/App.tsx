@@ -66,11 +66,8 @@ import { WorkflowsPanel } from './components/WorkflowsPanel'
 import { WorkflowInfoPage } from './components/WorkflowInfoPage'
 import { ProcessFlowPage } from './components/ProcessFlowPage'
 import { getProcessRoute, touchProcessRoute } from './processRouteStore'
-import {
-  readPersistedAppNav,
-  writePersistedAppNav,
-  type PersistedSidebarDrawer,
-} from './appNavPersist'
+import { readPersistedAppNav, writePersistedAppNav } from './appNavPersist'
+import { useNavDrawers } from './navigation/useNavDrawers'
 
 function initialSidebarDrawer(restored: ReturnType<typeof readPersistedAppNav>): {
   shortcutsOpen: boolean
@@ -124,11 +121,7 @@ import type {
 } from './types'
 import './App.css'
 import './responsive.css'
-import {
-  favoritesPanelShortcutLabel,
-  matchPanelShortcut,
-  workflowsPanelShortcutLabel,
-} from './panelShortcuts'
+import { favoritesPanelShortcutLabel, workflowsPanelShortcutLabel } from './panelShortcuts'
 
 function isTextEditingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -271,14 +264,6 @@ function StageVisitPath({
 export default function App() {
   const restoredNav = useMemo(() => readPersistedAppNav(), [])
   const initialDrawer = useMemo(() => initialSidebarDrawer(restoredNav), [restoredNav])
-  const lastServicesDrawerRef = useRef<PersistedSidebarDrawer>(
-    restoredNav?.sidebarDrawer ??
-      (initialDrawer.workflowsOpen
-        ? 'workflows'
-        : initialDrawer.shortcutsOpen
-          ? 'shortcuts'
-          : 'none'),
-  )
   const [tree, setTree] = useState<ModuleNode[]>([])
   const [query, setQuery] = useState(() => restoredNav?.treeQuery ?? '')
   const [hits, setHits] = useState<Service[]>([])
@@ -348,8 +333,15 @@ export default function App() {
   const [returnToInbox, setReturnToInbox] = useState(false)
   const [snapshotToast, setSnapshotToast] = useState<string>()
   const [cmdkOpen, setCmdkOpen] = useState(false)
-  const [shortcutsOpen, setShortcutsOpen] = useState(() => initialDrawer.shortcutsOpen)
-  const [workflowsOpen, setWorkflowsOpen] = useState(() => initialDrawer.workflowsOpen)
+  const closeCommandPalette = useCallback(() => setCmdkOpen(false), [])
+  const { shortcutsOpen, setShortcutsOpen, workflowsOpen, setWorkflowsOpen, lastServicesDrawerRef } =
+    useNavDrawers({
+      surface,
+      initialShortcutsOpen: initialDrawer.shortcutsOpen,
+      initialWorkflowsOpen: initialDrawer.workflowsOpen,
+      restoredDrawer: restoredNav?.sidebarDrawer,
+      onCloseCommandPalette: closeCommandPalette,
+    })
   const [workflowInfoId, setWorkflowInfoId] = useState<string | undefined>(
     () => restoredNav?.workflowInfoId,
   )
@@ -374,19 +366,6 @@ export default function App() {
   const [frequentRecents, setFrequentRecents] = useState(() =>
     readServiceRecents().map((r) => ({ id: r.id, name: r.name })),
   )
-
-  useEffect(() => {
-    if (surface !== 'services') {
-      setShortcutsOpen(false)
-      setWorkflowsOpen(false)
-      return
-    }
-    lastServicesDrawerRef.current = shortcutsOpen
-      ? 'shortcuts'
-      : workflowsOpen
-        ? 'workflows'
-        : 'none'
-  }, [surface, shortcutsOpen, workflowsOpen])
 
   useEffect(() => {
     writePersistedAppNav({
@@ -1115,27 +1094,10 @@ export default function App() {
     )
   }, [service?.id, service?.name])
 
+  // Favoriler/İş akışları drawer kısayolları `useNavDrawers` içinde ayrı bir
+  // dinleyicide ele alınıyor; burada yalnızca komut paleti (⌘K / Esc) kalıyor.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (surface === 'services') {
-        if (matchPanelShortcut(e, 'favorites')) {
-          e.preventDefault()
-          e.stopPropagation()
-          setCmdkOpen(false)
-          setWorkflowsOpen(false)
-          setShortcutsOpen((v) => !v)
-          return
-        }
-        if (matchPanelShortcut(e, 'workflows')) {
-          e.preventDefault()
-          e.stopPropagation()
-          setCmdkOpen(false)
-          setShortcutsOpen(false)
-          setWorkflowsOpen((v) => !v)
-          return
-        }
-      }
-
       if (isTextEditingTarget(e.target)) return
 
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -1151,7 +1113,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [cmdkOpen, surface])
+  }, [cmdkOpen])
 
   const selectVisitIndex = useCallback(
     (i: number) => {
