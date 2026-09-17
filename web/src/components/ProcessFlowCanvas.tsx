@@ -493,7 +493,7 @@ function orphanIdsOf(graph: ProcessFlowGraph, incomingOf: Map<string, string[]>)
 function exceptionStrip(
   graph: ProcessFlowGraph,
   childrenOf: Map<string, string[]>,
-  incomingOf: Map<string, string[]>,
+  _incomingOf: Map<string, string[]>,
   orphans: Set<string>,
   includeOrphans: boolean,
 ) {

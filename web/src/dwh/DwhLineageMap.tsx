@@ -1585,7 +1585,7 @@ function DwhLineageMapInner({
       const layerIndex = availableLayerKeys.indexOf(normalizeDwhLayer(target))
       if (layerIndex >= 0 && visibleSwimlaneCount <= layerIndex) {
         setSearchFocusId(null)
-        setVisibleSwimlaneCount((current) => Math.min(availableLayerKeys.length, layerIndex + 1))
+        setVisibleSwimlaneCount(Math.min(availableLayerKeys.length, layerIndex + 1))
         return
       }
     } else if (target.depth > visibleMaxHop) {

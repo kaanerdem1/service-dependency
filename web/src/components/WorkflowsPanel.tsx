@@ -329,8 +329,13 @@ export function WorkflowsPanel({
               className={`sidebar-pin-btn shortcuts-drawer-pin${navPinned ? ' is-pinned' : ''}`}
               title={
                 navPinned
-                  ? 'Sabitlemeyi bırak'
-                  : 'Paneli sabitle'
+                  ? 'Sabitlemeyi bırak (panel rail\'e iner)'
+                  : 'Modül panelini sabitle — açık kalsın'
+              }
+              aria-label={
+                navPinned
+                  ? 'Modül paneli sabitli — sabitlemeyi bırak'
+                  : 'Modül panelini sabitle — açık kalsın'
               }
               aria-pressed={navPinned}
               onClick={onTogglePin}

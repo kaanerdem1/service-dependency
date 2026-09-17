@@ -170,8 +170,8 @@ export function folderAcceptsSteps(
   folder?: WorkflowFolder,
 ): boolean {
   if (!folder) return true
-  if (folder.icon === 'folder') return false
-  if (folder.icon && folder.icon !== 'folder') return true
+  if (isOrganizerFolder(folder)) return false
+  if (folder.icon) return true
   return store.folders.every((f) => f.parentId !== folder.id)
 }
 

@@ -117,7 +117,7 @@ server/src/
 | Sahne verisi: servis + etki + metod grafı | `navigation/useServiceStageData.ts` | ✅ Yapıldı |
 | Render: servis workspace | `components/shell/ServicesWorkspace.tsx` | ✅ Yapıldı |
 | Render: masthead + overlay | `AppMasthead`, `AppShellOverlays` | ✅ Yapıldı |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | ⏳ ~770 satır (persist, sidebar, inbox hook’ları ayrıldı) |
+| Render: sadece kabuk | `App.tsx` ~400–600 satır | ✅ ~620 satır; workspace/overlay prop hook’ları |
 
 **Yapıldı (1. adım):** `useNavDrawers` — Favoriler/İş akışları drawer state'i, yüzey değişince
 kapatma, son açık drawer hafızası (`lastServicesDrawerRef`) ve bu iki panele özel klavye
@@ -229,7 +229,9 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 | `styles/shell.css`            | Masthead, sidebar, drawer iskeleti                | ✅ |
 | `styles/workflows-drawer.css` | `sc-*` klasör, süreç listesi, rota satırları     | ✅ |
 | `styles/dwh.css`              | DWH stage — **taşınmadı** (kapsam dışı)          | — |
-| `App.css`                     | `@import` zinciri + servis sahnesi / harita / cmdk | ✅ |
+| `styles/cmdk.css`             | Komut paleti                                     | ✅ |
+| `styles/service-map.css`      | Etki haritası, map-stage, React Flow              | ✅ |
+| `App.css`                     | `@import` zinciri + katalog / tablo / welcome      | ✅ |
 
 
 **Kural:** Taşırken class adı **değiştirilmez** (sadece dosya taşınır).
@@ -290,8 +292,8 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 
 ## 8. Bilinen teknik borç (refactor sırasında dokunma / ayrı issue)
 
-- Web `tsc` uyarıları: `ProcessFlowCanvas`, `ProcessFlowRouteBuilder`, `workflowStore`, `DwhLineageMap` (2026-03).
-- `App.css` hâlâ büyük (harita/cmdk); Faz 5 shell/workflows/PF ayrıldı.
+- Web `tsc`: kritik hatalar giderildi (2026-03 tur); yeni uyarılar ayrı issue.
+- `App.css` ~10k satır (katalog/tablo); harita `service-map.css`, PF `process-flow.css`.
 
 ---
 
@@ -299,6 +301,5 @@ kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzel
 
 ## 9. Sonraki adım
 
-- **Refactor (kalan):** `App.tsx` prop wiring inceltme (opsiyonel); `App.css` servis sahnesi parçalama (düşük öncelik).
-- **Feature:** Faz 7 kalıcılık adapter ([catalog-persistence.md](./catalog-persistence.md)).
-- **Borç:** Web `tsc` hataları ayrı PR/issue.
+- **Refactor:** Planlanan dilimler tamam (Faz 7 hariç).
+- **Feature (sonra):** Faz 7 DB + API ([catalog-persistence.md](./catalog-persistence.md)).

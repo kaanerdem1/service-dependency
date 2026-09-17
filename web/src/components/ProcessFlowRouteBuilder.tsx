@@ -31,7 +31,6 @@ import { ProcessFlowScreens } from './ProcessFlowScreens'
 import { summarizeProcessFlow } from './processFlowSummary'
 import { buildUserRouteSnapshotSteps } from './processPathNarrative'
 import {
-  autoAdvanceRoute,
   chooseRouteEdge,
   createUserRoute,
   goRouteBack,
@@ -327,7 +326,7 @@ function ProcessFlowRouteBuilderInner({
     [choices, visits],
   )
   const cameraKey = cameraFocusIds.join('|')
-  const [nodes, setNodes, onNodesChange] = useNodesState(() =>
+  const [nodes, setNodes, onNodesChange] = useNodesState(
     buildRouteNodes(visits, choices, byId, {}, selectedIndex),
   )
   const syncRouteNodes = useCallback(

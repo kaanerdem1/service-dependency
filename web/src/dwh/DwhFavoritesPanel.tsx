@@ -7,7 +7,6 @@ import {
   deleteDwhFavoriteFolder,
   displayDwhFavoriteName,
   moveDwhFavorite,
-  removeDwhFavorite,
   removeDwhFavoriteFromFolder,
   renameDwhFavoriteFolder,
   setDwhFavoriteAlias,

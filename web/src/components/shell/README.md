@@ -13,6 +13,8 @@
  * | `ServiceStage.tsx` | Seçili servisin sekmeli sahnesi |
  * | `ServicesMainStage.tsx` | Orta sahne dallanması (süreç / klasör / servis) |
  * | `ServicesWorkspace.tsx` | Sidebar + workspace sütunu |
+ * | `useServicesWorkspaceProps.ts` | Workspace sidebar/stage prop üretimi |
+ * | `useAppShellOverlaysProps.ts` | Overlay prop üretimi |
  *
  * İlgili: docs/refactor-plan.md — Faz 1.
  */
