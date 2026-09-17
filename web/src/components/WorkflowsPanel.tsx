@@ -4,30 +4,23 @@ import {
   useMemo,
   useRef,
   useState,
-  type DragEvent as ReactDragEvent,
-  type ReactNode,
 } from 'react'
 import { searchServices, listPocProcesses, searchProcesses } from '../api/client'
-import { rankServiceHits, SearchHitLabel } from './SearchHitLabel'
-import { TreeKindIcon } from './TreeKindIcon'
-import { GitBranchIcon, WorkflowFolderGlyph } from './WorkflowIcons'
+import { rankServiceHits } from './SearchHitLabel'
+import { GitBranchIcon } from './WorkflowIcons'
 import { WorkflowStepReorder } from './WorkflowStepReorder'
 import { ProcessCatalogList } from './workflows/ProcessCatalogList'
 import { ProcessRoutesPanel } from './workflows/ProcessRoutesPanel'
 import { ProcessRouteDialogs } from './workflows/ProcessRouteDialogs'
+import { DropZone } from './workflows/WorkflowDropZone'
+import { FolderBlock } from './workflows/WorkflowFolderBlock'
+import { WorkflowsSearch } from './workflows/WorkflowsSearch'
 import {
-  FOLDER_MIME,
-  STEP_MIME,
   addWorkflowFolder,
   addWorkflowStep,
-  beginWorkflowDrag,
-  canNestUnder,
   deleteWorkflowFolder,
-  endWorkflowDrag,
-  folderAcceptsSteps,
   moveWorkflowFolder,
   moveWorkflowStep,
-  peekWorkflowDrag,
   placeWorkflowFolder,
   placeWorkflowStep,
   pureOrganizerChildren,
@@ -36,11 +29,9 @@ import {
   renameWorkflowFolder,
   sequenceInFolder,
   WORKFLOWS_CHANGED_EVENT,
-  type WorkflowFolder,
   type WorkflowFolderIcon,
   type WorkflowsStore,
 } from '../workflowStore'
-import type { ProcessCatalogItem, Service } from '../types'
 import {
   deleteProcessRoute,
   getProcessRoute,
@@ -51,6 +42,7 @@ import {
   routesForPanel,
   type SavedProcessRoute,
 } from '../processRouteStore'
+import type { ProcessCatalogItem, Service } from '../types'
 
 /**
  * İş akışları drawer'ı (sol panel, "İş akışları" başlığı).
@@ -59,7 +51,7 @@ import {
  *   1. Süreç kataloğu (öne çıkan / aranan BPM süreçleri) — `ProcessCatalogList`.
  *   2. Kaydedilmiş akış rotaları, süreç bazında gruplu — `ProcessRoutesPanel`.
  *   3. Kullanıcının kendi kurduğu servis akışları (klasör + adım ağacı) —
- *      bu dosyadaki `FolderBlock` / `WorkflowStepReorder`.
+ *      `WorkflowFolderBlock` / `WorkflowStepReorder`.
  *
  * State neden burada merkezi: (1) ve (2) için "hangi öğe aktif" bilgisi
  * `processFlowNo` / `activeRouteId` prop'larından, (3) için ise `workflowStore`
@@ -85,64 +77,6 @@ type Props = {
   canEdit?: boolean
 }
 
-function isWorkflowDrag(e: ReactDragEvent) {
-  const types = [...e.dataTransfer.types].map((t) => t.toLowerCase())
-  return (
-    types.includes(STEP_MIME) ||
-    types.includes(FOLDER_MIME) ||
-    types.includes('text/plain') ||
-    types.includes('text')
-  )
-}
-
-function InlineRename({
-  value,
-  onCommit,
-  onCancel,
-  className,
-  ariaLabel,
-}: {
-  value: string
-  onCommit: (next: string) => void
-  onCancel: () => void
-  className?: string
-  ariaLabel: string
-}) {
-  const [draft, setDraft] = useState(value)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    setDraft(value)
-    inputRef.current?.focus()
-    inputRef.current?.select()
-  }, [value])
-
-  return (
-    <input
-      ref={inputRef}
-      type="text"
-      className={className ?? 'sc-inline-rename'}
-      value={draft}
-      aria-label={ariaLabel}
-      onChange={(e) => setDraft(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          e.stopPropagation()
-          onCommit(draft)
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault()
-          e.stopPropagation()
-          onCancel()
-        }
-      }}
-      onBlur={() => onCommit(draft)}
-      onClick={(e) => e.stopPropagation()}
-    />
-  )
-}
-
 function PinIcon({ pinned }: { pinned: boolean }) {
   return (
     <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden className="sidebar-pin-icon">
@@ -155,334 +89,6 @@ function PinIcon({ pinned }: { pinned: boolean }) {
         strokeLinecap="round"
       />
     </svg>
-  )
-}
-
-function DropZone({
-  folderId,
-  children,
-  acceptSteps = true,
-  acceptFolders = true,
-  locked = false,
-  onDropStep,
-  onDropFolder,
-}: {
-  folderId?: string
-  children: ReactNode
-  acceptSteps?: boolean
-  acceptFolders?: boolean
-  locked?: boolean
-  onDropStep: (stepId: string, folderId?: string) => void
-  onDropFolder?: (dragFolderId: string, folderId?: string) => void
-}) {
-  const [over, setOver] = useState(false)
-
-  const reset = useCallback(() => setOver(false), [])
-
-  const allowsCurrent = () => {
-    if (locked) return false
-    const kind = peekWorkflowDrag()
-    if (kind === 'step') return acceptSteps
-    if (kind === 'folder') return acceptFolders
-    return acceptSteps || acceptFolders
-  }
-
-  useEffect(() => {
-    const clear = () => reset()
-    window.addEventListener('dragend', clear)
-    window.addEventListener('drop', clear)
-    return () => {
-      window.removeEventListener('dragend', clear)
-      window.removeEventListener('drop', clear)
-    }
-  }, [reset])
-
-  return (
-    <div
-      className={`sc-drop-zone${over ? ' is-over' : ''}`}
-      onDragEnter={(e) => {
-        if (!isWorkflowDrag(e) || !allowsCurrent()) return
-        e.preventDefault()
-        e.stopPropagation()
-        const t = e.target
-        if (t instanceof Element && (t.closest('.wf-reorder-row') || t.closest('.sc-folder-body'))) {
-          return
-        }
-        setOver(true)
-      }}
-      onDragOver={(e) => {
-        if (!isWorkflowDrag(e) || !allowsCurrent()) return
-        e.preventDefault()
-        e.stopPropagation()
-        e.dataTransfer.dropEffect = 'move'
-      }}
-      onDragLeave={(e) => {
-        e.stopPropagation()
-        const next = e.relatedTarget as Node | null
-        if (next && e.currentTarget.contains(next)) return
-        setOver(false)
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        const allowed = allowsCurrent()
-        setOver(false)
-        if (!allowed) {
-          endWorkflowDrag()
-          return
-        }
-        const folderDrag = e.dataTransfer.getData(FOLDER_MIME)
-        const raw = e.dataTransfer.getData(STEP_MIME) || e.dataTransfer.getData('text/plain')
-        endWorkflowDrag()
-        if (folderDrag) {
-          if (acceptFolders) onDropFolder?.(folderDrag, folderId)
-          return
-        }
-        if (raw.startsWith('folder:')) {
-          if (acceptFolders) onDropFolder?.(raw.slice(7), folderId)
-          return
-        }
-        const stepId = raw.startsWith('step:') ? raw.slice(5) : raw
-        if (stepId && acceptSteps) onDropStep(stepId, folderId)
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
-function FolderBlock({
-  folder,
-  store,
-  nested,
-  depth = 0,
-  selectedFolderId,
-  expandedFolders,
-  focusServiceId,
-  onSelectFolder,
-  onToggle,
-  onRename,
-  onDelete,
-  onAddChild,
-  onSelectService,
-  onRemove,
-  onMove,
-  onMoveFolder,
-  onPlaceStep,
-  onPlaceFolder,
-  onOpenInfo,
-  editingFolderId,
-  onStartEdit,
-  onStopEdit,
-  canEdit = true,
-}: {
-  folder: WorkflowFolder
-  store: WorkflowsStore
-  nested?: boolean
-  depth?: number
-  selectedFolderId?: string
-  expandedFolders: Set<string>
-  focusServiceId?: string
-  onSelectFolder: (id: string) => void
-  onToggle: (id: string) => void
-  onRename: (id: string, name: string) => void
-  onDelete: (id: string) => void
-  onAddChild: (parentId: string) => void
-  onSelectService: (id: string) => void
-  onRemove: (id: string) => void
-  onMove: (id: string, folderId?: string) => void
-  onMoveFolder: (dragId: string, folderId?: string) => void
-  onPlaceStep: (stepId: string, folderId: string | undefined, index: number) => void
-  onPlaceFolder: (folderId: string, parentId: string | undefined, index: number) => void
-  onOpenInfo: (id: string) => void
-  editingFolderId?: string
-  onStartEdit: (id: string) => void
-  onStopEdit: () => void
-  canEdit?: boolean
-}) {
-  const editing = editingFolderId === folder.id
-  const sequence = sequenceInFolder(store, folder.id)
-  const organizerKids = pureOrganizerChildren(store, folder.id)
-  const collapsed = !expandedFolders.has(folder.id)
-  const selected = selectedFolderId === folder.id
-  const allowChild = canNestUnder(store, folder.id)
-  const organizer = !folderAcceptsSteps(store, folder)
-
-  const onFolderDragStart = (e: ReactDragEvent) => {
-    beginWorkflowDrag('folder')
-    e.dataTransfer.setData(FOLDER_MIME, folder.id)
-    e.dataTransfer.setData('text/plain', `folder:${folder.id}`)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  return (
-    <section
-      className={`sc-folder${nested ? ' is-nested' : ''}${organizer ? ' is-organizer' : ' is-flow'}${selected ? ' is-selected' : ''}`}
-      style={{ ['--wf-depth' as string]: String(depth) }}
-    >
-      <DropZone
-        folderId={folder.id}
-        acceptSteps={!organizer}
-        locked={!canEdit}
-        onDropStep={onMove}
-        onDropFolder={onMoveFolder}
-      >
-        <div
-          className="sc-folder-head"
-          draggable={canEdit}
-          onDragStart={canEdit ? onFolderDragStart : undefined}
-          onDragEnd={canEdit ? () => endWorkflowDrag() : undefined}
-        >
-          <button
-            type="button"
-            className="sc-folder-chev-btn"
-            aria-expanded={!collapsed}
-            aria-label={collapsed ? 'Klasörü aç' : 'Klasörü daralt'}
-            onClick={() => onToggle(folder.id)}
-          >
-            <span className="sc-folder-chev">{collapsed ? '▸' : '▾'}</span>
-          </button>
-          <button
-            type="button"
-            className="sc-folder-toggle"
-            title="Bilgi sayfasını aç"
-            onClick={() => {
-              onSelectFolder(folder.id)
-              onOpenInfo(folder.id)
-            }}
-          >
-            {canEdit ? (
-              <span className="sc-drag-handle" aria-hidden>
-                ⋮⋮
-              </span>
-            ) : null}
-            <WorkflowFolderGlyph icon={folder.icon ?? 'flow'} size={14} />
-            {editing ? (
-              <InlineRename
-                value={folder.name}
-                ariaLabel="Akış adı"
-                className="sc-inline-rename sc-inline-rename-folder"
-                onCommit={(next) => {
-                  onRename(folder.id, next)
-                  onStopEdit()
-                }}
-                onCancel={onStopEdit}
-              />
-            ) : (
-              <span className="sc-folder-name">{folder.name}</span>
-            )}
-          </button>
-          {canEdit ? (
-          <div className="sc-folder-actions">
-            {allowChild ? (
-              <button
-                type="button"
-                className="sc-icon-btn"
-                title="Alt akış ekle"
-                aria-label="Alt akış ekle"
-                onClick={() => onAddChild(folder.id)}
-              >
-                +
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="sc-icon-btn sc-icon-btn-edit"
-              title="Yeniden adlandır"
-              aria-label="Yeniden adlandır"
-              onClick={() => onStartEdit(folder.id)}
-            >
-              ✎
-            </button>
-            <button
-              type="button"
-              className="sc-icon-btn sc-icon-btn-danger"
-              title="Klasörü sil"
-              aria-label="Klasörü sil"
-              onClick={() => onDelete(folder.id)}
-            >
-              ×
-            </button>
-          </div>
-          ) : null}
-        </div>
-      </DropZone>
-      {!collapsed ? (
-        <div className="sc-folder-body wf-tree-body">
-          {sequence.length > 0 ? (
-            <WorkflowStepReorder
-              parentId={folder.id}
-              items={sequence}
-              variant="drawer"
-              onPlaceStep={onPlaceStep}
-              onPlaceFolder={onPlaceFolder}
-              onSelect={onSelectService}
-              onRemove={canEdit ? onRemove : undefined}
-              focusServiceId={focusServiceId}
-              readOnly={!canEdit}
-              renderFolder={(childFolder) => (
-                <FolderBlock
-                  key={childFolder.id}
-                  folder={childFolder}
-                  store={store}
-                  nested
-                  depth={depth + 1}
-                  selectedFolderId={selectedFolderId}
-                  expandedFolders={expandedFolders}
-                  focusServiceId={focusServiceId}
-                  onSelectFolder={onSelectFolder}
-                  onToggle={onToggle}
-                  onRename={onRename}
-                  onDelete={onDelete}
-                  onAddChild={onAddChild}
-                  onSelectService={onSelectService}
-                  onRemove={onRemove}
-                  onMove={onMove}
-                  onMoveFolder={onMoveFolder}
-                  onPlaceStep={onPlaceStep}
-                  onPlaceFolder={onPlaceFolder}
-                  onOpenInfo={onOpenInfo}
-                  editingFolderId={editingFolderId}
-                  onStartEdit={onStartEdit}
-                  onStopEdit={onStopEdit}
-                  canEdit={canEdit}
-                />
-              )}
-            />
-          ) : null}
-        </div>
-      ) : null}
-      {!collapsed
-        ? organizerKids.map((child) => (
-            <FolderBlock
-              key={child.id}
-              folder={child}
-              store={store}
-              nested
-              depth={depth + 1}
-              selectedFolderId={selectedFolderId}
-              expandedFolders={expandedFolders}
-              focusServiceId={focusServiceId}
-              onSelectFolder={onSelectFolder}
-              onToggle={onToggle}
-              onRename={onRename}
-              onDelete={onDelete}
-              onAddChild={onAddChild}
-              onSelectService={onSelectService}
-              onRemove={onRemove}
-              onMove={onMove}
-              onMoveFolder={onMoveFolder}
-              onPlaceStep={onPlaceStep}
-              onPlaceFolder={onPlaceFolder}
-              onOpenInfo={onOpenInfo}
-              editingFolderId={editingFolderId}
-              onStartEdit={onStartEdit}
-              onStopEdit={onStopEdit}
-              canEdit={canEdit}
-            />
-          ))
-        : null}
-    </section>
   )
 }
 
@@ -650,7 +256,6 @@ export function WorkflowsPanel({
 
   const rootFolders = useMemo(() => pureOrganizerChildren(store, undefined), [store])
   const rootSequence = useMemo(() => sequenceInFolder(store, undefined), [store])
-  const searchingMode = query.trim().length >= 2
   const highlightId = infoFolderId ?? selectedFolderId
 
   const openService = useCallback(
@@ -743,100 +348,18 @@ export function WorkflowsPanel({
           </div>
         </div>
 
-        <div className="shortcuts-drawer-search">
-          <svg className="sc-search-icon" viewBox="0 0 16 16" fill="none" aria-hidden>
-            <circle cx="7" cy="7" r="4.25" stroke="currentColor" strokeWidth="1.35" />
-            <path d="M10.2 10.2 13 13" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
-          </svg>
-          <input
-            ref={searchRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Servis veya süreç ara…"
-            aria-label="Servis veya süreç ara"
-            autoComplete="off"
-          />
-          {query ? (
-            <button
-              type="button"
-              className="sc-search-clear"
-              aria-label="Aramayı temizle"
-              onClick={() => setQuery('')}
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
-
-        {searchingMode ? (
-          <div className="sc-search-hits" role="listbox" aria-label="Arama sonuçları">
-            <p className="sc-search-status">
-              {canEdit
-                ? '+ köke ekler; sonra bir akışın üzerine bırakın'
-                : 'Sonuçtan servisi açın'}
-            </p>
-            {searching ? (
-              <p className="sc-search-status">Aranıyor…</p>
-            ) : hits.length === 0 && processHits.length === 0 ? (
-              <p className="sc-search-status">Sonuç yok</p>
-            ) : (
-              <>
-                {processHits.length > 0 ? (
-                  <>
-                    <p className="sc-search-status">Süreçler</p>
-                    {processHits.map((p) => (
-                      <div key={p.no} className="sc-hit-row">
-                        <button
-                          type="button"
-                          className="sc-hit-main"
-                          title={p.descriptionTr || p.name || p.no}
-                          onClick={() => onOpenProcess(p.no)}
-                        >
-                          <TreeKindIcon kind="process" size={13} />
-                          <SearchHitLabel
-                            name={p.descriptionTr || p.name || p.no}
-                            query={query}
-                            id={p.no}
-                          />
-                        </button>
-                      </div>
-                    ))}
-                  </>
-                ) : null}
-                {hits.length > 0 ? (
-                  <>
-                    {processHits.length > 0 ? <p className="sc-search-status">Servisler</p> : null}
-                    {hits.map((s) => (
-                      <div key={s.id} className="sc-hit-row">
-                        <button
-                          type="button"
-                          className="sc-hit-main"
-                          title={s.name}
-                          onClick={() => openService(s.id)}
-                        >
-                          <TreeKindIcon kind="service" size={13} />
-                          <SearchHitLabel name={s.name} query={query} id={s.id} />
-                        </button>
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            className="sc-fav-btn"
-                            title="Köke ekle"
-                            aria-label="Köke ekle"
-                            onClick={() => addToRoot(s.id, s.name)}
-                          >
-                            +
-                          </button>
-                        ) : null}
-                      </div>
-                    ))}
-                  </>
-                ) : null}
-              </>
-            )}
-          </div>
-        ) : null}
+        <WorkflowsSearch
+          searchRef={searchRef}
+          query={query}
+          onQueryChange={setQuery}
+          searching={searching}
+          hits={hits}
+          processHits={processHits}
+          canEdit={canEdit}
+          onOpenProcess={onOpenProcess}
+          onOpenService={openService}
+          onAddToRoot={addToRoot}
+        />
 
         {canEdit ? (
         <div className="shortcuts-panel-toolbar">

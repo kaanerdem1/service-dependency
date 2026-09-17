@@ -11,7 +11,7 @@ Bu belge, **davranışı bozmadan** kod tabanını parçalara ayırma ve **Türk
 
 | Sorun                                                                                  | Etki                                                   |
 | -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `App.tsx`, `DwhPage.tsx`, `ProcessFlowCanvas.tsx`, `WorkflowsPanel.tsx` binlerce satır | Yeni özellik zor, hata riski yüksek                    |
+| `App.tsx`, `ProcessFlowCanvas.tsx`, `WorkflowsPanel.tsx` binlerce satır | Yeni özellik zor, hata riski yüksek                    |
 | `App.css` ~18k satır                                                                   | Stil nerede, hangi ekrana ait belirsiz                 |
 | Navigasyon + store + UI aynı dosyada                                                   | “Rota açılınca ne oluyor?” sorusu uzun grep gerektirir |
 | Az modül üstü açıklama                                                                 | Onboarding yavaş                                       |
@@ -145,7 +145,7 @@ klasör özeti / servis) içeriyor; satır sayısı ~1800 → ~1200.
 
 
 
-### Faz 2 — İş akışları drawer (1–2 PR) ✅ ilk adım tamam
+### Faz 2 — İş akışları drawer (1–2 PR) ✅ tamam
 
 **Sorun:** `WorkflowsPanel.tsx` ~1300 satır; süreç listesi, BPM rota grupları, workflow ağacı, arama.
 
@@ -154,18 +154,16 @@ klasör özeti / servis) içeriyor; satır sayısı ~1800 → ~1200.
 | BPM rota grupları + filtre UI | `components/workflows/ProcessRoutesPanel.tsx` | ✅ Yapıldı |
 | Süreç listesi (featured + scroll) | `components/workflows/ProcessCatalogList.tsx` | ✅ Yapıldı |
 | Rename/delete dialog | `components/workflows/ProcessRouteDialogs.tsx` (portal) | ✅ Yapıldı |
-| Folder ağacı (`FolderBlock`, `DropZone`, arama kutusu) | Şimdilik `WorkflowsPanel.tsx` içinde | ⏳ Sonraki adım |
+| Folder ağacı (`FolderBlock`, `DropZone`, arama kutusu) | `WorkflowFolderBlock` / `WorkflowDropZone` / `WorkflowsSearch` | ✅ Yapıldı |
 
 **Store:** `processRouteStore.ts` zaten ayrı; üst yorum + export grupları net. Bu fazda ayrıca
 Türkçe arama filtresindeki **İ/I** büyük/küçük harf hatası (`routeMatchesFilter`) test yazılırken
 yakalandı ve `foldTurkish` yardımcı fonksiyonuyla düzeltildi.
 
-**Sonuç:** `WorkflowsPanel.tsx` ~1290 → ~1010 satıra indi (3 yeni dosyaya ~440 satır taşındı).
-Her yeni dosyada üst modül yorumu var; state hâlâ `WorkflowsPanel`'de merkezi (bkz.
-`components/workflows/README.md`).
+**Sonuç:** `WorkflowsPanel.tsx` ~1290 → ~550 satır. Drawer artık composition: katalog, rotalar,
+arama, klasör ağacı ayrı dosyalar; state hâlâ panelde merkezi.
 
-**Bitti sayılır (sonraki PR):** `FolderBlock`/`DropZone`/arama kutusu da ayrılınca `WorkflowsPanel`
-yalnızca birleştirir (composition).
+**Bitti sayılır:** `WorkflowsPanel` yalnızca birleştirir (composition).
 
 ---
 
@@ -190,20 +188,10 @@ yalnızca birleştirir (composition).
 
 
 
-### Faz 4 — DWH (2–4 PR).  --- DWH ELLENMEYECEK.
+### Faz 4 — DWH — KAPSAM DIŞI
 
-**Sorun:** `DwhPage.tsx` ~1760 satır; sekmeler, ziyaret geçmişi, lineage panel.
-
-
-| Parça                 | Hedef                                                          |
-| --------------------- | -------------------------------------------------------------- |
-| Stage sekmeleri state | `dwh/useDwhStage.ts`                                           |
-| Tablo/rapor detay     | `DwhDetailStage.tsx`                                           |
-| Kolon lineage         | Zaten `DwhColumnLineagePanel`; “Anlatım modu” gelecekte buraya |
-| Harita                | `DwhLineageMap` + layout ayrı                                  |
-
-
-**Bitti sayılır:** `DwhPage` veri yükleme + sekme koordinasyonu.
+`web/src/dwh/` ve `server/src/dwh/` **bu refactor planına dahil değil**. Modülü başka
+kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzeltilmez.
 
 ---
 
@@ -258,7 +246,7 @@ yalnızca birleştirir (composition).
 2. **Faz 1** — En çok günlük geliştirmeyi rahatlatır.
 3. **Faz 3** — Süreç ürününün çekirdeği.
 4. **Faz 5** — CSS (paralel yapılabilir).
-5. **Faz 4** — DWH ayrı ekip/zaman dilimi.
+5. **Faz 4 yok** — DWH kapsam dışı (ayrı ekip).
 6. **Faz 6–7** — Backend + DB.
 
 ---

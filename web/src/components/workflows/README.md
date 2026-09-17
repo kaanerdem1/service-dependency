@@ -10,6 +10,9 @@ bileşenler yalnızca prop alıp render eder.
 | `ProcessCatalogList.tsx` | "SÜREÇLER" bölümü — öne çıkan/aranan BPM süreçleri | `pocProcesses` (API: `listPocProcesses`) |
 | `ProcessRoutesPanel.tsx` | "AKIŞ ROTALARI" bölümü — BPM'e göre gruplu kayıtlı rotalar, filtre | `processRouteStore.ts` (localStorage) |
 | `ProcessRouteDialogs.tsx` | Rota "yeniden adlandır" / "sil" onay modalleri (body portal) | `pendingRename` / `pendingDelete` state'i |
+| `WorkflowsSearch.tsx` | Drawer arama kutusu + süreç/servis sonuçları | `WorkflowsPanel` arama state'i |
+| `WorkflowDropZone.tsx` | Sürükle-bırak hedefi | `workflowStore` MIME + drag peek |
+| `WorkflowFolderBlock.tsx` | Akış takibi klasör/akış ağacı | `workflowStore` + üst callback'ler |
 
 **Neden state burada değil?** Aktif süreç/rota bilgisi (`processFlowNo`,
 `activeRouteId`) drawer'ı açan üst bileşenden (`App.tsx`) geliyor; "hangi BPM
