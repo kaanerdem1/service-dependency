@@ -75,6 +75,7 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 | Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre; **process akış haritası** ayrıntı: [process-flow.md](./process-flow.md) |
 | Process — tam akış haritası | ✅ | XML ingest, path focus, drawer, yol snapshot (PDF) |
 | Process — akış rotası oluştur | ✅ | Adım adım seçim; kayıt `completed`; Kaydet / Farklı kaydet; rotalar paneli |
+| Süreç düğüm açıklaması (drawer) | ✅ DB | `node_descriptions` + PATCH; rotalar hâlâ local — [catalog-persistence.md](./catalog-persistence.md) |
 | Responsive (dar pencere) | ✅ kısmi | `<1100px` sidebar ölçekleme, harita içi yatay scroll — `responsive.css` |
 | DWH lineage sekmesi | ✅ | Ayrı `surface=dwh` |
 | Inventory DB entegrasyonu | ✅ | Postgres (`env.*`) |
@@ -82,7 +83,7 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 | Gerçek owner (F4) | ⏳ | `service_owner` + issue sahiplik alanları |
 | Kenar tipi (`http` / `queue`) | ⏳ | P2 |
 
-Test servisleri: repo kökünde `ss.md`.
+Manuel smoke servis listesi: repo kökünde `ss.md` (opsiyonel, `.gitignore` — repoda olmayabilir).
 
 ---
 
@@ -146,7 +147,8 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 
 | Konu | Doküman / kod |
 |------|----------------|
-| API ↔ DB, ağaç, smoke | [db.md](./db.md) |
+| API ↔ DB, ağaç, ingest | [db.md](./db.md) |
+| Kalıcılık tabloları + DDL | [catalog-persistence.md](./catalog-persistence.md) |
 | Kurulum, mimari | [README](../README.md) |
 | Issue link, embed, `CatalogWorkbench` | [entegrasyon.md](./entegrasyon.md) |
 | Etki BFS | `server/src/impactGraph.ts` |
@@ -155,4 +157,4 @@ Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kald
 
 ---
 
-*Son güncelleme: 2026-09-16 — README/teknoloji özeti, rota `completed`, responsive notu.*
+*Son güncelleme: 2026-09-17 — kalıcılık rehberi, süreç drawer DB notları.*

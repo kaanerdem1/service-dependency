@@ -1,21 +1,22 @@
 # Ortak katalog kalıcılığı — tablolar, constraint’ler ve DDL
 
-> **Amaç:** Tarayıcı `localStorage` ve sunucu belleğinde duran ekip verisini `inventory_db` / `env` şemasına taşımak.  
-> **Çalıştırılabilir tek dosya:** [../server/sql/catalog_persistence.sql](../server/sql/catalog_persistence.sql)  
-> **Genel bağlam:** [db.md §14](./db.md#14-ortak-katalog--kalıcılık-localstorage-yerine-db)
+Favoriler, iş akışı belgesi, süreç rotaları, değişiklik günlüğü gibi veriler bugün çoğunlukla **tarayıcıda** (`localStorage`) veya **API belleğinde** tutuluyor. Bu belge, aynı veriyi **`inventory_db` / `env`** şemasında kalıcı hale getirmek için gereken tabloları, okuma/yazma uçlarını ve SQL’i toplar.
 
-**Uygulama sırası**
+- **Özet bağlam:** [db.md §14](./db.md#14-ortak-katalog--kalıcılık-localstorage-yerine-db)
+- **Tek seferde çalıştır:** [../server/sql/catalog_persistence.sql](../server/sql/catalog_persistence.sql)
 
-1. `server/sql/node_descriptions_migration.sql` — süreç düğüm açıklamaları (zaten ayrı; aşağıda §0).
-2. `server/sql/catalog_persistence.sql` — bu belgedeki §1–§9 tabloları.
+**Migration sırası**
 
-**Ortak kurallar**
+1. `server/sql/node_descriptions_migration.sql` — süreç düğüm açıklamaları (§0; zaten production’da olabilir).
+2. `server/sql/catalog_persistence.sql` — §1–§9 tabloları.
 
-- Tüm tablolar `SET search_path TO env` ile `env` altında oluşturulur.
-- `user_id` / `owner_user_id` / `author_user_id`: SSO `personId` (ayrı kullanıcı tablosu yok).
-- PAR ingest ve servis dump import **bu tabloları güncellemez**.
-- `process_no`: extended katalogda `env.process.no`; **FK yok** (legacy şemada `no` yok / UNIQUE garantisi yok). API: `status = 1` EXISTS.
-- `dwh_favorite_table.table_id`: `stage` DB referansı; cross-database FK yok.
+**Genel kurallar**
+
+- Tablolar `env` şemasında (`SET search_path TO env`).
+- Kullanıcı kimliği kolonları SSO `personId` string’idir; ayrı `catalog_user` tablosu yok.
+- PAR ingest ve servis dump import bu ekip tablolarına **dokunmaz**.
+- `process_no` için Postgres FK yok (legacy şemada `no` kolonu / UNIQUE garantisi olmayabilir); API sürecin var olduğunu doğrular.
+- DWH favori `table_id`, `stage` veritabanına referans verir; cross-DB FK tanımlanmaz.
 
 ---
 
@@ -23,7 +24,7 @@
 
 ## Okuma/yazma uçları — özet (API ↔ kalıcılık)
 
-**Kural:** Sunucu tarafı **GET/PUT/POST** ile ekip verisini okuyup yazmak için veri **Postgres’te** durmalıdır. Tarayıcı `localStorage` sunucudan okunamaz. Tablo yokken yeni uç ya **boş/default** döner ya da UI **local fallback** ile kalır (paylaşım ve restart güvenliği yok).
+Sunucu **GET/PUT/POST** ile anlamlı ekip verisi ancak Postgres’te kayıt varken döndürür; `localStorage` HTTP ile okunamaz. Tablo yokken API boş döner veya UI eski veriyi tarayıcıdan gösterir — restart ve paylaşım güvenli değildir.
 
 
 | Okuma/yazma ucu               | API durumu                                         | Kalıcılık için gerekli tablo/kolon                         | Tablo/kolon yokken                       |

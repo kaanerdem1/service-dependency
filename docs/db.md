@@ -2,7 +2,7 @@
 
 **inventory_db**, `env` şemasında servis, metod, call-graph ve süreç XML verisini tutar. UI’daki modül ağacı, etki haritası ve süreç akışı bu tablolardan beslenir.
 
-**İlgili:** [Kurulum](../README.md) · [process-flow.md](./process-flow.md) · bağlantı: `server/.env` (`INVENTORY_PG`*)
+**İlgili:** [Kurulum](../README.md) · [process-flow.md](./process-flow.md) · [catalog-persistence.md](./catalog-persistence.md) · bağlantı: `server/.env` (`INVENTORY_PG*`)
 
 ### İçindekiler (okuma sırası)
 
@@ -16,7 +16,8 @@
 | [6](#6-ortam)                                                 | Postgres ortamı (inventory vs stage) |
 | [7–12](#7-fazlar)                                             | Fazlar, SSS, SQL, ölçümler           |
 | [13](#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor) | **Acil:** süreç XML boş / ingest     |
-| [14](#14-ortak-katalog--kalıcılık-localstorage-yerine-db)     | localStorage → DB kalıcılık planı    |
+| [14](#14-ortak-katalog--kalıcılık-localstorage-yerine-db)     | localStorage → DB (özet)             |
+| —                                                             | Detay: [catalog-persistence.md](./catalog-persistence.md) |
 
 
 > §13 numarası tarihsel; sorun giderme için erken bölüme alınmıştır.
@@ -401,7 +402,7 @@ WHERE ss.service_oid = :service_definition_id;
 | Metod out-degree max        | 1.287                                     |
 
 
-Smoke: `PROPOSAL_MAIN_GET` (249), `ss.md` hop-1 seti (3/5/7/10/15/20), izole servis.
+Smoke: `PROPOSAL_MAIN_GET` (249), ekip içi hop-1 servis seti (ör. kökteki `ss.md` — gitignore), izole servis.
 
 **İzole servis:** haritada yalnız pivot; Tablo boş — hata değil. Internal çağrı metod haritasında.
 
@@ -507,8 +508,9 @@ LIMIT 120;  -- UI şu an 100 kesiyor
 
 ## 14. Ortak katalog — kalıcılık (localStorage yerine DB)
 
-> Özet tablo: [ss.md](../ss.md) — “Local vs global”.  
-> Amaç: Ekip verisi (not, rota, akış takibi, servis günlüğü) **tarayıcıya değil inventory_db’ye** yazılsın; okuma API ile herkese aynı.
+Ekip verisi (süreç notu, rota, iş akışı belgesi, servis günlüğü, favoriler) bugün çoğunlukla **tarayıcıda veya API belleğinde** duruyor; hedef, bunları **inventory_db**’de tutup intranet üzerinden okumak/yazmak.
+
+Tablo listesi, constraint’ler, hangi API’nin hangi tabloya ihtiyaç duyduğu ve DDL: **[catalog-persistence.md](./catalog-persistence.md)**. Migration: `server/sql/catalog_persistence.sql` (+ `node_descriptions_migration.sql`).
 
 
 
@@ -578,7 +580,7 @@ LIMIT 120;  -- UI şu an 100 kesiyor
 | `env.service_change_log` | `id`, `service_definition_id` FK, `commit` (metin), `kinds text[]`, `kind_details jsonb`, `author_user_id`, `created_at` | `GET /api/services/:id/changes` | `POST` / `PATCH` / `DELETE` (canEdit) |
 
 
-**Eklenecek — servis serbest not** (ss.md “service_notes”, henüz UI yok):
+**Eklenecek — servis serbest not** (harita not popup; tam UI henüz sınırlı):
 
 
 | Tablo (öneri)      | Alanlar                                                               |
@@ -659,7 +661,7 @@ Kişisel başlangıç; ileride `team_id` ile paylaşımlı klasör.
 
 1. `ALTER TABLE env.process ADD COLUMN IF NOT EXISTS node_descriptions jsonb;` — `server/sql/node_descriptions_migration.sql`
 2. Yeni tablolar: [catalog-persistence.md](./catalog-persistence.md) (açıklama + DDL bölüm bölüm) · çalıştır: `server/sql/catalog_persistence.sql`.
-3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; `node_descriptions`**, change log, workflow doc, rotalar** güncellenmez.
+3. **PAR ingest** ve servis dump import: yalnızca teknik kolonlar; `node_descriptions`, change log, workflow doc, rotalar **güncellenmez**.
 4. İsteğe bağlı: localStorage → DB **bir kerelik import** script (kullanıcı bazlı).
 
 

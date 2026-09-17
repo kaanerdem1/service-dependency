@@ -4,7 +4,7 @@ Intranet **issue / change** aracı onay ve ticket tutar; **Service Dependency (S
 
 Issue aracı da React ise hedef, harita/ağaç UX’ini **embed** etmek; API ayrı kalabilir (`server/` + Postgres).
 
-**Diğer dokümanlar:** [Kurulum](../README.md) · [db.md](./db.md)
+**Diğer dokümanlar:** [Kurulum](../README.md) · [db.md](./db.md) · [catalog-persistence.md](./catalog-persistence.md)
 
 ---
 
@@ -139,7 +139,7 @@ export default function App() {
 
 
 **Regresyon riski:** Orta — extract sırasında state taşınırken davranış kopyalanmalı.  
-**Mitigasyon:** Extract öncesi/sonrası aynı E2E veya manuel smoke (`ss.md` servisleri).
+**Mitigasyon:** Extract öncesi/sonrası aynı E2E veya manuel smoke (ekip içi `ss.md` servis listesi, kök — gitignore).
 
 ---
 
@@ -310,7 +310,7 @@ Deep link ve reverse proxy **performans cezası vermez**; sadece navigasyon fark
 
 ## 10. Smoke test (extract sonrası)
 
-`ss.md` servisleri ile standalone ve embed modda:
+Ekip içi smoke servis listesi (`ss.md`, kök — gitignore) ile standalone ve embed modda:
 
 - Ağaç: grup → jar → servis lazy load
 - ⌘K / arama → servis seç → jar vurgusu temizlenir
@@ -355,7 +355,7 @@ types, api  →  components, motion  →  catalog/hooks  →  CatalogWorkbench  
 | `components/*`                      | saf UI — props alır, global state tutmaz |
 
 
-**Güvenli sıra:** (1) selection hook extract → (2) data hook → (3) JSX → `CatalogWorkbench` → (4) embed mode → (5) CSS scope. Her adımda `ss.md` smoke.
+**Güvenli sıra:** (1) selection hook extract → (2) data hook → (3) JSX → `CatalogWorkbench` → (4) embed mode → (5) CSS scope. Her adımda aynı manuel smoke listesini çalıştır.
 
 **Bağımlılık kaçarsa:** Circular import build’de patlar (Vite/TS). Kalıcı çözüm: katman kuralını CI’da `dependency-cruiser` ile zorla.
 

@@ -154,7 +154,8 @@ flowchart LR
 | Dosya | Ne için |
 |--------|---------|
 | [docs/PRODUCT.md](docs/PRODUCT.md) | Ürün kapsamı, özellik durumu |
-| [docs/db.md](docs/db.md) | Tablolar, API↔DB, ingest, kalıcılık planı |
+| [docs/db.md](docs/db.md) | Tablolar, API↔DB, ingest, kalıcılık özeti (§14) |
+| [docs/catalog-persistence.md](docs/catalog-persistence.md) | Kalıcılık tabloları, API↔DDL, migration |
 | [docs/process-flow.md](docs/process-flow.md) | Tam akış vs kullanıcı rotası |
 | [docs/entegrasyon.md](docs/entegrasyon.md) | Issue tool embed / deep link |
 

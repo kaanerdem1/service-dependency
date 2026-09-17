@@ -6,7 +6,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
-/* Uygulama geneli yeşil; IM mavisi yalnızca --im-blue ile (talep butonları, sol Servis/DWH sekmesi) */
+/* Uygulama geneli yeşil; IM mavisi (--im-blue): talep butonu, üst Servis/DWH sekmesi, sidebar pin/favori/akış butonları */
 :root,
 [data-theme='mixed'],
 [data-theme='white'] {
