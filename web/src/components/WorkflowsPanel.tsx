@@ -41,8 +41,11 @@ import {
 import type { ProcessCatalogItem, Service } from '../types'
 import {
   deleteProcessRoute,
+  getProcessRoute,
+  groupProcessRoutesByBpm,
   PROCESS_ROUTES_CHANGED_EVENT,
   renameProcessRoute,
+  routeMatchesFilter,
   routesForPanel,
   type SavedProcessRoute,
 } from '../processRouteStore'
@@ -157,6 +160,63 @@ function RouteDeleteIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  )
+}
+
+function ProcessRouteListItem({
+  route,
+  active,
+  onOpen,
+  onRename,
+  onDelete,
+}: {
+  route: SavedProcessRoute
+  active: boolean
+  onOpen: () => void
+  onRename: () => void
+  onDelete: () => void
+}) {
+  return (
+    <li className="sc-process-route-row">
+      <button
+        type="button"
+        className={`sc-process-item${active ? ' is-active' : ''}`}
+        onClick={onOpen}
+      >
+        <span className="sc-process-route-glyph" aria-hidden>
+          <GitBranchIcon />
+        </span>
+        <span className="sc-process-item-copy">
+          <span className="sc-process-item-name">{route.name}</span>
+        </span>
+      </button>
+      <span className="sc-process-route-actions">
+        <button
+          type="button"
+          className="sc-process-route-action is-rename"
+          title="Adı düzenle"
+          aria-label={`${route.name} rotasının adını düzenle`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onRename()
+          }}
+        >
+          <RouteRenameIcon />
+        </button>
+        <button
+          type="button"
+          className="sc-process-route-action is-delete"
+          title="Rotayı sil"
+          aria-label={`${route.name} rotasını sil`}
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
+        >
+          <RouteDeleteIcon />
+        </button>
+      </span>
+    </li>
   )
 }
 
@@ -532,6 +592,8 @@ export function WorkflowsPanel({
   const [processRoutes, setProcessRoutes] = useState<SavedProcessRoute[]>(() =>
     routesForPanel(processFlowNo),
   )
+  const [routeFilter, setRouteFilter] = useState('')
+  const [expandedRouteGroups, setExpandedRouteGroups] = useState<Set<string>>(() => new Set())
   const [pendingDelete, setPendingDelete] = useState<SavedProcessRoute>()
   const [pendingRename, setPendingRename] = useState<SavedProcessRoute>()
   const [renameDraft, setRenameDraft] = useState('')
@@ -544,6 +606,8 @@ export function WorkflowsPanel({
       setHits([])
       setProcessHits([])
       setExpandedFolders(new Set())
+      setRouteFilter('')
+      setExpandedRouteGroups(new Set())
       return
     }
     const data = readWorkflows()
@@ -574,11 +638,50 @@ export function WorkflowsPanel({
   }, [])
 
   useEffect(() => {
-    const refresh = () => setProcessRoutes(routesForPanel(processFlowNo))
+    const refresh = () => setProcessRoutes(routesForPanel())
     refresh()
     window.addEventListener(PROCESS_ROUTES_CHANGED_EVENT, refresh)
     return () => window.removeEventListener(PROCESS_ROUTES_CHANGED_EVENT, refresh)
-  }, [processFlowNo])
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const activeProcess =
+      processFlowNo ?? (activeRouteId ? getProcessRoute(activeRouteId)?.processNo : undefined)
+    setExpandedRouteGroups(activeProcess ? new Set([activeProcess]) : new Set())
+  }, [open, processFlowNo, activeRouteId])
+
+  const routeFilterNeedle = routeFilter.trim()
+  const routeBpmGroups = useMemo(() => {
+    const groups = groupProcessRoutesByBpm(processRoutes)
+    if (!routeFilterNeedle) return groups
+    return groups
+      .map((group) => ({
+        ...group,
+        routes: group.routes.filter((route) => routeMatchesFilter(route, routeFilterNeedle)),
+      }))
+      .filter((group) => group.routes.length > 0)
+  }, [processRoutes, routeFilterNeedle])
+
+  const activeProcessForRoutes =
+    processFlowNo ?? (activeRouteId ? getProcessRoute(activeRouteId)?.processNo : undefined)
+
+  const toggleRouteGroup = useCallback((processNo: string) => {
+    setExpandedRouteGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(processNo)) next.delete(processNo)
+      else next.add(processNo)
+      return next
+    })
+  }, [])
+
+  const isRouteGroupExpanded = useCallback(
+    (processNo: string) => {
+      if (routeFilterNeedle) return true
+      return expandedRouteGroups.has(processNo)
+    },
+    [routeFilterNeedle, expandedRouteGroups],
+  )
 
   useEffect(() => {
     if (!open || (!processFlowNo && !activeRouteId)) return
@@ -846,7 +949,7 @@ export function WorkflowsPanel({
         )}
 
         <div className="shortcuts-drawer-body">
-          <div className="sc-process-block">
+          <div className="sc-process-block sc-process-catalog-block">
             <div className="sc-section-label">Süreçler</div>
             {pocProcesses.length === 0 ? (
               <p className="sc-process-hint">Liste yüklenemedi veya boş.</p>
@@ -875,55 +978,117 @@ export function WorkflowsPanel({
 
           <div className="sc-process-block sc-process-routes-block">
             <div className="sc-section-label">Akış Rotaları</div>
+            {processRoutes.length > 0 ? (
+              <label className="sc-route-filter">
+                <span className="visually-hidden">Akış rotası ara</span>
+                <input
+                  type="search"
+                  value={routeFilter}
+                  onChange={(e) => setRouteFilter(e.target.value)}
+                  placeholder="Rota adı veya süreç no…"
+                  aria-label="Akış rotası ara"
+                  autoComplete="off"
+                />
+                {routeFilter ? (
+                  <button
+                    type="button"
+                    className="sc-route-filter-clear"
+                    aria-label="Rotayı filtrelemeyi temizle"
+                    onClick={() => setRouteFilter('')}
+                  >
+                    ×
+                  </button>
+                ) : null}
+              </label>
+            ) : null}
             {processRoutes.length === 0 ? (
-              <p className="sc-process-hint">Henüz kaydedilmiş rota yok.</p>
+              <p className="sc-process-hint">
+                Henüz kaydedilmiş rota yok. Bir süreçte akış rotası oluşturup kaydedin.
+              </p>
+            ) : routeBpmGroups.length === 0 ? (
+              <p className="sc-process-hint">Filtreye uyan rota yok.</p>
             ) : (
-              <ul className="sc-process-list">
-                {processRoutes.map((route) => (
-                  <li key={route.id} className="sc-process-route-row">
-                    <button
-                      type="button"
-                      className={`sc-process-item${activeRouteId === route.id ? ' is-active' : ''}`}
-                      onClick={() => onOpenProcessRoute(route.id)}
-                    >
-                      <span className="sc-process-route-glyph" aria-hidden>
-                        <GitBranchIcon />
-                      </span>
-                      <span className="sc-process-item-copy">
-                        <span className="sc-process-item-name">{route.name}</span>
-                        <span className="sc-process-item-no">{route.processNo}</span>
-                      </span>
-                    </button>
-                    <span className="sc-process-route-actions">
-                      <button
-                        type="button"
-                        className="sc-process-route-action is-rename"
-                        title="Adı düzenle"
-                        aria-label={`${route.name} rotasının adını düzenle`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setPendingRename(route)
-                          setRenameDraft(route.name)
-                        }}
+              <>
+                {activeProcessForRoutes &&
+                !processRoutes.some((route) => route.processNo === activeProcessForRoutes) ? (
+                  <p className="sc-process-hint">
+                    Bu süreç için kayıtlı rota yok. Akış ekranında rota oluşturup kaydedin.
+                  </p>
+                ) : null}
+                <div className="sc-route-bpm-groups" role="tree" aria-label="Süreç bazlı akış rotaları">
+                  {routeBpmGroups.map((group) => {
+                    const expanded = isRouteGroupExpanded(group.processNo)
+                    const panelId = `sc-route-bpm-${group.processNo}`
+                    return (
+                      <section
+                        key={group.processNo}
+                        className={`sc-route-bpm-group${expanded ? ' is-expanded' : ''}${activeProcessForRoutes === group.processNo ? ' is-active-process' : ''}`}
+                        role="treeitem"
+                        aria-expanded={expanded}
                       >
-                        <RouteRenameIcon />
-                      </button>
-                      <button
-                        type="button"
-                        className="sc-process-route-action is-delete"
-                        title="Rotayı sil"
-                        aria-label={`${route.name} rotasını sil`}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setPendingDelete(route)
-                        }}
-                      >
-                        <RouteDeleteIcon />
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                        <div className="sc-route-bpm-head">
+                          <button
+                            type="button"
+                            className="sc-route-bpm-chev-btn"
+                            aria-expanded={expanded}
+                            aria-controls={panelId}
+                            onClick={() => toggleRouteGroup(group.processNo)}
+                          >
+                            <span className="sc-folder-chev" aria-hidden>
+                              {expanded ? '▾' : '▸'}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="sc-route-bpm-toggle"
+                            aria-expanded={expanded}
+                            aria-controls={panelId}
+                            onClick={() => toggleRouteGroup(group.processNo)}
+                          >
+                            <TreeKindIcon kind="process" size={13} title="Süreç" />
+                            <span className="sc-route-bpm-copy">
+                              <span className="sc-route-bpm-title">{group.processTitle}</span>
+                              <span className="sc-route-bpm-meta">
+                                {group.processNo}
+                                <span className="sc-route-bpm-count">{group.routes.length} rota</span>
+                              </span>
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            className="sc-route-bpm-open"
+                            title="Süreci aç"
+                            aria-label={`${group.processTitle} sürecini aç`}
+                            onClick={() => onOpenProcess(group.processNo)}
+                          >
+                            Aç
+                          </button>
+                        </div>
+                        {expanded ? (
+                          <ul
+                            id={panelId}
+                            className="sc-process-list sc-route-bpm-routes wf-tree-body"
+                          >
+                            {group.routes.map((route) => (
+                              <ProcessRouteListItem
+                                key={route.id}
+                                route={route}
+                                active={activeRouteId === route.id}
+                                onOpen={() => onOpenProcessRoute(route.id)}
+                                onRename={() => {
+                                  setPendingRename(route)
+                                  setRenameDraft(route.name)
+                                }}
+                                onDelete={() => setPendingDelete(route)}
+                              />
+                            ))}
+                          </ul>
+                        ) : null}
+                      </section>
+                    )
+                  })}
+                </div>
+              </>
             )}
           </div>
 

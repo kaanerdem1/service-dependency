@@ -56,7 +56,6 @@ export function readProcessRoutes(): ProcessRouteStore {
     const routes = (parsed.routes ?? [])
       .map(normalizeRoute)
       .filter((route): route is SavedProcessRoute => Boolean(route))
-      .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, MAX_ROUTES)
     return { routes }
   } catch {
@@ -105,7 +104,10 @@ export function saveProcessRoute(input: {
     updatedAt: now,
     lastOpenedAt: now,
   }
-  writeProcessRoutes([route, ...store.routes.filter((item) => item.id !== route.id)])
+  const nextRoutes = existing
+    ? store.routes.map((item) => (item.id === route.id ? route : item))
+    : [...store.routes, route]
+  writeProcessRoutes(nextRoutes)
   return route
 }
 
@@ -133,11 +135,45 @@ export function touchProcessRoute(id: string): ProcessRouteStore {
   )
 }
 
-export function routesForPanel(activeProcessNo?: string): SavedProcessRoute[] {
-  const routes = readProcessRoutes().routes
-  return [...routes].sort((a, b) => {
-    const aActive = a.processNo === activeProcessNo ? 1 : 0
-    const bActive = b.processNo === activeProcessNo ? 1 : 0
-    return bActive - aActive || b.lastOpenedAt - a.lastOpenedAt
-  })
+/** Drawer listesi: kayıt sırası sabit; seçince veya açınca en üste taşınmaz. */
+export function routesForPanel(_activeProcessNo?: string): SavedProcessRoute[] {
+  return readProcessRoutes().routes
+}
+
+export type ProcessRouteBpmGroup = {
+  processNo: string
+  processTitle: string
+  routes: SavedProcessRoute[]
+}
+
+/** Süreç (BPM) numarasına göre grupla; ilk görülme sırası korunur. */
+export function groupProcessRoutesByBpm(routes: SavedProcessRoute[]): ProcessRouteBpmGroup[] {
+  const order: string[] = []
+  const map = new Map<string, ProcessRouteBpmGroup>()
+  for (const route of routes) {
+    let group = map.get(route.processNo)
+    if (!group) {
+      group = {
+        processNo: route.processNo,
+        processTitle: route.processTitle || route.processNo,
+        routes: [],
+      }
+      map.set(route.processNo, group)
+      order.push(route.processNo)
+    } else if (
+      route.processTitle &&
+      (group.processTitle === group.processNo || !group.processTitle)
+    ) {
+      group.processTitle = route.processTitle
+    }
+    group.routes.push(route)
+  }
+  return order.map((no) => map.get(no)!)
+}
+
+export function routeMatchesFilter(route: SavedProcessRoute, needle: string): boolean {
+  const q = needle.trim().toLowerCase()
+  if (!q) return true
+  const hay = `${route.name}\n${route.processNo}\n${route.processTitle}`.toLowerCase()
+  return hay.includes(q)
 }
