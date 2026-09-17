@@ -8,16 +8,20 @@ Bu belge, **davranışı bozmadan** kod tabanını parçalara ayırma ve **Türk
 
 ## 1. Neden refactor?
 
-| Sorun | Etki |
-|--------|------|
-| `App.tsx`, `DwhPage.tsx`, `ProcessFlowCanvas.tsx`, `WorkflowsPanel.tsx` binlerce satır | Yeni özellik zor, hata riski yüksek |
-| `App.css` ~18k satır | Stil nerede, hangi ekrana ait belirsiz |
-| Navigasyon + store + UI aynı dosyada | “Rota açılınca ne oluyor?” sorusu uzun grep gerektirir |
-| Az modül üstü açıklama | Onboarding yavaş |
+
+| Sorun                                                                                  | Etki                                                   |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| `App.tsx`, `DwhPage.tsx`, `ProcessFlowCanvas.tsx`, `WorkflowsPanel.tsx` binlerce satır | Yeni özellik zor, hata riski yüksek                    |
+| `App.css` ~18k satır                                                                   | Stil nerede, hangi ekrana ait belirsiz                 |
+| Navigasyon + store + UI aynı dosyada                                                   | “Rota açılınca ne oluyor?” sorusu uzun grep gerektirir |
+| Az modül üstü açıklama                                                                 | Onboarding yavaş                                       |
+
 
 **Hedef:** Bir geliştirici (veya bankacı-teknik PO) dosya adına / üst yoruma bakınca **“bu ne işe yarıyor?”** sorusunu 30 saniyede cevaplayabilsin.
 
 ---
+
+
 
 ## 2. İlkeler (değişmez kurallar)
 
@@ -28,6 +32,8 @@ Bu belge, **davranışı bozmadan** kod tabanını parçalara ayırma ve **Türk
 5. **Test / smoke:** Süreç rotası, iş akışı drawer, DWH lineage, servis haritası — her faz sonrası kısa manuel smoke ([process-flow.md](./process-flow.md), kök `ss.md` varsa).
 
 ---
+
+
 
 ## 3. Yorum standardı (eklenecek metinler)
 
@@ -56,6 +62,8 @@ Her yeni veya taşınan dosyanın **en üstüne** kısa blok:
 
 ---
 
+
+
 ## 4. Mevcut harita (kısa)
 
 ```
@@ -76,7 +84,11 @@ server/src/
 
 ---
 
+
+
 ## 5. Fazlar
+
+
 
 ### Faz 0 — Harita ve “README her klasörde” (1 PR, düşük risk)
 
@@ -88,83 +100,110 @@ server/src/
 
 ---
 
+
+
 ### Faz 1 — `App.tsx` parçalama (2–4 PR)
 
 **Sorun:** ~2000 satır; navigasyon, süreç rotası, favoriler, DWH geçişi iç içe.
 
-| Taşınacak parça | Hedef | Üst yorum konusu |
-|-----------------|--------|------------------|
-| Servis geçmişi / breadcrumb | `navigation/useCatalogHistory.ts` + ince hook | Geri/ileri stack |
-| Süreç açma / rota açma | `navigation/openProcess.ts` veya `process/openProcessVisit.ts` | `processFlowNo`, `processRouteId` birlikte |
-| Drawer görünürlük (shortcuts, workflows) | `shell/useNavDrawers.ts` | Pin, overlay |
-| Render: sadece kabuk | `App.tsx` ~400–600 satır | Yüzey seçimi + outlet |
+
+| Taşınacak parça                          | Hedef                                                          | Üst yorum konusu                           |
+| ---------------------------------------- | -------------------------------------------------------------- | ------------------------------------------ |
+| Servis geçmişi / breadcrumb              | `navigation/useCatalogHistory.ts` + ince hook                  | Geri/ileri stack                           |
+| Süreç açma / rota açma                   | `navigation/openProcess.ts` veya `process/openProcessVisit.ts` | `processFlowNo`, `processRouteId` birlikte |
+| Drawer görünürlük (shortcuts, workflows) | `shell/useNavDrawers.ts`                                       | Pin, overlay                               |
+| Render: sadece kabuk                     | `App.tsx` ~400–600 satır                                       | Yüzey seçimi + outlet                      |
+
 
 **Bitti sayılır:** `App.tsx` yalnızca layout + provider + route benzeri dallanma; iş kuralı yok.
 
 ---
 
-### Faz 2 — İş akışları drawer (1–2 PR)
+
+
+### Faz 2 — İş akışları drawer (1–2 PR) ✅ ilk adım tamam
 
 **Sorun:** `WorkflowsPanel.tsx` ~1300 satır; süreç listesi, BPM rota grupları, workflow ağacı, arama.
 
-| Parça | Hedef dosya |
-|--------|-------------|
-| BPM rota grupları + filtre UI | `ProcessRoutesPanel.tsx` |
-| Süreç listesi (featured + scroll) | `ProcessCatalogList.tsx` |
-| Rename/delete dialog | `ProcessRouteDialogs.tsx` (portal) |
-| Folder ağacı | Mevcut `FolderBlock` ayrı dosyada kalabilir |
+| Parça | Hedef dosya | Durum |
+|--------|-------------|-------|
+| BPM rota grupları + filtre UI | `components/workflows/ProcessRoutesPanel.tsx` | ✅ Yapıldı |
+| Süreç listesi (featured + scroll) | `components/workflows/ProcessCatalogList.tsx` | ✅ Yapıldı |
+| Rename/delete dialog | `components/workflows/ProcessRouteDialogs.tsx` (portal) | ✅ Yapıldı |
+| Folder ağacı (`FolderBlock`, `DropZone`, arama kutusu) | Şimdilik `WorkflowsPanel.tsx` içinde | ⏳ Sonraki adım |
 
-**Store:** `processRouteStore.ts` zaten ayrı; üst yorum + export grupları net.
+**Store:** `processRouteStore.ts` zaten ayrı; üst yorum + export grupları net. Bu fazda ayrıca
+Türkçe arama filtresindeki **İ/I** büyük/küçük harf hatası (`routeMatchesFilter`) test yazılırken
+yakalandı ve `foldTurkish` yardımcı fonksiyonuyla düzeltildi.
 
-**Bitti sayılır:** `WorkflowsPanel` sadece birleştirir (composition).
+**Sonuç:** `WorkflowsPanel.tsx` ~1290 → ~1010 satıra indi (3 yeni dosyaya ~440 satır taşındı).
+Her yeni dosyada üst modül yorumu var; state hâlâ `WorkflowsPanel`'de merkezi (bkz.
+`components/workflows/README.md`).
+
+**Bitti sayılır (sonraki PR):** `FolderBlock`/`DropZone`/arama kutusu da ayrılınca `WorkflowsPanel`
+yalnızca birleştirir (composition).
 
 ---
+
+
 
 ### Faz 3 — Süreç haritası ve rota modu (3–5 PR)
 
 **Sorun:** `ProcessFlowCanvas.tsx`, `ProcessFlowRouteBuilder.tsx`, `ProcessFlowMap.tsx` büyük; state makinesi dağınık.
 
-| Adım | İş |
-|------|-----|
-| 3a | `processUserRoute.ts` + `processPathNarrative.ts` — tek “rota domain” README |
-| 3b | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) |
-| 3c | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook |
-| 3d | `ProcessFlowPage.tsx` ince orchestrator |
+
+| Adım | İş                                                                                                   |
+| ---- | ---------------------------------------------------------------------------------------------------- |
+| 3a   | `processUserRoute.ts` + `processPathNarrative.ts` — tek “rota domain” README                         |
+| 3b   | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) |
+| 3c   | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook                            |
+| 3d   | `ProcessFlowPage.tsx` ince orchestrator                                                              |
+
 
 **Yorum odağı:** Tam akış vs kayıtlı rota farkı ([process-flow.md](./process-flow.md) ile aynı cümleler).
 
 ---
 
-### Faz 4 — DWH (2–4 PR)
+
+
+### Faz 4 — DWH (2–4 PR).  --- DWH ELLENMEYECEK.
 
 **Sorun:** `DwhPage.tsx` ~1760 satır; sekmeler, ziyaret geçmişi, lineage panel.
 
-| Parça | Hedef |
-|--------|--------|
-| Stage sekmeleri state | `dwh/useDwhStage.ts` |
-| Tablo/rapor detay | `DwhDetailStage.tsx` |
-| Kolon lineage | Zaten `DwhColumnLineagePanel`; “Anlatım modu” gelecekte buraya |
-| Harita | `DwhLineageMap` + layout ayrı |
+
+| Parça                 | Hedef                                                          |
+| --------------------- | -------------------------------------------------------------- |
+| Stage sekmeleri state | `dwh/useDwhStage.ts`                                           |
+| Tablo/rapor detay     | `DwhDetailStage.tsx`                                           |
+| Kolon lineage         | Zaten `DwhColumnLineagePanel`; “Anlatım modu” gelecekte buraya |
+| Harita                | `DwhLineageMap` + layout ayrı                                  |
+
 
 **Bitti sayılır:** `DwhPage` veri yükleme + sekme koordinasyonu.
 
 ---
 
+
+
 ### Faz 5 — CSS bölme (2–3 PR, görsel regresyon dikkat)
 
 **Sorun:** Tek `App.css`.
 
-| Dosya | İçerik |
-|--------|--------|
-| `styles/shell.css` | Sidebar, drawer, masthead |
-| `styles/process-flow.css` | PF harita, rota çubuğu |
-| `styles/workflows-drawer.css` | sc-process-*, sc-route-* |
-| `styles/dwh.css` | DWH stage |
-| `App.css` | `@import` veya Vite’ta `main.tsx` import zinciri |
+
+| Dosya                         | İçerik                                           |
+| ----------------------------- | ------------------------------------------------ |
+| `styles/shell.css`            | Sidebar, drawer, masthead                        |
+| `styles/process-flow.css`     | PF harita, rota çubuğu                           |
+| `styles/workflows-drawer.css` | sc-process-*, sc-route-*                         |
+| `styles/dwh.css`              | DWH stage                                        |
+| `App.css`                     | `@import` veya Vite’ta `main.tsx` import zinciri |
+
 
 **Kural:** Taşırken class adı **değiştirilmez** (sadece dosya taşınır).
 
 ---
+
+
 
 ### Faz 6 — Sunucu `inventory/` (1–2 PR)
 
@@ -176,6 +215,8 @@ server/src/
 
 ---
 
+
+
 ### Faz 7 — Kalıcılık API’leri (refactor değil, feature — sıraya al)
 
 [catalog-persistence.md](./catalog-persistence.md) uygulanırken:
@@ -185,16 +226,20 @@ server/src/
 
 ---
 
+
+
 ## 6. Öncelik sırası (öneri)
 
-1. **Faz 0 + Faz 2** — Az risk, son dokunduğumuz drawer netleşir.  
-2. **Faz 1** — En çok günlük geliştirmeyi rahatlatır.  
-3. **Faz 3** — Süreç ürününün çekirdeği.  
-4. **Faz 5** — CSS (paralel yapılabilir).  
-5. **Faz 4** — DWH ayrı ekip/zaman dilimi.  
+1. **Faz 0 + Faz 2** — Az risk, son dokunduğumuz drawer netleşir.
+2. **Faz 1** — En çok günlük geliştirmeyi rahatlatır.
+3. **Faz 3** — Süreç ürününün çekirdeği.
+4. **Faz 5** — CSS (paralel yapılabilir).
+5. **Faz 4** — DWH ayrı ekip/zaman dilimi.
 6. **Faz 6–7** — Backend + DB.
 
 ---
+
+
 
 ## 7. PR checklist (her refactor PR’ında)
 
@@ -206,6 +251,8 @@ server/src/
 
 ---
 
+
+
 ## 8. Bilinen teknik borç (refactor sırasında dokunma / ayrı issue)
 
 - Web `tsc` uyarıları: `ProcessFlowCanvas`, `ProcessFlowRouteBuilder`, `workflowStore`, `DwhLineageMap` (2026-03).
@@ -213,10 +260,12 @@ server/src/
 
 ---
 
+
+
 ## 9. Sonraki adım (seninle netleştirelim)
 
-1. Faz 0 + **ProcessRoutesPanel** ayırma ile başlayalım mı?  
-2. Refactor PR’larında yorum dili **tamamen Türkçe** mi, yoksa modül başlığı TR / detay EN mi?  
+1. Faz 0 + **ProcessRoutesPanel** ayırma ile başlayalım mı?
+2. Refactor PR’larında yorum dili **tamamen Türkçe** mi, yoksa modül başlığı TR / detay EN mi?
 3. CSS bölme Vite’ta tek bundle mı kalsın, yoksa lazy yüzey (DWH) ayrı chunk mu?
 
 Onayladığın sıraya göre ilk PR’ı açabiliriz.

@@ -171,9 +171,22 @@ export function groupProcessRoutesByBpm(routes: SavedProcessRoute[]): ProcessRou
   return order.map((no) => map.get(no)!)
 }
 
+/**
+ * Türkçe uyumlu küçük harfe çevirme.
+ *
+ * JS'in standart `toLowerCase()`'i "İ" harfini "i̇" (noktalı, iki karakter)
+ * yapar; bu da "İade" içinde düz "i" ile arama yapılamamasına yol açar.
+ * Burada "İ"/"I" harflerini önce düz "i"ye çevirip sonra `toLowerCase()`
+ * uyguluyoruz — arama kutusu için "ı/i" ayrımı önemli değil, tek amaç
+ * kullanıcının yazdığı metnin eşleşmesi.
+ */
+function foldTurkish(value: string): string {
+  return value.replace(/[İIı]/g, 'i').toLowerCase()
+}
+
 export function routeMatchesFilter(route: SavedProcessRoute, needle: string): boolean {
-  const q = needle.trim().toLowerCase()
+  const q = foldTurkish(needle.trim())
   if (!q) return true
-  const hay = `${route.name}\n${route.processNo}\n${route.processTitle}`.toLowerCase()
+  const hay = foldTurkish(`${route.name}\n${route.processNo}\n${route.processTitle}`)
   return hay.includes(q)
 }
