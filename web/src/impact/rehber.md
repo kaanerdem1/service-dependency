@@ -1,6 +1,6 @@
 # `impact/` — servis etki haritası yardımcıları
 
-Ana UI: `components/ImpactMap.tsx`, `MapStage.tsx`. CSS: `App.css` (harita kuralları).
+Ana UI grubu: [components/service-map/rehber.md](../components/service-map/rehber.md) (`ImpactMap.tsx`, `MapStage.tsx`). CSS: `styles/service-map.css`.
 
 | Dosya | Rol |
 |-------|-----|

@@ -10,7 +10,7 @@ import {
 } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { createPortal } from 'react-dom'
-import { MapStage } from '../components/MapStage'
+import { MapStage } from '../components/service-map/MapStage'
 import { DwhSearchHitsPortal } from './DwhSearchHitsPortal'
 import { MotionListItem } from '../motion/MotionList'
 import { MotionModalPanel } from '../motion/MotionModal'
@@ -35,9 +35,9 @@ import { DwhLineageTree } from './DwhLineageTree'
 import { DwhFavoritesPanel } from './DwhFavoritesPanel'
 import { useDwhFavorites } from './useDwhFavorites'
 import { DwhSqlCode } from './DwhSqlCode'
-import { StarIcon } from '../components/FavoriteStarButton'
+import { StarIcon } from '../components/sidebar/FavoriteStarButton'
 import { DwhKindIconBadge } from './DwhKindIconBadge'
-import { type AppSurface } from '../components/SurfaceSwitch'
+import { type AppSurface } from '../components/shell/SurfaceSwitch'
 import type {
   DwhColumn,
   DwhColumnLineageResponse,

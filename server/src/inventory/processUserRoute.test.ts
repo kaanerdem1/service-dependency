@@ -13,8 +13,8 @@ import {
   savedRouteHasChanges,
   transitionCaption,
   visibleRouteVisits,
-} from '../../../web/src/components/processUserRoute.js'
-import { buildUserRouteSnapshotSteps } from '../../../web/src/components/processPathNarrative.js'
+} from '../../../web/src/components/process/processUserRoute.js'
+import { buildUserRouteSnapshotSteps } from '../../../web/src/components/process/processPathNarrative.js'
 
 const graph: ProcessFlowGraph = {
   no: 'P1',

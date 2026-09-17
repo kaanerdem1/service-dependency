@@ -27,7 +27,7 @@ import {
 } from './impact/projectFilter'
 import { DwhPage } from './dwh/DwhPage'
 import { APP_THEME_KEY, readAppTheme, type AppTheme } from './theme'
-import { type AppSurface } from './components/SurfaceSwitch'
+import { type AppSurface } from './components/shell/SurfaceSwitch'
 import { AppMasthead } from './components/shell/AppMasthead'
 import { AppShellOverlays } from './components/shell/AppShellOverlays'
 import { ServicesWorkspace } from './components/shell/ServicesWorkspace'
@@ -48,8 +48,8 @@ import { usePersistedAppNav } from './navigation/usePersistedAppNav'
 import { useSidebarLayout } from './navigation/useSidebarLayout'
 import { useInboxAndChangeRequests } from './navigation/useInboxAndChangeRequests'
 import { useCommandPaletteKeyboard } from './navigation/useCommandPaletteKeyboard'
-import { useServiceFavorites } from './useServiceFavorites'
-import { useServiceCatalogLinks } from './components/ServiceCatalogPanels'
+import { useServiceFavorites } from './stores/useServiceFavorites'
+import { useServiceCatalogLinks } from './components/catalog/ServiceCatalogPanels'
 import {
   getModuleTree,
   getSessionUsers,
@@ -58,7 +58,7 @@ import {
 } from './api/client'
 import { useSnapshotPack, snapshotWatermarkLines } from './snapshot/useSnapshotPack'
 import { sidebarOpenAtSnapshot } from './snapshot/sidebarState'
-import { readServiceRecents } from './serviceRecents'
+import { readServiceRecents } from './stores/serviceRecents'
 import { resolveCatalogCanEdit } from './auth/catalogAccess'
 import type { SessionUser } from './mock/session'
 import type {
@@ -69,8 +69,8 @@ import type {
   ModuleNode,
   Service,
 } from './types'
-import './App.css'
-import './responsive.css'
+import './styles/App.css'
+import './styles/responsive.css'
 
 type Tab = StageTabId
 

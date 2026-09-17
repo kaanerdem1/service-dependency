@@ -7,7 +7,7 @@ import {
   renameProcessRoute,
   routeMatchesFilter,
   saveProcessRoute,
-} from '../../../web/src/processRouteStore.js'
+} from '../../../web/src/stores/processRouteStore.js'
 
 test('rota store görünür prefixi saklar, yeniden adlandırır ve siler', () => {
   const values = new Map<string, string>()

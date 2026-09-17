@@ -1,4 +1,4 @@
-import type { AppSurface } from './components/SurfaceSwitch'
+import type { AppSurface } from './components/shell/SurfaceSwitch'
 import type { StageTabId } from './motion/StageTabs'
 
 const STORAGE_KEY = 'sd-app-navigation-v1'

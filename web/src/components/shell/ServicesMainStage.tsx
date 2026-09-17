@@ -6,10 +6,10 @@
  * Ne yapmaz: State tutmaz; callback’ler App / navigation hook’larından gelir.
  */
 import type { ComponentProps, RefObject } from 'react'
-import { WelcomeScreen } from '../WelcomeScreen'
-import { ProcessFlowPage } from '../ProcessFlowPage'
-import { WorkflowInfoPage } from '../WorkflowInfoPage'
-import { CatalogEntityOverview } from '../CatalogEntityOverview'
+import { WelcomeScreen } from '../welcome/WelcomeScreen'
+import { ProcessFlowPage } from '../process/ProcessFlowPage'
+import { WorkflowInfoPage } from '../workflow-stage/WorkflowInfoPage'
+import { CatalogEntityOverview } from '../catalog/CatalogEntityOverview'
 import { ServiceStage } from './ServiceStage'
 import type { SelectPivotFn } from '../../navigation/useProcessFlowNav'
 import type { StageTabId } from '../../motion/StageTabs'

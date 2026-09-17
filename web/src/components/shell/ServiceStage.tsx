@@ -4,20 +4,20 @@
  * Ne yapar: Bir servis seçiliyken orta alanı basar (StageTabs + harita + tablo
  *   + servis işlevi + ekranlar + process).
  * Ne yapmaz: Pivot/geçmiş state tutmaz; tüm aksiyonlar App’ten gelir.
- * İlgili: docs/refactor-plan.md — Faz 1 (kabuk JSX).
+ * İlgili: shell/rehber.md
  */
 import type { Dispatch, RefObject, SetStateAction } from 'react'
-import { FavoriteStarButton } from '../FavoriteStarButton'
-import { ImpactMap } from '../ImpactMap'
-import { MapStage } from '../MapStage'
-import { MethodImpactMap } from '../MethodImpactMap'
-import { RelationshipTable } from '../RelationshipTable'
+import { FavoriteStarButton } from '../sidebar/FavoriteStarButton'
+import { ImpactMap } from '../service-map/ImpactMap'
+import { MapStage } from '../service-map/MapStage'
+import { MethodImpactMap } from '../service-map/MethodImpactMap'
+import { RelationshipTable } from '../catalog/RelationshipTable'
 import {
   ServiceProcessesStage,
   ServiceScreensStage,
-} from '../ServiceCatalogPanels'
-import { ServiceOverview } from '../ServiceOverview'
-import { ServiceWorkflowChip } from '../ServiceWorkflowChip'
+} from '../catalog/ServiceCatalogPanels'
+import { ServiceOverview } from '../catalog/ServiceOverview'
+import { ServiceWorkflowChip } from '../catalog/ServiceWorkflowChip'
 import { MapLoadingSkeleton, SkeletonShimmer } from '../../motion/SkeletonShimmer'
 import { StageTabPanels } from '../../motion/StageTabPanels'
 import { StageTabs, SERVICE_STAGE_TAB_ORDER, type StageTabDef, type StageTabId } from '../../motion/StageTabs'

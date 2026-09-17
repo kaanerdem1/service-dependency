@@ -2,6 +2,8 @@
 
 Kaynak graf: sunucu `GET /api/processes/:no/flow` (PAR/XML parse). İki kullanım modu: **tam akış** (tüm graf) ve **akış rotası** (kullanıcının seçtiği yol). Ürün: [docs/process-flow.md](../../../docs/process-flow.md).
 
+Drawer’dan süreç açma: [workflows/rehber.md](../workflows/rehber.md). Servis haritası **ayrı grup**: [service-map/rehber.md](../service-map/rehber.md).
+
 ## Otomatik çizim vs referans dosyası
 
 | Süreç | Layout |

@@ -3,7 +3,7 @@
  *
  * Ne yapar: Favoriler / iş akışları / pin / gelen kutusu SVG’lerini çizer.
  * Ne yapmaz: Tıklama veya açık/kapalı state tutmaz — yalnızca görünüm.
- * İlgili: docs/refactor-plan.md — Faz 1 (kabuk JSX).
+ * İlgili: shell/rehber.md
  */
 export function SidebarStarIcon({ active }: { active: boolean }) {
   return (

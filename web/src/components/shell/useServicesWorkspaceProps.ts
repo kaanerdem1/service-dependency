@@ -8,7 +8,7 @@ import { useCallback, useMemo, type ComponentProps, type RefObject } from 'react
 import type { ModuleSidebar } from './ModuleSidebar'
 import type { ServicesMainStage } from './ServicesMainStage'
 import type { ServiceStage } from './ServiceStage'
-import type { ProcessFlowPage } from '../ProcessFlowPage'
+import type { ProcessFlowPage } from '../process/ProcessFlowPage'
 import type { SelectPivotFn } from '../../navigation/useProcessFlowNav'
 import type { buildServiceStageTabs, StageTabId } from '../../motion/StageTabs'
 import type { AppTheme } from '../../theme'

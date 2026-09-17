@@ -3,7 +3,7 @@ import test from 'node:test'
 import {
   servicesForOutgoingLabel,
   detailGroupsWithoutTransitionServices,
-} from '../../../web/src/components/processFlowTransitionServices.ts'
+} from '../../../web/src/components/process/processFlowTransitionServices.ts'
 
 test('geçiş adına göre servis eşlemesi', () => {
   const details = {

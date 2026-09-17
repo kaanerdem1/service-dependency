@@ -7,7 +7,7 @@
  *   arama/filtre mantığı içermez — o iş `WorkflowsPanel` üstündeki arama kutusunda.
  * İlgili ekran: Sol "İş akışları" drawer'ı, "SÜREÇLER" bölümü.
  */
-import { TreeKindIcon } from '../TreeKindIcon'
+import { TreeKindIcon } from '../sidebar/TreeKindIcon'
 import type { ProcessCatalogItem } from '../../types'
 
 type Props = {

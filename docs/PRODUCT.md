@@ -21,10 +21,12 @@ Servis A
 
 **İki yüzey:**
 
-| Yüzey | Odak |
-|-------|------|
+
+| Yüzey               | Odak                                                         |
+| ------------------- | ------------------------------------------------------------ |
 | **Servis kataloğu** | Servis ↔ servis bağımlılığı, harita, tablo, metod call-graph |
-| **DWH kataloğu** | Tablo / kolon / prosedür lineage, etki yarıçapı |
+| **DWH kataloğu**    | Tablo / kolon / prosedür lineage, etki yarıçapı              |
+
 
 Uzun vadede servis → metod → veri katmanı tek etki hikâyesinde birleşir.
 
@@ -32,12 +34,14 @@ Uzun vadede servis → metod → veri katmanı tek etki hikâyesinde birleşir.
 
 ## 2. Sınır: SD vs issue management
 
-| SD (biz) | Issue management (intranet) |
-|----------|----------------------------|
-| Katalog gezinme, arama | Ticket / change kaydı |
-| Etkilenen servis listesi (hop-1) | Onay, red, beklet, gate |
-| Harita / tablo / metod call-graph | Inbox, bildirim, rol / yetki |
-| Deep link veya embed (`?service=`) | Workflow, sahiplik, audit |
+
+| SD (biz)                           | Issue management (intranet)  |
+| ---------------------------------- | ---------------------------- |
+| Katalog gezinme, arama             | Ticket / change kaydı        |
+| Etkilenen servis listesi (hop-1)   | Onay, red, beklet, gate      |
+| Harita / tablo / metod call-graph  | Inbox, bildirim, rol / yetki |
+| Deep link veya embed (`?service=`) | Workflow, sahiplik, audit    |
+
 
 Issue kaydından SD’ye deep link veya embed intranet issue aracında tanımlanır (bu repoda ayrı belge yok).
 
@@ -63,25 +67,27 @@ Sol **modül ağacı** (grup → jar → servis), sağ **seçili servis detayı*
 
 ## 4. Durum (bugün)
 
-| Alan | Durum | Not |
-|------|--------|-----|
-| Modül ağacı (lazy) | ✅ | Inventory DB — ~37k servis |
-| Arama (servis / metod) | ✅ | ⌘K komut paleti |
-| Etkilenen servisler (hop-1 API) | ✅ | Issue’ya aktarılacak özet küme |
-| Harita (LTR + Radial) | ✅ | Pivot, geri/ileri, katman aç/kapa |
-| Tablo (etki zinciri) | ✅ | L1 satır → L2/L3/L4 kolonları |
-| Metod call-graph | ✅ | Servis altında drill-down |
-| Favoriler · iş akışları | ✅ | ⌃F / ⌃G — kişisel gezinme |
-| Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre; **process akış haritası** ayrıntı: [process-flow.md](./process-flow.md) |
-| Process — tam akış haritası | ✅ | XML ingest, path focus, drawer, yol snapshot (PDF) |
-| Process — akış rotası oluştur | ✅ | Adım adım seçim; kayıt `completed`; Kaydet / Farklı kaydet; rotalar paneli |
-| Süreç düğüm açıklaması (drawer) | ✅ DB | `node_descriptions` + PATCH; rotalar hâlâ local — [catalog-persistence.md](./catalog-persistence.md) |
-| Responsive (dar pencere) | ✅ kısmi | `<1100px` sidebar ölçekleme, harita içi yatay scroll — `responsive.css` |
-| DWH lineage sekmesi | ✅ | Ayrı `surface=dwh` |
-| Inventory DB entegrasyonu | ✅ | Postgres (`env.*`) |
-| Issue deep link / embed | ⏳ | F1: `?service=` (intranet issue aracı) |
-| Gerçek owner (F4) | ⏳ | `service_owner` + issue sahiplik alanları |
-| Kenar tipi (`http` / `queue`) | ⏳ | P2 |
+
+| Alan                            | Durum   | Not                                                                                                  |
+| ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| Modül ağacı (lazy)              | ✅       | Inventory DB — ~37k servis                                                                           |
+| Arama (servis / metod)          | ✅       | ⌘K komut paleti                                                                                      |
+| Etkilenen servisler (hop-1 API) | ✅       | Issue’ya aktarılacak özet küme                                                                       |
+| Harita (LTR + Radial)           | ✅       | Pivot, geri/ileri, katman aç/kapa                                                                    |
+| Tablo (etki zinciri)            | ✅       | L1 satır → L2/L3/L4 kolonları                                                                        |
+| Metod call-graph                | ✅       | Servis altında drill-down                                                                            |
+| Favoriler · iş akışları         | ✅       | ⌃F / ⌃G — kişisel gezinme                                                                            |
+| Servis işlevi / ekran / process | ✅ kısmi | Özet + filtre; **process akış haritası** ayrıntı: [process-flow.md](./process-flow.md)               |
+| Process — tam akış haritası     | ✅       | XML ingest, path focus, drawer, yol snapshot (PDF)                                                   |
+| Process — akış rotası oluştur   | ✅       | Adım adım seçim; kayıt `completed`; Kaydet / Farklı kaydet; rotalar paneli                           |
+| Süreç düğüm açıklaması (drawer) | ✅ DB    | `node_descriptions` + PATCH; rotalar hâlâ local — [catalog-persistence.md](./catalog-persistence.md) |
+| Responsive (dar pencere)        | ✅ kısmi | `<1100px` sidebar ölçekleme, harita içi yatay scroll — `responsive.css`                              |
+| DWH lineage sekmesi             | ✅       | Ayrı `surface=dwh`                                                                                   |
+| Inventory DB entegrasyonu       | ✅       | Postgres (`env.*`)                                                                                   |
+| Issue deep link / embed         | ⏳       | F1: `?service=` (intranet issue aracı)                                                               |
+| Gerçek owner (F4)               | ⏳       | `service_owner` + issue sahiplik alanları                                                            |
+| Kenar tipi (`http` / `queue`)   | ⏳       | P2                                                                                                   |
+
 
 Manuel smoke servis listesi: repo kökünde `ss.md` (opsiyonel, `.gitignore` — repoda olmayabilir).
 
@@ -96,10 +102,12 @@ Manuel smoke servis listesi: repo kökünde `ss.md` (opsiyonel, `.gitignore` —
 
 ### Hop-1 vs derin katman
 
-| Katman | Ne | Kim kullanır |
-|--------|-----|--------------|
-| **Hop-1** (doğrudan) | Değişiklikten doğrudan etkilenen servisler | Issue tool — bilgilendirme / onay listesi kaynağı |
-| **Hop 2–4** (dolaylı) | Zincir halinde dolaylı etki | SD harita / tablo — keşif ve etki yarıçapı |
+
+| Katman                | Ne                                         | Kim kullanır                                      |
+| --------------------- | ------------------------------------------ | ------------------------------------------------- |
+| **Hop-1** (doğrudan)  | Değişiklikten doğrudan etkilenen servisler | Issue tool — bilgilendirme / onay listesi kaynağı |
+| **Hop 2–4** (dolaylı) | Zincir halinde dolaylı etki                | SD harita / tablo — keşif ve etki yarıçapı        |
+
 
 Dolaylı görünen servis, issue tarafında otomatik onaya **eklenmez**; issue workflow’u hop-1 kümesiyle beslenir.
 
@@ -122,38 +130,29 @@ Dolaylı görünen servis, issue tarafında otomatik onaya **eklenmez**; issue w
 
 ### Ölçek
 
-| Mod | Düğüm bütçesi (yaklaşık) | Max hop |
-|-----|--------------------------|---------|
-| Basit | ~28 | 3 |
-| Gelişmiş | ~48 | 3 |
 
----
+| Mod      | Düğüm bütçesi (yaklaşık) | Max hop |
+| -------- | ------------------------ | ------- |
+| Basit    | ~28                      | 3       |
+| Gelişmiş | ~48                      | 3       |
 
-## 7. Bilinçli kapsam dışı
-
-Bunlar **SD’de yapılmaz** — issue management’ta kalır veya oradan bağlanır:
-
-- Onay flag’leri (kabul / red / beklet / gate)
-- Inbox, talep CRUD, bildirim workflow’u
-- Requester / owner / viewer rol matrisi
-- Runtime APM, full-mesh harita
-- Kenar tipi rozeti (P2)
-
-Standalone’daki mock CR/inbox kodu (`changeRequests.ts`) geçici; F5’te kaldırılır veya issue API sync yazılır.
 
 ---
 
 ## 8. Nerede detay?
 
-| Konu | Doküman / kod |
-|------|----------------|
-| API ↔ DB, ağaç, ingest | [db.md](./db.md) |
-| Kalıcılık tabloları + DDL | [catalog-persistence.md](./catalog-persistence.md) |
-| Kurulum, mimari | [README](../README.md) |
-| Issue link / embed | Intranet issue aracı (repoda ayrı spec yok) |
-| Etki BFS | `server/src/impactGraph.ts` |
-| Harita layout | `web/src/impact/mapLayout.ts`, `ImpactMap.tsx` |
-| Process tam akış + rota | [process-flow.md](./process-flow.md) · `ProcessFlowMap.tsx`, `ProcessFlowRouteBuilder.tsx` |
+
+| Konu                      | Doküman / kod                                                                              |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| API ↔ DB, ağaç, ingest    | [db.md](./db.md)                                                                           |
+| Kalıcılık tabloları + DDL | [catalog-persistence.md](./catalog-persistence.md)                                         |
+| Kurulum, mimari           | [README](../README.md) · [web-architecture.md](./web-architecture.md)                     |
+| Web modül grupları        | [web-module-layout.md](./web-module-layout.md) · `web/src/rehber.md`                       |
+| Issue link / embed        | Intranet issue aracı (repoda ayrı spec yok)                                                |
+| Etki BFS                  | `server/src/impactGraph.ts`                                                                |
+| Harita layout             | `web/src/impact/mapLayout.ts`, `components/service-map/ImpactMap.tsx`                      |
+| Process tam akış + rota   | [process-flow.md](./process-flow.md) · `ProcessFlowMap.tsx`, `ProcessFlowRouteBuilder.tsx` |
+
 
 ---
 

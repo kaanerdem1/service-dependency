@@ -692,7 +692,7 @@ Tüm yazma uçları: `canEdit` / SSO; okuma intranet kullanıcıları.
 | `node_descriptions` (drawer adım açıklaması) | DB — **var** (`process.node_descriptions`, `PATCH /api/processes/:no/node-descriptions`)                                   |
 | Akış rotaları                                | **localStorage** — `web/src/processRouteStore.ts` (`sd-process-flow-routes:v1`); §14.2 tablo hedefi                        |
 | Akış Takibi (WorkflowsPanel)                 | **localStorage** — `web/src/workflowStore.ts` (`sd-service-workflows:v1`)                                                  |
-| Süreç haritası yapışkan notları              | **localStorage** — `web/src/components/processFlowNotes.ts` (`sd-process-flow-map:{no}`)                                   |
+| Süreç haritası yapışkan notları              | **localStorage** — `web/src/components/process/processFlowNotes.ts` (`sd-process-flow-map:{no}`)                                   |
 | Tam akış canvas UI (not + elle konum)        | **localStorage** — `ProcessFlowCanvas` / `sd-process-flow-v3:{no}` (not metni DB’ye taşınabilir; konum isteğe bağlı local) |
 | Servis değişiklik günlüğü                    | **localStorage** — `ServiceChangeLog.tsx` (`sd-service-changes:{id}`)                                                      |
 | Değişiklik talebi / inbox                    | **bellek** — `server/src/changeRequests.ts` (restart sıfırlar)                                                             |

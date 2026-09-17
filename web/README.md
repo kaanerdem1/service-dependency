@@ -1,5 +1,15 @@
 # Web (UI)
 
-React + Vite arayüzü.
+React + Vite — servis kataloğu (modül ağacı, etki haritası, BPM, iş akışları).
 
-**Kurulum ve `npm run dev`:** [../README.md](../README.md)
+## Dokümanlar
+
+| Dosya | Ne için |
+|--------|---------|
+| [../README.md](../README.md) | Kurulum, `npm run dev`, ortam |
+| [src/components/rehber.md](./src/components/rehber.md) | **UI klasör haritası — önce burası** |
+| [../docs/web-module-layout.md](../docs/web-module-layout.md) | `components/` alt klasör özeti |
+| [../docs/web-architecture.md](../docs/web-architecture.md) | Store’lar, CSS, yüzeyler |
+| [src/rehber.md](./src/rehber.md) | Tüm `web/src` modül haritası |
+
+DWH arayüzü: `src/dwh/` (`components/` ağacından ayrı).

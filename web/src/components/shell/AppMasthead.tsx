@@ -1,8 +1,8 @@
 /**
  * Üst masthead — yüzey seçici, marka, tema, gelen kutusu.
  */
-import { SurfaceSwitch, type AppSurface } from '../SurfaceSwitch'
-import { ThemeSwitch } from '../ThemeSwitch'
+import { SurfaceSwitch, type AppSurface } from './SurfaceSwitch'
+import { ThemeSwitch } from './ThemeSwitch'
 import { themeLabel, type AppTheme } from '../../theme'
 import type { TrailAction, TrailEntry } from '../../types'
 import { InboxIcon } from './sidebarIcons'

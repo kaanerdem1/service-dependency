@@ -23,9 +23,9 @@
  *     ham state olarak dışa açık — `App.tsx`'teki `selectPivot`,
  *     `selectMethod`, `clearSelection` gibi fonksiyonlar bunları öncekiyle
  *     birebir aynı şekilde doğrudan güncelliyor. (Bu, davranışı hiç
- *     değiştirmeden taşımak için bilinçli bir tercih — bkz. docs/refactor-plan.md.)
+ *     değiştirmeden taşımak için bilinçli bir tercih.)
  *
- * İlgili: docs/refactor-plan.md — Faz 1.
+ * İlgili: navigation/rehber.md, docs/web-architecture.md
  */
 import { useCallback, useMemo, useState } from 'react'
 import type { StageTabId } from '../motion/StageTabs'

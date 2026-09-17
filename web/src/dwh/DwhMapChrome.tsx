@@ -26,7 +26,7 @@ import { MotionSheetBody } from '../motion/MotionSheet'
 import { DockMagnifyRow } from '../motion/DockMagnifyRow'
 import { MotionPopover } from '../motion/MotionPopover'
 import { layoutSpring } from '../motion/config'
-import { DockTooltipPortal } from '../components/DockTooltipPortal'
+import { DockTooltipPortal } from '../components/service-map/DockTooltipPortal'
 
 /** Ortak lejant + filtre ipucu + path breadcrumb + blast özeti */
 

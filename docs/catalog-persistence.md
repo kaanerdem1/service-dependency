@@ -429,7 +429,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS process_user_route_owner_name_key
 
 **Uygulama yeri:** Süreç **Tam akış** canvas — **Not ekle** (`ProcessFlowCanvas` / `ProcessFlowMap`).
 
-**Bugün:** `localStorage` `sd-process-flow-map:{processNo}` — `web/src/components/processFlowNotes.ts`.
+**Bugün:** `localStorage` `sd-process-flow-map:{processNo}` — `web/src/components/process/processFlowNotes.ts`.
 
 **Hedef API:** `GET /api/processes/:no/map-notes`, `PUT` (liste replace) veya CRUD.
 

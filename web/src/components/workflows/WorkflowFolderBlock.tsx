@@ -3,11 +3,11 @@
  *
  * Ne yapar: Klasör başlığı, yeniden adlandırma, sürükle-bırak, alt adımlar.
  * Ne yapmaz: localStorage yazmaz; tüm mutasyonlar üstten callback.
- * İlgili: docs/refactor-plan.md — Faz 2.
+ * İlgili: workflows/rehber.md
  */
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
-import { WorkflowFolderGlyph } from '../WorkflowIcons'
-import { WorkflowStepReorder } from '../WorkflowStepReorder'
+import { WorkflowFolderGlyph } from '../workflow-stage/WorkflowIcons'
+import { WorkflowStepReorder } from '../workflow-stage/WorkflowStepReorder'
 import {
   FOLDER_MIME,
   beginWorkflowDrag,
@@ -18,7 +18,7 @@ import {
   sequenceInFolder,
   type WorkflowFolder,
   type WorkflowsStore,
-} from '../../workflowStore'
+} from '../../stores/workflowStore'
 import { DropZone } from './WorkflowDropZone'
 
 function InlineRename({

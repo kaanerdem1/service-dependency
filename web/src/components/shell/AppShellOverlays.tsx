@@ -3,10 +3,10 @@
  */
 import { AnimatePresence } from 'motion/react'
 import { MotionToast } from '../../motion/MotionToast'
-import { ChangeRequestModal } from '../ChangeRequestModal'
-import { CommandPalette } from '../CommandPalette'
-import { InboxPanel } from '../InboxPanel'
-import { RequestDetailModal } from '../RequestDetailModal'
+import { ChangeRequestModal } from '../overlays/ChangeRequestModal'
+import { CommandPalette } from '../search/CommandPalette'
+import { InboxPanel } from '../overlays/InboxPanel'
+import { RequestDetailModal } from '../overlays/RequestDetailModal'
 import type { AppTheme } from '../../theme'
 import type { SessionUser } from '../../mock/session'
 import type {

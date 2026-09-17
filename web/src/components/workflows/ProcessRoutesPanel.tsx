@@ -17,9 +17,9 @@
  *
  * İlgili ekran: Sol "İş akışları" drawer'ı, "AKIŞ ROTALARI" bölümü.
  */
-import { TreeKindIcon } from '../TreeKindIcon'
-import { GitBranchIcon } from '../WorkflowIcons'
-import type { ProcessRouteBpmGroup, SavedProcessRoute } from '../../processRouteStore'
+import { TreeKindIcon } from '../sidebar/TreeKindIcon'
+import { GitBranchIcon } from '../workflow-stage/WorkflowIcons'
+import type { ProcessRouteBpmGroup, SavedProcessRoute } from '../../stores/processRouteStore'
 
 function RouteRenameIcon() {
   return (

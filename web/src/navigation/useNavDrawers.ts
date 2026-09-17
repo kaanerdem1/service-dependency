@@ -20,11 +20,11 @@
  *   - Persisted nav'a yazma yapmaz — `lastServicesDrawerRef.current`'ı okuyup
  *     yazan yer hâlâ `App.tsx`'teki genel "nav'ı localStorage'a yaz" efekti.
  *
- * İlgili: docs/refactor-plan.md — Faz 1.
+ * İlgili: navigation/rehber.md
  */
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import { matchPanelShortcut } from '../panelShortcuts'
-import type { AppSurface } from '../components/SurfaceSwitch'
+import { matchPanelShortcut } from '../shortcuts/panelShortcuts'
+import type { AppSurface } from '../components/shell/SurfaceSwitch'
 import type { PersistedSidebarDrawer } from '../appNavPersist'
 
 type Params = {

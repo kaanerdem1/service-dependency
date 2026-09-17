@@ -142,8 +142,8 @@ flowchart LR
 | Konu | Dosya |
 |------|--------|
 | UI kabuk | `web/src/App.tsx` |
-| Servis haritası | `web/src/components/ImpactMap.tsx` |
-| Süreç akış / rota | `web/src/components/ProcessFlowMap.tsx`, `processRouteStore.ts` |
+| Servis haritası | `web/src/components/service-map/ImpactMap.tsx` |
+| Süreç akış / rota | `web/src/components/process/ProcessFlowMap.tsx`, `processRouteStore.ts` |
 | API | `server/src/index.ts` |
 | Etki grafi | `server/src/impactGraph.ts` |
 | DWH UI | `web/src/dwh/DwhPage.tsx` |
@@ -158,6 +158,12 @@ flowchart LR
 | [docs/db.md](docs/db.md) | Tablolar, API↔DB, ingest, kalıcılık özeti (§14) |
 | [docs/catalog-persistence.md](docs/catalog-persistence.md) | Kalıcılık tabloları, API↔DDL, migration |
 | [docs/process-flow.md](docs/process-flow.md) | Tam akış vs kullanıcı rotası |
+| [docs/web-module-layout.md](docs/web-module-layout.md) | Web `components/` klasör haritası |
+| [docs/web-architecture.md](docs/web-architecture.md) | Web mimarisi (store, CSS, yüzeyler) |
+| [dwh/rehber.md](dwh/rehber.md) | DWH örnek veri / legacy (repo kökü) |
+| [web/src/components/rehber.md](web/src/components/rehber.md) | UI klasör haritası (önce burası) |
+| [web/src/rehber.md](web/src/rehber.md) | Tüm `web/src` modül haritası |
+
 ---
 
 ## Tema / geri dönüş

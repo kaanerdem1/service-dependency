@@ -3,7 +3,7 @@
  *
  * Ne yapar: Geri/ileri yığınındaki servis adlarını tıklanabilir gösterir.
  * Ne yapmaz: Geçmişi tutmaz — `onSelect(index)` App/`useVisitHistory`’ye gider.
- * İlgili: docs/refactor-plan.md — Faz 1.
+ * İlgili: shell/rehber.md
  */
 import type { VisitPathStep } from '../../navigation/useVisitHistory'
 

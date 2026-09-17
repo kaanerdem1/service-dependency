@@ -1,9 +1,8 @@
 # `components/workflows/` — İş akışları drawer'ının parçaları
 
-Bu klasör, `WorkflowsPanel.tsx` içinden çıkarılan **sunum (presentational)**
-bileşenlerini barındırır. State (hangi grup açık, filtre metni, hangi rota
-siliniyor) hâlâ `WorkflowsPanel.tsx` içinde merkezi tutulur; buradaki
-bileşenler yalnızca prop alıp render eder.
+Bu klasör **`WorkflowsPanel.tsx`** (composition + state) ve ondan çıkarılan
+**sunum** parçalarını barındırır. Parça bileşenler prop alıp render eder;
+drawer state merkezi olarak `WorkflowsPanel.tsx` içindedir.
 
 | Dosya | Ne gösterir | Kimden veri alır |
 |-------|-------------|-------------------|
@@ -20,4 +19,4 @@ grubu açık" kararı da bu bilgiye bağlı. Tek yerde tutmak, "seçince rota
 listesi neden kayıyor/kaymıyor" gibi soruların cevabını tek dosyada
 aranabilir kılıyor (bkz. `../../processRouteStore.ts` üstündeki not).
 
-**İlgili:** [../../../../docs/refactor-plan.md](../../../../docs/refactor-plan.md) — Faz 2.
+**İlgili:** [rehber.md](./rehber.md) · Süreç canvas: [process/rehber.md](../process/rehber.md) · Layout planı: [docs/web-module-layout.md](../../../../docs/web-module-layout.md)

@@ -16,5 +16,6 @@
  * | `useServicesWorkspaceProps.ts` | Workspace sidebar/stage prop üretimi |
  * | `useAppShellOverlaysProps.ts` | Overlay prop üretimi |
  *
- * İlgili: [rehber.md](./rehber.md), docs/refactor-plan.md — Faz 1.
+ * Komşu gruplar: sidebar, workflows — bkz. [rehber.md](./rehber.md).
+ * İlgili: [docs/web-architecture.md](../../../../docs/web-architecture.md), [docs/web-module-layout.md](../../../../docs/web-module-layout.md).
  */

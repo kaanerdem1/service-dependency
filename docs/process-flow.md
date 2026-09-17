@@ -39,9 +39,9 @@ PAR / jBPM XML **inventory_db**’den gelir (`env.process`). Arayüzde iki mod v
 
 | Konu | Dosya |
 |------|--------|
-| Sayfa / mod geçişi | `web/src/components/ProcessFlowPage.tsx` |
-| Rota state | `web/src/components/processUserRoute.ts` |
-| PDF anlatım | `web/src/components/processPathNarrative.ts` |
+| Sayfa / mod geçişi | `web/src/components/process/ProcessFlowPage.tsx` |
+| Rota state | `web/src/components/process/processUserRoute.ts` |
+| PDF anlatım | `web/src/components/process/processPathNarrative.ts` |
 | Düğüm açıklamaları (API) | `server/src/inventory/processNodeDescriptions.ts` |
 | XML parse | `server/src/inventory/parProcessParser.ts` |
 | Akış API | `server/src/inventory/processFlowService.ts` |

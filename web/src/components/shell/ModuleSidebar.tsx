@@ -5,22 +5,22 @@
  *   drawer’ı (ShortcutsPanel, WorkflowsPanel) basar.
  * Ne yapmaz: Seçim / süreç açma iş kuralını yürütmez; tıklanınca App’ten
  *   gelen callback’leri çağırır.
- * İlgili: docs/refactor-plan.md — Faz 1 (kabuk JSX).
+ * İlgili: shell/rehber.md
  */
 import { AnimatePresence } from 'motion/react'
 import type { Dispatch, PointerEvent as ReactPointerEvent, RefObject, SetStateAction } from 'react'
-import { CatalogHelp } from '../CatalogHelp'
-import { ModuleTree } from '../ModuleTree'
-import { SearchHitContent } from '../SearchHitContent'
-import { SearchHitsPortal } from '../SearchHitsPortal'
-import { ShortcutsPanel } from '../ShortcutsPanel'
-import { SidebarHoverTip } from '../SidebarHoverTip'
-import { TreeKindIcon } from '../TreeKindIcon'
-import { TreeOptionsRadial } from '../TreeOptionsRadial'
-import { WorkflowsPanel } from '../WorkflowsPanel'
+import { CatalogHelp } from '../catalog/CatalogHelp'
+import { ModuleTree } from '../sidebar/ModuleTree'
+import { SearchHitContent } from '../search/SearchHitContent'
+import { SearchHitsPortal } from '../search/SearchHitsPortal'
+import { ShortcutsPanel } from '../sidebar/ShortcutsPanel'
+import { SidebarHoverTip } from '../sidebar/SidebarHoverTip'
+import { TreeKindIcon } from '../sidebar/TreeKindIcon'
+import { TreeOptionsRadial } from '../sidebar/TreeOptionsRadial'
+import { WorkflowsPanel } from '../workflows/WorkflowsPanel'
 import { MorphHoverButton } from '../../motion/MorphHoverButton'
 import { MotionListItem } from '../../motion/MotionList'
-import { favoritesPanelShortcutLabel, workflowsPanelShortcutLabel } from '../../panelShortcuts'
+import { favoritesPanelShortcutLabel, workflowsPanelShortcutLabel } from '../../shortcuts/panelShortcuts'
 import type { SelectPivotFn } from '../../navigation/useProcessFlowNav'
 import type { AppTheme } from '../../theme'
 import type { MethodRef, ModuleNode, Service } from '../../types'

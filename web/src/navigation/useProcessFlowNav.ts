@@ -19,12 +19,12 @@
  *     `processFlowReturn`'e ihtiyaç duyduğu için bu hook'tan *sonra*
  *     çağrılır; restore fonksiyonu ise geçmişi temizlemek zorunda.
  *
- * İlgili: docs/refactor-plan.md — Faz 1.
+ * İlgili: navigation/rehber.md
  */
 import { useCallback, useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { searchServices } from '../api/client'
 import type { StageTabId } from '../motion/StageTabs'
-import { getProcessRoute, touchProcessRoute } from '../processRouteStore'
+import { getProcessRoute, touchProcessRoute } from '../stores/processRouteStore'
 import type { AffectedService, ImpactGraph, Service } from '../types'
 import type { VisitEntry } from './useVisitHistory'
 

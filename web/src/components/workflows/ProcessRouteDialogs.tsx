@@ -9,7 +9,7 @@
  * İlgili ekran: Sol "İş akışları" drawer'ı, "AKIŞ ROTALARI" satır aksiyonları.
  */
 import { createPortal } from 'react-dom'
-import type { SavedProcessRoute } from '../../processRouteStore'
+import type { SavedProcessRoute } from '../../stores/processRouteStore'
 
 type Props = {
   pendingRename?: SavedProcessRoute

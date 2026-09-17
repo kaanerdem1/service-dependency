@@ -3,11 +3,11 @@
  *
  * Ne yapar: Servis/süreç metin araması UI’si; en az 2 karakterde sonuç gösterir.
  * Ne yapmaz: API çağırmaz — `hits` / `processHits` üstten gelir.
- * İlgili: docs/refactor-plan.md — Faz 2.
+ * İlgili: workflows/rehber.md
  */
 import type { RefObject } from 'react'
-import { SearchHitLabel } from '../SearchHitLabel'
-import { TreeKindIcon } from '../TreeKindIcon'
+import { SearchHitLabel } from '../search/SearchHitLabel'
+import { TreeKindIcon } from '../sidebar/TreeKindIcon'
 import type { ProcessCatalogItem, Service } from '../../types'
 
 type Props = {

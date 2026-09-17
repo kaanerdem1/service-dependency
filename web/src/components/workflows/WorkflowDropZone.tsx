@@ -3,7 +3,7 @@
  *
  * Ne yapar: Adım veya klasör bırakılınca `onDropStep` / `onDropFolder` çağırır.
  * Ne yapmaz: Store yazmaz — taşıma `WorkflowsPanel` içindeki callback’lerde.
- * İlgili: docs/refactor-plan.md — Faz 2.
+ * İlgili: workflows/rehber.md
  */
 import { useCallback, useEffect, useState, type DragEvent as ReactDragEvent, type ReactNode } from 'react'
 import {
@@ -11,7 +11,7 @@ import {
   STEP_MIME,
   endWorkflowDrag,
   peekWorkflowDrag,
-} from '../../workflowStore'
+} from '../../stores/workflowStore'
 
 function isWorkflowDrag(e: ReactDragEvent) {
   const types = [...e.dataTransfer.types].map((t) => t.toLowerCase())

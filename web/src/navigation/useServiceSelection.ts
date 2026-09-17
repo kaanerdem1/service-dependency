@@ -10,7 +10,7 @@
  *   servis işlevi vb. son sekme hatırlanmaz).
  */
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import { pushServiceRecent } from '../serviceRecents'
+import { pushServiceRecent } from '../stores/serviceRecents'
 import type { TrailAction, TrailEntry, ModuleNode, MethodImpactGraph, Service } from '../types'
 import type { SelectPivotFn, ProcessFlowAnchor } from './useProcessFlowNav'
 import { visitEntry, type VisitEntry } from './useVisitHistory'

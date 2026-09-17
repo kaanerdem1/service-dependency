@@ -16,9 +16,10 @@
  * | `processFlowCamera.ts` | Tam akış kamerası (start / frame) |
  * | `useProcessFlowHover.ts` | Hover + sürükleme vurgusu |
  * | `processFlowCanvasLayout.ts` | Eski KTF keşif canvas yerleşimi |
-| `processFlowReferenceLayout.ts` | **Yalnız KTF (105116)** sabit koordinat (HTML referans) |
+ * | `processFlowReferenceLayout.ts` | **Yalnız KTF (105116)** sabit koordinat (HTML referans) |
  * | `useSaveProcessRoute.ts` | Rota kaydet + PDF snapshot |
  *
  * Ayrıntı: [docs/process-flow.md](../../../docs/process-flow.md)
  * Modül haritası (TR): [rehber.md](./rehber.md) — KTF referans layout dahil.
+ * Kaynak dosyalar bu klasörde. Üst harita: [docs/web-module-layout.md](../../../../docs/web-module-layout.md).
  */

@@ -7,7 +7,7 @@
  */
 import { useEffect, type Dispatch, type SetStateAction } from 'react'
 import { getImpactGraph, getMethodImpactGraph, getNeighbors, getService } from '../api/client'
-import { renameServiceRecent } from '../serviceRecents'
+import { renameServiceRecent } from '../stores/serviceRecents'
 import type { AffectedService, ImpactGraph, MethodImpactGraph, Service } from '../types'
 
 type Params = {

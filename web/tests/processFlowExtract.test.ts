@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { sinkCopyRealId } from '../src/components/processFlowIds.ts'
-import { isDummyId, isHappyLabel, isRejectLabel } from '../src/components/processFlowCanvasLayout.ts'
+import { sinkCopyRealId } from '../src/components/process/processFlowIds.ts'
+import { isDummyId, isHappyLabel, isRejectLabel } from '../src/components/process/processFlowCanvasLayout.ts'
 
 test('sinkCopyRealId gerçek BPM id’sini ::near kopyasından ayırır', () => {
   assert.equal(sinkCopyRealId('n1'), 'n1')

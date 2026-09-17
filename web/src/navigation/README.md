@@ -1,18 +1,14 @@
 # Navigasyon hook’ları
 
-`App.tsx` kabuktur; seçim, geçmiş, drawer ve süreç geçişleri burada toplanır.
+`App.tsx` kabuktur; seçim, geçmiş, drawer ve süreç geçişleri burada toplanır. Türkçe gruplu liste: [rehber.md](./rehber.md).
 
-| Dosya | Rol |
-|-------|-----|
-| `useNavDrawers.ts` | Favoriler / iş akışları drawer |
-| `useVisitHistory.ts` | Servis ziyaret yığını, Geri/İleri |
-| `useProcessFlowNav.ts` | Süreç / rota, servisten geri dönüş |
-| `useServiceSelection.ts` | selectPivot, katalog, temizleme |
-| `useServiceStageData.ts` | Pivot → API graf yüklemesi |
-| `appShellHelpers.ts` | Drawer restore, klavye hedefi |
-| `usePersistedAppNav.ts` | localStorage navigasyon yazma |
-| `useSidebarLayout.ts` | Sidebar genişlik / sabitleme |
-| `useInboxAndChangeRequests.ts` | Inbox + CR modal |
-| `useCommandPaletteKeyboard.ts` | ⌘K / Esc |
+| Grup | Dosyalar |
+|------|----------|
+| Layout / drawer | `useSidebarLayout.ts`, `useNavDrawers.ts` |
+| Seçim / geçmiş | `useServiceSelection.ts`, `useVisitHistory.ts` |
+| Süreç | `useProcessFlowNav.ts` |
+| API veri | `useServiceStageData.ts` |
+| Overlays / ⌘K | `useInboxAndChangeRequests.ts`, `useCommandPaletteKeyboard.ts` |
+| Persist | `usePersistedAppNav.ts`, `appShellHelpers.ts` |
 
-İlgili: [rehber.md](./rehber.md), [web/ARCHITECTURE.md](../../ARCHITECTURE.md)
+İlgili: [docs/web-architecture.md](../../../docs/web-architecture.md), [docs/web-module-layout.md](../../../docs/web-module-layout.md)

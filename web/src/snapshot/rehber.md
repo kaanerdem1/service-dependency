@@ -1,6 +1,6 @@
 # `snapshot/` — oturum izi ve PNG/PDF paketi
 
-Değişiklik talebi ve servis haritası snapshot’ları için istemci tarafı paket.
+Değişiklik talebi, servis haritası ve süreç yolu snapshot’ları için istemci tarafı paket. UI grupları: [service-map/rehber.md](../components/service-map/rehber.md), [process/rehber.md](../components/process/rehber.md), [overlays/rehber.md](../components/overlays/rehber.md).
 
 | Dosya | Rol | Çağıran |
 |-------|-----|---------|
