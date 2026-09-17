@@ -9,7 +9,8 @@ Giriş noktası ve paylaşılan tipler — her biri tek sorumluluk:
 | Dosya | Rol |
 |-------|-----|
 | `main.tsx` | React mount, tema, `SnapshotTrailProvider` |
-| `App.tsx` | Kabuk: yüzey, hook birleşimi, persist |
+| `App.tsx` | İnce kabuk (JSX); wiring → `app/useServiceCatalogShell.ts` |
+| `app/` | [app/rehber.md](./app/rehber.md) |
 | `appNavPersist.ts` | `sessionStorage` navigasyon okuma/yazma |
 | `types.ts` | Paylaşılan TS tipleri (API ↔ UI) |
 | `theme.ts` | Tema adı (`AppTheme`), `localStorage` |
