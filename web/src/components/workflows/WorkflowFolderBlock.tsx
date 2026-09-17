@@ -6,7 +6,7 @@
  * İlgili: docs/refactor-plan.md — Faz 2.
  */
 import { useEffect, useRef, useState, type DragEvent as ReactDragEvent } from 'react'
-import { WorkflowFolderGlyph } from '../WorkflowIcons'
+import { TreeKindIcon } from '../TreeKindIcon'
 import { WorkflowStepReorder } from '../WorkflowStepReorder'
 import {
   FOLDER_MIME,
@@ -174,7 +174,11 @@ export function FolderBlock({
                 ⋮⋮
               </span>
             ) : null}
-            <WorkflowFolderGlyph icon={folder.icon ?? 'flow'} size={14} />
+            <TreeKindIcon
+              kind={folder.icon === 'folder' ? 'group' : 'process'}
+              size={14}
+              title={folder.icon === 'folder' ? 'Klasör' : 'Akış'}
+            />
             {editing ? (
               <InlineRename
                 value={folder.name}

@@ -2022,6 +2022,36 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: inherit;
+}
+
+/* Akış Takibi: Süreçler / Akış Rotaları ile aynı yazı ve ikon doygunluğu */
+.shortcuts-drawer-panel .sc-folder-toggle,
+.shortcuts-drawer-panel .sc-folder-chev-btn,
+.shortcuts-drawer-panel .sc-row-main {
+  color: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.shortcuts-drawer-panel .sc-folder-chev {
+  opacity: 1;
+  color: inherit;
+}
+
+.shortcuts-drawer-panel .sc-drag-handle {
+  color: inherit;
+  opacity: 0.72;
+}
+
+.shortcuts-drawer-panel .sc-row-alias {
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: inherit;
 }
 
 .sc-folder-count {
@@ -9546,6 +9576,10 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
   color: #f0b27a;
 }
 
+.module-sidebar .tree-kind-wrap.is-process {
+  color: #c9b0ea;
+}
+
 [data-theme='white'] .module-sidebar .tree-kind-wrap.is-group {
   color: #1d7a74;
 }
@@ -9560,6 +9594,10 @@ html.sd-map-drawer-collapsed .main.main-map .stage-actions {
 
 [data-theme='white'] .module-sidebar .tree-kind-wrap.is-method {
   color: #b45309;
+}
+
+[data-theme='white'] .module-sidebar .tree-kind-wrap.is-process {
+  color: #6d4cae;
 }
 
 .module-kind-key .tree-kind-wrap {
