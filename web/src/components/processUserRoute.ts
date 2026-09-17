@@ -1,3 +1,12 @@
+/**
+ * Kullanıcı akış rotası — state makinesi (tam akıştan ayrı).
+ *
+ * Ne yapar: Start’tan itibaren seçilen geçişlerle `visits` + `cursor` tutar;
+ *   tek çıkışlı zinciri otomatik ilerletir; geri/ileri; kayıtlı rotayı güncel
+ *   grafla uzlaştırır (`reconcileRouteWithGraph`).
+ * Ne yapmaz: UI, PDF, localStorage yazmaz. Kayıt `processRouteStore.ts`.
+ * Tam akış vs rota: docs/process-flow.md
+ */
 import type { ProcessFlowGraph } from '../types'
 
 export type RouteVisit = {

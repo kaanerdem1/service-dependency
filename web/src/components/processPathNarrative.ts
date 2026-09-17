@@ -1,3 +1,11 @@
+/**
+ * Rota / tam-akış yolu → snapshot PDF anlatım adımları.
+ *
+ * Ne yapar: Graf + sıralı düğüm id’lerinden `ProcessPathSnapshotStep[]` üretir
+ *   (tam akış path focus veya kayıtlı rota ziyaretleri).
+ * Ne yapmaz: PDF çizmez; onu `snapshot/processPathSnapshot.ts` yapar.
+ * Tam akış vs rota: docs/process-flow.md
+ */
 import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../types'
 import type { ProcessPathSnapshotStep } from '../snapshot/processPathSnapshot'
 import type { RouteVisit } from './processUserRoute'

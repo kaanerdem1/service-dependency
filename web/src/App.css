@@ -2054,6 +2054,10 @@
   color: inherit;
 }
 
+.shortcuts-drawer-panel .sc-folder-toggle svg {
+  color: inherit;
+}
+
 .sc-folder-count {
   flex-shrink: 0;
   font-size: 10px;

@@ -169,18 +169,21 @@ arama, klasör ağacı ayrı dosyalar; state hâlâ panelde merkezi.
 
 
 
-### Faz 3 — Süreç haritası ve rota modu (3–5 PR)
+### Faz 3 — Süreç haritası ve rota modu (3–5 PR) ⏳ 3a tamam
 
 **Sorun:** `ProcessFlowCanvas.tsx`, `ProcessFlowRouteBuilder.tsx`, `ProcessFlowMap.tsx` büyük; state makinesi dağınık.
 
 
-| Adım | İş                                                                                                   |
-| ---- | ---------------------------------------------------------------------------------------------------- |
-| 3a   | `processUserRoute.ts` + `processPathNarrative.ts` — tek “rota domain” README                         |
-| 3b   | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) |
-| 3c   | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook                            |
-| 3d   | `ProcessFlowPage.tsx` ince orchestrator                                                              |
+| Adım | İş                                                                                                   | Durum |
+| ---- | ---------------------------------------------------------------------------------------------------- | ----- |
+| 3a   | `processUserRoute.ts` + `processPathNarrative.ts` — tek “rota domain” README                         | ✅ |
+| 3b   | Canvas: layout / zoom / hover ayrı modüller (`processFlowCanvasLayout.ts`, `useProcessFlowHover.ts`) | ⏳ |
+| 3c   | Route builder: kaydet / snapshot çağrıları tek `useSaveProcessRoute` hook                            | ⏳ |
+| 3d   | `ProcessFlowPage.tsx` ince orchestrator                                                              | ⏳ |
 
+
+**3a:** Domain dosyalarına Türkçe üst yorum eklendi; harita `components/process/README.md`.
+Davranış değişmedi.
 
 **Yorum odağı:** Tam akış vs kayıtlı rota farkı ([process-flow.md](./process-flow.md) ile aynı cümleler).
 
