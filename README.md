@@ -106,6 +106,7 @@ npm run dev --prefix web
 | Ağaç boş / 500 | `CATALOG_SOURCE=inventory` ise PG bilgileri ve dump |
 | Port 5173 dolu | Vite otomatik 5174’e geçer; terminal çıktısındaki URL’yi aç |
 | Süreç listesi `.par` isimli | `npm run ingest:process-par` — [db.md §13](docs/db.md#13-process-xml--db-eski-hale-döndü--tabloya-yazılmıyor) |
+| DB yedek (yerel) | `npm run backup:inventory-db --prefix server` → `backups/postgres/` (git’te yok) |
 
 ---
 

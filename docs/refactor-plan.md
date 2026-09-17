@@ -209,10 +209,9 @@ Davranış değişmedi.
 
 
 
-### Faz 4 — DWH — KAPSAM DIŞI
+### Faz 4 — DWH
 
-`web/src/dwh/` ve `server/src/dwh/` **bu refactor planına dahil değil**. Modülü başka
-kişi geliştirecek; burada parçalanmaz, taşınmaz, “fırsat bu ya” düzeltilmez.
+DWH yüzeyi (`web/src/dwh/`, `server/src/dwh/`) servis refactor’ından bağımsız geliştirilebilir; aynı repo, ayrı sahiplik / PR dilimi önerilir.
 
 ---
 

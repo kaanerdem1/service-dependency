@@ -9,7 +9,7 @@ Davranış değiştirmeden refactor için “nereye dokunurum?” haritası. Ayr
 | Yüzey | Bileşen | Not |
 |--------|---------|-----|
 | Servis kataloğu | `App.tsx` → `components/shell/ServicesWorkspace.tsx` | Sol ağaç + orta sahne |
-| DWH katalog | `dwh/DwhPage.tsx` | **Refactor kapsam dışı** (ayrı ekip) |
+| DWH katalog | `dwh/DwhPage.tsx` | Ayrı modül; `web/src/dwh/` |
 
 Yüzey seçimi: `components/SurfaceSwitch.tsx`, kalıcılık: `appNavPersist.ts` (`sessionStorage`, key `sd-app-navigation-v1`).
 

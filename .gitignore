@@ -19,9 +19,8 @@ dist-ssr/
 *.sln
 *.sw?
 
-# Yerel DB dump'ları (backups/postgres/README.md git'te kalır)
-/backups/postgres/*
-!/backups/postgres/README.md
+# Yerel DB dump'ları (server: npm run backup:inventory-db → backups/postgres/)
+/backups/
 
 # Lokal notlar — push edilmez (docs/PRODUCT.md, db.md, README.md hariç)
 /ss.md
