@@ -4,10 +4,17 @@ import request from 'supertest'
 import { createApp } from './createApp.js'
 
 test('GET /api/health → 200', async () => {
-  const app = createApp()
-  const res = await request(app).get('/api/health')
-  assert.equal(res.status, 200)
-  assert.ok(res.body)
+  const prev = process.env.CATALOG_SOURCE
+  process.env.CATALOG_SOURCE = 'mock'
+  try {
+    const app = createApp()
+    const res = await request(app).get('/api/health')
+    assert.equal(res.status, 200)
+    assert.equal(res.body?.ok, true)
+  } finally {
+    if (prev === undefined) delete process.env.CATALOG_SOURCE
+    else process.env.CATALOG_SOURCE = prev
+  }
 })
 
 test('GET /api/processes inventory kapalıyken not_available', async () => {

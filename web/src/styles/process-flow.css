@@ -1,4 +1,6 @@
 /** Süreç haritası — ortak / wrap / react-flow. */
+@import './process-flow-chrome.css';
+@import './process-flow-canvas.css';
 
 .hl-shell {
   display: flex;
