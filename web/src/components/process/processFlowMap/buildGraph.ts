@@ -1,5 +1,5 @@
 import { MarkerType, type Edge, type Node } from 'reactflow'
-import type { ProcessFlowGraph, ProcessFlowNodeKind } from '../../types'
+import type { ProcessFlowGraph } from '../../../types'
 import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from '../processFlowReferenceLayout.js'
 import { servicesForOutgoingLabels } from '../processFlowTransitionServices.js'
 import { sinkCopyRealId } from '../processFlowIds.js'
@@ -7,7 +7,6 @@ import { PROCESS_FLOW_ORIGIN as ORIGIN } from '../processFlowCamera.js'
 import {
   COL_GAP,
   FAN_GAP,
-  NODE_H,
   NODE_SEP,
   NODE_W,
   RAIL_GAP,
@@ -522,9 +521,6 @@ export function withEdgeRoutes(
  * yanına küçük, salt-görsel bir kopya konur ve o kaynağın oku artık kısa/
  * doğrudan bu kopyaya bağlanır — grafın kendisi (node/edge sayısı, drawer
  * içeriği) değişmez, sadece ekranda nereye çizildiği değişir. */
-const SINK_COPY_GAP_X = 40
-const SINK_COPY_OFFSET_Y = -52
-
 function splitCrowdedBackSinks(
   graph: ProcessFlowGraph,
   nodes: Node[],

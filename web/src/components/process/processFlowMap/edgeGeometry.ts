@@ -1,16 +1,15 @@
 import type { Edge } from 'reactflow'
-import type { ProcessFlowNodeKind } from '../../types'
+import type { ProcessFlowNodeKind } from '../../../types'
+import type { ProcessEdgeData, RouteKind } from './types.js'
 import {
   CORNER,
   GATEWAY_H,
   NODE_H,
   NODE_W,
-  RAIL_GAP,
   RAIL_PAD,
   RANK_SEP,
 } from './constants.js'
 import { PROCESS_FLOW_ORIGIN as ORIGIN } from '../processFlowCamera.js'
-import type { RouteKind } from './types.js'
 
 export function assignRailSlots(
   edges: Edge[],

@@ -1,4 +1,4 @@
-import type { ProcessFlowNodeKind } from '../../types'
+import type { ProcessFlowNodeKind } from '../../../types'
 
 export const RAIL_PAD = 36
 export const RAIL_GAP = 28

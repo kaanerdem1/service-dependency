@@ -35,10 +35,6 @@ import {
   NOTE_COLLAPSED_WIDTH,
   NOTE_DEFAULT_HEIGHT,
   NOTE_DEFAULT_WIDTH,
-  NOTE_MAX_HEIGHT,
-  NOTE_MAX_WIDTH,
-  NOTE_MIN_HEIGHT,
-  NOTE_MIN_WIDTH,
   readProcessFlowNotes,
   writeProcessFlowNotes,
   type ProcessFlowNote,
@@ -61,6 +57,7 @@ import {
 } from './processFlowMap/buildGraph.js'
 import { EdgeMarkers, FullscreenGlyph, processFlowEdgeTypes } from './processFlowMap/edges.js'
 import { processFlowNodeTypes, type NoteNodeData } from './processFlowMap/nodes.js'
+import type { ProcessEdgeData } from './processFlowMap/types.js'
 
 /** Snapshot çekimi öncesi DOM/layout'un yeni (daraltılmış) düğüm kümesiyle
  * gerçekten render/reflow olmasını beklemek için — bir animasyon

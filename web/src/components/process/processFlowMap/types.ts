@@ -2,7 +2,7 @@ import type {
   ProcessDecisionInfo,
   ProcessFlowNodeKind,
   ProcessNodeDetails,
-} from '../../types'
+} from '../../../types'
 
 export type ProcessNodeData = {
   label: string
