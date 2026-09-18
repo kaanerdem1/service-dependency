@@ -1,15 +1,12 @@
-# `web/src/api`
+# `web/src/api` — sunucuyla **konuşma**
 
-HTTP istemci — tek ana dosya: **`client.ts`**.
+**Ekranda:** Doğrudan bir pencere yok; her liste, harita ve süreç canvas’ı buradaki isteklerle dolar. Dev ortamında Vite `/api` isteklerini `localhost:4000` API’ye yollar.
 
-| Sorumluluk | Nerede |
-| --- | --- |
-| `/api/*` fetch sarmalayıcıları | `client.ts` |
-| Tipler (ProcessFlowGraph, Service, …) | `../types.ts` |
-| Vite dev proxy | `web/vite.config.ts` → `127.0.0.1:4000` |
+| Ne | Dosya |
+|----|--------|
+| Tüm `fetch('/api/...')` sarmalayıcıları | `client.ts` |
+| Dönen JSON’un TypeScript karşılığı | `../types.ts` |
 
-Mock modda API gerçek sunucuya gider (`CATALOG_SOURCE=mock` sunucuda). İstemci tarafı demo veri: [mock/rehber.md](../mock/rehber.md) (nadiren).
+Yetki sabitleri (buton göster/gizle): [auth/rehber.md](../auth/rehber.md). Hangi URL’ler var: [server/src/routes/rehber.md](../../../server/src/routes/rehber.md).
 
-Yetki / görünürlük sabitleri: [auth/rehber.md](../auth/rehber.md).
-
-Sunucu uç listesi: [server/src/routes/rehber.md](../../../server/src/routes/rehber.md).
+Demo mod: sunucuda `CATALOG_SOURCE=mock` — istemci yine gerçek API’yi çağırır.

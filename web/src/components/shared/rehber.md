@@ -1,12 +1,12 @@
-# `shared/` — çapraz UI parçaları
+# `shared/` — birçok ekranda tekrar eden **küçük parçalar**
 
-Birden fazla domain klasörünün kullandığı **küçük, state’siz** bileşenler. Domain mantığı burada tutulmaz.
+**Ekranda:** Tek başına sayfa değil; katalog sekmesinde “veri yok”, talep detayında **snapshot listesi** gibi ortak bloklar.
 
-| Dosya | Rol | Tüketiciler |
-|-------|-----|-------------|
-| `EmptyState.tsx` | “Veri yok / hata / yükleme” üçlü metin bloğu | `catalog/*`, `overlays/InboxPanel` |
-| `SnapshotList.tsx` | Talebe bağlı snapshot listesi + indirme | `overlays/RequestDetailModal` |
+| Dosya | Nerede görürsün | Ne gösterir |
+|-------|-----------------|-------------|
+| `EmptyState.tsx` | Boş tablo/liste | “Henüz kayıt yok” / hata / yükleniyor üçlüsü |
+| `SnapshotList.tsx` | Talep detay modalında | Eklenmiş PNG/PDF snapshot’ları, indir |
 
-Snapshot API / format: [snapshot/rehber.md](../../snapshot/rehber.md).
+Domain mantığı burada tutulmaz. Snapshot formatı: [snapshot/rehber.md](../../snapshot/rehber.md).
 
-Yeni paylaşılan parça eklerken: gerçekten **2+ domain** kullanıyorsa `shared/`; tek domain’e özel ise o domain klasöründe kal.
+Yeni parça: gerçekten **iki farklı ekran alanı** kullanacaksa `shared/`; yoksa ilgili domain klasöründe kalsın.

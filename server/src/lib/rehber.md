@@ -1,11 +1,9 @@
-# `server/src/lib`
+# `server/src/lib` — API **ortak dallanma**
 
-Route handler’ların paylaştığı **ince** yardımcılar. İş kuralı burada değil — `inventory/` ve kök modüllerde.
+**Ekranda:** Kullanıcı fark etmez; `.env`’de `CATALOG_SOURCE=mock` ise demo veri, `inventory` ise PostgreSQL — aynı ekranlar farklı kaynaktan dolar.
 
-| Dosya | Rol |
-| --- | --- |
-| `catalogHelpers.ts` | `CATALOG_SOURCE` (mock vs inventory) için ortak “hangi servis katmanı?” dallanması; route dosyaları import eder |
+| Dosya | Ne yapar |
+|-------|----------|
+| `catalogHelpers.ts` | Route’ların “mock mu inventory mi?” sorusuna ortak cevap |
 
-Yeni ortak route util gerekiyorsa önce burada mı yoksa `inventory/` içinde mi olduğuna karar ver: **DB / domain** → inventory; **yalnızca HTTP katmanı** → lib.
-
-Route listesi: [routes/rehber.md](../routes/rehber.md)
+Domain iş kuralları `inventory/` içinde; burada yalnızca ince HTTP yardımcıları.

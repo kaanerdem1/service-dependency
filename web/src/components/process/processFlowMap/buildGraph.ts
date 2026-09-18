@@ -1,6 +1,5 @@
 import { MarkerType, type Edge, type Node } from 'reactflow'
 import type { ProcessFlowGraph } from '../../../types'
-import { KTF_REFERENCE_POSITIONS, KTF_REFERENCE_ROUTES } from '../processFlowReferenceLayout.js'
 import { servicesForOutgoingLabels } from '../processFlowTransitionServices.js'
 import { sinkCopyRealId } from '../processFlowIds.js'
 import { PROCESS_FLOW_ORIGIN as ORIGIN } from '../processFlowCamera.js'
@@ -409,26 +408,12 @@ function spreadForwardFans(
 }
 
 function positionsFor(graph: ProcessFlowGraph) {
-  const fallback = layeredLayout(graph)
-  if (graph.no !== '105116') {
-    spreadForwardFans(graph, fallback)
-    return fallback
-  }
-  const out = { ...fallback }
-  for (const n of graph.nodes) {
-    if (n.kind === 'dummy') continue
-    const ref = KTF_REFERENCE_POSITIONS[n.id] ?? KTF_REFERENCE_POSITIONS[n.name]
-    if (ref) out[n.id] = { ...ref }
-  }
-  spreadForwardFans(graph, out)
-  return out
+  const positions = layeredLayout(graph)
+  spreadForwardFans(graph, positions)
+  return positions
 }
 
-function routeFor(graph: ProcessFlowGraph, from: string, to: string, fromX: number, toX: number): RouteKind {
-  if (graph.no === '105116') {
-    const hit = KTF_REFERENCE_ROUTES[`${from}\0${to}`]
-    if (hit) return hit.route
-  }
+function routeFor(_graph: ProcessFlowGraph, _from: string, _to: string, fromX: number, toX: number): RouteKind {
   return classifyRoute(fromX + NODE_W, toX)
 }
 

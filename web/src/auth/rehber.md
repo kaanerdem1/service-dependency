@@ -1,10 +1,10 @@
-# `web/src/auth`
+# `web/src/auth` — **yetki** (UI tarafı)
 
-Katalog **UI yetkisi** — sunucu `permissions.ts` ile uyumlu sabitler; oturum SSO bu repoda minimal.
+**Ekranda:** “Bu düğmeyi göster”, “süreç notunu kaydetmeye izin var mı” gibi kararlar — tam SSO akışı kurumsal gateway’de; burada sabitler ve küçük kontroller.
 
-| Dosya | Rol |
-| --- | --- |
-| `permissions.ts` | Rol / aksiyon sabitleri |
-| `catalogAccess.ts` | Bileşenlerde “yazma / CR göster” gibi kontroller |
+| Dosya | Ekranda etkisi |
+|-------|----------------|
+| `permissions.ts` | Rol/aksiyon isimleri (sunucu ile uyumlu) |
+| `catalogAccess.ts` | Katalog yazma, CR alanları görünürlüğü |
 
-Gerçek kimlik doğrulama kurumsal gateway / intranet embed senaryosuna bırakılır; API `session-users` uçları [server/src/routes/rehber.md](../../../server/src/routes/rehber.md).
+Oturum kullanıcı listesi API: `server` health/tree uçları.

@@ -1,6 +1,6 @@
 /**
  * Eski POC: KTF için iframe/HTML, diğer süreçler için keşif canvas.
- * Üretim tam akış: `ProcessFlowMap` (+ KTF için `processFlowReferenceLayout.ts`).
+ * Üretim tam akış: `ProcessFlowMap` / `processFlowMap/buildGraph.ts`.
  */
 import { ProcessFlowCanvas } from './ProcessFlowCanvas'
 import type { ProcessFlowGraph } from '../../types'

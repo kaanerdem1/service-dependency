@@ -1,21 +1,19 @@
-# `components/workflows/` — İş akışları drawer parçaları
+# `workflows/` — **İş akışları** sol drawer’ı
 
-**Drawer grubu:** `WorkflowsPanel.tsx` (state + composition) ve parça bileşenler bu klasörde. Sidebar iskeleti: [shell/ModuleSidebar.tsx](../shell/ModuleSidebar.tsx).
+**Ekranda:** Sol panelden **“İş akışları”** (veya kısayol) ile açılan çekmece — süreç arama, öne çıkan BPM listesi, kayıtlı **Akış Rotaları**, kendi klasörlerinde tuttuğun iş akışları.
 
-Süreç **canvas** drawer değil → [process/rehber.md](../process/rehber.md). İş akışı **tam sayfa** → [workflow-stage/rehber.md](../workflow-stage/rehber.md).
+**Not:** Drawer’da sürece tıklayınca orta alanda açılan **büyük BPM canvas** → [process/rehber.md](../process/rehber.md). Drawer’da bir iş akışına tıklayınca açılan **tam sayfa editör** → [workflow-stage/rehber.md](../workflow-stage/rehber.md).
 
-| Dosya | Rol | Veri / store |
-|-------|-----|--------------|
-| `WorkflowsPanel.tsx` | Drawer composition + state | `workflowStore`, `processRouteStore`, API arama |
-| `ProcessCatalogList.tsx` | Süreç listesi (featured + scroll) | API süreç katalog |
-| `ProcessRoutesPanel.tsx` | BPM “Akış Rotaları” grupları | `processRouteStore.ts` |
-| `ProcessRouteDialogs.tsx` | Rename / sil (portal) | `processRouteStore` |
-| `WorkflowsSearch.tsx` | Drawer arama kutusu | API search |
-| `WorkflowFolderBlock.tsx` | Klasör ağacı bloğu | `workflowStore.ts` |
-| `WorkflowDropZone.tsx` | Sürükle-bırak hedefleri | `workflowStore` |
+| Dosya | Ekranda nereye karşılık gelir | Ne işe yarar |
+|-------|------------------------------|--------------|
+| `WorkflowsPanel.tsx` | Drawer’ın tamamı | Sekmeler, arama, listeleri bir araya getirir |
+| `WorkflowsSearch.tsx` | Drawer üstündeki arama kutusu | Süreç / katalog araması |
+| `ProcessCatalogList.tsx` | “Süreçler” listesi (featured vb.) | Bir süreç no’ya tıklayınca tam akış açılır |
+| `ProcessRoutesPanel.tsx` | “Akış Rotaları” bölümü | Daha önce kaydettiğin adım adım yollar |
+| `ProcessRouteDialogs.tsx` | Rota yeniden adlandır / sil onayı | Modal (portal) |
+| `WorkflowFolderBlock.tsx` | Klasör + alt akış ağacı | Sürükle-bırak ile düzenleme |
+| `WorkflowDropZone.tsx` | Klasörler arası bırakma alanı | Sürükle-bırak hedefi |
 
-App navigasyon: süreç/rota açma → `navigation/useProcessFlowNav.ts` (`openProcessFlow`, `openProcessRoute`).
+Veri: `stores/workflowStore.ts` (iş akışları), `stores/processRouteStore.ts` (rotalar). CSS: `styles/workflows-drawer.css`.
 
-CSS: `styles/workflows-drawer.css` (`sc-*` sınıfları).
-
-Detay: `workflows/README.md` (varsa) ve [docs/process-flow.md](../../../docs/process-flow.md).
+Süreç açma mantığı: `navigation/useProcessFlowNav.ts`. Ürün: [docs/process-flow.md](../../../docs/process-flow.md).

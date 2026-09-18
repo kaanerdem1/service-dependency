@@ -1,25 +1,18 @@
-# Katalog ve servis detay — modül grubu
+# `catalog/` — servis **detay sekmelerinin** içeriği
 
-Seçili servis veya jar/grup için **sekmeler** (ekranlar, süreçler, tablo, changelog). Orchestrator: `shell/ServiceStage.tsx`.
+**Ekranda:** Soldan bir **servis** (veya üst seviye jar/grup) seçince orta alandaki **Genel bakış, Ekranlar, Tablo, Değişiklikler** gibi sekmelerin gövdesi. Sekme çubuğu ve iskelet → `shell/ServiceStage.tsx`.
 
-Kaynak dosyalar bu klasörde. Boş durum: [shared/EmptyState](../shared/EmptyState.tsx).
+Harita sekmesi **bu klasörde değil** → [service-map/rehber.md](../service-map/rehber.md).
 
-## Dosya → rol
+| Dosya | Ekranda hangi sekme / parça | Ne gösterir |
+|-------|----------------------------|-------------|
+| `ServiceOverview.tsx` | Genel bakış | Özet kartlar, kısa meta |
+| `CatalogEntityOverview.tsx` | Grup veya jar seçiliyken | Jar/grup düzeyi özet |
+| `ServiceCatalogPanels.tsx` | Ekranlar / süreçler listeleri | Servise bağlı ekran ve süreç satırları |
+| `RelationshipTable.tsx` | Tablo sekmesi | Komşu / ilişki tablosu |
+| `ServiceChangeLog.tsx` | Değişiklik geçmişi | Changelog satırları |
+| `ServiceWorkflowChip.tsx` | Overview veya listelerde chip | İlgili kayıtlı iş akışına link |
+| `CatalogHelp.tsx` | Yardım metni | Katalog alanı açıklaması |
+| `DetailPanel.tsx` | Yan detay | Seçili satır ek bilgisi |
 
-| Dosya | Rol | Sekme / bağlam |
-|-------|-----|----------------|
-| `ServiceCatalogPanels.tsx` | Ekranlar / süreçler listesi verisi | Katalog sekmeleri |
-| `CatalogEntityOverview.tsx` | Grup veya jar özeti | Pivot grup/jar |
-| `CatalogHelp.tsx` | Katalog yardım metni | Yardım |
-| `RelationshipTable.tsx` | İlişki tablosu | Tablo sekmesi |
-| `ServiceOverview.tsx` | Servis özet kartı | Overview |
-| `DetailPanel.tsx` | Yan detay paneli | Çeşitli |
-| `ServiceChangeLog.tsx` | Değişiklik geçmişi | Changelog |
-| `ServiceWorkflowChip.tsx` | İlgili iş akışı chip’i | Overview / liste |
-
-Harita ve metod görünümleri: [service-map/rehber.md](../service-map/rehber.md) (`MethodImpactMap`, `MethodCallTree`).
-
-## Stil
-
-Çoğu kural `App.css` içinde; kabuk spacing `shell.css`.
-
+Boş liste mesajları: [shared/EmptyState](../shared/EmptyState.tsx). Stil: `catalog.css`, `catalog-detail.css`, `catalog-bento.css`.

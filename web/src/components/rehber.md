@@ -1,49 +1,53 @@
-# `components/` — giriş (modül haritası)
+# `components/` — arayüz parçalarının haritası
 
-Servis kataloğu arayüzünün React bileşenleri. **State çoğunlukla `App.tsx` + `navigation/`**; bu ağaç **sunum + domain UI** içerir.
+Tarayıcıda gördüğün **Servis kataloğu** ekranının tamamı bu klasörün alt klasörlerinden gelir. “Hangi düğme nerede?” sorusuna cevap: aşağıdaki **ekran → klasör** tablosu; detay için ilgili alt klasördeki `rehber.md`.
 
-**Projeye yeni giren biri:** önce aşağıdaki **ağaç** ve **ekran → klasör** tablosu; sonra ilgili alt klasördeki `rehber.md`. Kısa yönlendirme: [README.md](./README.md). Özet tablo: [docs/web-module-layout.md](../../../docs/web-module-layout.md).
+State (seçili servis, açık drawer, süreç no) çoğunlukla `App.tsx` + `navigation/` içindedir; buradaki dosyalar **görünümü** çizer.
 
-## Klasör ağacı (hepsi alt dizin)
-
-```
-components/
-├── shell/           Uygulama kabuğu (masthead, workspace, stage iskeleti)
-├── sidebar/         Sol panel içeriği (ağaç, favoriler)
-├── workflows/       İş akışları drawer (+ WorkflowsPanel)
-├── welcome/         Hiç seçim yokken orta sahne
-├── workflow-stage/  Seçili iş akışı tam sayfa editörü
-├── process/         BPM süreç haritası (tam akış + rota)
-├── service-map/     Servis / metod etki haritası (React Flow)
-├── catalog/         Servis detay sekmeleri, tablo, overview
-├── search/          ⌘K komut paleti
-├── overlays/        CR, inbox, talep modalları
-└── shared/          EmptyState, SnapshotList (çapraz)
-```
+Özet tablo: [docs/web-module-layout.md](../../../docs/web-module-layout.md) · Giriş: [README.md](./README.md)
 
 ## Ekranda ne görüyorsan → hangi klasör?
 
-| Kullanıcı gördüğü | Orchestrator | Klasör(ler) |
-|-------------------|--------------|-------------|
-| Üst bar, tema, Servis/DWH | `shell/AppMasthead` | `shell/` |
-| Sol modül ağacı, pin, drawer | `shell/ModuleSidebar` | `shell/` + `sidebar/` + `workflows/` |
-| Hoş geldin / tur | `shell/ServicesMainStage` | `welcome/` |
-| Süreç akış canvas | `process/ProcessFlowPage` | `process/` |
-| İş akışı tam sayfa | `workflow-stage/WorkflowInfoPage` | `workflow-stage/` |
-| Servis sekmeleri, harita | `shell/ServiceStage` | `service-map/`, `catalog/` |
-| ⌘K | `shell/AppShellOverlays` | `search/` |
-| Inbox / CR modal | `shell/AppShellOverlays` | `overlays/` |
+| Ekranda gördüğün | Nerede duruyor | Kod klasörü |
+|------------------|----------------|-------------|
+| Üst şerit: logo, **Servis / DWH** geçişi, tema, inbox rozeti | Sayfanın en üstü | `shell/` |
+| Sol sütun: proje→jar→servis **ağacı**, pin, daraltma | Sol panel | `shell/` + `sidebar/` |
+| Sol panelden açılan **Favoriler** veya **İş akışları** çekmecesi | Aynı sol kolon, overlay drawer | `sidebar/` + `workflows/` |
+| Ortada hiçbir şey seçili değilken **hoş geldin / tur** | Orta alan | `welcome/` |
+| Bir **servis** seçince: sekmeler (Genel bakış, Harita, Tablo, …) | Orta alan | `shell/ServiceStage` → `catalog/` + `service-map/` |
+| **Harita** sekmesindeki servis/metod baloncukları | Harita sekmesi | `service-map/` |
+| İş akışlarından açılan **BPM süreç** canvas’ı (tam akış veya rota) | Orta alan, süreç modu | `process/` |
+| Sol drawer’dan seçilen **kayıtlı iş akışı** tam sayfa editörü | Orta alan | `workflow-stage/` |
+| **⌘K** (Mac) / Ctrl+K arama paleti | Ekran ortası modal | `search/` |
+| **Inbox**, değişiklik talebi, talep detayı pencereleri | Modal katman | `overlays/` |
+| “Liste boş”, snapshot listesi gibi tekrar eden küçük bloklar | Birçok sekmede | `shared/` |
 
-## Veri akışı (kısa)
+## Klasör ağacı (kısa)
 
 ```
-api/client
-  → navigation/* (seçim, geçmiş, drawer, süreç açma)
-  → shell/* (layout)
-  → domain klasörleri (process, service-map, catalog, …)
+shell/           Üst bar + sol iskelet + orta sahneyi birleştirir
+sidebar/         Ağaç satırları, yıldız, favoriler içeriği
+workflows/       İş akışları drawer’ının listeleri ve araması
+welcome/         Seçim yokken orta ekran
+workflow-stage/  Kayıtlı iş akışı tam sayfa
+process/         BPM haritası ve rota oluşturucu
+service-map/     Servis etki haritası
+catalog/         Servis detay sekmelerinin içerikleri
+search/          Komut paleti
+overlays/        CR / inbox modalları
+shared/          Ortak küçük parçalar
 ```
 
-Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNavPersist.ts` (src kökü).
+## Veri nasıl geliyor?
+
+```
+Tarayıcı → api/client (HTTP)
+         → navigation/* (ne seçili, hangi drawer açık)
+         → shell/* (sayfa iskeleti)
+         → domain klasörleri (harita, süreç, katalog…)
+```
+
+Kalıcı kullanıcı verisi (favoriler, rotalar): [stores/rehber.md](../stores/rehber.md). Sekme yenileyince seçim: `appNavPersist.ts`.
 
 ## Alt rehberler
 
@@ -61,28 +65,14 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | `overlays/` | [overlays/rehber.md](./overlays/rehber.md) |
 | `shared/` | [shared/rehber.md](./shared/rehber.md) |
 
-## CSS
+## CSS (ekran parçası → stil dosyası)
 
-| UI alanı | Dosya |
-|----------|--------|
-| Kabuk, sidebar | `styles/shell.css` |
-| Drawer | `styles/workflows-drawer.css` |
-| Servis haritası | `styles/service-map.css` |
-| Süreç haritası | `styles/process-flow.css` (+ chrome/canvas alt dosyaları) |
+| Ekranda | Stil |
+|---------|------|
+| Üst bar, sol panel iskeleti | `styles/shell.css` |
+| İş akışları drawer | `styles/workflows-drawer.css` |
+| Servis / süreç haritaları | `styles/service-map.css`, `process-flow.css` |
 | ⌘K | `styles/cmdk.css` |
-| Servis sahnesi / sekmeler | `styles/stage.css` |
-| Katalog, tablo | `styles/catalog.css` |
-| Welcome | `styles/welcome.css` |
-| CR / inbox modalları | `styles/overlays.css` |
-| İş akışı tam sayfa | `styles/workflow-stage.css` |
-| Harita popup (dd-*) | `styles/map-misc.css` |
-| Ağaç / sidebar | `styles/tree.css` |
-| Arama | `styles/search.css` |
-| Katalog detay (bento, tablo) | `styles/catalog-detail.css` |
-| İş akışı canvas (wf-*) | `styles/workflow-canvas.css` |
-| App kabuğu | `styles/app-chrome.css` + `styles/app-remainder.css` |
-| Bento / overview | `styles/catalog-bento.css` |
-| Komşu / path UI | `styles/stage-neighbors.css` |
-| Harita dock / stage | `styles/service-map-dock.css`, `service-map-stage.css` |
+| Servis sekmeleri | `styles/stage.css`, `catalog.css`, `catalog-detail.css` |
 
-Tam import listesi: [styles/rehber.md](../styles/rehber.md). Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).
+Tam liste: [styles/rehber.md](../styles/rehber.md).

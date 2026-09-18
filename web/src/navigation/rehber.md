@@ -1,49 +1,48 @@
-# `navigation/` — App kabuğu iş kuralları
+# `navigation/` — tıklayınca **ne olacağını** yöneten hook’lar
 
-`App.tsx` ince kalır; seçim, geçiş, drawer ve süreç açma burada. UI grupları: [components/rehber.md](../components/rehber.md).
+**Ekranda doğrudan görünmez**; ama her etkileşimin arkası burada: ağaçtan servis seçince hangi sekme açılır, drawer kapanır mı, süreç canvas’a geçilir mi, ⌘K Esc ile kapanır mı.
 
-## Gruplar
+UI parçaları: [components/rehber.md](../components/rehber.md). `App.tsx` ince kalır; mantık burada.
 
-### Layout ve drawer
+## Sol panel ve drawer
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `useSidebarLayout.ts` | Panel genişlik, pin, hover collapse | `ModuleSidebar` |
-| `useNavDrawers.ts` | Favoriler / İş akışları açık, kısayol tuşları | `App` → sidebar |
+| Hook / dosya | Kullanıcı ne yapar | Sonuç |
+|--------------|-------------------|--------|
+| `useSidebarLayout.ts` | Sidebar’ı pinler / genişletir | Panel genişliği, dar rail |
+| `useNavDrawers.ts` | Favoriler veya İş akışları kısayolu | Hangi drawer açık |
 
-### Seçim ve geçmiş
+## Seçim ve gezinme
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `useServiceSelection.ts` | `selectPivot`, katalog, temizle, Harita sekmesi | App, sidebar, harita |
-| `useVisitHistory.ts` | Geri/ileri, breadcrumb, harita view kaydı | App, `ServiceStage`, ⌘K |
+| Hook / dosya | Kullanıcı ne yapar | Sonuç |
+|--------------|-------------------|--------|
+| `useServiceSelection.ts` | Ağaçtan servis/jar seçer | Orta alan katalog/harita, pivot id |
+| `useVisitHistory.ts` | Haritada düğüm gezer, breadcrumb tıklar | Geri/ileri, ziyaret yolu çubuğu |
 
-### Süreç ve rota
+## Süreç
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `useProcessFlowNav.ts` | Süreç/rota aç, servisten geri dön | App, sidebar, `ProcessFlowPage` |
+| Hook / dosya | Kullanıcı ne yapar | Sonuç |
+|--------------|-------------------|--------|
+| `useProcessFlowNav.ts` | Drawer’dan süreç veya kayıtlı rota açar | Orta alan BPM; servisten geri dönüş |
 
-### Veri yükleme
+## Veri
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `useServiceStageData.ts` | Pivot değişince API: servis, etki, metod grafı | `App.tsx` (effect) |
+| Hook / dosya | Ne zaman | Sonuç |
+|--------------|----------|--------|
+| `useServiceStageData.ts` | Seçili servis değişince | API: detay, etki grafı, metodlar |
 
-### Overlays ve klavye
+## Modallar ve klavye
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `useInboxAndChangeRequests.ts` | Inbox + CR modal | App → overlays |
-| `useCommandPaletteKeyboard.ts` | ⌘K / Esc | App |
+| Hook / dosya | Kullanıcı ne yapar | Sonuç |
+|--------------|-------------------|--------|
+| `useCommandPaletteKeyboard.ts` | ⌘K / Esc | Palet aç/kapa |
+| `useInboxAndChangeRequests.ts` | Inbox / CR ikonları | Modal state |
 
-### Persist ve yardımcılar
+## Sayfa yenileyince
 
-| Hook / dosya | Davranış | Tüketici |
-|--------------|----------|----------|
-| `usePersistedAppNav.ts` | `appNavPersist` yazma | App mount |
-| `appShellHelpers.ts` | Drawer restore, klavye hedefi filtresi | Nav hook’ları |
+| Hook / dosya | Ne saklar |
+|--------------|-----------|
+| `usePersistedAppNav.ts` | Seçili servis, açık süreç → `sessionStorage` (`appNavPersist.ts`) |
 
-Persist okuma: `appNavPersist.ts` (App mount).
+| `appShellHelpers.ts` | Klavye hedefi, drawer restore yardımcıları |
 
-İlgili: [docs/web-architecture.md](../../../docs/web-architecture.md), [components/shell/rehber.md](../components/shell/rehber.md).
+Mimari: [docs/web-architecture.md](../../../docs/web-architecture.md).

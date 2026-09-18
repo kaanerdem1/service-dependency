@@ -1,22 +1,18 @@
-# `motion/` — animasyon katmanı
+# `motion/` — **animasyonlu** geçişler
 
-**Ne değil:** İş mantığı veya API yok. **Ne:** [Framer Motion](https://motion.dev/) / `motion/react` ile tekrar kullanılan animasyonlu UI parçaları — servis kabuğu ve haritada ortak “his”.
+**Ekranda:** Sidebar pin olurken yumuşak kayma, sekme değişince fade, modal açılışında hareket — “hissiyat”; veri veya iş kuralı yok.
 
-Servis ekranı CSS’i ayrıca `styles/*.css` ve `styles/App.css` içinde; motion bileşenleri **React tarafında** geçiş, liste, modal, sekme animasyonunu üstlenir.
+| Grup | Nerede fark edersin | Dosyalar |
+|------|---------------------|----------|
+| Hover / pin | Sol rail, yüzey switch | `MorphHover`, `MorphHoverButton` |
+| Toast / rozet | Hata bandı, ağaç rozetleri | `MotionToast`, `StatusBadge` |
+| Modal / sheet | CR, inbox | `MotionModal`, `MotionSheet`, `MotionDrawer` |
+| Sekmeler | Servis stage sekmeleri | `StageTabs`, `StageTabPanels` |
+| Liste | ⌘K sonuçları | `MotionList` |
+| Harita dock | Zoom satırı | `DockMagnifyRow` |
+| Diğer | Sayı animasyonu, skeleton | `AnimatedNumber`, `SkeletonShimmer`, … |
+| Ayar | (görünmez) | `config.ts` — süre, easing |
 
-## Bileşen grupları
+Servis ekranı stilleri ayrıca `styles/*.css`. DWH kendi CSS’ini kullanır.
 
-| Grup | Dosyalar | Nerede |
-|------|----------|--------|
-| Hover / pin | `MorphHover.tsx`, `MorphHoverButton.tsx` | Sidebar rail, yüzey switch |
-| Geri bildirim | `MotionToast.tsx`, `MotionBanner` (varsa), `StatusBadge.tsx` | App hata bandı, ağaç rozetleri |
-| Modal / sheet | `MotionModal.tsx`, `MotionSheet.tsx`, `MotionDrawer.tsx` | CR, inbox, yardım |
-| Sekmeler | `StageTabs.tsx`, `StageTabPanels.tsx` | `ServiceStage` sekmeleri |
-| Liste | `MotionList.tsx`, `MotionListItem` | Arama sonuçları, sidebar |
-| Harita | `DockMagnifyRow.tsx` | `service-map/ImpactChrome` |
-| Yardımcı | `AnimatedNumber.tsx`, `AutoHeight.tsx`, `MotionPopover.tsx`, `MotionTooltip.tsx`, `MotionSpotlight.tsx`, `SkeletonShimmer.tsx`, `TreeAccordion.tsx`, `MotionProgress.tsx` | Çeşitli |
-| Sabitler | `config.ts` | Süre, spring, easing |
-
-DWH yüzeyi kendi CSS’ini kullanır; motion’dan seçici import edebilir.
-
-Kabuk: [components/shell/rehber.md](../components/shell/rehber.md) · Harita: [service-map/rehber.md](../components/service-map/rehber.md).
+Kabuk: [shell/rehber.md](../components/shell/rehber.md).

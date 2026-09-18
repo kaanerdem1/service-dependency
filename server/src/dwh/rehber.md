@@ -1,24 +1,15 @@
-# `server/src/dwh`
+# `server/src/dwh` — **DWH sekmesi** API’si
 
-DWH lineage API — mount: `createApp.ts` → **`/api/dwh`**, router: `routes.ts`.
+**Ekranda:** Masthead’den DWH’ye geçince tablo ağacı, lineage haritası, kolon paneli — hepsi `/api/dwh/...` ile buradan gelir. Stage PostgreSQL (`PGSCHEMA=stage` vb.).
 
-Stage PostgreSQL şeması (`PGHOST`, `PGDATABASE`, `PGSCHEMA=stage` vb., bkz. `server/.env.example`).
-
-| Dosya | Rol |
-| --- | --- |
-| `routes.ts` | Express router, uç tanımları |
-| `db.ts` | Stage PG pool |
-| `types.ts` | API tipleri |
-| `treeService.ts` | DWH modül / tablo ağacı |
+| Dosya | UI’da karşılığı |
+|-------|-----------------|
+| `routes.ts` | Tüm DWH HTTP uçları |
+| `treeService.ts` | Sol DWH ağacı |
 | `tableService.ts` | Tablo meta |
-| `columnLineageService.ts` | Kolon upstream/downstream |
-| `graphService.ts` | Lineage graf |
-| `impactService.ts` | Etki özeti |
-| `mapSummaryService.ts` | Harita özet |
+| `columnLineageService.ts` | Kolon upstream/downstream paneli |
+| `graphService.ts` | Lineage harita verisi |
+| `sqlService.ts` | SQL metni |
 | `reportService.ts` | Rapor uçları |
-| `sqlService.ts` / `sqlSimplify.ts` | SQL metni, sadeleştirme |
-| `format.ts` | Format yardımcıları |
 
-UI: [web/src/dwh/rehber.md](../../../web/src/dwh/rehber.md). Repo kökü örnek dump / legacy: [dwh/rehber.md](../../../dwh/rehber.md).
-
-Servis katalog route’ları **bu klasörde değil** → [routes/rehber.md](../routes/rehber.md).
+React tarafı: [web/src/dwh/rehber.md](../../../web/src/dwh/rehber.md). Servis katalog route’ları → [routes/rehber.md](../routes/rehber.md).

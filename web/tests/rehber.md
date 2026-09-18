@@ -1,17 +1,17 @@
-# `web/tests`
+# `web/tests` — **otomatik** regresyon testleri
 
-Node **tsx test runner** — saf TS modülleri, React mount yok.
+**Ekranda:** Hiçbir şey; geliştirici `npm test` çalıştırınca layout ve yardımcı fonksiyonların bozulmadığını kontrol eder.
 
 ```bash
 npm run test --prefix web
 # veya repo kökü: npm test
 ```
 
-| Dosya | Ne doğrular |
-| --- | --- |
-| `processFlowMapBuildGraph.test.ts` | `processFlowMap/buildGraph` — layout, highlight |
-| `processFlowExtract.test.ts` | Süreç metin / extract yardımcıları |
-| `swimlaneProjection.test.ts` | Swimlane projeksiyon |
-| `appShellHelpers.test.ts` | `navigation/appShellHelpers` |
+| Test dosyası | Ne korur (kullanıcı etkisi) |
+|--------------|----------------------------|
+| `processFlowMapBuildGraph.test.ts` | Süreç haritası düğüm/ok layout’u |
+| `processFlowExtract.test.ts` | Süreç metin çıkarma |
+| `swimlaneProjection.test.ts` | Swimlane hesabı |
+| `appShellHelpers.test.ts` | Navigasyon yardımcıları |
 
-Sunucu smoke + inventory testleri: [server/src/rehber.md](../../server/src/rehber.md).
+Sunucu testleri: [server/src/rehber.md](../../server/src/rehber.md).

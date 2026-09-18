@@ -1,20 +1,14 @@
-# Arama ve ⌘K — modül grubu
+# `search/` — **⌘K** komut paleti
 
-Komut paleti ve arama sonuç satırları. ## Dosya → rol
+**Ekranda:** Klavyede **⌘K** (Windows’ta Ctrl+K) ile açılan ortadaki arama penceresi — servis, jar, süreç ararsın; Enter ile seçince ilgili ekrana gidersin.
 
-| Dosya | Rol |
-|-------|-----|
-| `CommandPalette.tsx` | ⌘K modal — servis/süreç/jar arama |
-| `SearchHitsPortal.tsx` | Hit listesini body’ye portal |
-| `SearchHitLabel.tsx` | Sonuç satırı başlık |
-| `SearchHitContent.tsx` | Sonuç satırı gövde |
+| Dosya | Ekranda | Ne işe yarar |
+|-------|---------|--------------|
+| `CommandPalette.tsx` | Modal’ın tamamı | Arama kutusu, sonuç listesi, kapat |
+| `SearchHitsPortal.tsx` | Sonuç listesinin DOM yeri | Taşmayı önlemek için body’ye portal |
+| `SearchHitLabel.tsx` | Her sonuç satırının başlığı | Servis/süreç adı, tür rozeti |
+| `SearchHitContent.tsx` | Satır alt metni | Yol, jar, ek ipucu |
 
-## Bağlantılar
+Kim açar: `shell/AppShellOverlays.tsx`. Klavye: `navigation/useCommandPaletteKeyboard.ts`. CSS: `styles/cmdk.css`.
 
-- Render: `shell/AppShellOverlays.tsx`
-- Klavye: `navigation/useCommandPaletteKeyboard.ts`
-- Seçim: `navigation/useServiceSelection.ts`, `useProcessFlowNav.ts`
-- Sık kullanılanlar: `serviceRecents.ts`
-
-CSS: `styles/cmdk.css`.
-
+Son seçilenler: `stores/serviceRecents.ts`.

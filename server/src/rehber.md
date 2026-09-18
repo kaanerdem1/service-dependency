@@ -1,53 +1,40 @@
-# `server/src` — API giriş haritası
+# `server/src` — **API** (tarayıcının arkası)
 
-Node + Express katalog API (`:4000`). UI proxy: Vite → `/api`.
+**Ekranda:** Kullanıcı doğrudan görmez; sol **ağaç**, **harita**, **süreç canvas**, **DWH** ekranları `:4000` üzerindeki bu kodun `/api` cevaplarıyla dolar. Vite dev’de istekler proxy ile buraya gider.
 
-## Akış
+## İstek akışı (basit)
 
 ```
-index.ts → startServer.ts → createApp()
-  ├─ /api/dwh/*     → dwh/routes.ts
-  └─ /api/* (katalog) → routes/registerCatalogRoutes.ts
+Tarayıcı /api/...  →  createApp()
+                        ├─ /api/dwh/*     → dwh/
+                        └─ diğer /api/*   → routes/
 ```
 
-| Dosya | Rol |
-| --- | --- |
-| `index.ts` | Process giriş |
-| `startServer.ts` | `createApp()`, port, env |
-| `createApp.ts` | CORS, JSON, route mount (ince kabuk) |
-| `data.ts` | Mock katalog verisi (`CATALOG_SOURCE=mock`) |
-| `impactGraph.ts` | Call-graph BFS / hop rollup |
-| `impact.ts` | Etki uçları için yardımcılar |
-| `methods.ts` | Metod listesi / call-graph (mock dal) |
+| Dosya | UI’da neyi besler |
+|-------|-------------------|
+| `createApp.ts` | Tüm API’nin giriş kapısı |
+| `startServer.ts` | Port dinleme, env |
+| `data.ts` | Mock modda demo ağaç (`CATALOG_SOURCE=mock`) |
+| `impactGraph.ts` | Harita sekmesi etki grafı |
 | `notes.ts` | Servis notları |
-| `snapshots.ts` | Snapshot meta (bellek / persist) |
-| `snapshotTypes.ts` | Snapshot TS tipleri |
-| `changeRequests.ts` | CR / inbox iş mantığı |
-| `permissions.ts` | Yetki sabitleri |
+| `changeRequests.ts` | Inbox / değişiklik talebi |
+| `methods.ts` | Metod listesi (mock dal) |
 
 ## Alt klasörler
 
-| Klasör | Ne tutar | rehber |
-| --- | --- | --- |
-| `routes/` | Express handler kayıtları (`/api/*`) | [routes/rehber.md](./routes/rehber.md) |
-| `inventory/` | Postgres env şeması, süreç parse, graf servisleri | [inventory/rehber.md](./inventory/rehber.md) |
-| `dwh/` | Stage şeması, lineage SQL, `/api/dwh` | [dwh/rehber.md](./dwh/rehber.md) |
-| `lib/` | Route ortak mock/inventory dallanması | [lib/rehber.md](./lib/rehber.md) |
+| Klasör | Ekrana karşılık | rehber |
+|--------|-----------------|--------|
+| `routes/` | Her `/api/...` uç tanımı | [routes/rehber.md](./routes/rehber.md) |
+| `inventory/` | Gerçek PG katalog + BPM XML | [inventory/rehber.md](./inventory/rehber.md) |
+| `dwh/` | DWH sekmesi verisi | [dwh/rehber.md](./dwh/rehber.md) |
+| `lib/` | Mock vs inventory seçimi | [lib/rehber.md](./lib/rehber.md) |
 
-## Testler
+## Test ve bakım
 
 ```bash
 npm run test --prefix server
 ```
 
-- `inventory/*.test.ts` — parse, rota, katalog sağlık
-- `routes/catalogRoutes.registry.test.ts` — kayıtlı route envanteri
-- `api.smoke.test.ts` — supertest `/api/health`, `/api/processes` (`CATALOG_SOURCE=mock`)
+Bakım scriptleri: [scripts/rehber.md](../scripts/rehber.md).
 
-Kökten tüm suite: repo kökünde `npm test`.
-
-## Scriptler (bakım)
-
-Operasyonel CLI → [scripts/rehber.md](../scripts/rehber.md) (`ingest:process-par`, backup, audit).
-
-Üst kurulum: [README.md](../../README.md) · Veri modeli: [docs/db.md](../../docs/db.md)
+Kurulum: [README.md](../../README.md) · Tablolar: [docs/db.md](../../docs/db.md).

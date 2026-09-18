@@ -1,17 +1,10 @@
-# `dwh/` — veri ve legacy referans (repo kökü)
+# `dwh/` (repo kökü) — **örnek veri**, legacy demo
 
-DWH **React yüzeyi** kodu burada değil → `web/src/dwh/`. Bu klasör örnek veri, eski Flask lineage demosu ve logo kaynağını tutar.
+**Ekranda:** Bu klasör React uygulaması **değil**. DWH **ekranı** → `web/src/dwh/`. Burada stage dump, ER diyagram JSON ve eski Python lineage örneği durur; referans / taşıma paketi.
 
-| Yol | İçerik |
-|-----|--------|
-| `artifacts/data.csv` | Örnek / referans CSV |
-| `artifacts/ERdiagram.json` | ER diyagram JSON |
-| `artifacts/dwh_stage.dump` | PostgreSQL stage dump (yerel restore) |
-| `legacy/lineage_app_sample.py` | Eski kolon lineage Flask uygulaması (referans; prod UI değil) |
-| `assets/dwh-logo.png` | Logo **kaynak** dosyası |
+| İçerik | Ne için |
+|--------|---------|
+| `artifacts/` | Örnek CSV, dump parçaları |
+| `legacy/` | Eski Flask lineage demo (prod değil) |
 
-**Canlı logo:** Vite `web/public/dwh-logo.png` — masthead `/dwh-logo.png` ile yükler. Logo değişince `assets/` → `web/public/` kopyala.
-
-**`netlify.toml`:** Repo kökünde kalır (Netlify build ayarı); DWH verisi değil.
-
-Paket notları: `dwh_lineage_tasima_paketi/`.
+Canlı UI ve API: [web/src/dwh/rehber.md](../web/src/dwh/rehber.md), [server/src/dwh/rehber.md](../server/src/dwh/rehber.md).

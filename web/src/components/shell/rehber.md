@@ -1,23 +1,24 @@
-# `components/shell/` — uygulama kabuğu (sunum)
+# `shell/` — sayfa iskeleti (kabuk)
 
-State **burada tutulmaz**; `App.tsx` + `navigation/*` hook’ları veriyi prop olarak verir.
+**Ekranda:** Uygulamanın “çerçevesi” — üst masthead, sol sidebar kolonu, ortadaki büyük içerik alanı. Seçtiğin servise göre orta alan **katalog**, **harita**, **süreç** veya **iş akışı** ekranına döner; kabuk aynı kalır.
 
-**Komşu gruplar:** [sidebar/rehber.md](../sidebar/rehber.md), [workflows/rehber.md](../workflows/rehber.md), [search/rehber.md](../search/rehber.md), [overlays/rehber.md](../overlays/rehber.md). Harita: [components/rehber.md](../rehber.md).
+Burada **seçim state’i tutulmaz**; `App.tsx` ve `navigation/*` hook’ları veriyi prop olarak verir.
 
-| Dosya | App / üst bileşen | Alt bileşenler / not |
-|-------|-------------------|----------------------|
-| `AppMasthead.tsx` | `App.tsx` | Yüzey switch, tema, inbox rozeti → `SurfaceSwitch`, `ThemeSwitch` |
-| `AppShellOverlays.tsx` | `App.tsx` | `CommandPalette`, CR/inbox modalları, toast |
-| `ServicesWorkspace.tsx` | `App.tsx` (servis yüzeyi) | `ModuleSidebar` + `ServicesMainStage` |
-| `useServicesWorkspaceProps.ts` | `App.tsx` | Sidebar + stage prop nesneleri |
-| `useAppShellOverlaysProps.ts` | `App.tsx` | Overlay prop nesnesi |
-| `ModuleSidebar.tsx` | `ServicesWorkspace` | `ModuleTree`, `ShortcutsPanel`, `WorkflowsPanel` |
-| `ServicesMainStage.tsx` | `ServicesWorkspace` | [welcome/](../welcome/rehber.md), [process/](../process/rehber.md), [workflow-stage/](../workflow-stage/rehber.md), [catalog/](../catalog/rehber.md), `ServiceStage` |
-| `ServiceStage.tsx` | `ServicesMainStage` | Sekmeler, `MapStage`, tablolar, katalog panelleri |
-| `StageVisitPath.tsx` | `ServiceStage` | Ziyaret breadcrumb → `useVisitHistory.visitSteps` |
-| `sidebarIcons.tsx` | `ModuleSidebar`, drawer başlıkları | SVG ikonlar |
-| `ThemeSwitch.tsx`, `SurfaceSwitch.tsx` | `AppMasthead` | Tema ve Servis/DWH yüzeyi |
+Komşular: [sidebar/](../sidebar/rehber.md), [workflows/](../workflows/rehber.md), [search/](../search/rehber.md), [overlays/](../overlays/rehber.md)
 
-CSS: `styles/shell.css` (masthead, sidebar, drawer iskeleti).
+| Dosya | Ekranda nereye karşılık gelir | Ne işe yarar |
+|-------|------------------------------|--------------|
+| `AppMasthead.tsx` | En üst şerit | Servis/DWH switch, tema, inbox ikonu |
+| `SurfaceSwitch.tsx` | Masthead’de “Servis” / “DWH” | İki farklı uygulama yüzeyi arası geçiş |
+| `ThemeSwitch.tsx` | Masthead’de tema düğmesi | Açık/koyu tema |
+| `ServicesWorkspace.tsx` | Sol panel + orta sütunun birleşimi | Servis kataloğu ana layout |
+| `ModuleSidebar.tsx` | Sol sütun | Ağaç, drawer tetikleyicileri, favoriler/iş akışları alanı |
+| `ServicesMainStage.tsx` | Orta büyük alan | Seçime göre welcome / servis stage / süreç / iş akışı sayfası |
+| `ServiceStage.tsx` | Bir servis seçiliyken orta alan | Üst sekmeler (Genel bakış, Harita, …), breadcrumb ziyaret yolu |
+| `StageVisitPath.tsx` | Servis stage üstünde küçük yol çubuğu | Haritada gezindiğin düğümler arası geri/ileri |
+| `AppShellOverlays.tsx` | Sayfanın üstünde (modal katman) | ⌘K paleti, CR/inbox pencereleri, toast |
+| `useServicesWorkspaceProps.ts` | (görünmez) | Sidebar + stage’e giden prop’ları App’ten toplar |
+| `useAppShellOverlaysProps.ts` | (görünmez) | Overlay modallarına giden prop’ları toplar |
+| `sidebarIcons.tsx` | Drawer başlık ikonları | SVG ikon seti |
 
-Kabuk navigasyon kuralları: `navigation/rehber.md`.
+CSS: `styles/shell.css`. Navigasyon kuralları: [navigation/rehber.md](../../navigation/rehber.md).

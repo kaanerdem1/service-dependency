@@ -1,31 +1,21 @@
-# Servis etki haritası — modül grubu
+# `service-map/` — **Harita** sekmesi (servis etki grafiği)
 
-**Servis ↔ servis / metod** etki grafiği (React Flow). Süreç BPM haritası **bu grupta değil** → [process/rehber.md](../process/rehber.md).
+**Ekranda:** Bir servis seçiliyken üst sekmelerden **Harita**’ya geçince gördüğün React Flow canvas — baloncuklar arası oklar, zoom dock, tam ekran, ziyaret yolu.
 
-Kaynak dosyalar bu klasörde. Layout yardımcıları: [impact/rehber.md](../../impact/rehber.md).
+**BPM süreç haritası burada değil** (farklı ekran, farklı API) → [process/rehber.md](../process/rehber.md).
 
-## Dosya → rol
+| Dosya | Ekranda nereye karşılık gelir | Ne işe yarar |
+|-------|------------------------------|--------------|
+| `MapStage.tsx` | Harita sekmesinin tamamı | Toolbar, tam ekran, haritayı stage’e yerleştirir |
+| `ImpactMap.tsx` | Servis→servis graf | İnce sarmalayıcı; asıl çizim [impactMap/](./impactMap/rehber.md) |
+| `MethodImpactMap.tsx` | Metod seviyesi graf (ilgili görünümde) | [methodImpactMap/](./methodImpactMap/rehber.md) |
+| `ImpactChrome.tsx` | Harita üst/yan kontroller | Hop, filtre, legend benzeri chrome |
+| `SimpleImpactPath.tsx` | Kısa “etki yolu” metni/şerit | Seçili düğüm yolu özeti |
+| `MethodCallTree.tsx` | Metod çağrı ağacı paneli | Tablo/harita ile birlikte |
+| `DockTooltipPortal.tsx` | Zoom dock üzerindeki tooltip | Fareyle üstüne gelince açıklama |
 
-| Dosya | Rol |
-|-------|-----|
-| `MapStage.tsx` | Harita sekmesi sarmalayıcı (toolbar, tam ekran) |
-| `ImpactMap.tsx` | Re-export; gövde [impactMap/](./impactMap/rehber.md) |
-| `MethodImpactMap.tsx` | Re-export; gövde [methodImpactMap/](./methodImpactMap/rehber.md) |
-| `ImpactChrome.tsx` | Harita üst/yan chrome |
-| `SimpleImpactPath.tsx` | Kısa etki yolu gösterimi |
-| `MethodCallTree.tsx` | Metod çağrı ağacı (tablo/harita ile ilişkili) |
-| `DockTooltipPortal.tsx` | Harita dock tooltip (portal) |
+Veri: seçili servis değişince API’den gelen etki grafı (`navigation/useServiceStageData`). Düğüm konumu: [impact/mapLayout.ts](../../impact/mapLayout.ts).
 
-## Veri ve filtre
+Snapshot: harita görüntüsü değişiklik talebine eklenebilir → [snapshot/rehber.md](../../snapshot/rehber.md).
 
-- API: `useServiceStageData` → etki grafı (`api/client.ts`)
-- Proje/jar filtresi: `impact/projectFilter.ts` → `App.tsx` tablo filtresi
-- Yerleşim: `impact/mapLayout.ts`
-
-## Snapshot
-
-Harita anlık görüntüsü: `snapshot/trail.tsx`, `useSnapshotPack.ts` — `ServiceStage` üzerinden.
-
-CSS: `styles/service-map.css` + `service-map-dock.css`, `service-map-stage.css` — [styles/rehber.md](../../styles/rehber.md). Smoke: harita sekmesi, tam ekran, ziyaret yolu (`shell/StageVisitPath`).
-
-Paylaşılan chrome: DWH `DwhMapChrome` yalnızca `DockTooltipPortal` import eder; servis haritası `ImpactChrome` kullanır.
+CSS: `service-map.css`, `service-map-dock.css`, `service-map-stage.css`.

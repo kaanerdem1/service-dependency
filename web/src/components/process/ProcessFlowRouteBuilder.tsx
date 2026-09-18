@@ -3,7 +3,7 @@
  *
  * Ne yapar: `processUserRoute` state ile prefix yol; geçiş seçimi, rota çubuğu,
  *   kaydet (`useSaveProcessRoute`). Layout rota ziyaretlerine göre dinamik.
- * Ne yapmaz: Tam graf keşfi (`ProcessFlowMap`). KTF referans koordinat dosyasına bağlı değil.
+ * Ne yapmaz: Tam graf keşfi (`ProcessFlowMap`).
  * İlgili: [rehber.md](./rehber.md)
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'

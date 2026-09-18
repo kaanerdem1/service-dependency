@@ -1,15 +1,16 @@
-# `snapshot/` — oturum izi ve PNG/PDF paketi
+# `snapshot/` — **ekran görüntüsü + iz** paketleri
 
-Değişiklik talebi, servis haritası ve süreç yolu snapshot’ları için istemci tarafı paket. UI grupları: [service-map/rehber.md](../components/service-map/rehber.md), [process/rehber.md](../components/process/rehber.md), [overlays/rehber.md](../components/overlays/rehber.md).
+**Ekranda:** Değişiklik talebi açarken “şu an ekranda ne vardı” kaydı; harita veya süreç yolundan **PDF**; talep detayında indirilebilir dosya listesi.
 
-| Dosya | Rol | Çağıran |
-|-------|-----|---------|
-| `trail.tsx` | `SnapshotTrailProvider`, `useSnapshotTrail` — UI olayları yığını | `App.tsx`, `ServiceStage` |
-| `useSnapshotPack.ts` | Trail + ekran görüntüsü payload birleştirme | App, CR modal |
-| `capture.ts` | DOM → canvas/png | `useSnapshotPack` |
-| `formatTrail.ts` | İz metni formatı | Snapshot export |
-| `processPathSnapshot.ts` | Süreç yolu PDF | `ProcessFlowMap`, rota kaydet |
-| `sidebarState.ts` | Snapshot anında sidebar açık mı | App |
-| `imageUrl.ts` | Blob URL yardımcıları | Liste UI |
+| Dosya | Kullanıcı ne görür / yapar | Ne işe yarar |
+|-------|---------------------------|--------------|
+| `trail.tsx` | (dolaylı) CR’de otomatik adım listesi | Tıkladığın ekranlar yığını |
+| `useSnapshotPack.ts` | Talebe eklenen paket | İz + PNG birleştirme |
+| `capture.ts` | (arkada) | DOM’dan görüntü alma |
+| `processPathSnapshot.ts` | Süreçte “PDF” / snapshot | Seçili yol anlatımı |
+| `formatTrail.ts` | Metin export | İz cümleleri |
+| `sidebarState.ts` | Pakette sidebar açık mı | Layout tutarlılığı |
 
-Sunucu bellek API: `POST/GET /api/snapshots` (kalıcı DB — Faz 7, [catalog-persistence.md](../../../docs/catalog-persistence.md)).
+Çağıran yerler: [service-map](../components/service-map/rehber.md), [process](../components/process/rehber.md), [overlays](../components/overlays/rehber.md).
+
+Sunucu: `/api/snapshots` (kalıcı DB planı → [catalog-persistence.md](../../../docs/catalog-persistence.md)).

@@ -1,39 +1,15 @@
-# `server/src/inventory`
+# `server/src/inventory` — **gerçek katalog** veritabanı
 
-`CATALOG_SOURCE=inventory` iken PostgreSQL **`env`** şeması üzerinden servis ağacı, call-edge, süreç PAR/XML ve katalog yazma.
+**Ekranda:** `CATALOG_SOURCE=inventory` iken sol **~37k servis ağacı**, **harita** call-edge’leri, **süreç listesi** ve BPM **XML parse** sonucu — hepsi PostgreSQL `env` şemasından buradan okunur/yazılır.
 
-## Çekirdek
+| Alan | Kullanıcı ne görür | Ana dosyalar |
+|------|-------------------|--------------|
+| Modül ağacı | Sol proje→jar→servis | `treeService.ts`, `catalogEntityService.ts` |
+| Servis detay / komşular | Katalog sekmeleri | `serviceService.ts` |
+| Harita grafı | Harita sekmesi okları | `graphService.ts`, `methodService.ts` |
+| BPM süreç | Süreç canvas düğümleri | `processFlowService.ts`, `parProcessParser.ts` |
+| Süreç boşsa | Drawer’da `.par` isimli süreçler | ingest → [docs/db.md §13](../../docs/db.md) |
 
-| Dosya | Rol |
-| --- | --- |
-| `config.ts` | PG bağlantı env |
-| `db.ts` | Pool, sorgu yardımcıları |
-| `catalog.ts` | Katalog okuma girişi |
-| `catalogEntityService.ts` | Grup / artifact / servis entity |
-| `treeService.ts` | Modül ağacı |
-| `serviceService.ts` | Servis detay, komşular |
-| `methodService.ts` | Metodlar, call-graph kaynağı |
-| `graphService.ts` | Graf rollup (inventory) |
-| `contextService.ts` | Oturum / kullanıcı bağlamı |
-| `location.ts` | Jar / proje konumu |
-| `catalogWriteAccess.ts` | Yazma yetkisi kontrolü |
+Bağlantı: `config.ts`, `db.ts`. HTTP: [routes/rehber.md](../routes/rehber.md) `processes.routes.ts`.
 
-## Süreç (BPM) katmanı
-
-| Dosya | Rol |
-| --- | --- |
-| `parProcessParser.ts` | PAR/XML → düğüm / geçiş modeli |
-| `processDefinitionSource.ts` | Tanım kaynağı (DB / dosya) |
-| `processFlowService.ts` | `GET …/flow`, düğüm açıklamaları |
-| `processCatalogSchema.ts` / `processCatalogColumns.ts` | Süreç katalog tabloları |
-| `processCatalogHealth.ts` | Parse / katalog sağlık metrikleri |
-| `processParseAudit.ts` | Parse denetim kaydı |
-| `processNodeDescriptions.ts` | Düğüm açıklama PATCH |
-
-Ingest ve boş süreç listesi: [docs/db.md §13](../../docs/db.md) · `npm run ingest:process-par --prefix server`.
-
-## Testler
-
-Aynı klasörde `*.test.ts` — parser, rota store, geçiş servisleri, node descriptions. Çalıştırma: `npm run test --prefix server`.
-
-HTTP uçları: [routes/rehber.md](../routes/rehber.md) (`processes.routes.ts`). UI sözleşmesi: `web/src/types.ts`, `web/src/api/client.ts`.
+Testler: aynı klasörde `*.test.ts`.

@@ -1,45 +1,29 @@
-# `web/src/styles`
+# `web/src/styles` — **görünüm** (CSS)
 
-Global CSS — **feature dilimleri**. Kurallar mümkün olduğunca burada; bileşen dosyalarında inline stil yok (istisna: React Flow / dinamik).
+**Ekranda:** Renkler, boşluklar, sekme şeridi, harita ok kalınlığı — kod `components/` içinde sınıf adı kullanır, kurallar burada.
 
-## Giriş zinciri
+## Nasıl yüklenir
 
 ```
 main.tsx → index.css
-App.tsx  → App.css (@import hub) + responsive.css
+App.tsx  → App.css (tüm parça dosyalarını @import eder) + responsive.css
 ```
 
-## `App.css` import sırası (özet)
+## Hangi ekran hangi dosyayı etkiler?
 
-İlk satırlar harita ağırlıklı; sonra kabuk, katalog, app chrome:
+| Ekran parçası | CSS dosyası |
+|---------------|-------------|
+| Üst bar, sol panel iskeleti | `shell.css` |
+| İş akışları drawer | `workflows-drawer.css` |
+| Servis haritası + dock | `service-map.css`, `service-map-dock.css`, `service-map-stage.css` |
+| BPM süreç haritası | `process-flow.css` → `process-flow-chrome.css`, `process-flow-canvas.css` |
+| ⌘K paleti | `cmdk.css`, `cmdk-hit-tags.css` |
+| Servis sekmeleri, bento kartlar | `stage.css`, `catalog.css`, `catalog-detail.css`, `catalog-bento.css` |
+| Hoş geldin | `welcome.css` |
+| CR / inbox modalları | `overlays.css` |
+| İş akışı tam sayfa | `workflow-stage.css`, `workflow-canvas.css` |
+| Ağaç satırları | `tree.css`, `tree-options-extras.css` |
 
-| Sıra | Dosya | UI alanı |
-| --- | --- | --- |
-| hub | `process-flow.css` | Süreç haritası (+ alt import) |
-| | `service-map.css` | Servis etki haritası |
-| | `service-map-dock.css`, `service-map-stage.css` | Harita dock / stage |
-| | `shell.css`, `workflows-drawer.css` | Kabuk, iş akışları drawer |
-| | `cmdk.css` | ⌘K |
-| | `stage.css`, `catalog.css`, `welcome.css` | Servis sahnesi |
-| | `overlays.css`, `workflow-stage.css` | Modallar, WF tam sayfa |
-| | `app-chrome.css`, `map-misc.css` | Masthead, harita popup |
-| | `catalog-detail.css`, `catalog-bento.css`, `catalog-extras.css` | Katalog detay |
-| | `stage-neighbors.css`, `snapshots-ui.css`, `cmdk-hit-tags.css` | Komşu path, snapshot UI |
-| | `tree-options-extras.css`, `process-route-ui.css` | Ağaç, rota modu |
-| | `search.css`, `shared-ui.css`, `stage-extras.css`, `tree.css` | Arama, paylaşılan |
-| | `welcome-extras.css`, `workflow-canvas.css`, `app-remainder.css` | Welcome, WF canvas, kalan |
+Tam `@import` sırası: `App.css` dosyasının kendisi.
 
-## Süreç CSS hub
-
-`process-flow.css` **içinden** (App.css’te tekrar import etme):
-
-- `process-flow-chrome.css` — toolbar, arama, tam ekran
-- `process-flow-canvas.css` — canvas, node/edge, hover highlight
-
-## Bileşen → CSS eşlemesi
-
-Detay tablo: [components/rehber.md](../components/rehber.md) § CSS.
-
-CSS değişikliği sonrası: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).
-
-Mimari özet: [docs/web-architecture.md](../../../docs/web-architecture.md).
+CSS değişince smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).

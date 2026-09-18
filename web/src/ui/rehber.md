@@ -1,12 +1,12 @@
-# `ui/` — paylaşılan form / kart bileşenleri
+# `ui/` — küçük **form ve kart** bileşenleri
 
-Hafif tasarım sistemi; DWH ve bazı modallarda kullanılır. Stil: `ui/ui.css`.
+**Ekranda:** Servis kabuğunun çoğu kendi CSS sınıflarını kullanır; **DWH** ve bazı modallarda gördüğün düzenli düğme, label+input, kart blokları buradan gelir.
 
-| Dosya | Rol |
-|-------|-----|
-| `Button.tsx` | Birincil / ikincil düğme |
-| `Field.tsx` | Label + input sarmalayıcı |
-| `Card.tsx`, `Section.tsx` | Blok düzeni |
-| `index.ts` | Re-export |
+| Dosya | Ekranda |
+|-------|---------|
+| `Button.tsx` | Birincil / ikincil aksiyon düğmesi |
+| `Field.tsx` | Etiketli input satırı |
+| `Card.tsx`, `Section.tsx` | Kenarlıklı içerik kutusu |
+| `index.ts` | Import kolaylığı |
 
-Servis kabuğu çoğunlukla kendi sınıflarını (`App.css`, `shell.css`) kullanır; `ui/` zorunlu değildir her ekranda. Bileşen grupları: [components/rehber.md](../components/rehber.md).
+Stil: `ui/ui.css`. Ana servis UI: [components/rehber.md](../components/rehber.md).

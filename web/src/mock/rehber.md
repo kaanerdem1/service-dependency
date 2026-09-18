@@ -1,10 +1,8 @@
-# `web/src/mock`
+# `web/src/mock` — **statik demo** veri
 
-Geliştirme / izole demo — **üretim akışı API + inventory/mock** üzerinden.
+**Ekranda:** Normal kullanımda görmezsin; geliştiricide bazen API yerine sabit JSON denemek için. Günlük çalışma: sunucu `CATALOG_SOURCE=mock` veya `inventory` → [README.md](../../../README.md).
 
-| Dosya | Rol |
-| --- | --- |
-| `data.ts` | Statik örnek kayıtlar |
-| `api.ts` | Mock fetch shim (legacy / test yolları) |
-
-Günlük geliştirme: sunucuda `CATALOG_SOURCE=mock` veya `inventory` — [README.md](../../../README.md).
+| Dosya | Ne |
+|-------|-----|
+| `data.ts` | Örnek kayıtlar |
+| `api.ts` | Eski mock fetch shim |

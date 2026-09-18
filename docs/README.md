@@ -13,7 +13,7 @@ Aşağıdaki dosyalar ürün ve veri modelini anlatır. İlk okuma için öneril
 7. **[web-architecture.md](./web-architecture.md)** — Web store’lar, CSS, yüzeyler, motion, testler.
 8. **[dwh/rehber.md](../dwh/rehber.md)** — Repo kökü DWH örnek veri / legacy (UI: `web/src/dwh/`).
 
-**Kod içi rehberler:** [web/src/rehber.md](../web/src/rehber.md) (UI) · [server/src/rehber.md](../server/src/rehber.md) (API). `components/` ve çoğu alt klasörde **`rehber.md`** — projede gezinmek için dosya adına göre arama yerine klasör rehberine bak.
+**Kod içi rehberler:** [web/src/rehber.md](../web/src/rehber.md) (UI) · [server/src/rehber.md](../server/src/rehber.md) (API). Her `rehber.md` mümkün olduğunca **ekran → klasör/dosya** diliyle yazılır (“sol ağaç”, “Harita sekmesi”, “⌘K”); teknik rol tabloları ikinci sütunda kalır.
 
 **Otomatik test:** repo kökünde `npm test` — [web/tests/rehber.md](../web/tests/rehber.md), [server/src/rehber.md](../server/src/rehber.md) § Testler.
 

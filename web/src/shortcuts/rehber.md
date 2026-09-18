@@ -1,10 +1,10 @@
-# `shortcuts/` — panel ve ⌘K kısayol etiketleri
+# `shortcuts/` — drawer **kısayol etiketleri**
 
-Klavye eşlemesi **navigation** hook’larında; burada yalnızca etiket / matcher yardımcıları.
+**Ekranda:** Sol panelde **Favoriler / İş akışları** drawer’ının altında veya ipucunda gördüğün “Alt+…” metinleri; klavye dinleme `navigation/` içinde.
 
-| Dosya | Rol |
-|-------|-----|
-| `panelShortcuts.ts` | Favoriler / İş akışları drawer Alt-kısayol metinleri, `matchPanelShortcut` |
-| `serviceShortcuts.ts` | Favori servis listesi CRUD (localStorage) |
+| Dosya | Ekranda | Ne işe yarar |
+|-------|---------|--------------|
+| `panelShortcuts.ts` | Drawer kısayol açıklaması | Hangi tuş hangi drawer’ı açar |
+| `serviceShortcuts.ts` | (eski yol) favori listesi | Bazı favori yardımcıları |
 
-İlgili: [navigation/rehber.md](../navigation/rehber.md), [search/rehber.md](../components/search/rehber.md).
+Asıl favoriler: `stores/useServiceFavorites.ts`. ⌘K: [search/rehber.md](../components/search/rehber.md).

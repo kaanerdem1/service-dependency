@@ -1,19 +1,15 @@
-# `server/src/routes`
+# `server/src/routes` — **HTTP uçları** → ekran
 
-Katalog API route kayıtları (`/api/*`, `/api/dwh` hariç — DWH → `dwh/routes.ts`).
+**Ekranda:** Her satır, tarayıcının bir yerinde gördüğün veriyi taşır. (DWH uçları `dwh/routes.ts` — `/api/dwh`.)
 
-| Dosya | Uçlar |
-| --- | --- |
-| `registerCatalogRoutes.ts` | Tüm register* çağrıları |
-| `healthAndTree.routes.ts` | health, session-users, modules, catalog group/artifact |
-| `services.routes.ts` | services, neighbors, impact, notes |
-| `processes.routes.ts` | `/api/processes/*`, `services/:id/processes` |
-| `methods.routes.ts` | methods, method impact |
-| `meta.routes.ts` | meta/* (parse audit, catalog health, call-graph) |
-| `changeRequests.routes.ts` | change-requests, inbox, snapshots |
+| Dosya | Kullanıcı ne yapar | API (özet) |
+|-------|-------------------|------------|
+| `healthAndTree.routes.ts` | Uygulama açılır, sol ağaç yüklenir | `/api/health`, modül ağacı |
+| `services.routes.ts` | Servis seçer, harita/komşular | servis detay, etki, notlar |
+| `processes.routes.ts` | Süreç açar, düğüm notu kaydeder | `/api/processes/.../flow`, node-descriptions |
+| `methods.routes.ts` | Metod / call-graph görünümü | metod listesi, metod impact |
+| `meta.routes.ts` | (geliştirici) katalog sağlık | parse audit, call-graph meta |
+| `changeRequests.routes.ts` | Inbox, CR, snapshot | change-requests, inbox |
+| `registerCatalogRoutes.ts` | (görünmez) | Yukarıdakileri Express’e bağlar |
 
-Ortak mock/inventory dallanması: [lib/catalogHelpers.ts](../lib/catalogHelpers.ts) — [lib/rehber.md](../lib/rehber.md).
-
-Mount sırası: `registerCatalogRoutes.ts` → health/tree → services → processes → methods → meta → change-requests. DWH ayrı: [dwh/routes.ts](../dwh/routes.ts) (`/api/dwh`).
-
-Test: `routes/catalogRoutes.registry.test.ts` (kayıtlı uç envanteri). Üst harita: [server/src/rehber.md](../rehber.md).
+Mock mu gerçek DB mi: [lib/rehber.md](../lib/rehber.md). Test: `catalogRoutes.registry.test.ts`.

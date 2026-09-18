@@ -1,12 +1,12 @@
-# `impact/` — servis etki haritası yardımcıları
+# `impact/` — **Harita** sekmesinin yerleşim matematiği
 
-Ana UI grubu: [components/service-map/rehber.md](../components/service-map/rehber.md) (`ImpactMap.tsx`, `MapStage.tsx`). CSS: `styles/service-map.css`.
+**Ekranda:** Servis haritasındaki baloncukların **nereye konduğu** ve proje/jar **filtre etiketleri** — kullanıcı bunu “düzen” olarak görür; React bileşeni `components/service-map/` içinde.
 
-| Dosya | Rol |
-|-------|-----|
-| `mapLayout.ts` | React Flow düğüm yerleşimi (servis/metod haritası) |
-| `projectFilter.ts` | Etki grafında proje/jar filtre etiketleri → `App.tsx` tablo filtresi |
+| Dosya | Ekranda etkisi | Ne yapar |
+|-------|----------------|----------|
+| `mapLayout.ts` | Harita düğümlerinin x/y dizilimi | Büyük grafı okunaklı yerleştirir |
+| `projectFilter.ts` | Tablo/haritada proje filtresi | Hangi jar’lar gösterilsin |
 
-Veri: `GET` servis etki uçları (`api/client.ts`), tipler `types.ts` `ImpactGraph`.
+Veri sunucudan gelir (`api/client.ts`). BPM süreç haritası **burada değil** → [components/process/rehber.md](../components/process/rehber.md).
 
-Süreç BPM haritası **bu klasörde değil** → [components/process/rehber.md](../components/process/rehber.md).
+CSS: `styles/service-map.css`.

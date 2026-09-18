@@ -1,13 +1,12 @@
-# `server/scripts`
+# `server/scripts` — **operasyon** (geliştirici / DBA)
 
-Bakım ve doğrulama — `server/package.json` script adlarıyla eşleşir.
+**Ekranda:** Doğrudan UI yok; terminalden çalıştırınca katalog veya süreç verisini düzeltir — sonuç bir sonraki sayfa yenilemede görünür.
 
-| Script / dosya | Ne yapar |
-| --- | --- |
-| `ingest-process-par.mjs` | `npm run ingest:process-par` — PAR süreç XML → inventory tabloları |
-| `verify-process-catalog.mjs` | `npm run verify:process-catalog` — katalog tutarlılık |
-| `audit-process-parse.mjs` | `npm run audit:process-parse` — parse denetimi |
-| `backup-inventory-db.sh` | `npm run backup:inventory-db` — yerel PG yedek → `backups/postgres/` |
-| `smoke-inventory.mjs` / `smoke-sprint-3-5.mjs` | Manuel / dönemsel smoke (geliştirici) |
+| Komut / script | Sonuç ekranda |
+|----------------|---------------|
+| `npm run ingest:process-par` | Süreç drawer’ında gerçek BPM listesi (XML DB’ye) |
+| `npm run verify:process-catalog` | (log) katalog tutarlılık |
+| `npm run audit:process-parse` | (log) parse denetimi |
+| `npm run backup:inventory-db` | Yerel PG yedek dosyası |
 
-Otomatik regresyon: `npm run test --prefix server` (tsx test). Kurulum: [README.md](../../README.md).
+Otomatik test: `npm run test --prefix server`. Kurulum: [README.md](../../README.md).
