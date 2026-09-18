@@ -1,6 +1,6 @@
 # Refactor / CSS — test senaryoları
 
-Otomatik: repo kökünde `npm test` (server route registry + web unit testleri).
+Otomatik: repo kökünde `npm test` (route registry, buildGraph, **supertest** `/api/health` + `/api/processes` mock).
 
 ## Otomatik (her CSS / route diliminden sonra)
 

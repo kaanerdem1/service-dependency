@@ -1,17 +1,4 @@
-/**
- * Süreç haritası ve rota modu (Faz 5 — App.css taşınması).
- * Class adları değişmedi.
- */
-
-.pf-html-frame {
-  flex: 1;
-  width: 100%;
-  min-height: 640px;
-  height: min(78vh, 920px);
-  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
-  border-radius: 14px;
-  background: #f7f8fa;
-}
+/** Süreç haritası — ortak / wrap / react-flow. */
 
 .hl-shell {
   display: flex;
@@ -105,18 +92,23 @@
 .hl-lane.is-sistem {
   background: #e7eef6;
 }
+
 .hl-lane.is-akış {
   background: #d7ecfb;
 }
+
 .hl-lane.is-yetki {
   background: #e3f5e6;
 }
+
 .hl-lane.is-bolge {
   background: #fde9c8;
 }
+
 .hl-lane.is-revize {
   background: #f3e4f8;
 }
+
 .hl-lane.is-sonuc {
   background: #fde4e4;
 }
@@ -352,179 +344,9 @@
   background: #f7f8fa;
 }
 
-.pf-map-page {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-
-.pf-map-head {
-  flex: 0 0 auto;
-  padding: 14px 120px 10px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
-  background: color-mix(in srgb, #fff 94%, transparent);
-}
-
-.pf-map-head-primary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 14px;
-}
-
-.pf-map-head-cluster {
-  display: flex;
-  flex: 1 1 240px;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 0;
-  min-width: 0;
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
-.pf-map-head-cluster > * + *::before {
-  content: '·';
-  margin: 0 8px;
-  color: color-mix(in srgb, var(--muted) 88%, var(--line));
-  font-weight: 500;
-}
-
-.pf-map-title {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 8px;
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--ink);
-  flex: 0 0 auto;
-}
-
-.pf-map-title-sep {
-  font-weight: 500;
-  color: color-mix(in srgb, var(--muted) 88%, var(--line));
-}
-
 .pf-map-route-title-name {
   font-weight: 600;
   color: color-mix(in srgb, var(--ink) 88%, var(--accent, #2f6fed));
-}
-
-.pf-map-subtitle {
-  margin: 0;
-  font-size: inherit;
-  color: var(--muted);
-  font-family: var(--mono, ui-monospace, monospace);
-}
-
-.pf-map-meta {
-  margin: 0;
-  font-size: inherit;
-  color: color-mix(in srgb, var(--ink) 75%, var(--muted));
-}
-
-.pf-map-stats,
-.pf-map-route-status {
-  margin: 0;
-  font-size: inherit;
-  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-}
-
-.pf-map-summary {
-  margin: 6px 0 0;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
-}
-
-.pf-map-screens {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
-}
-
-.pf-map-screens-title {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.pf-map-screens-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.pf-map-screens-item {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
-  max-width: 100%;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--ink) 4%, #fff);
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  font-size: 11.5px;
-}
-
-.pf-map-screens-item.is-highlighted {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 10%, #fff);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
-.pf-map-screens-name {
-  font-weight: 650;
-  color: var(--ink);
-}
-
-.pf-map-screens-type {
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--muted);
-}
-
-.pf-map-screens-desc {
-  flex: 1 1 100%;
-  font-size: 10.5px;
-  color: var(--muted);
-  line-height: 1.35;
-}
-
-.pf-map-back,
-.pf-map-close {
-  position: absolute;
-  top: 12px;
-  z-index: 20;
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  background: color-mix(in srgb, #fff 92%, transparent);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.pf-map-back {
-  right: 88px;
-}
-
-.pf-map-close {
-  right: 12px;
 }
 
 .pf-map-canvas {
@@ -657,37 +479,6 @@
   cursor: default;
 }
 
-.pf-map-wrap .react-flow__node.pf-search-match {
-  opacity: 1;
-  z-index: 11;
-}
-
-.pf-map-wrap .react-flow__node.pf-search-match .pf-node:not(.pf-node-event):not(.pf-node-gateway),
-.pf-map-wrap .react-flow__node.pf-search-match .pf-route-node {
-  box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 45%, transparent);
-}
-
-.pf-map-wrap .react-flow__node.pf-search-match .pf-event-circle,
-.pf-map-wrap .react-flow__node.pf-search-match .pf-gateway-diamond {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 40%, transparent);
-}
-
-.pf-map-wrap .react-flow__node.pf-search-active {
-  z-index: 15;
-}
-
-.pf-map-wrap .react-flow__node.pf-search-active .pf-node:not(.pf-node-event):not(.pf-node-gateway),
-.pf-map-wrap .react-flow__node.pf-search-active .pf-route-node {
-  outline: 2px solid color-mix(in srgb, #f59e0b 75%, transparent);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px color-mix(in srgb, #f59e0b 22%, transparent);
-}
-
-.pf-map-wrap .react-flow__node.pf-search-active .pf-event-circle,
-.pf-map-wrap .react-flow__node.pf-search-active .pf-gateway-diamond {
-  box-shadow: 0 0 0 4px color-mix(in srgb, #f59e0b 55%, transparent);
-}
-
 .pf-map-wrap.is-expanded {
   position: fixed;
   inset: 0;
@@ -696,29 +487,8 @@
   min-height: 0;
 }
 
-.pf-map-wrap.is-expanded .pf-map-head {
-  padding: 8px 120px 6px 14px;
-}
-
-.pf-map-wrap.is-expanded .pf-map-close {
-  top: 9px;
-}
-
-.pf-map-wrap.is-expanded .pf-map-head-primary {
-  align-items: center;
-}
-
-.pf-map-wrap.is-expanded .pf-map-screens {
-  margin-top: 6px;
-  padding-top: 6px;
-}
-
 .pf-map-wrap.is-expanded .pf-map-canvas {
   flex: 1 1 0;
-}
-
-.pf-map-wrap.is-expanded .pf-detail-drawer {
-  width: min(440px, 36vw);
 }
 
 .pf-map-status {
@@ -774,107 +544,6 @@
   background: transparent;
   cursor: default;
   pointer-events: none;
-}
-
-.pf-detail-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 22;
-  display: flex;
-  flex-direction: column;
-  width: min(380px, 92%);
-  border-left: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
-  background: color-mix(in srgb, #fff 97%, transparent);
-  box-shadow: -12px 0 32px rgba(28, 29, 32, 0.1);
-  transform: translateX(100%);
-  transition: transform 0.24s ease;
-  pointer-events: auto;
-}
-
-.pf-detail-drawer.is-open {
-  transform: translateX(0);
-}
-
-.pf-detail-drawer-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-shrink: 0;
-  padding: 14px 14px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-}
-
-.pf-detail-drawer-head-copy {
-  min-width: 0;
-}
-
-.pf-detail-drawer-kind {
-  display: block;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.pf-detail-drawer-title {
-  margin: 4px 0 0;
-  font-size: 15px;
-  font-weight: 750;
-  line-height: 1.3;
-  color: var(--ink);
-}
-
-.pf-detail-drawer-id {
-  margin: 4px 0 0;
-  font-family: var(--mono, ui-monospace, monospace);
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.pf-detail-drawer-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.pf-detail-drawer-close,
-.pf-detail-drawer-snapshot {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--ink) 6%, transparent);
-  color: var(--muted);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.pf-detail-drawer-close:hover,
-.pf-detail-drawer-snapshot:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ink) 10%, transparent);
-  color: var(--ink);
-}
-
-.pf-detail-drawer-snapshot:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.pf-detail-drawer-body {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 12px 14px 16px;
 }
 
 .pf-detail-section + .pf-detail-section {
@@ -1291,19 +960,6 @@
   color: var(--muted);
 }
 
-.pf-map-wrap .pf-node,
-.pf-map-wrap .pf-node-event,
-.pf-map-wrap .pf-node-gateway {
-  cursor: pointer;
-}
-
-.pf-map-wrap .pf-node-detail-selected.pf-node,
-.pf-map-wrap .pf-node-detail-selected.pf-node-event,
-.pf-map-wrap .pf-node-detail-selected.pf-node-gateway {
-  outline: 2px solid color-mix(in srgb, #2f6fed 55%, transparent);
-  outline-offset: 2px;
-}
-
 .pf-map-wrap .react-flow__node,
 .pf-map-wrap .react-flow__node.selected,
 .pf-map-wrap .react-flow__node-processStep,
@@ -1314,53 +970,9 @@
   border: none;
 }
 
-.pf-map-wrap .react-flow__handle.pf-h {
-  width: 8px;
-  height: 8px;
-  opacity: 0;
-  border: 0;
-  background: transparent;
-}
-
-.pf-map-wrap .pf-node.is-task,
-.pf-map-wrap .pf-node.is-service,
-.pf-map-wrap .pf-node.is-subprocess,
-.pf-map-wrap .pf-node.is-other {
-  width: 168px;
-  min-width: 168px;
-  max-width: 168px;
-  min-height: 56px;
-  box-sizing: border-box;
-}
-
-.pf-map-wrap .pf-node-title,
-.pf-map-wrap .pf-gateway-label {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-
-.pf-map-wrap .pf-node-svc {
-  max-width: 100%;
-}
-
 .pf-map-wrap .react-flow__edgelabel-renderer {
   z-index: 3;
   pointer-events: none;
-}
-
-.pf-map-wrap .pf-edge-label {
-  z-index: 3;
-}
-
-.pf-map-wrap .pf-edge-label.is-dim {
-  opacity: 0.2;
-}
-
-.pf-map-wrap .pf-edge-label.is-onpath {
-  z-index: 4;
 }
 
 .pf-map-wrap .react-flow__node-processStep {
@@ -1454,58 +1066,6 @@
   color: var(--ink);
 }
 
-.pf-add-note {
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  background: #fff;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.pf-node {
-  position: relative;
-  min-width: 168px;
-  max-width: 220px;
-  padding: 8px 10px 10px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
-  background: #fff;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 5%, transparent);
-}
-
-.pf-node.is-selected {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-}
-
-.pf-node.is-task {
-  border-radius: 12px;
-}
-
-.pf-node.is-service {
-  background: color-mix(in srgb, var(--accent) 8%, #fff);
-}
-
-.pf-node.is-subprocess {
-  border-width: 2px;
-  border-style: double;
-  background: color-mix(in srgb, #6b5b95 6%, #fff);
-}
-
-.pf-node-subproc {
-  display: block;
-  margin-top: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  color: color-mix(in srgb, #6b5b95 75%, var(--ink));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .pf-dummy {
   width: 8px;
   height: 8px;
@@ -1523,174 +1083,6 @@
   min-height: 4px;
 }
 
-.pf-node-icon {
-  position: absolute;
-  top: -8px;
-  left: -8px;
-  width: 18px;
-  height: 18px;
-  border-radius: 5px;
-  background: #fff;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  line-height: 1;
-  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
-}
-
-/* BPMN olay (start/end): daire — şekil türü tek bakışta ayırt edilsin */
-.pf-node-event {
-  min-width: 0;
-  max-width: 108px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.pf-event-kicker {
-  font-size: 9px;
-  font-weight: 750;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.pf-event-circle {
-  position: relative;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--ink) 6%, transparent);
-}
-
-.pf-node-event.is-start .pf-event-circle {
-  border: 2px solid color-mix(in srgb, #2f9e58 65%, var(--line));
-  background: color-mix(in srgb, #2f9e58 10%, #fff);
-}
-
-.pf-node-event.is-end .pf-event-circle {
-  border: 3px solid color-mix(in srgb, #c1443c 65%, var(--line));
-  background: color-mix(in srgb, #c1443c 8%, #fff);
-}
-
-.pf-node-event.is-copy .pf-event-circle {
-  border-style: dashed;
-  transform: scale(0.88);
-}
-
-.pf-node-event.is-selected .pf-event-circle {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
-/* "Reddet" gibi paylaşılan geri-dönüş hedeflerinin, kalabalık tek noktaya
-   toplanmak yerine her kararın yanında gösterilen küçük görsel kopyası
-   (izole deneme — copyOf mantığının Süreç Akışı haritasındaki karşılığı). */
-.react-flow__node.pf-node-sink-copy {
-  opacity: 0.92;
-}
-
-.pf-node-sink-copy .pf-event-circle {
-  border-style: dashed;
-  transform: scale(0.8);
-}
-
-.pf-node-sink-copy .pf-event-label {
-  font-size: 10px;
-  opacity: 0.85;
-}
-
-.pf-node-sink-copy .pf-node:not(.pf-node-event) {
-  border-style: dashed;
-}
-
-.pf-event-label {
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.25;
-  text-align: center;
-  max-width: 108px;
-  overflow-wrap: anywhere;
-}
-
-/* BPMN karar (gateway): baklava/diamond — onay/reddet dallanması görsel olarak ayrışsın */
-.pf-node-gateway {
-  min-width: 0;
-  max-width: 128px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.pf-gateway-diamond {
-  position: relative;
-  width: 42px;
-  height: 42px;
-  border-radius: 6px;
-  border: 2px solid color-mix(in srgb, #e3b341 70%, var(--line));
-  background: color-mix(in srgb, #e3b341 14%, #fff);
-  transform: rotate(45deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.pf-node-gateway.is-selected .pf-gateway-diamond {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
-.pf-gateway-mark {
-  transform: rotate(-45deg);
-  font-size: 15px;
-  font-weight: 800;
-  color: #8a6d1d;
-}
-
-.pf-gateway-label {
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1.25;
-  text-align: center;
-  max-width: 128px;
-  overflow-wrap: anywhere;
-}
-
-.pf-node-more-badge {
-  position: absolute;
-  top: -6px;
-  right: -10px;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 20%, #fff);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
-  color: var(--accent);
-  font-size: 9.5px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-/* Baklava 45° döndürülmüş; rozeti dik göstermek için ters döndür */
-.pf-gateway-diamond .pf-node-more-badge {
-  transform: rotate(-45deg);
-  top: 2px;
-  right: -22px;
-}
-
-/* Karar (gateway) düğümündeki "i" ipucu: hangi ok NEDEN seçiliyor (istek
- * sahibinin organizasyon/profil bilgisine göre) — XML handler'ından
- * çıkarılan kurallar, hover ile okunabilir bir liste olarak gösterilir. */
 .pf-decision-info {
   position: relative;
   margin-top: 2px;
@@ -1767,278 +1159,9 @@
   font-weight: 500;
 }
 
-.react-flow__node.pf-node-offpath {
-  opacity: 0.28;
-}
-
-.pf-map-canvas.is-path-focus .react-flow__node:not(.pf-node-onpath):not(.pf-note-node) {
-  opacity: 0.28;
-}
-
-.pf-map-canvas.is-local-focus .react-flow__node:not(.pf-node-onpath):not(.pf-note-node) {
-  opacity: 1;
-}
-
-.pf-map-canvas.is-local-focus .pf-edge-offpath {
-  opacity: 0.45;
-}
-
-.pf-map-wrap .react-flow__node-processStep:hover .pf-node:not(.pf-node-event):not(.pf-node-gateway) {
-  border-color: color-mix(in srgb, #2f6fed 45%, var(--line));
-  box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 18%, transparent);
-}
-
-.pf-map-wrap .react-flow__node-processStep:hover .pf-event-circle {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 24%, transparent);
-}
-
-.pf-map-wrap .react-flow__node-processStep:hover .pf-gateway-diamond {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 24%, transparent);
-}
-
-.react-flow__node.pf-node-onpath {
-  opacity: 1;
-  z-index: 2;
-}
-
-/* Hover çerçevesi yalnızca düğümün kendi şekline otursun: görev/servis
- * dikdörtgen, olay dairesi, karar baklavası. Wrapper’a ekstra dikdörtgen
- * çerçeve basılmaz. */
-.react-flow__node.pf-node-onpath .pf-node:not(.pf-node-event):not(.pf-node-gateway) {
-  border-color: color-mix(in srgb, #2f6fed 60%, var(--line));
-  box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 22%, transparent);
-}
-
-.react-flow__node.pf-node-onpath .pf-event-circle {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 30%, transparent);
-}
-
-.react-flow__node.pf-node-onpath .pf-gateway-diamond {
-  box-shadow: 0 0 0 3px color-mix(in srgb, #2f6fed 30%, transparent);
-}
-
-.react-flow__edge.pf-edge-offpath .react-flow__edge-path {
-  opacity: 0.15;
-  stroke-width: 1.1px;
-}
-
-.react-flow__edge.pf-edge-jump .react-flow__edge-path {
-  stroke: #2f6fed;
-  stroke-width: 1.3;
-  stroke-dasharray: 5 4;
-  opacity: 0.55;
-}
-
-.react-flow__edge.pf-edge-back .react-flow__edge-path {
-  stroke: #e05b4f;
-  stroke-width: 1.3;
-  stroke-dasharray: 5 4;
-  opacity: 0.55;
-}
-
-.react-flow__edge.pf-edge-onpath .react-flow__edge-path {
-  stroke: #2f6fed;
-  stroke-width: 2.6;
-  opacity: 1;
-  stroke-dasharray: none;
-}
-
 .pf-canvas-wrap .react-flow__edgelabel-renderer {
   z-index: 6;
   pointer-events: none;
-}
-
-/* Ok üzerindeki etiket: kaynağa (çıkış ucuna) yakın — aynı düğümden çıkan
- * birden çok ok, kesişme bölgesinde değil kendi kaynağının yanında okunsun.
- * Sönük durumda arka planı da kaldırıyoruz — sadece opaklık düşürmek,
- * beyaz zemin üzerinde yeterince "sönük" görünmüyordu. */
-.pf-edge-label {
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: #fff;
-  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
-  font-size: 10.5px;
-  font-weight: 650;
-  color: var(--muted);
-  white-space: nowrap;
-  z-index: 8;
-  isolation: isolate;
-  transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
-}
-
-.pf-edge-label.has-transition-svc {
-  cursor: help;
-  box-shadow: inset 0 -2px 0 color-mix(in srgb, #2f6fed 42%, transparent);
-}
-
-.pf-edge-label.is-dim {
-  background: #fff;
-  border-color: color-mix(in srgb, var(--line) 40%, transparent);
-  color: color-mix(in srgb, var(--muted) 70%, transparent);
-  opacity: 0.7;
-}
-
-.pf-edge-label.is-onpath {
-  background: #2f6fed;
-  border-color: #2f6fed;
-  color: #fff;
-  font-weight: 750;
-  z-index: 9;
-  box-shadow: 0 1px 4px color-mix(in srgb, #2f6fed 45%, transparent);
-}
-
-.pf-edge-chevron {
-  font-size: 15px;
-  font-weight: 800;
-  line-height: 1;
-  z-index: 3;
-  opacity: 0.85;
-  transition: opacity 0.12s ease;
-}
-
-.pf-edge-chevron.is-dim {
-  opacity: 0.18;
-}
-
-.pf-edge-chevron.is-onpath {
-  opacity: 1;
-  font-size: 16px;
-}
-
-.pf-node-kind {
-  display: block;
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.pf-node-title {
-  display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
-}
-
-.pf-node-svc-row {
-  display: block;
-  margin-top: 4px;
-  min-width: 0;
-}
-
-.pf-node-svc {
-  display: block;
-  font-size: 10.5px;
-  color: color-mix(in srgb, var(--accent) 70%, var(--ink));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pf-node-svc-more {
-  display: inline-block;
-  margin-top: 2px;
-  padding: 1px 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 650;
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 14%, #fff);
-}
-
-.pf-node-more {
-  display: inline-block;
-  margin-top: 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 16%, #fff);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.pf-note {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-width: 64px;
-  min-height: 40px;
-  box-sizing: border-box;
-  padding: 8px 22px 8px 8px;
-  border-radius: 8px;
-  background: #fff6c8;
-  border: 1px solid color-mix(in srgb, #e3b341 45%, #ccc);
-  box-shadow: 1px 2px 0 color-mix(in srgb, var(--ink) 8%, transparent);
-}
-
-.pf-note-collapsed {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  background: transparent;
-  border: 0;
-  box-shadow: none;
-  cursor: pointer;
-}
-
-.pf-note-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 44px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #fff6c8;
-  border: 1px solid color-mix(in srgb, #e3b341 50%, #ccc);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 10%, transparent);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: color-mix(in srgb, var(--ink) 72%, transparent);
-  user-select: none;
-}
-
-.pf-note-toolbar {
-  position: absolute;
-  top: 3px;
-  right: 4px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pf-note-del,
-.pf-note-collapse {
-  margin: 0;
-  padding: 0 2px;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 650;
-  line-height: 1;
-  color: var(--muted);
-}
-
-.pf-note-del:hover,
-.pf-note-collapse:hover {
-  color: var(--ink);
-}
-
-.pf-note-collapse {
-  font-size: 14px;
-  font-weight: 700;
 }
 
 .pf-map-wrap .react-flow__node-processNote.selected .react-flow__resize-control.line {
@@ -2048,22 +1171,6 @@
 .pf-map-wrap .react-flow__node-processNote.selected .react-flow__resize-control.handle {
   background: #e3b341;
   border: 1px solid color-mix(in srgb, #e3b341 70%, #fff);
-}
-
-.pf-note:not(.pf-note-collapsed) {
-  padding-top: 22px;
-}
-
-.pf-note textarea {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  resize: none;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  line-height: 1.35;
 }
 
 .pf-detail {
@@ -2134,131 +1241,6 @@
   border-color: color-mix(in srgb, #9eb5d4 40%, var(--line));
 }
 
-/* —— Rota modu (App.css taşınması) —— */
-
-.pf-map-head-primary > .pf-route-start {
-  margin-top: 0;
-  margin-left: auto;
-  flex: 0 0 auto;
-}
-
-.pf-route-start {
-  margin-top: 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
-  border-radius: 999px;
-  padding: 6px 13px;
-  background: color-mix(in srgb, var(--accent) 5%, #fff);
-  color: color-mix(in srgb, var(--accent-strong, var(--accent)) 76%, var(--ink));
-  font: inherit;
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-}
-
-.pf-route-start:hover {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
-  background: color-mix(in srgb, var(--accent) 9%, #fff);
-}
-
-.pf-route-wrap {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  height: 100%;
-}
-
-.pf-map-wrap.is-expanded.pf-route-wrap .pf-route-bar {
-  flex: 0 0 auto;
-}
-
-.pf-map-wrap.is-expanded.pf-route-wrap .pf-route-canvas {
-  flex: 1 1 0;
-}
-
-.pf-route-bar {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  overflow-x: auto;
-  flex: 0 0 auto;
-  min-height: 54px;
-  padding: 7px 14px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 94%, var(--accent));
-}
-
-.pf-route-bar-part {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-.pf-route-bar-edge {
-  max-width: 110px;
-  margin: 0 5px;
-  overflow: hidden;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pf-route-bar-sep {
-  width: 10px;
-  height: 2px;
-  margin: 0 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 28%, var(--line));
-}
-
-.pf-route-bar-step {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 190px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 5px 9px 5px 6px;
-  overflow: hidden;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pf-route-bar-step > span {
-  display: inline-grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 14%, #fff);
-  color: var(--accent);
-  font-weight: 800;
-}
-
-.pf-route-bar-step small {
-  color: var(--muted);
-}
-
-.pf-route-bar-step.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-
-.pf-route-canvas {
-  min-width: 0;
-  height: 100%;
-}
-
 .pf-route-snapshot {
   display: inline-flex;
   align-items: center;
@@ -2284,27 +1266,6 @@
   opacity: 0.45;
 }
 
-.react-flow__node.pf-route-node-wrap.is-new .pf-route-node,
-.react-flow__node.pf-route-choice-wrap.is-new .pf-route-choice-node {
-  animation: pf-route-node-in 220ms ease both;
-}
-
-@keyframes pf-route-node-in {
-  from {
-    opacity: 0;
-    transform: translateX(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-.pf-route-node {
-  width: 168px;
-  box-sizing: border-box;
-}
-
 .pf-route-visit-badge {
   display: inline-block;
   margin-top: 5px;
@@ -2314,50 +1275,6 @@
   color: #6d3ec1;
   font-size: 9.5px;
   font-weight: 750;
-}
-
-.pf-route-choice-node {
-  width: 168px;
-  box-sizing: border-box;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
-  background: color-mix(in srgb, var(--accent) 7%, #fff);
-  cursor: pointer;
-}
-
-.pf-route-choice-kicker {
-  display: block;
-  margin-bottom: 2px;
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-
-.react-flow__node.pf-route-choice-wrap:hover .pf-route-choice-node {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.pf-route-wrap .react-flow__node.pf-route-node-wrap,
-.pf-route-wrap .react-flow__node.pf-route-node-wrap.selected,
-.pf-route-wrap .react-flow__node.pf-route-choice-wrap,
-.pf-route-wrap .react-flow__node.pf-route-choice-wrap.selected {
-  outline: none;
-  box-shadow: none;
-  background: transparent;
-}
-
-.pf-route-wrap .react-flow__node.pf-route-node-wrap:hover .pf-route-node,
-.pf-route-wrap .react-flow__node.pf-route-node-wrap.selected .pf-route-node,
-.pf-route-wrap .pf-node.pf-route-node.is-selected {
-  border-color: color-mix(in srgb, #2f6fed 60%, var(--line));
-  box-shadow: 0 0 0 2px color-mix(in srgb, #2f6fed 22%, transparent);
-}
-
-.pf-route-choice-kicker:empty {
-  display: none;
 }
 
 .react-flow__edge.pf-route-ghost-edge .react-flow__edge-path {
@@ -2436,4 +1353,3 @@
   opacity: 0.45;
   cursor: not-allowed;
 }
-

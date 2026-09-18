@@ -1,6 +1,6 @@
 # `processFlowMap/` — ProcessFlowMap parçaları
 
-Ana bileşen hâlâ `../ProcessFlowMap.tsx` (nodes, edges, notlar, `ProcessFlowMapCore` yakında).
+Ana export: `../ProcessFlowMap.tsx` → `ProcessFlowMapCore.tsx`.
 
 | Dosya | Rol |
 | --- | --- |
@@ -10,5 +10,5 @@ Ana bileşen hâlâ `../ProcessFlowMap.tsx` (nodes, edges, notlar, `ProcessFlowM
 | `buildGraph.ts` | `buildGraph`, `withEdgeRoutes`, `focusHighlightFor`, `buildDag` |
 | `nodes.tsx` | `processFlowNodeTypes`, `NoteNodeData` |
 | `edges.tsx` | `processFlowEdgeTypes`, `EdgeMarkers`, `FullscreenGlyph` |
-
-Sonraki dilim: `ProcessFlowMapCore.tsx`, `noteNodes.ts`.
+| `noteNodes.ts` | Not storage / `noteActions` |
+| `ProcessFlowMapCore.tsx` | State, React Flow, drawer, snapshot |

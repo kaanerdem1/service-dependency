@@ -37,3 +37,18 @@ export type PathHighlight = {
   edgeIds: Set<string>
   orderedIds: string[]
 }
+
+export type ProcessFlowMapProps = {
+  graph: import('../../../types').ProcessFlowGraph
+  processScreens?: import('../../../types').ServiceScreenLink[]
+  onDismiss?: () => void
+  canGoBack?: boolean
+  onBackToParent?: () => void
+  initialSelectedNodeId?: string
+  onRestoreConsumed?: () => void
+  onOpenService?: (serviceName: string, nodeId: string, serviceId?: string) => void
+  onOpenSubProcess?: (processNo: string, nodeId: string) => void
+  onCreateRoute?: () => void
+  canEditCatalog?: boolean
+  onNodeDescriptionsChange?: (doc: import('../../../types').ProcessNodeDescriptionsDoc) => void
+}

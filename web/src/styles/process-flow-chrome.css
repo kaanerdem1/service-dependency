@@ -1,0 +1,304 @@
+/** Süreç sayfası chrome (header, ekran listesi, toolbar). */
+
+.pf-html-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 640px;
+  height: min(78vh, 920px);
+  border: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+  border-radius: 14px;
+  background: #f7f8fa;
+}
+
+.pf-map-page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.pf-map-head {
+  flex: 0 0 auto;
+  padding: 14px 120px 10px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 75%, transparent);
+  background: color-mix(in srgb, #fff 94%, transparent);
+}
+
+.pf-map-head-primary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+}
+
+.pf-map-head-cluster {
+  display: flex;
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 0;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.pf-map-head-cluster > * + *::before {
+  content: '·';
+  margin: 0 8px;
+  color: color-mix(in srgb, var(--muted) 88%, var(--line));
+  font-weight: 500;
+}
+
+.pf-map-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+  flex: 0 0 auto;
+}
+
+.pf-map-title-sep {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--muted) 88%, var(--line));
+}
+
+.pf-map-subtitle {
+  margin: 0;
+  font-size: inherit;
+  color: var(--muted);
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
+.pf-map-meta {
+  margin: 0;
+  font-size: inherit;
+  color: color-mix(in srgb, var(--ink) 75%, var(--muted));
+}
+
+.pf-map-stats,
+.pf-map-route-status {
+  margin: 0;
+  font-size: inherit;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
+.pf-map-summary {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+
+.pf-map-screens {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+
+.pf-map-screens-title {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pf-map-screens-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pf-map-screens-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ink) 4%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  font-size: 11.5px;
+}
+
+.pf-map-screens-item.is-highlighted {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.pf-map-screens-name {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.pf-map-screens-type {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.pf-map-screens-desc {
+  flex: 1 1 100%;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.pf-map-back,
+.pf-map-close {
+  position: absolute;
+  top: 12px;
+  z-index: 20;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, #fff 92%, transparent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.pf-map-back {
+  right: 88px;
+}
+
+.pf-map-close {
+  right: 12px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-head {
+  padding: 8px 120px 6px 14px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-close {
+  top: 9px;
+}
+
+.pf-map-wrap.is-expanded .pf-map-head-primary {
+  align-items: center;
+}
+
+.pf-map-wrap.is-expanded .pf-map-screens {
+  margin-top: 6px;
+  padding-top: 6px;
+}
+
+.pf-map-head-primary > .pf-route-start {
+  margin-top: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.pf-route-start {
+  margin-top: 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+  border-radius: 999px;
+  padding: 6px 13px;
+  background: color-mix(in srgb, var(--accent) 5%, #fff);
+  color: color-mix(in srgb, var(--accent-strong, var(--accent)) 76%, var(--ink));
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+
+.pf-route-start:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: color-mix(in srgb, var(--accent) 9%, #fff);
+}
+
+.pf-map-wrap.is-expanded.pf-route-wrap .pf-route-bar {
+  flex: 0 0 auto;
+}
+
+.pf-route-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  flex: 0 0 auto;
+  min-height: 54px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 94%, var(--accent));
+}
+
+.pf-route-bar-part {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.pf-route-bar-edge {
+  max-width: 110px;
+  margin: 0 5px;
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-route-bar-sep {
+  width: 10px;
+  height: 2px;
+  margin: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+
+.pf-route-bar-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 9px 5px 6px;
+  overflow: hidden;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-route-bar-step > span {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.pf-route-bar-step small {
+  color: var(--muted);
+}
+
+.pf-route-bar-step.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent);
+}
