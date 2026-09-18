@@ -26,12 +26,15 @@ Büyük CSS artık **`styles/`** altında (`App.css`, `index.css`, `responsive.c
 | `stores/` | localStorage store modülleri | [stores/rehber.md](./stores/rehber.md) |
 | `shortcuts/` | Panel kısayol etiketleri / favori listesi | [shortcuts/rehber.md](./shortcuts/rehber.md) |
 | `motion/` | Animasyon bileşenleri (Framer Motion) | [motion/rehber.md](./motion/rehber.md) |
-| `styles/` | Global CSS ve feature dilimleri | [docs/web-architecture.md](../../docs/web-architecture.md) § CSS |
+| `styles/` | Global CSS ve feature dilimleri | [styles/rehber.md](./styles/rehber.md) |
 | `impact/` | Servis haritası layout math | [impact/rehber.md](./impact/rehber.md) |
 | `snapshot/` | Snapshot izi, PNG/PDF | [snapshot/rehber.md](./snapshot/rehber.md) |
 | `ui/` | Küçük form/kart kit | [ui/rehber.md](./ui/rehber.md) |
 | `dwh/` | DWH React yüzeyi | [dwh/rehber.md](./dwh/rehber.md) |
-| `api/`, `auth/`, `mock/` | HTTP istemci, yetki, demo veri | `api/client.ts` üst yorum |
+| `api/` | HTTP istemci (`client.ts`) | [api/rehber.md](./api/rehber.md) |
+| `auth/` | Katalog yetki sabitleri | [auth/rehber.md](./auth/rehber.md) |
+| `mock/` | Statik demo veri | [mock/rehber.md](./mock/rehber.md) |
+| `tests/` | tsx unit testler | [tests/rehber.md](./tests/rehber.md) |
 
 ## `motion/` kısaca
 

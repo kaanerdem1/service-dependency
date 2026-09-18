@@ -1,7 +1,7 @@
 /**
  * Süreç akışı — domain ve UI parçaları (Faz 3).
  *
- * Tam akış = tüm BPM grafını gezmek (`ProcessFlowMap`).
+ * Tam akış = tüm BPM grafını gezmek (`processFlowMap/ProcessFlowMapCore`, export `ProcessFlowMap.tsx`).
  * Akış rotası = kullanıcının seçtiği adım zinciri (`processUserRoute` +
  * `ProcessFlowRouteBuilder`). İkisi aynı XML grafını kullanır; kayıtlı rota
  * localStorage’dadır (`processRouteStore.ts`).

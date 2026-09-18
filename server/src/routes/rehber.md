@@ -12,4 +12,8 @@ Katalog API route kayıtları (`/api/*`, `/api/dwh` hariç — DWH → `dwh/rout
 | `meta.routes.ts` | meta/* (parse audit, catalog health, call-graph) |
 | `changeRequests.routes.ts` | change-requests, inbox, snapshots |
 
-Ortak mock/inventory dallanması: `lib/catalogHelpers.ts`.
+Ortak mock/inventory dallanması: [lib/catalogHelpers.ts](../lib/catalogHelpers.ts) — [lib/rehber.md](../lib/rehber.md).
+
+Mount sırası: `registerCatalogRoutes.ts` → health/tree → services → processes → methods → meta → change-requests. DWH ayrı: [dwh/routes.ts](../dwh/routes.ts) (`/api/dwh`).
+
+Test: `routes/catalogRoutes.registry.test.ts` (kayıtlı uç envanteri). Üst harita: [server/src/rehber.md](../rehber.md).

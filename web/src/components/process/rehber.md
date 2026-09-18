@@ -42,8 +42,8 @@ App / useProcessFlowNav
 |-------|----------|--------------|
 | `useProcessFlowPage.ts` | Flow API, rota modu, `ProcessFlowPage` state | `ProcessFlowPage.tsx` |
 | `ProcessFlowPage.tsx` | Map / RouteBuilder / drawer iskeleti | `ServicesMainStage` |
-| `ProcessFlowMap.tsx` | Tam graf canvas, notlar, arama, snapshot | `ProcessFlowPage` |
-| `processFlowMap/` | Layout + `buildGraph` (pure) | `ProcessFlowMap.tsx` |
+| `ProcessFlowMap.tsx` | `ReactFlowProvider` + re-export (~20 satır) | `ProcessFlowPage` |
+| `processFlowMap/` | `ProcessFlowMapCore`, `buildGraph`, node/edge tipleri | [processFlowMap/rehber.md](./processFlowMap/rehber.md) |
 | `ProcessFlowRouteBuilder.tsx` | Prefix rotası, geçiş seçimi, kaydet | `ProcessFlowPage` |
 | `ProcessFlowCanvas.tsx` | Kademeli keşif (hover ile açılan alt graf) | Eski/alternatif UI yolları |
 | `processFlowReferenceLayout.ts` | KTF koordinat + rota override | **Yalnızca** `ProcessFlowMap` when `no===105116` |
@@ -74,6 +74,6 @@ App / useProcessFlowNav
 
 ## Yeni kod nereye?
 
-- Tam akış davranışı → `ProcessFlowMap.tsx` veya `processFlowCamera.ts`
+- Tam akış davranışı → `processFlowMap/ProcessFlowMapCore.tsx`, `processFlowCamera.ts`
 - Rota modu kuralı → `processUserRoute.ts`
 - Yeni süreç için layout → genelde **hiçbir yere sabit koordinat ekleme**; KTF gibi istisna gerekiyorsa ayrı `referenceLayout` + `graph.no` koşulu

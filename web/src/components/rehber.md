@@ -68,7 +68,7 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | Kabuk, sidebar | `styles/shell.css` |
 | Drawer | `styles/workflows-drawer.css` |
 | Servis haritası | `styles/service-map.css` |
-| Süreç haritası | `styles/process-flow.css` |
+| Süreç haritası | `styles/process-flow.css` (+ chrome/canvas alt dosyaları) |
 | ⌘K | `styles/cmdk.css` |
 | Servis sahnesi / sekmeler | `styles/stage.css` |
 | Katalog, tablo | `styles/catalog.css` |
@@ -85,4 +85,4 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | Komşu / path UI | `styles/stage-neighbors.css` |
 | Harita dock / stage | `styles/service-map-dock.css`, `service-map-stage.css` |
 
-Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).
+Tam import listesi: [styles/rehber.md](../styles/rehber.md). Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).

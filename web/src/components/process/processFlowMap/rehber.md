@@ -1,6 +1,8 @@
 # `processFlowMap/` — ProcessFlowMap parçaları
 
-Ana export: `../ProcessFlowMap.tsx` → `ProcessFlowMapCore.tsx`.
+Ana export: `../ProcessFlowMap.tsx` — yalnızca `ReactFlowProvider` sarmalayıcı; gövde **`ProcessFlowMapCore.tsx`**. Tipler paylaşılan `web/src/types.ts` + yerel `types.ts`.
+
+CSS: `styles/process-flow.css` (hub) → `process-flow-chrome.css`, `process-flow-canvas.css` — [styles/rehber.md](../../../styles/rehber.md).
 
 | Dosya | Rol |
 | --- | --- |

@@ -9,8 +9,8 @@ Kaynak dosyalar bu klasörde. Layout yardımcıları: [impact/rehber.md](../../i
 | Dosya | Rol |
 |-------|-----|
 | `MapStage.tsx` | Harita sekmesi sarmalayıcı (toolbar, tam ekran) |
-| `ImpactMap.tsx` | Re-export; gövde `impactMap/ImpactMapCore.tsx` |
-| `MethodImpactMap.tsx` | Re-export; gövde `methodImpactMap/` |
+| `ImpactMap.tsx` | Re-export; gövde [impactMap/](./impactMap/rehber.md) |
+| `MethodImpactMap.tsx` | Re-export; gövde [methodImpactMap/](./methodImpactMap/rehber.md) |
 | `ImpactChrome.tsx` | Harita üst/yan chrome |
 | `SimpleImpactPath.tsx` | Kısa etki yolu gösterimi |
 | `MethodCallTree.tsx` | Metod çağrı ağacı (tablo/harita ile ilişkili) |
@@ -26,6 +26,6 @@ Kaynak dosyalar bu klasörde. Layout yardımcıları: [impact/rehber.md](../../i
 
 Harita anlık görüntüsü: `snapshot/trail.tsx`, `useSnapshotPack.ts` — `ServiceStage` üzerinden.
 
-CSS: `styles/service-map.css`. Smoke: harita sekmesi, tam ekran, ziyaret yolu (`shell/StageVisitPath`).
+CSS: `styles/service-map.css` + `service-map-dock.css`, `service-map-stage.css` — [styles/rehber.md](../../styles/rehber.md). Smoke: harita sekmesi, tam ekran, ziyaret yolu (`shell/StageVisitPath`).
 
 Paylaşılan chrome: DWH `DwhMapChrome` yalnızca `DockTooltipPortal` import eder; servis haritası `ImpactChrome` kullanır.

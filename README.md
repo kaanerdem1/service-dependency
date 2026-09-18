@@ -91,6 +91,14 @@ npm run dev
 
 Tek komut API ve UI’yi birlikte açar (`concurrently`).
 
+### 4. Testler (isteğe bağlı)
+
+```bash
+npm test
+```
+
+Sunucu: inventory parser/rota testleri, route registry, supertest smoke (`CATALOG_SOURCE=mock`). Web: `buildGraph` ve navigasyon yardımcıları. Detay: [server/src/rehber.md](server/src/rehber.md), [web/tests/rehber.md](web/tests/rehber.md).
+
 **İki terminal** tercih edersen:
 
 ```bash
@@ -143,10 +151,10 @@ flowchart LR
 |------|--------|
 | UI kabuk | `web/src/App.tsx` |
 | Servis haritası | `web/src/components/service-map/ImpactMap.tsx` |
-| Süreç akış / rota | `web/src/components/process/ProcessFlowMap.tsx`, `processRouteStore.ts` |
-| API giriş | `server/src/index.ts`, `startServer.ts` |
-| Express kabuk | `server/src/createApp.ts` |
-| Katalog route'ları | `server/src/routes/` (`registerCatalogRoutes.ts`) |
+| Süreç akış / rota | `process/processFlowMap/` + ince `ProcessFlowMap.tsx`, `stores/processRouteStore.ts` |
+| API giriş | `server/src/rehber.md` → `index.ts`, `createApp.ts`, `routes/` |
+| Express kabuk | `server/src/createApp.ts` (route kayıtları `routes/registerCatalogRoutes.ts`) |
+| Katalog route'ları | `server/src/routes/rehber.md` |
 | Etki grafi | `server/src/impactGraph.ts` |
 | DWH UI | `web/src/dwh/DwhPage.tsx` |
 
@@ -165,6 +173,8 @@ flowchart LR
 | [dwh/rehber.md](dwh/rehber.md) | DWH örnek veri / legacy (repo kökü) |
 | [web/src/components/rehber.md](web/src/components/rehber.md) | UI klasör haritası (önce burası) |
 | [web/src/rehber.md](web/src/rehber.md) | Tüm `web/src` modül haritası |
+| [server/src/rehber.md](server/src/rehber.md) | API, inventory, DWH, testler |
+| [docs/refactor-visual-regression.md](docs/refactor-visual-regression.md) | CSS / UI smoke checklist |
 
 ---
 

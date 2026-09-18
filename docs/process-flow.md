@@ -6,7 +6,9 @@ PAR / jBPM XML **inventory_db**’den gelir (`env.process`). Arayüzde iki mod v
 
 ---
 
-## 1. Tam akış (`ProcessFlowMap`)
+## 1. Tam akış (`ProcessFlowMap` / `processFlowMap/`)
+
+İnce export: `ProcessFlowMap.tsx` · gövde: `processFlowMap/ProcessFlowMapCore.tsx` — [processFlowMap/rehber.md](../web/src/components/process/processFlowMap/rehber.md).
 
 **Nereden açılır:** Modül ağacı → Process sekmesi, sol paneldeki süreç listesi (İş akışları), arama.
 

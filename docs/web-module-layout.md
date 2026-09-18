@@ -29,8 +29,8 @@ Ana giriş: [web/src/components/rehber.md](../web/src/components/rehber.md)
 | `workflows/` | “İş akışları” drawer | `WorkflowsPanel` |
 | `welcome/` | Seçim yokken orta sahne / tur | `WelcomeScreen` |
 | `workflow-stage/` | İş akışı tam sayfa editörü | `WorkflowInfoPage` |
-| `process/` | BPM haritası ve kayıtlı rotalar | `ProcessFlowPage` |
-| `service-map/` | Servis ve metod etki haritası | `ImpactMap`, `MapStage` |
+| `process/` | BPM haritası ve kayıtlı rotalar | `ProcessFlowPage` · canvas: `processFlowMap/` |
+| `service-map/` | Servis ve metod etki haritası | `ImpactMap` / `impactMap/`, `MethodImpactMap` / `methodImpactMap/` |
 | `catalog/` | Servis detay sekmeleri, tablo | `ServiceCatalogPanels`, … |
 | `search/` | Komut paleti (⌘K) | `CommandPalette` |
 | `overlays/` | CR, inbox, talep modalları | `AppShellOverlays` importları |
@@ -48,7 +48,9 @@ Her klasörde **`rehber.md`**: dosya listesi, kim import eder, store/CSS notlar�
 | `impact/` | Harita yerleşim matematiği (`service-map/` kullanır) |
 | `snapshot/` | İz, PNG/PDF |
 | `motion/` | Animasyon sarmalayıcıları |
-| `styles/` | `App.css` @import dilimleri |
+| `styles/` | `App.css` @import dilimleri — [styles/rehber.md](../web/src/styles/rehber.md) |
+| `api/`, `auth/`, `mock/` | HTTP istemci, yetki, demo — ilgili `rehber.md` |
+| `tests/` | tsx unit testler — [tests/rehber.md](../web/tests/rehber.md) |
 | `dwh/` | DWH yüzeyi (bu ağacın dışında) |
 
 ---

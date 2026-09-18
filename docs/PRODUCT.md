@@ -150,8 +150,8 @@ Dolaylı görünen servis, issue tarafında otomatik onaya **eklenmez**; issue w
 | Web modül grupları        | [web-module-layout.md](./web-module-layout.md) · `web/src/rehber.md`                       |
 | Issue link / embed        | Intranet issue aracı (repoda ayrı spec yok)                                                |
 | Etki BFS                  | `server/src/impactGraph.ts`                                                                |
-| Harita layout             | `web/src/impact/mapLayout.ts`, `components/service-map/ImpactMap.tsx`                      |
-| Process tam akış + rota   | [process-flow.md](./process-flow.md) · `ProcessFlowMap.tsx`, `ProcessFlowRouteBuilder.tsx` |
+| Harita layout             | `web/src/impact/mapLayout.ts`, `components/service-map/impactMap/`                      |
+| Process tam akış + rota   | [process-flow.md](./process-flow.md) · `processFlowMap/`, `ProcessFlowRouteBuilder.tsx` |
 
 
 ---

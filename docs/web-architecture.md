@@ -48,7 +48,25 @@ Yüzey: `components/shell/SurfaceSwitch.tsx`. Navigasyon persist: `appNavPersist
 
 ## CSS
 
-`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Tur 2: `catalog-bento`, `stage-neighbors`, …, `service-map-dock/stage`; süreç: `process-flow-chrome`, `process-flow-canvas` + `process-flow.css`. Smoke: [refactor-visual-regression.md](./refactor-visual-regression.md). CI: `.github/workflows/ci.yml`.
+`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Dilim listesi ve süreç hub (`process-flow.css` → chrome/canvas): [web/src/styles/rehber.md](../web/src/styles/rehber.md). Smoke: [refactor-visual-regression.md](./refactor-visual-regression.md).
+
+## Testler
+
+| Katman | Komut | Kapsam |
+| --- | --- | --- |
+| Tüm repo | `npm test` (kök) | server + web |
+| API | `npm run test --prefix server` | inventory `*.test.ts`, route registry, supertest smoke |
+| Web | `npm run test --prefix web` | `tests/*.test.ts` (buildGraph, helpers) |
+
+Smoke test health uçları mock katalog bekler (`CATALOG_SOURCE=mock`). Detay: [web/tests/rehber.md](../web/tests/rehber.md).
+
+## Büyük React Flow modülleri
+
+| UI | İnce export | Parça klasörü |
+| --- | --- | --- |
+| Süreç tam akış | `process/ProcessFlowMap.tsx` | `process/processFlowMap/` → `ProcessFlowMapCore.tsx` |
+| Servis etki | `service-map/ImpactMap.tsx` | `service-map/impactMap/` |
+| Metod etki | `service-map/MethodImpactMap.tsx` | `service-map/methodImpactMap/` |
 
 ## DWH veri / legacy (repo kökü)
 
