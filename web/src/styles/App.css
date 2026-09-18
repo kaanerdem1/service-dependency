@@ -10,6 +10,14 @@
 @import './workflow-stage.css';
 @import './app-chrome.css';
 @import './map-misc.css';
+@import './catalog-detail.css';
+@import './process-route-ui.css';
+@import './search.css';
+@import './shared-ui.css';
+@import './stage-extras.css';
+@import './tree.css';
+@import './welcome-extras.css';
+@import './workflow-canvas.css';
 @import './app-remainder.css';
 
 /**

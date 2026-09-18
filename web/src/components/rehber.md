@@ -76,6 +76,10 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | CR / inbox modalları | `styles/overlays.css` |
 | İş akışı tam sayfa | `styles/workflow-stage.css` |
 | Harita popup (dd-*) | `styles/map-misc.css` |
-| App kabuğu parçaları | `styles/app-chrome.css` + `styles/app-remainder.css` |
+| Ağaç / sidebar | `styles/tree.css` |
+| Arama | `styles/search.css` |
+| Katalog detay (bento, tablo) | `styles/catalog-detail.css` |
+| İş akışı canvas (wf-*) | `styles/workflow-canvas.css` |
+| App kabuğu parçaları | `styles/app-chrome.css` + `styles/app-remainder.css` (~2k satır kalan) |
 
 Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).

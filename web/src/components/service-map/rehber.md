@@ -10,7 +10,7 @@ Kaynak dosyalar bu klasörde. Layout yardımcıları: [impact/rehber.md](../../i
 |-------|-----|
 | `MapStage.tsx` | Harita sekmesi sarmalayıcı (toolbar, tam ekran) |
 | `ImpactMap.tsx` | Re-export; gövde `impactMap/ImpactMapCore.tsx` |
-| `MethodImpactMap.tsx` | Metod seviyesi alt harita |
+| `MethodImpactMap.tsx` | Re-export; gövde `methodImpactMap/` |
 | `ImpactChrome.tsx` | Harita üst/yan chrome |
 | `SimpleImpactPath.tsx` | Kısa etki yolu gösterimi |
 | `MethodCallTree.tsx` | Metod çağrı ağacı (tablo/harita ile ilişkili) |

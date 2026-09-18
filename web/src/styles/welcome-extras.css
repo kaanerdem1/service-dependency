@@ -1,0 +1,181 @@
+/**
+ * Faz 5 — App.css taşınması (welcome-extras.css).
+ */
+
+.wp-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+.wp-chevron {
+  display: inline-block;
+  flex-shrink: 0;
+  color: var(--accent);
+  font-size: 11px;
+}
+.wp-screens {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wp-filter-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.wp-filter-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--muted);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, #fff 70%, transparent);
+}
+.wp-filter-chip.is-on {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+}
+.wp-screen-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  background: color-mix(in srgb, #fff 78%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  min-width: 0;
+}
+.wp-screen-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+.wp-badge {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 650;
+}
+.wp-badge.is-region {
+  color: #2f5fbf;
+  background: color-mix(in srgb, #5b8def 16%, transparent);
+}
+.wp-badge.is-page {
+  color: #4f3db8;
+  background: color-mix(in srgb, #7a5bef 16%, transparent);
+}
+.coach-mark {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 40;
+  width: min(360px, calc(100vw - 32px));
+  padding: 0;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: blur(14px);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 60%, transparent) inset,
+    0 20px 48px rgba(20, 30, 24, 0.16);
+  overflow: hidden;
+}
+.coach-mark-spotlight {
+  padding: 16px 16px 14px;
+}
+.coach-mark-head {
+  margin-bottom: 12px;
+}
+.coach-mark-kicker {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.coach-mark-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.coach-mark-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.coach-mark-tile {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 9px 10px;
+  border-radius: 11px;
+  border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+  background: color-mix(in srgb, var(--surface) 88%, #fff);
+}
+.coach-mark-tile-icon {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 1;
+}
+.coach-mark-tile-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.coach-mark-tile-copy strong {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.coach-mark-tile-copy span {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.coach-mark-tile:last-child:nth-child(odd) {
+  grid-column: span 2;
+}
+.coach-mark-actions {
+  display: flex;
+  gap: 8px;
+}
+.coach-mark-primary,
+.coach-mark-ghost {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.coach-mark-primary {
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+}
+.coach-mark-ghost {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}

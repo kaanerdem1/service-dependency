@@ -48,7 +48,7 @@ Yüzey: `components/shell/SurfaceSwitch.tsx`. Navigasyon persist: `appNavPersist
 
 ## CSS
 
-`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Dilimler: `shell`, `process-flow`, `service-map`, `workflows-drawer`, `cmdk`, `stage`, `catalog`, `welcome`, `overlays`, `workflow-stage`, `app-chrome`, `map-misc`, `app-remainder`.
+`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Ek dilimler: `tree`, `search`, `catalog-detail`, `workflow-canvas`, `process-route-ui`, `stage-extras`, `welcome-extras`, `shared-ui`, `app-remainder` (kalan ~2k satır).
 
 ## DWH veri / legacy (repo kökü)
 

@@ -1,0 +1,552 @@
+/**
+ * Faz 5 — App.css taşınması (search.css).
+ */
+
+.search {
+  position: relative;
+}
+.search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--shell-sidebar-muted, var(--muted));
+  pointer-events: none;
+  opacity: 0.85;
+}
+.search input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 10px;
+  padding: 8px 10px 8px 32px;
+  font-size: 13px;
+}
+.search input.has-clear {
+  padding-right: 34px;
+}
+.search input.has-shortcut {
+  padding-right: 48px;
+}
+.search input.has-clear.has-shortcut {
+  padding-right: 70px;
+}
+.search-shortcut {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid color-mix(in srgb, var(--shell-sidebar-input-border, var(--line)) 80%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--shell-sidebar-input-bg, var(--surface)) 88%, #000);
+  color: var(--shell-sidebar-muted, var(--muted));
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+}
+.search-shortcut:hover {
+  color: var(--shell-sidebar-fg, var(--ink));
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+.search-clear-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--shell-sidebar-muted, var(--muted));
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.search.has-shortcut-and-clear .search-clear-btn {
+  right: 42px;
+}
+.search-clear-btn:hover {
+  background: var(--shell-nav-toggle-hover-bg, rgba(0, 0, 0, 0.06));
+  color: var(--shell-sidebar-fg, var(--ink));
+}
+.search-clear-btn:active {
+  transform: translateY(-50%) scale(0.94);
+}
+.search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  border: 0;
+  padding: 0;
+  background: var(--overlay);
+  cursor: default;
+}
+.search-hits {
+  position: absolute;
+  z-index: 50;
+  left: 0;
+  right: auto;
+  width: min(440px, calc(100vw - 28px));
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(40, 35, 28, 0.12);
+  max-height: min(360px, 50vh);
+  overflow: auto;
+}
+.search-hits-portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--shell-search-dropdown-bg, var(--surface));
+  border: 1px solid var(--shell-search-dropdown-border, var(--line));
+  color: var(--shell-search-dropdown-fg, var(--ink));
+  border-radius: 10px;
+  box-shadow: var(
+    --shell-search-dropdown-shadow,
+    0 4px 12px rgba(40, 35, 28, 0.1),
+    0 16px 40px rgba(40, 35, 28, 0.16)
+  );
+  overflow: hidden;
+}
+.search-hits-shell .search-hits {
+  position: static;
+  left: auto;
+  right: auto;
+  top: auto;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  margin: 0;
+  box-shadow: none;
+  border: 0;
+  background: transparent;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.search-hits-auto {
+  width: 100%;
+}
+.search-hits-portal button {
+  color: inherit;
+}
+.search-hits-portal button:hover,
+.search-hits-portal button:focus-visible {
+  background: var(--shell-search-dropdown-hover-bg, var(--accent-soft));
+  color: var(--shell-search-dropdown-fg, var(--ink));
+}
+.search-hits-portal button:hover .search-hit-text strong,
+.search-hits-portal button:focus-visible .search-hit-text strong {
+  color: var(--shell-search-dropdown-fg, inherit);
+}
+.search-hits-portal .search-hit-text strong {
+  color: var(--shell-search-dropdown-fg, inherit);
+}
+.search-hits-portal .method-hit-svc {
+  color: var(--shell-search-dropdown-muted, var(--muted));
+}
+.search-hits button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+.search-hits button:hover {
+  background: var(--accent-soft);
+}
+.search-hit-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.search-hit-text {
+  flex: 1;
+  min-width: 0;
+}
+.search-hit-text strong {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.search-hits .name-tip.is-short[data-tip]::after {
+  z-index: 60;
+}
+.search-hit-accessory {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.search-hit-id {
+  font-family: ui-monospace, 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--shell-search-dropdown-muted, var(--muted));
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-hit-sub {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--shell-search-dropdown-muted, var(--muted));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wp-cmdk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 280px;
+  margin: 0 auto;
+}
+.wp-cmdk-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, #fff);
+  box-shadow: 0 8px 24px rgba(28, 29, 32, 0.07);
+  overflow: hidden;
+}
+.wp-cmdk-icon {
+  color: var(--muted);
+  font-size: 14px;
+}
+.wp-cmdk-typed {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.wp-cmdk-caret {
+  width: 2px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.wp-cmdk-hit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 90%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 65%, transparent);
+}
+.wp-cmdk-hit.is-focus {
+  color: var(--ink);
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, #fff);
+}
+.wp-cmdk-hit-name {
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+.wp-map {
+  width: 100%;
+  height: 100%;
+  min-height: 160px;
+}
+.wp-map-edge {
+  stroke: color-mix(in srgb, var(--accent) 55%, var(--line));
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.wp-map-node {
+  fill: #fff;
+  stroke: color-mix(in srgb, var(--line) 80%, transparent);
+  stroke-width: 2;
+}
+.wp-map-node.is-center {
+  fill: color-mix(in srgb, var(--accent) 18%, #fff);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+.wp-map-pulse {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.wp-map-label {
+  fill: color-mix(in srgb, var(--muted) 70%, var(--ink));
+  font-size: 7px;
+  font-weight: 650;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wp-map-label.is-center {
+  fill: var(--ink);
+  font-size: 7.5px;
+  font-weight: 750;
+}
+.wp-table {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 10px;
+  width: 100%;
+}
+.wp-table-head,
+.wp-table-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.wp-table-head {
+  padding: 2px 8px 8px;
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.wp-table-head > span:not(.wp-table-num) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wp-table-row {
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 70%, #fff);
+  border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+}
+.wp-table-num {
+  font-weight: 750;
+  color: var(--muted);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wp-table-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  color: var(--ink);
+}
+.wp-table-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.wp-table-expand > :not(.wp-chevron) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wp-bento {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  height: 100%;
+}
+.wp-bento-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, transparent);
+  background: color-mix(in srgb, #fff 82%, transparent);
+}
+.wp-bento-tile.is-wide {
+  grid-column: span 2;
+}
+.wp-bento-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.wp-bento-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+}
+.wp-bento-bar.is-short {
+  width: 55%;
+}
+.wp-fav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 320px;
+  margin: 0 auto;
+  height: 100%;
+}
+.wp-fav-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 2px 0;
+}
+.wp-fav-toolbar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--ink);
+}
+.wp-fav-star-inline {
+  color: #c99700;
+  font-size: 13px;
+  line-height: 1;
+}
+.wp-fav-toolbar-meta {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 750;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+.wp-fav-search {
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--surface) 65%, #fff);
+  font-size: 10px;
+  color: var(--muted);
+}
+.wp-fav-drawer {
+  flex: 1;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, transparent);
+  background: color-mix(in srgb, var(--surface) 58%, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wp-fav-section {
+  display: block;
+  margin: 4px 0 2px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--muted) 80%, var(--ink));
+}
+.wp-fav-section.is-folders {
+  margin-top: 10px;
+}
+.wp-fav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.wp-fav-item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+}
+.wp-fav-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+.wp-fav-folder-chev {
+  flex-shrink: 0;
+  width: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+.wp-fav-folder-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.wp-fav-folder-count {
+  flex-shrink: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 750;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  color: var(--muted);
+}
