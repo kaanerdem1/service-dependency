@@ -4,7 +4,8 @@
   "scripts": {
     "bootstrap": "npm install && npm install --prefix server && npm install --prefix web",
     "devall": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix web\"",
-    "dev": "npm run devall"
+    "dev": "npm run devall",
+    "test": "npm run test --prefix server && npm run test --prefix web"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

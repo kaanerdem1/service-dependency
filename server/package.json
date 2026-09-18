@@ -9,7 +9,8 @@
     "ingest:process-par": "node scripts/ingest-process-par.mjs",
     "verify:process-catalog": "node scripts/verify-process-catalog.mjs",
     "backup:inventory-db": "bash scripts/backup-inventory-db.sh",
-    "audit:process-parse": "node scripts/audit-process-parse.mjs"
+    "audit:process-parse": "node scripts/audit-process-parse.mjs",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "engines": {
     "node": ">=22"
