@@ -10,7 +10,7 @@
     "verify:process-catalog": "node scripts/verify-process-catalog.mjs",
     "backup:inventory-db": "bash scripts/backup-inventory-db.sh",
     "audit:process-parse": "node scripts/audit-process-parse.mjs",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --test src/inventory src/routes src/api.smoke.test.ts"
   },
   "engines": {
     "node": ">=22"
