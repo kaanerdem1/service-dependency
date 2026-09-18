@@ -1,0 +1,265 @@
+/**
+ * Faz 5 — App.css taşınması (workflow-stage.css).
+ */
+
+.wf-info {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 24px 28px 36px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+}
+.wf-info-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 24px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 78%, transparent);
+}
+.wf-info-hero-main {
+  min-width: 0;
+  flex: 1;
+}
+.wf-info-hero-side {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+.wf-info-kicker,
+.wf-info-crumb {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wf-info-crumb {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--accent);
+}
+.wf-info-crumb:hover {
+  text-decoration: underline;
+}
+.wf-info-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.wf-info-mark {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #005a9e;
+  background: color-mix(in srgb, var(--accent) 14%, #fff);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line));
+}
+.wf-info-title {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.wf-info-lede {
+  margin: 8px 0 0;
+  max-width: 52ch;
+  font-size: 13px;
+  line-height: 1.45;
+  color: color-mix(in srgb, var(--ink) 72%, var(--muted));
+}
+.wf-info-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+  max-width: 62ch;
+}
+.wf-info-summary-label {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.wf-info-summary textarea {
+  width: 100%;
+  min-height: 4.2em;
+  resize: vertical;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #fff;
+  color: inherit;
+}
+.wf-info-summary textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.wf-info-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wf-info-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.wf-info-h {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink) 82%, var(--muted));
+}
+.wf-info-h-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.wf-info-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+.wf-info-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
+  background: color-mix(in srgb, #fff 78%, var(--surface));
+}
+.wf-info-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+}
+.wf-info-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.wf-info-card-copy strong {
+  font-size: 13px;
+  font-weight: 700;
+}
+.wf-info-card-copy span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.wf-info-blank {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--line) 85%, transparent);
+}
+.wf-info-blank p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.wf-info-service-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 10px 8px 10px 0;
+}
+.wf-info-service-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+}
+.wf-info-service-go {
+  font-size: 11px;
+  font-weight: 750;
+  color: var(--muted);
+}
+.wf-info-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.wf-info-chip {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+.wf-info-chip.is-output {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.wf-info-chip.is-input {
+  background: color-mix(in srgb, #5a9af0 16%, transparent);
+}
+.wf-info-link.is-compact {
+  margin: 0 8px 2px 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  border: 1px solid transparent;
+  font-size: 11px;
+}
+.wf-info-link.is-ok {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.wf-info-link.is-watch {
+  background: color-mix(in srgb, #e3b341 16%, transparent);
+  border-color: color-mix(in srgb, #c99700 28%, transparent);
+}
+.wf-info-link-label {
+  font-weight: 700;
+}
+.wf-info-link-detail {
+  color: color-mix(in srgb, var(--ink) 70%, var(--muted));
+}

@@ -1,0 +1,85 @@
+/**
+ * Faz 5 — App.css taşınması (app-chrome.css).
+ */
+
+.app-surface-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: stretch;
+  isolation: isolate;
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--shell-sidebar-fg, #fff) 14%, transparent);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.app-surface-switch button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  min-height: 32px;
+  padding: 6px 10px 8px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--shell-topbar-btn-fg, #c8cdd3) 80%, transparent);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+}
+.app-surface-switch button:hover:not(.is-active) {
+  color: var(--shell-topbar-btn-hover-fg, #fff);
+}
+.app-surface-switch button.is-active {
+  background: transparent;
+  color: var(--shell-brand-title, #fff);
+  font-weight: 750;
+}
+.app-surface-switch-pill {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  bottom: 0;
+  top: auto;
+  height: 2px;
+  z-index: 0;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(90deg, #5cba8a 0%, #2f6b50 100%);
+  box-shadow: 0 0 10px rgba(92, 186, 138, 0.35);
+}
+.app-surface-switch-hover {
+  position: absolute;
+  inset: 2px 4px 4px;
+  z-index: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--shell-sidebar-fg) 10%, transparent);
+}
+.app-surface-switch-label {
+  position: relative;
+  z-index: 1;
+}
+.api-banner {
+  margin: 0;
+  padding: 0;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+  line-height: 1.45;
+  overflow: hidden;
+}
+.api-banner-inner {
+  padding: 10px 20px;
+}
+.api-banner-hint {
+  color: color-mix(in srgb, var(--warn-ink) 75%, var(--muted));
+  font-size: 12px;
+}
+.api-banner code {
+  font-size: 11px;
+}

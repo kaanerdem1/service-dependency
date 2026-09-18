@@ -70,6 +70,12 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | Servis haritası | `styles/service-map.css` |
 | Süreç haritası | `styles/process-flow.css` |
 | ⌘K | `styles/cmdk.css` |
-| Katalog, welcome | `styles/App.css` |
+| Servis sahnesi / sekmeler | `styles/stage.css` |
+| Katalog, tablo | `styles/catalog.css` |
+| Welcome | `styles/welcome.css` |
+| CR / inbox modalları | `styles/overlays.css` |
+| İş akışı tam sayfa | `styles/workflow-stage.css` |
+| Harita popup (dd-*) | `styles/map-misc.css` |
+| App kabuğu parçaları | `styles/app-chrome.css` + `styles/app-remainder.css` |
 
 Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).
