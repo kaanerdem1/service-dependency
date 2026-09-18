@@ -43,6 +43,7 @@ App / useProcessFlowNav
 | `useProcessFlowPage.ts` | Flow API, rota modu, `ProcessFlowPage` state | `ProcessFlowPage.tsx` |
 | `ProcessFlowPage.tsx` | Map / RouteBuilder / drawer iskeleti | `ServicesMainStage` |
 | `ProcessFlowMap.tsx` | Tam graf canvas, notlar, arama, snapshot | `ProcessFlowPage` |
+| `processFlowMap/` | Layout + `buildGraph` (pure) | `ProcessFlowMap.tsx` |
 | `ProcessFlowRouteBuilder.tsx` | Prefix rotası, geçiş seçimi, kaydet | `ProcessFlowPage` |
 | `ProcessFlowCanvas.tsx` | Kademeli keşif (hover ile açılan alt graf) | Eski/alternatif UI yolları |
 | `processFlowReferenceLayout.ts` | KTF koordinat + rota override | **Yalnızca** `ProcessFlowMap` when `no===105116` |
