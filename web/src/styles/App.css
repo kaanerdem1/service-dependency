@@ -1,5 +1,7 @@
 @import './process-flow.css';
 @import './service-map.css';
+@import './service-map-dock.css';
+@import './service-map-stage.css';
 @import './shell.css';
 @import './workflows-drawer.css';
 @import './cmdk.css';
@@ -11,6 +13,12 @@
 @import './app-chrome.css';
 @import './map-misc.css';
 @import './catalog-detail.css';
+@import './catalog-bento.css';
+@import './catalog-extras.css';
+@import './stage-neighbors.css';
+@import './snapshots-ui.css';
+@import './cmdk-hit-tags.css';
+@import './tree-options-extras.css';
 @import './process-route-ui.css';
 @import './search.css';
 @import './shared-ui.css';

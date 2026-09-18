@@ -1,0 +1,49 @@
+/** Faz 5 tur 2 — `snapshots-ui` (app-remainder'dan). */
+
+.snapshot-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fffcf7;
+}
+
+.snapshot-item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.snapshot-item-meta {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #5c564c;
+}
+
+.snapshot-trail-details {
+  margin-top: 8px;
+}
+
+.snapshot-trail-details summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.snapshot-trail-list {
+  margin: 6px 0 0;
+  padding-left: 1.2rem;
+  font-size: 12px;
+  color: #5c564c;
+  line-height: 1.45;
+}
+
+.snapshot-trail-list li + li {
+  margin-top: 4px;
+}
+
+.snapshot-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

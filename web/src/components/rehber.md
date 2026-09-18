@@ -80,6 +80,9 @@ Store’lar: [stores/rehber.md](../stores/rehber.md). Navigasyon persist: `appNa
 | Arama | `styles/search.css` |
 | Katalog detay (bento, tablo) | `styles/catalog-detail.css` |
 | İş akışı canvas (wf-*) | `styles/workflow-canvas.css` |
-| App kabuğu parçaları | `styles/app-chrome.css` + `styles/app-remainder.css` (~2k satır kalan) |
+| App kabuğu | `styles/app-chrome.css` + `styles/app-remainder.css` |
+| Bento / overview | `styles/catalog-bento.css` |
+| Komşu / path UI | `styles/stage-neighbors.css` |
+| Harita dock / stage | `styles/service-map-dock.css`, `service-map-stage.css` |
 
 Manuel smoke: [docs/refactor-visual-regression.md](../../../docs/refactor-visual-regression.md).

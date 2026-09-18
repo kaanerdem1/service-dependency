@@ -1,0 +1,86 @@
+/** Faz 5 tur 2 — `catalog-extras` (app-remainder'dan). */
+
+[data-theme='white'] .catalog-help-dialog {
+  background: #fff;
+  box-shadow:
+    0 24px 56px rgba(28, 27, 25, 0.14),
+    0 2px 8px rgba(28, 27, 25, 0.05);
+}
+
+[data-theme='white'] .catalog-help-card {
+  background: #f7f8fa;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 8px;
+}
+
+.tabs button {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.tabs button.on {
+  background: var(--warn-bg);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tabs button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.relations-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 0;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #faf6ef;
+  font-size: 13px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.relations-breadcrumb .sep {
+  margin: 0 6px;
+  color: var(--line);
+}
+
+.relations-breadcrumb button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: inherit;
+  text-align: left;
+}
+
+.relations-breadcrumb button:hover:not(:disabled) {
+  color: var(--ink);
+  background: #efe8dc;
+}
+
+.relations-breadcrumb button.current {
+  color: var(--ink);
+  font-weight: 600;
+  cursor: default;
+}

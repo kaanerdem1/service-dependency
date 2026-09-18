@@ -1,0 +1,43 @@
+/** Faz 5 tur 2 — `cmdk-hit-tags` (app-remainder'dan). */
+
+.hit-tag {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 3px 6px;
+  border-radius: 999px;
+  line-height: 1.2;
+  border: 0;
+}
+
+.method-hit-svc {
+  display: block;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hit-tag-service {
+  color: #1a4a36;
+  background: #cfe4d8;
+}
+
+.hit-tag-method {
+  color: #6a3d12;
+  background: #f0d2ae;
+}
+
+.hit-tag-action {
+  color: #243e6e;
+  background: color-mix(in srgb, #d4e0f4 82%, #fff);
+}
+
+.method-hit-svc {
+  font-size: 11px;
+  color: var(--muted);
+}

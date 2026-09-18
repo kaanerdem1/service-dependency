@@ -48,7 +48,7 @@ Yüzey: `components/shell/SurfaceSwitch.tsx`. Navigasyon persist: `appNavPersist
 
 ## CSS
 
-`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Ek dilimler: `tree`, `search`, `catalog-detail`, `workflow-canvas`, `process-route-ui`, `stage-extras`, `welcome-extras`, `shared-ui`, `app-remainder` (kalan ~2k satır).
+`main.tsx` → `styles/index.css`. `App.tsx` → `styles/App.css` (yalnızca `@import`) + `styles/responsive.css`. Tur 2 dilimleri: `catalog-bento`, `stage-neighbors`, `snapshots-ui`, `cmdk-hit-tags`, `catalog-extras`, `tree-options-extras`, `service-map-dock`, `service-map-stage`; kalan `app-remainder`. Smoke: [refactor-visual-regression.md](./refactor-visual-regression.md).
 
 ## DWH veri / legacy (repo kökü)
 
