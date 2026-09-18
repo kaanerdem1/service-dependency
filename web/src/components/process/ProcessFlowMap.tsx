@@ -6,26 +6,16 @@
  * Ne yapmaz: Kayıtlı rota modu (`ProcessFlowRouteBuilder`).
  * İlgili: [rehber.md](./rehber.md)
  */
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Background,
   BackgroundVariant,
-  BaseEdge,
   Controls,
-  EdgeLabelRenderer,
-  Handle,
-  NodeResizer,
-  Position,
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
   useReactFlow,
-  type Edge,
-  type EdgeProps,
-  type EdgeTypes,
   type Node,
-  type NodeProps,
-  type NodeTypes,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import type { ProcessFlowGraph, ProcessNodeDescriptionsDoc } from '../../types'
@@ -38,7 +28,6 @@ import {
   incomingTransitionsFor,
   outgoingTransitionsFor,
 } from './processFlowDrawerNav'
-import { ProcessNodeServicePreview } from './ProcessNodeServicePreview'
 import { buildPathSnapshotSteps } from './processPathNarrative'
 import { exportProcessPathSnapshotPdf } from '../../snapshot/processPathSnapshot'
 import {
@@ -63,10 +52,15 @@ import {
   startCamera,
 } from './processFlowCamera'
 import { useProcessFlowHover } from './useProcessFlowHover'
-import { buildGraph, focusHighlightFor, withEdgeRoutes } from './processFlowMap/buildGraph.js'
-import { classifyRoute, kitEdgePath } from './processFlowMap/edgeGeometry.js'
-import { KIND_LABEL } from './processFlowMap/constants.js'
-import type { ProcessEdgeData, ProcessNodeData } from './processFlowMap/types.js'
+import {
+  buildDag,
+  buildGraph,
+  focusHighlightFor,
+  longestPathRanks,
+  withEdgeRoutes,
+} from './processFlowMap/buildGraph.js'
+import { EdgeMarkers, FullscreenGlyph, processFlowEdgeTypes } from './processFlowMap/edges.js'
+import { processFlowNodeTypes, type NoteNodeData } from './processFlowMap/nodes.js'
 
 /** Snapshot çekimi öncesi DOM/layout'un yeni (daraltılmış) düğüm kümesiyle
  * gerçekten render/reflow olmasını beklemek için — bir animasyon
@@ -76,268 +70,6 @@ function nextFrame(): Promise<void> {
 }
 
 
-function Ports() {
-  return (
-    <>
-      <Handle id="l" type="target" position={Position.Left} className="pf-h" />
-      <Handle id="r" type="source" position={Position.Right} className="pf-h" />
-      <Handle id="ti" type="target" position={Position.Top} className="pf-h" />
-      <Handle id="b" type="source" position={Position.Bottom} className="pf-h" style={{ left: '62%' }} />
-      <Handle id="bi" type="target" position={Position.Bottom} className="pf-h" style={{ left: '38%' }} />
-    </>
-  )
-}
-
-function ProcessStepNode({ data, selected }: NodeProps<ProcessNodeData>) {
-  if (data.kind === 'start' || data.kind === 'end') {
-    return (
-      <div className={`pf-node pf-node-event is-${data.kind}${selected ? ' is-selected' : ''}`}>
-        <Ports />
-        <span className="pf-event-kicker">{KIND_LABEL[data.kind]}</span>
-        <div className="pf-event-circle" />
-        <strong className="pf-event-label">{data.label}</strong>
-      </div>
-    )
-  }
-
-  if (data.kind === 'subprocess') {
-    return (
-      <div className={`pf-node is-subprocess${selected ? ' is-selected' : ''}`}>
-        <Ports />
-        <span className="pf-node-icon">↳</span>
-        <span className="pf-node-kind">{KIND_LABEL.subprocess}</span>
-        <strong className="pf-node-title">{data.label}</strong>
-        {data.subProcessNo ? (
-          <span className="pf-node-subproc" title={`Alt süreç: ${data.subProcessNo}`}>
-            {data.subProcessNo}
-          </span>
-        ) : null}
-        <ProcessNodeServicePreview services={data.services} />
-      </div>
-    )
-  }
-
-  if (data.kind === 'decision') {
-    return (
-      <div className={`pf-node pf-node-gateway is-decision${selected ? ' is-selected' : ''}`}>
-        <Ports />
-        <span className="pf-event-kicker">{KIND_LABEL.decision}</span>
-        <div className="pf-gateway-diamond">
-          <span className="pf-gateway-mark">✕</span>
-        </div>
-        <strong className="pf-gateway-label">{data.label}</strong>
-        <ProcessNodeServicePreview services={data.services} />
-      </div>
-    )
-  }
-
-  return (
-    <div className={`pf-node is-${data.kind}${selected ? ' is-selected' : ''}`}>
-      <Ports />
-      {data.kind === 'service' ? <span className="pf-node-icon">⚙</span> : null}
-      <span className="pf-node-kind">{KIND_LABEL[data.kind]}</span>
-      <strong className="pf-node-title">{data.label}</strong>
-      <ProcessNodeServicePreview services={data.services} />
-    </div>
-  )
-}
-
-function ProcessEdge({
-  id,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  style,
-  label,
-  data,
-}: EdgeProps<ProcessEdgeData>) {
-  const route = data?.route ?? classifyRoute(sourceX, targetX)
-  const bandMinY = data?.bandMinY ?? Math.min(sourceY, targetY)
-  const bandMaxY = data?.bandMaxY ?? Math.max(sourceY, targetY)
-  const { path: edgePath, labelX, labelY } = kitEdgePath(
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    route,
-    data?.originalId ?? id,
-    data?.railY,
-    bandMinY,
-    bandMaxY,
-    data?.lane ?? 0,
-    data?.slot ?? 0,
-  )
-  const active = !!data?.active
-  const dim = !!data?.dim
-  const stroke = active
-    ? '#2f6fed'
-    : route === 'back'
-      ? '#e05b4f'
-      : route === 'jump'
-        ? '#2f6fed'
-        : '#a8b0bc'
-  const dash = active ? undefined : route === 'direct' ? undefined : '5 4'
-  const width = active ? 2.5 : route === 'direct' ? 1.5 : 1.3
-  const opacity = active ? 1 : dim ? 0.16 : route === 'direct' ? 1 : 0.55
-  const stateClass = active ? ' is-onpath' : dim ? ' is-dim' : ''
-  // Akış yönünü belirtmek için label'ın hemen öncesine ve sonrasına küçük
-  // ok işaretleri koyulur — "akan" animasyon yerine sabit, okunması kolay
-  // bir yön ipucu. Ray tabanlı (jump/back) rotalarda etiketin durduğu segment
-  // her zaman yataydır; 'direct' rotada ise gerçek eğime göre döndürülür ki
-  // eğik bir çizgide yatay ok görünmesin.
-  const dirSign = targetX >= sourceX ? 1 : -1
-  const angleDeg =
-    route === 'direct'
-      ? (Math.atan2(targetY - sourceY, targetX - sourceX) * 180) / Math.PI
-      : dirSign > 0
-        ? 0
-        : 180
-  const angleRad = (angleDeg * Math.PI) / 180
-  const ux = Math.cos(angleRad)
-  const uy = Math.sin(angleRad)
-  const span = Math.abs(targetX - sourceX) + Math.abs(targetY - sourceY)
-  const showChevrons = !!label && span > 70
-  const chevronGap = 20
-  const preChevron = { x: labelX - ux * chevronGap, y: labelY - uy * chevronGap }
-  const postChevron = { x: labelX + ux * chevronGap, y: labelY + uy * chevronGap }
-  const labelTitle = [
-    typeof label === 'string' ? label : undefined,
-    data?.transitionServices?.length
-      ? `Geçiş servisi: ${data.transitionServices.join(', ')}`
-      : undefined,
-  ]
-    .filter(Boolean)
-    .join('\n')
-  return (
-    <>
-      <BaseEdge
-        id={id}
-        path={edgePath}
-        markerEnd={active ? 'url(#pf-arrow-active)' : `url(#pf-arrow-${route})`}
-        style={{ ...style, stroke, strokeWidth: width, strokeDasharray: dash, opacity }}
-        interactionWidth={28}
-      />
-      {label ? (
-        <EdgeLabelRenderer>
-          {showChevrons ? (
-            <span
-              className={`pf-edge-chevron${stateClass}`}
-              style={{
-                position: 'absolute',
-                pointerEvents: 'none',
-                color: stroke,
-                transform: `translate(-50%, -50%) translate(${preChevron.x}px, ${preChevron.y}px) rotate(${angleDeg}deg)`,
-              }}
-              aria-hidden
-            >
-              ›
-            </span>
-          ) : null}
-          <div
-            className={`pf-edge-label${stateClass}${data?.transitionServices?.length ? ' has-transition-svc' : ''}`}
-            title={labelTitle || undefined}
-            style={{
-              position: 'absolute',
-              pointerEvents: 'auto',
-              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
-            }}
-          >
-            {label}
-          </div>
-          {showChevrons ? (
-            <span
-              className={`pf-edge-chevron${stateClass}`}
-              style={{
-                position: 'absolute',
-                pointerEvents: 'none',
-                color: stroke,
-                transform: `translate(-50%, -50%) translate(${postChevron.x}px, ${postChevron.y}px) rotate(${angleDeg}deg)`,
-              }}
-              aria-hidden
-            >
-              ›
-            </span>
-          ) : null}
-        </EdgeLabelRenderer>
-      ) : null}
-    </>
-  )
-}
-
-type NoteNodeData = {
-  text: string
-  collapsed: boolean
-  expandedWidth?: number
-  expandedHeight?: number
-  onChange: (text: string) => void
-  onRemove: () => void
-  onResizeEnd: () => void
-  onToggleCollapse: () => void
-}
-
-function NoteNode({ data, selected }: NodeProps<NoteNodeData>) {
-  if (data.collapsed) {
-    const hint = data.text.trim() ? data.text : 'Açmak için tıkla'
-    return (
-      <div className="pf-note pf-note-collapsed" title={hint}>
-        <span className="pf-note-chip">Not</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className={`pf-note${selected ? ' is-selected' : ''}`}>
-      <NodeResizer
-        isVisible={selected}
-        minWidth={NOTE_MIN_WIDTH}
-        minHeight={NOTE_MIN_HEIGHT}
-        maxWidth={NOTE_MAX_WIDTH}
-        maxHeight={NOTE_MAX_HEIGHT}
-        color="#e3b341"
-        lineStyle={{ borderWidth: 2 }}
-        handleStyle={{ width: 10, height: 10, borderRadius: 2 }}
-        onResizeEnd={() => data.onResizeEnd()}
-      />
-      <div className="pf-note-toolbar">
-        <button
-          type="button"
-          className="pf-note-del"
-          onClick={(e) => {
-            e.stopPropagation()
-            data.onRemove()
-          }}
-        >
-          Sil
-        </button>
-        <button
-          type="button"
-          className="pf-note-collapse"
-          onClick={(e) => {
-            e.stopPropagation()
-            data.onToggleCollapse()
-          }}
-          aria-label="Notu kapat"
-          title="Kapat"
-        >
-          −
-        </button>
-      </div>
-      <textarea
-        value={data.text}
-        placeholder="Not…"
-        onChange={(e) => data.onChange(e.target.value)}
-        onPointerDown={(e) => e.stopPropagation()}
-      />
-    </div>
-  )
-}
-
-const nodeTypes: NodeTypes = {
-  processStep: memo(ProcessStepNode),
-  processNote: memo(NoteNode),
-}
-const edgeTypes: EdgeTypes = { processEdge: memo(ProcessEdge) }
 
 function notesFromNodes(list: Node[]): ProcessFlowNote[] {
   return list
@@ -439,55 +171,6 @@ function noteNodesFromStorage(processNo: string): Node[] {
       zIndex: 6,
     }
   })
-}
-
-function EdgeMarkers() {
-  return (
-    <svg style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden' }} aria-hidden>
-      <defs>
-        <marker id="pf-arrow-direct" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#a8b0bc" />
-        </marker>
-        <marker id="pf-arrow-jump" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f6fed" />
-        </marker>
-        <marker id="pf-arrow-back" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#e05b4f" />
-        </marker>
-        <marker id="pf-arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#2f6fed" />
-        </marker>
-      </defs>
-    </svg>
-  )
-}
-
-function FullscreenGlyph({ expanded }: { expanded: boolean }) {
-  return (
-    <span className="tl-zoom-glyph" aria-hidden>
-      {expanded ? (
-        <svg viewBox="0 0 12 12" width="10" height="10">
-          <path
-            d="M4.5 1.5H1.5v3M7.5 1.5h3v3M1.5 7.5v3h3M10.5 7.5v3h-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-          />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 12 12" width="10" height="10">
-          <path
-            d="M1.5 4.5V1.5h3M10.5 4.5V1.5h-3M1.5 7.5v3h3M10.5 7.5v3h-3"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-          />
-        </svg>
-      )}
-    </span>
-  )
 }
 
 function ProcessFlowMapInner({
@@ -981,8 +664,8 @@ function ProcessFlowMapInner({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
+        nodeTypes={processFlowNodeTypes}
+        edgeTypes={processFlowEdgeTypes}
         nodesConnectable={false}
         nodesDraggable
         panOnDrag

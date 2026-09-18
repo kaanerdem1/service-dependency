@@ -73,7 +73,7 @@ function visualEdges(graph: ProcessFlowGraph) {
  * ulaşılıyorsa, o zincirin gerektirdiği kadar sağa itilsin — örn. bir bitiş
  * düğümü kısa bir yolla erken erişilebiliyor olsa bile, asıl uzun ana akış
  * zinciri bitmeden sola/erken sütunlara sıkışmasın. */
-function longestPathRanks(
+export function longestPathRanks(
   nodeIds: string[],
   dagChildren: Map<string, string[]>,
   forcedRootHop0: string[],
@@ -113,7 +113,7 @@ function longestPathRanks(
  * (layeredLayout) hem de "buraya nasıl gelinir" kanonik yol hesabı
  * (pathToTarget) bu ortak DAG üzerinden çalışır — iki yerde ayrı
  * ayrı DFS/geri-kenar mantığı tekrarlanmasın diye tek noktadan üretilir. */
-function buildDag(graph: ProcessFlowGraph): {
+export function buildDag(graph: ProcessFlowGraph): {
   allIds: string[]
   starts: string[]
   dagChildren: Map<string, string[]>

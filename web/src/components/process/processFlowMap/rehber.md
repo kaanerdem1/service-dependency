@@ -7,6 +7,8 @@ Ana bileşen hâlâ `../ProcessFlowMap.tsx` (nodes, edges, notlar, `ProcessFlowM
 | `constants.ts` | Layout sabitleri, `KIND_LABEL` |
 | `types.ts` | Node/edge data tipleri, `PathHighlight` |
 | `edgeGeometry.ts` | Ok rayları, `kitEdgePath`, `classifyRoute` |
-| `buildGraph.ts` | `buildGraph`, `withEdgeRoutes`, `focusHighlightFor` |
+| `buildGraph.ts` | `buildGraph`, `withEdgeRoutes`, `focusHighlightFor`, `buildDag` |
+| `nodes.tsx` | `processFlowNodeTypes`, `NoteNodeData` |
+| `edges.tsx` | `processFlowEdgeTypes`, `EdgeMarkers`, `FullscreenGlyph` |
 
-Sonraki dilim: `nodes.tsx`, `edges.tsx`, `ProcessFlowMapCore.tsx`.
+Sonraki dilim: `ProcessFlowMapCore.tsx`, `noteNodes.ts`.
