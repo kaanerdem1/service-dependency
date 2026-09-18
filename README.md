@@ -144,7 +144,9 @@ flowchart LR
 | UI kabuk | `web/src/App.tsx` |
 | Servis haritası | `web/src/components/service-map/ImpactMap.tsx` |
 | Süreç akış / rota | `web/src/components/process/ProcessFlowMap.tsx`, `processRouteStore.ts` |
-| API | `server/src/index.ts` |
+| API giriş | `server/src/index.ts`, `startServer.ts` |
+| Express kabuk | `server/src/createApp.ts` |
+| Katalog route'ları | `server/src/routes/` (`registerCatalogRoutes.ts`) |
 | Etki grafi | `server/src/impactGraph.ts` |
 | DWH UI | `web/src/dwh/DwhPage.tsx` |
 

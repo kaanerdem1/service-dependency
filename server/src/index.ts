@@ -1,6 +1,6 @@
 /**
  * Express API girişi (varsayılan :4000).
- * Route tanımları: `createApp.ts` · başlatma: `startServer.ts`.
+ * Uygulama: `createApp.ts` · katalog route'ları: `routes/` · başlatma: `startServer.ts`.
  */
 import { startServer } from './startServer.js'
 
